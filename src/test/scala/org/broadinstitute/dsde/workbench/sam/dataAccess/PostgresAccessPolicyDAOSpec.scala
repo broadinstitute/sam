@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
@@ -495,8 +495,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     val defaultGroupName = WorkbenchGroupName("group")
     val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
-    val defaultUserId = WorkbenchUserId("testUser")
-    val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"), Option(AzureB2CId("testICId")))
+    val defaultUser = Generator.genWorkbenchUserBoth.sample.get
     "createPolicy" - {
       "creates a policy" in {
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -681,10 +680,10 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listFlattenedPolicyMembers" - {
       "lists all members of a policy" in {
-        val directMember = WorkbenchUser(WorkbenchUserId("direct"), None, WorkbenchEmail("direct@member.biz"), None)
-        val subGroupMember = WorkbenchUser(WorkbenchUserId("indirect"), Option(GoogleSubjectId("googley")), WorkbenchEmail("subGroup@member.edu.biz"), Option(AzureB2CId("icy")))
-        val subSubGroupMember = WorkbenchUser(WorkbenchUserId("veryIndirect"), None, WorkbenchEmail("very@indirect.net"), None)
-        val inTwoGroupsMember = WorkbenchUser(WorkbenchUserId("multipleGroups"), None, WorkbenchEmail("member@members.com"), None)
+        val directMember = Generator.genWorkbenchUserGoogle.sample.get
+        val subGroupMember = Generator.genWorkbenchUserBoth.sample.get
+        val subSubGroupMember = Generator.genWorkbenchUserGoogle.sample.get
+        val inTwoGroupsMember = Generator.genWorkbenchUserGoogle.sample.get
         val allMembers = Set(directMember, subGroupMember, subSubGroupMember, inTwoGroupsMember)
 
         val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("subSubGroup"), Set(subSubGroupMember.id), WorkbenchEmail("subSub@groups.com"))
@@ -695,7 +694,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policy")), Set(subGroup.id, secondGroup.id, directMember.id), WorkbenchEmail("policy@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
 
         // control user/group to make sure fuction excludes something
-        val inSomeOtherGroup = WorkbenchUser(WorkbenchUserId("notInPolicy"), None, WorkbenchEmail("notInPolicy@members.com"), None)
+        val inSomeOtherGroup = Generator.genWorkbenchUserGoogle.sample.get
         val someOtherGroup = BasicWorkbenchGroup(WorkbenchGroupName("someOtherGroup"), Set(inSomeOtherGroup.id), WorkbenchEmail("someOtherGroup@groups.com"))
 
         (allMembers + inSomeOtherGroup).map((user) => dirDao.createUser(user, samRequestContext).unsafeRunSync())
@@ -712,7 +711,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listAccessPoliciesForUser" - {
       "lists the access policies on a resource that a user is a member of" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -736,7 +735,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "does not list policies on other resources the user is a member of" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("thisOne")), Set(user.id), WorkbenchEmail("correct@policy.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
@@ -758,7 +757,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listUserResourceActions" - {
       "lists the actions on a resource that a user is a member of" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -809,7 +808,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists the actions on a resource that a user is a member of via ancestor" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -865,7 +864,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists actions granted by nested roles on a resource a user is a member of" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -915,7 +914,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists actions granted by nested roles on a resource a user is a member of via ancestor" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -1013,7 +1012,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists all a user's resources of a type" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -1065,7 +1064,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists all a user's resources of a type when granted access via nested roles" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
 
@@ -1149,7 +1148,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listUserResourceRoles" - {
       "lists the roles on a resource that a user is a member of" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -1191,7 +1190,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists the roles on a resource that a user is a member of via ancestor" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -1238,7 +1237,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists included and descendant roles on a resource a user is a member of" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -1288,7 +1287,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists included and descendant roles on a resource a user is a member of via ancestor" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -1342,7 +1341,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "should distinguish between descendant roles and direct roles when dealing with the same resource type" in {
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
         val descendantRoleResourceTypeName = ResourceTypeName("descends")
 
         val descendantRole = ResourceRole(ResourceRoleName("descends"), Set.empty, descendantRoles = Map(descendantRoleResourceTypeName -> Set(ownerRoleName)))
@@ -1367,8 +1366,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       "list included role when it is included in inherited role" in {
         // parent_role on parent has child_role on child, child_role includes child_included_role
         // verify that user has child_included_role on child when granted parent_role on parent
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
-        val noAccessUser = WorkbenchUser(WorkbenchUserId("no access"), None, WorkbenchEmail("no access@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        val noAccessUser = Generator.genWorkbenchUserGoogle.sample.get
 
         val childRole = ResourceRoleName("child_role")
         val childIncludedRole = ResourceRoleName("child_included_role")
@@ -1410,8 +1409,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         // create grand parent, parent, child structure where grand parent role includes
         // a parent role and parent role include a child role then assign user grandparent role
         // and verify user has correct role at each level
-        val user = WorkbenchUser(WorkbenchUserId("user"), None, WorkbenchEmail("user@user.edu"), None)
-        val noAccessUser = WorkbenchUser(WorkbenchUserId("no access"), None, WorkbenchEmail("no access@user.edu"), None)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        val noAccessUser = Generator.genWorkbenchUserGoogle.sample.get
 
         val childRole = ResourceRoleName("child_role")
         val childRT = ResourceType(ResourceTypeName("childRT"), Set.empty, Set(ResourceRole(childRole, Set.empty)), childRole)
@@ -1567,7 +1566,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dirDao.createUser(secondUser, samRequestContext).unsafeRunSync()
 
-        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
         dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
 
@@ -1611,11 +1610,11 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dirDao.createUser(secondUser, samRequestContext).unsafeRunSync()
 
-        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
         dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
 
-        val newPolicy = policy.copy(members = Set(defaultUserId, secondUser.id), actions = Set(readAction), roles = Set.empty, public = true)
+        val newPolicy = policy.copy(members = Set(defaultUser.id, secondUser.id), actions = Set(readAction), roles = Set.empty, public = true)
         dao.overwritePolicy(newPolicy, samRequestContext).unsafeRunSync()
 
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(newPolicy)
@@ -1630,11 +1629,11 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
-        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), Set.empty, false)
         dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
 
-        val newPolicy = policy.copy(members = Set(defaultUserId, secondUser.id), actions = Set(ResourceAction("fakeAction")), roles = Set.empty, public = true)
+        val newPolicy = policy.copy(members = Set(defaultUser.id, secondUser.id), actions = Set(ResourceAction("fakeAction")), roles = Set.empty, public = true)
 
         assertThrows[PSQLException] {
           dao.overwritePolicy(newPolicy, samRequestContext).unsafeRunSync()
@@ -1651,8 +1650,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val otherResourceTypeDescendant = AccessPolicyDescendantPermissions(otherResourceType.name, Set(readAction), Set(actionlessRole.roleName))
         val initialDescendantPermissions = Set(sameResourceTypeDescendant, otherResourceTypeDescendant)
         val updatedDescendantPermissions = Set(sameResourceTypeDescendant.copy(actions = Set(readAction)), otherResourceTypeDescendant.copy(roles = Set(readerRole.roleName)))
-        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUserId), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), initialDescendantPermissions, false)
-        val newPolicy = policy.copy(members = Set(defaultUserId, secondUser.id), actions = Set(readAction), roles = Set.empty, descendantPermissions = updatedDescendantPermissions, public = true)
+        val policy = AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")), Set(defaultUser.id), WorkbenchEmail("policy@email.com"), resourceType.roles.map(_.roleName), Set(readAction, writeAction), initialDescendantPermissions, false)
+        val newPolicy = policy.copy(members = Set(defaultUser.id, secondUser.id), actions = Set(readAction), roles = Set.empty, descendantPermissions = updatedDescendantPermissions, public = true)
 
         val testResult = for {
           _ <- dao.createResourceType(resourceType, samRequestContext)

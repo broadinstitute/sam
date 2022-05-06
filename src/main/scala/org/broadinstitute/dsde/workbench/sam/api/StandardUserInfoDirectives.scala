@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -23,24 +24,25 @@ import scala.util.matching.Regex
 trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
 
-  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo] = requireOidcHeaders.flatMap { oidcHeaders =>
+  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
     }
   }
 
-  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[WorkbenchUser] = requireOidcHeaders.map(buildWorkbenchUser)
+  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildWorkbenchUser)
 
-  private def buildWorkbenchUser(oidcHeaders: OIDCHeaders): WorkbenchUser = {
+  private def buildWorkbenchUser(oidcHeaders: OIDCHeaders): SamUser = {
     // google id can either be in the external id or google id from azure headers, favor the external id as the source
     val googleSubjectId = (oidcHeaders.externalId.left.toOption ++ oidcHeaders.googleSubjectIdFromAzure).headOption
     val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
 
-    WorkbenchUser(
+    SamUser(
       genWorkbenchUserId(System.currentTimeMillis()),
       googleSubjectId,
       oidcHeaders.email,
-      azureB2CId)
+      azureB2CId,
+      false)
   }
 
   /**
@@ -49,22 +51,8 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
   private def requireOidcHeaders: Directive1[OIDCHeaders] = {
     (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
       externalIdFromHeaders &
-      expiresInFromHeader &
       headerValueByName(emailHeader).as(WorkbenchEmail) &
       optionalHeaderValueByName(googleIdFromAzureHeader).map(_.map(GoogleSubjectId))).as(OIDCHeaders)
-  }
-
-  private def expiresInFromHeader: Directive1[Long] = {
-    // gets expiresInHeader as a string and converts it to Long raising an exception if it can't
-    optionalHeaderValueByName(expiresInHeader).flatMap {
-      case Some(expiresInString) =>
-        Try(expiresInString.toLong).fold(
-          t => failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"expiresIn $expiresInString can't be converted to Long", t))).toDirective,
-          expiresInLong => provide(expiresInLong)
-        )
-
-      case None => provide(0)
-    }
   }
 
   private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
@@ -78,25 +66,24 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
 object StandardUserInfoDirectives {
   val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com$)".r
   val accessTokenHeader = "OIDC_access_token"
-  val expiresInHeader = "OIDC_CLAIM_expires_in"
   val emailHeader = "OIDC_CLAIM_email"
   val userIdHeader = "OIDC_CLAIM_user_id"
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
 
-  def getUserInfo(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] = {
+  def getUserInfo(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[SamUser] = {
     oidcHeaders match {
-      case OIDCHeaders(_, Left(googleSubjectId), _, saEmail@WorkbenchEmail(SAdomain(_)), _) =>
+      case OIDCHeaders(_, Left(googleSubjectId), saEmail@WorkbenchEmail(SAdomain(_)), _) =>
         // If it's a PET account, we treat it as its owner
         directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
-          case Some(pet) => IO.pure(UserInfo(oidcHeaders.token, pet.id, pet.email, oidcHeaders.expiresIn))
-          case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(oidcHeaders.token, uid, saEmail, oidcHeaders.expiresIn))
+          case Some(petsOwner) => IO.pure(petsOwner)
+          case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext)
         }
 
-      case OIDCHeaders(_, Left(googleSubjectId), _, _, _) =>
-        lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(oidcHeaders.token, uid, oidcHeaders.email, oidcHeaders.expiresIn))
+      case OIDCHeaders(_, Left(googleSubjectId), _, _) =>
+        lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext)
 
-      case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
-        loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, registrationDAO, samRequestContext).map(user => UserInfo(oidcHeaders.token, user.id, oidcHeaders.email, oidcHeaders.expiresIn))
+      case OIDCHeaders(_, Right(azureB2CId), _, _) =>
+        loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, registrationDAO, samRequestContext)
     }
   }
 
@@ -126,17 +113,19 @@ object StandardUserInfoDirectives {
     }
   }
 
-  private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[WorkbenchUserId] =
+  private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
-      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
-      userInfo <- subject match {
-        case Some(uid: WorkbenchUserId) => IO.pure(uid)
-        case Some(_) =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a WorkbenchUser")))
-        case None =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam")))
+      maybeSamUser <- directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext)
+      samUser <- maybeSamUser match {
+        case Some(samUser) => IO.pure(samUser)
+        case None => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).flatMap {
+          case Some(_) =>
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a WorkbenchUser")))
+          case None =>
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam")))
+        }
       }
-    } yield userInfo
+    } yield samUser
 }
 
-final case class OIDCHeaders(token: OAuth2BearerToken, externalId: Either[GoogleSubjectId, AzureB2CId], expiresIn: Long, email: WorkbenchEmail, googleSubjectIdFromAzure: Option[GoogleSubjectId])
+final case class OIDCHeaders(token: OAuth2BearerToken, externalId: Either[GoogleSubjectId, AzureB2CId], email: WorkbenchEmail, googleSubjectIdFromAzure: Option[GoogleSubjectId])

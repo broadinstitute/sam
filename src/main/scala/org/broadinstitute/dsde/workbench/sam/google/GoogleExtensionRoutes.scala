@@ -7,7 +7,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUser}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SamModelDirectives, SamRequestContextDirectives, SecurityDirectives, UserInfoDirectives, ioMarshaller}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -31,7 +31,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
               requireAction(
                 FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
                 GoogleExtensions.getPetPrivateKeyAction,
-                userInfo.userId,
+                userInfo.id,
                 samRequestContext) {
                 complete {
                   import spray.json._
@@ -52,7 +52,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     complete {
                       import spray.json._
                       googleExtensions
-                        .getArbitraryPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), samRequestContext)
+                        .getArbitraryPetServiceAccountKey(userInfo, samRequestContext)
                         .map(key => StatusCodes.OK -> key.parseJson)
                     }
                   }
@@ -63,7 +63,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     post {
                       entity(as[Set[String]]) { scopes =>
                         complete {
-                          googleExtensions.getArbitraryPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), scopes, samRequestContext).map { token =>
+                          googleExtensions.getArbitraryPetServiceAccountToken(userInfo, scopes, samRequestContext).map { token =>
                             StatusCodes.OK -> JsString(token)
                           }
                         }
@@ -76,14 +76,14 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     requireOneOfActionIfParentIsWorkspace(
                       FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                       Set(SamResourceActions.createPet),
-                      userInfo.userId,
+                      userInfo.id,
                       samRequestContext) {
                       get {
                         complete {
                           import spray.json._
                           // parse json to ensure it is json and tells akka http the right content-type
                           googleExtensions
-                            .getPetServiceAccountKey(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext)
+                            .getPetServiceAccountKey(userInfo, GoogleProject(project), samRequestContext)
                             .map { key =>
                               StatusCodes.OK -> key.parseJson
                             }
@@ -94,7 +94,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                         delete {
                           complete {
                             googleExtensions
-                              .removePetServiceAccountKey(userInfo.userId, GoogleProject(project), ServiceAccountKeyId(keyId), samRequestContext)
+                              .removePetServiceAccountKey(userInfo.id, GoogleProject(project), ServiceAccountKeyId(keyId), samRequestContext)
                               .map(_ => StatusCodes.NoContent)
                           }
                         }
@@ -104,13 +104,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       requireOneOfActionIfParentIsWorkspace(
                         FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                         Set(SamResourceActions.createPet),
-                        userInfo.userId,
+                        userInfo.id,
                         samRequestContext) {
                         post {
                           entity(as[Set[String]]) { scopes =>
                             complete {
                               googleExtensions
-                                .getPetServiceAccountToken(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), scopes, samRequestContext)
+                                .getPetServiceAccountToken(userInfo, GoogleProject(project), scopes, samRequestContext)
                                 .map { token =>
                                   StatusCodes.OK -> JsString(token)
                                 }
@@ -123,11 +123,11 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       requireOneOfActionIfParentIsWorkspace(
                         FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                         Set(SamResourceActions.createPet),
-                        userInfo.userId,
+                        userInfo.id,
                         samRequestContext) {
                         get {
                           complete {
-                            googleExtensions.createUserPetServiceAccount(WorkbenchUser(userInfo.userId, None, userInfo.userEmail, None), GoogleProject(project), samRequestContext).map {
+                            googleExtensions.createUserPetServiceAccount(userInfo, GoogleProject(project), samRequestContext).map {
                               petSA =>
                                 StatusCodes.OK -> petSA.serviceAccount.email
                             }
@@ -136,7 +136,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       } ~
                         delete { // NOTE: This endpoint is not visible in Swagger
                           complete {
-                            googleExtensions.deleteUserPetServiceAccount(userInfo.userId, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
+                            googleExtensions.deleteUserPetServiceAccount(userInfo.id, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
                           }
                         }
                     }

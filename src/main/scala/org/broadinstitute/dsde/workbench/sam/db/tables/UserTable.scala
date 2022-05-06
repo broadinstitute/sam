@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
+import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import scalikejdbc._
 
 final case class UserRecord(id: WorkbenchUserId,
@@ -24,7 +25,7 @@ object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
 
   def apply(o: SyntaxProvider[UserRecord])(rs: WrappedResultSet): UserRecord = apply(o.resultName)(rs)
 
-  def unmarshalUserRecord(userRecord: UserRecord): WorkbenchUser = {
-    WorkbenchUser(userRecord.id, userRecord.googleSubjectId, userRecord.email, userRecord.azureB2cId)
+  def unmarshalUserRecord(userRecord: UserRecord): SamUser = {
+    SamUser(userRecord.id, userRecord.googleSubjectId, userRecord.email, userRecord.azureB2cId, userRecord.enabled)
   }
 }

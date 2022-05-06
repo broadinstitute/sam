@@ -41,7 +41,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
 
   "GET /api/google/v1/user/proxyGroup/{email}" should "return a user's proxy group" in {
     val (user, _, routes) = createTestUser()
-    Get(s"/api/google/v1/user/proxyGroup/$defaultUserEmail") ~> routes.route ~> check {
+    Get(s"/api/google/v1/user/proxyGroup/${user.email}") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
       response shouldBe WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsDomain}")
@@ -184,13 +184,13 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   "GET /api/google/v1/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
     // create a pet service account key
-    Get(s"/api/google/v1/petServiceAccount/myproject/${defaultUserInfo.userEmail.value}") ~> samRoutes.route ~> check {
+    Get(s"/api/google/v1/petServiceAccount/myproject/${defaultUserInfo.email.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[String]
       response shouldEqual(expectedJson)
@@ -200,7 +200,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   it should "404 when user does not exist" in {
     val (defaultUserInfo, samRoutes, _) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }

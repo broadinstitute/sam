@@ -4,7 +4,6 @@ import java.net.URI
 import java.time.Instant
 import java.util.concurrent.Executors
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.stream.Materializer
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -76,7 +75,6 @@ object TestSupport extends TestSupport {
   val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
   val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
-  val defaultUserEmail = WorkbenchEmail("newuser@new.com")
   val directoryConfig = config.as[DirectoryConfig]("directory")
   val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
   val dirURI = new URI(directoryConfig.directoryUrl)
@@ -128,7 +126,7 @@ object TestSupport extends TestSupport {
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config)
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config)
     with MockUserInfoDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
@@ -145,11 +143,11 @@ object TestSupport extends TestSupport {
         case extensions: GoogleExtensions => extensions.googleKeyCache
         case _ => null
       }
-      override val userInfo: UserInfo = uInfo
-      override val workbenchUser: Option[WorkbenchUser] = Option(WorkbenchUser(uInfo.userId, Option(GoogleSubjectId(uInfo.userId.value)), uInfo.userEmail, Option(AzureB2CId(uInfo.userId.value))))
+      override val user: SamUser = uInfo
+      override val workbenchUser: Option[SamUser] = Option(uInfo)
   }
 
-  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), defaultUserEmail, 3600))
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
 
   /*
   In unit tests there really is not a difference between read and write pools.

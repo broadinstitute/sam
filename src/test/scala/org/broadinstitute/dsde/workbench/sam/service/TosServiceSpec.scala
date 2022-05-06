@@ -1,18 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatest.flatspec.AnyFlatSpec
-import java.net.URI
 
+import java.net.URI
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -34,19 +32,8 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   val regDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, global)
   lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
-  private[service] val dummyUserInfo =
-    UserInfo(OAuth2BearerToken("token"), WorkbenchUserId("userid"), WorkbenchEmail("user@company.com"), 0)
-
-  val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
-  val defaultGoogleSubjectId = GoogleSubjectId(defaultUserId.value)
-  val defaultUserEmail = WorkbenchEmail("fake@tosServiceSpec.com")
-  val defaultUser = WorkbenchUser(defaultUserId, Option(defaultGoogleSubjectId), defaultUserEmail, None)
-
-  val serviceAccountUserId = genWorkbenchUserId(System.currentTimeMillis())
-  val serviceAccountUserSubjectId = GoogleSubjectId(serviceAccountUserId.value)
-  val serviceAccountUserEmail = WorkbenchEmail("fake@fake.gserviceaccount.com")
-  val serviceAccountUser = WorkbenchUser(serviceAccountUserId, Option(serviceAccountUserSubjectId), serviceAccountUserEmail, None)
-
+  val defaultUser = Generator.genWorkbenchUserBoth.sample.get
+  val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
 
   private val tosServiceEnabledV0 = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = 0))
   private val tosServiceEnabled = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig.copy(enabled = true))
@@ -160,7 +147,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assertResult(expected = true, "regDAO.isEnabled (second check) should have returned false")(actual = isEnabledLdapV2PostAccept)
 
     //Delete the user from the system
-    Await.result(userServiceTosEnabled.deleteUser(defaultUser.id, dummyUserInfo, samRequestContext), Duration.Inf)
+    Await.result(userServiceTosEnabled.deleteUser(defaultUser.id, samRequestContext), Duration.Inf)
   }
 
   it should "not empty the enabledUsers group in OpenDJ when the ToS version remains the same" in {

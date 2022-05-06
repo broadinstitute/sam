@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.api.RejectionHandlers.{MethodDisabl
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
+import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAcceptance}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 
@@ -24,13 +24,13 @@ trait UserInfoDirectives {
   val cloudExtensions: CloudExtensions
   val termsOfServiceConfig: TermsOfServiceConfig
 
-  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo]
+  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[SamUser]
 
-  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[WorkbenchUser]
+  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
-  def asWorkbenchAdmin(userInfo: UserInfo): Directive0 =
+  def asWorkbenchAdmin(userInfo: SamUser): Directive0 =
     Directives.mapInnerRoute { r =>
-      onSuccess(cloudExtensions.isWorkbenchAdmin(userInfo.userEmail)) { isAdmin =>
+      onSuccess(cloudExtensions.isWorkbenchAdmin(userInfo.email)) { isAdmin =>
         if (!isAdmin) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You must be an admin.")))
         else r
       }

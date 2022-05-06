@@ -2,8 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource
-import org.broadinstitute.dsde.workbench.model.{AzureB2CId, ErrorReport, GoogleSubjectId, PetServiceAccount, PetServiceAccountId, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUser, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{AzureB2CId, ErrorReport, GoogleSubjectId, PetServiceAccount, PetServiceAccountId, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
+import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
@@ -12,7 +13,7 @@ import scala.collection.mutable
 class MockRegistrationDAO extends RegistrationDAO {
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
 
-  private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
+  private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
   private val usersWithGoogleSubjectIds: mutable.Map[GoogleSubjectId, WorkbenchSubject] = new TrieMap()
 
@@ -21,7 +22,7 @@ class MockRegistrationDAO extends RegistrationDAO {
 
   override def getConnectionType(): ConnectionType = ConnectionType.LDAP
 
-  override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
+  override def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     if (users.keySet.contains(user.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists")))
     } else {
@@ -34,7 +35,7 @@ class MockRegistrationDAO extends RegistrationDAO {
 
   override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit //the enabledUsers group is instantiated with this mock class, so no-op here
 
-  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = IO {
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = IO {
     users.get(userId)
   }
 

@@ -83,13 +83,13 @@ class ResourceService(
     * @param userInfo
     * @return
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): IO[Resource] = {
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: SamUser, samRequestContext: SamRequestContext): IO[Resource] = {
     val ownerRole = resourceType.roles
       .find(_.roleName == resourceType.ownerRoleName)
       .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
     val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
-      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName), None, None))
-    createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, userInfo.userId, samRequestContext)
+      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.email), Set.empty, Set(ownerRole.roleName), None, None))
+    createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, userInfo.id, samRequestContext)
   }
 
   /**
@@ -264,8 +264,8 @@ class ResourceService(
         } yield ()
     }
 
-  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): Future[Set[ResourceRoleName]] =
-    accessPolicyDAO.listUserResourceRoles(resource, userInfo.userId, samRequestContext).unsafeToFuture()
+  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: SamUser, samRequestContext: SamRequestContext): Future[Set[ResourceRoleName]] =
+    accessPolicyDAO.listUserResourceRoles(resource, userInfo.id, samRequestContext).unsafeToFuture()
 
   /**
     * Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
@@ -530,7 +530,7 @@ class ResourceService(
       members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id, samRequestContext))
       workbenchUsers = members.flatten.toSet
     } yield {
-      workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
+      workbenchUsers.map(_.toUserIdInfo)
     }
 
   @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy

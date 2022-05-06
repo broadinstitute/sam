@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam
 package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.unsafe.implicits.global
@@ -36,8 +35,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
   private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val groupId = "foo"
-  private val defaultNewUser = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), WorkbenchEmail("newGuy@organization.org"), 0)
-  private val defaultGoogleSubjectId = Option(GoogleSubjectId("NewGuy"))
+  private val defaultNewUser = Generator.genWorkbenchUserGoogle.sample.get
 
   def assertGroupDoesNotExist(samRoutes: SamRoutes, groupId: String = groupId): Unit = {
     Get(s"/api/groups/v1/$groupId") ~> samRoutes.route ~> check {
@@ -64,9 +62,9 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
   }
 
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
-  def makeOtherUser(samRoutes: SamRoutes, userInfo: UserInfo = defaultNewUser) = new {
-    runAndWait(samRoutes.userService.createUser(WorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
-    val email = userInfo.userEmail
+  def makeOtherUser(samRoutes: SamRoutes, userInfo: SamUser = defaultNewUser) = new {
+    runAndWait(samRoutes.userService.createUser(userInfo, samRequestContext))
+    val email = userInfo.email
     val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.directoryDAO, samRoutes.registrationDAO)
   }
 
@@ -80,8 +78,8 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     assertCreateGroup(defaultRoutes)
     assertGetGroup(defaultRoutes)
 
-    val theDude = UserInfo(OAuth2BearerToken("tokenDude"), WorkbenchUserId("ElDudarino"), WorkbenchEmail("ElDudarino@example.com"), 0)
-    defaultRoutes.directoryDAO.createUser(WorkbenchUser(theDude.userId, None, theDude.userEmail, None), samRequestContext).unsafeRunSync()
+    val theDude = Generator.genWorkbenchUserGoogle.sample.get
+    defaultRoutes.directoryDAO.createUser(theDude, samRequestContext).unsafeRunSync()
     val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.policyEvaluatorService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.directoryDAO, defaultRoutes.registrationDAO)
     body(dudesRoutes)
   }
@@ -95,16 +93,15 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
   it should "respond with 200 if the requesting user is in the member policy for the group" in {
     val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, Generator.genResourceId.sample.get, Set.empty))
-    val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
-    val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
+    val newGuy = Generator.genWorkbenchUserGoogle.sample.get
     val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.directoryDAO, samRoutes.registrationDAO)
 
     assertCreateGroup(samRoutes = samRoutes)
     assertGetGroup(samRoutes = samRoutes)
 
-    samRoutes.userService.createUser(WorkbenchUser(newGuy.userId, defaultGoogleSubjectId, newGuy.userEmail, None), samRequestContext).futureValue
+    samRoutes.userService.createUser(newGuy, samRequestContext).futureValue
 
-    setGroupMembers(samRoutes, Set(newGuyEmail), expectedStatus = StatusCodes.Created)
+    setGroupMembers(samRoutes, Set(newGuy.email), expectedStatus = StatusCodes.Created)
 
     assertGetGroup(newGuyRoutes)
   }
@@ -121,8 +118,8 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     assertCreateGroup(samRoutes)
 
     val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
-    val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
-    samRoutes.directoryDAO.createUser(WorkbenchUser(newGuy.userId, None, newGuyEmail, None), samRequestContext).unsafeRunSync()
+    val newGuy = Generator.genWorkbenchUserGoogle.sample.get
+    samRoutes.directoryDAO.createUser(newGuy, samRequestContext).unsafeRunSync()
     val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao)
 
 
@@ -311,7 +308,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
     Get(s"/api/groups/v1/$groupId/admin") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[String] should include (TestSamRoutes.defaultUserInfo.userEmail.value)
+      responseAs[String] should include (TestSamRoutes.defaultUserInfo.email.value)
     }
   }
 
@@ -431,8 +428,8 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
     assertCreateGroup(samRoutes)
 
-    val defaultUserInfo = samRoutes.userInfo
-    Put(s"/api/groups/v1/$groupId/admin/${defaultUserInfo.userEmail}") ~> samRoutes.route ~> check {
+    val defaultUserInfo = samRoutes.user
+    Put(s"/api/groups/v1/$groupId/admin/${defaultUserInfo.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -478,7 +475,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
     val newGuy = makeOtherUser(samRoutes)
 
-    Put(s"/api/groups/v1/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
+    Put(s"/api/groups/v1/$groupId/admin/${samRoutes.user.email}") ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -489,7 +486,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
     assertCreateGroup(samRoutes)
 
-    Delete(s"/api/groups/v1/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/groups/v1/$groupId/admin/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -501,7 +498,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
     assertCreateGroup(samRoutes)
 
-    Delete(s"/api/groups/v1/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/groups/v1/$groupId/admin/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -509,7 +506,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
   it should "respond with 404 when the group does not exist" in {
     val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
 
-    Delete(s"/api/groups/v1/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/groups/v1/$groupId/admin/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -519,7 +516,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
     assertCreateGroup(samRoutes)
 
-    Delete(s"/api/groups/v1/$groupId/people/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/groups/v1/$groupId/people/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -532,7 +529,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     val newGuy = makeOtherUser(samRoutes)
 
 
-    Delete(s"/api/groups/v1/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
+    Delete(s"/api/groups/v1/$groupId/admin/${samRoutes.user.email}") ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }

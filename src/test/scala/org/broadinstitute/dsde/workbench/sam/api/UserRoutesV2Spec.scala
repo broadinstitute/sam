@@ -4,7 +4,6 @@ package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
@@ -20,8 +19,8 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO, NoExtensions)
-    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO,registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), petSAUserId, petSAEmail, 0), directoryDAO, registrationDAO, NoExtensions)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO, NoExtensions)
+    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO,registrationDAO, NoExtensions, TestSupport.dbRef), null, petSAUser, directoryDAO, registrationDAO, NoExtensions)
     testCode(samRoutes, SARoutes)
   }
 
@@ -44,7 +43,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
-    val (user, samDep, routes) = createTestUser(googSubjectId = Some(googleSubjectId))
+    val (user, samDep, routes) = createTestUser()
     Get("/register/user/v2/self/info") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true, true)
@@ -56,7 +55,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     Get("/register/user/v2/self/diagnostics") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
-    val (user, samDep, routes) = createTestUser(googSubjectId = Some(googleSubjectId), tosEnabled = true, tosAccepted = true)
+    val (user, samDep, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
 
     Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK

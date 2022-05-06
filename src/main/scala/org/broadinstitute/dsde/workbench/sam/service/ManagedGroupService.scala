@@ -32,11 +32,11 @@ class ManagedGroupService(
       ManagedGroupService.managedGroupTypeName,
       throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
 
-  def createManagedGroup(groupId: ResourceId, userInfo: UserInfo, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[Resource] = {
+  def createManagedGroup(groupId: ResourceId, userInfo: SamUser, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
     val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), None, None)
-    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(adminRole), None, None)
+    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(userInfo.email), Set.empty, Set(adminRole), None, None)
     val adminNotificationPolicy = ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(
       Set.empty,
       Set.empty,
@@ -46,7 +46,7 @@ class ManagedGroupService(
 
     validateGroupName(groupId.value)
     for {
-      managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, None, userInfo.userId, samRequestContext)
+      managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, None, userInfo.id, samRequestContext)
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId, samRequestContext)
       workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt, samRequestContext)
       _ <- IO.fromFuture(IO(cloudExtensions.publishGroup(workbenchGroup.id)))
@@ -149,7 +149,7 @@ class ManagedGroupService(
   }
 
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
-    def extractGoogleSubjectId(requesterUser: Option[WorkbenchUser]): IO[WorkbenchUserId] =
+    def extractGoogleSubjectId(requesterUser: Option[SamUser]): IO[WorkbenchUserId] =
       (for { u <- requesterUser; s <- u.googleSubjectId } yield s) match {
         case Some(subjectId) => IO.pure(WorkbenchUserId(subjectId.value))
         // don't know how a user would get this far without getting a subject id

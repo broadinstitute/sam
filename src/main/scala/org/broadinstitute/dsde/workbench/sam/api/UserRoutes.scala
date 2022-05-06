@@ -10,7 +10,6 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
-import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
@@ -52,7 +51,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               get {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
                   complete {
-                    userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
+                    userService.getUserStatus(user.id, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -71,7 +70,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 get {
                   requireUserInfo(samRequestContext) { userInfo =>
                     complete {
-                      userService.getTermsOfServiceStatus(userInfo.userId, samRequestContext).map { statusOption =>
+                      userService.getTermsOfServiceStatus(userInfo.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(JsBoolean(status))
@@ -88,7 +87,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 requireUserInfo(samRequestContext) { userInfo =>
                   withTermsOfServiceAcceptance {
                     complete {
-                      userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                      userService.acceptTermsOfService(userInfo.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(status)
@@ -102,7 +101,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               delete {
                 requireUserInfo(samRequestContext) { userInfo =>
                   complete {
-                    userService.rejectTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                    userService.rejectTermsOfService(userInfo.id, samRequestContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -132,7 +131,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               path("info") {
                 get {
                   complete {
-                    userService.getUserStatusInfo(user.userId, samRequestContext).map { statusOption =>
+                    userService.getUserStatusInfo(user.id, samRequestContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -145,7 +144,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 path("diagnostics") {
                   get {
                     complete {
-                      userService.getUserStatusDiagnostics(user.userId, samRequestContext).map { statusOption =>
+                      userService.getUserStatusDiagnostics(user.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(status)
@@ -182,7 +181,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                   pathEnd {
                     delete {
                       complete {
-                        userService.deleteUser(WorkbenchUserId(userId), userInfo, samRequestContext).map(_ => StatusCodes.OK)
+                        userService.deleteUser(WorkbenchUserId(userId), samRequestContext).map(_ => StatusCodes.OK)
                       }
                     } ~
                       get {
@@ -267,7 +266,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 path(Segment) { inviteeEmail =>
                   complete {
                     userService
-                      .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)), samRequestContext)
+                      .inviteUser(WorkbenchEmail(inviteeEmail.trim), samRequestContext)
                       .map(userStatus => StatusCodes.Created -> userStatus)
                   }
                 }
@@ -278,5 +277,3 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
     }
   }
 }
-
-final case class InviteUser(inviteeId: WorkbenchUserId, inviteeEmail: WorkbenchEmail)

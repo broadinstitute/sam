@@ -3,7 +3,6 @@ package google
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -244,13 +243,13 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   "GET /api/google/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
     // create a pet service account key
-    Get(s"/api/google/petServiceAccount/myproject/${defaultUserInfo.userEmail.value}") ~> samRoutes.route ~> check {
+    Get(s"/api/google/petServiceAccount/myproject/${defaultUserInfo.email.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[String]
       response shouldEqual(expectedJson)
@@ -260,7 +259,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   it should "404 when user does not exist" in {
     val (defaultUserInfo, samRoutes, _) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.userEmail), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
+    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
@@ -289,30 +288,21 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
   val configResourceTypes = TestSupport.configResourceTypes
 
   def createTestUser(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty[ResourceTypeName, ResourceType],
-                             googIamDAO: Option[GoogleIamDAO] = None,
-                             googleServicesConfig: GoogleServicesConfig = TestSupport.googleServicesConfig,
-                             googSubjectId: Option[GoogleSubjectId] = None,
-                             email: Option[WorkbenchEmail] = None,
-                             azureB2CIdOpt: Option[AzureB2CId] = None,
-                             policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-                             resourceServiceOpt: Option[ResourceService] = None
-                    ): (WorkbenchUser, SamDependencies, SamRoutes) = {
-    val em = email.getOrElse(defaultUserEmail)
-    val googleSubjectId = googSubjectId.map(_.value).getOrElse(genRandom(System.currentTimeMillis()))
-
-    val userInfo = UserInfo(OAuth2BearerToken(""), WorkbenchUserId(googleSubjectId), em, 3600)
-
+                     googIamDAO: Option[GoogleIamDAO] = None,
+                     googleServicesConfig: GoogleServicesConfig = TestSupport.googleServicesConfig,
+                     policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
+                     resourceServiceOpt: Option[ResourceService] = None,
+                     user: SamUser = Generator.genWorkbenchUserBoth.sample.get
+                    ): (SamUser, SamDependencies, SamRoutes) = {
     val samDependencies = genSamDependencies(resourceTypes, googIamDAO, googleServicesConfig, policyEvaluatorServiceOpt = policyEvaluatorServiceOpt, resourceServiceOpt = resourceServiceOpt)
-    val createRoutes = genSamRoutes(samDependencies, userInfo)
+    val createRoutes = genSamRoutes(samDependencies, user)
 
     // create a user
-    val user = Post("/register/user/v1/") ~> createRoutes.route ~> check {
+    Post("/register/user/v1/") ~> createRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
-      res.userInfo.userEmail shouldBe em
+      res.userInfo.userEmail shouldBe user.email
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
-
-      WorkbenchUser(res.userInfo.userSubjectId, Some(GoogleSubjectId(googleSubjectId)), res.userInfo.userEmail, azureB2CIdOpt)
     }
 
     (user, samDependencies, createRoutes)
@@ -329,23 +319,20 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     (googleIamDAO, expectedJson)
   }
 
-  def setupPetSATest(): (UserInfo, SamRoutes, String) = {
+  def setupPetSATest(): (SamUser, SamRoutes, String) = {
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    val email = genNonPetEmail.sample.get
+    val samUser = Generator.genWorkbenchUserGoogle.sample.get
     val (user, samDeps, routes) = createTestUser(
       configResourceTypes,
       Some(googleIamDAO),
-      TestSupport.googleServicesConfig.copy(serviceAccountClientEmail = email, serviceAccountClientId = googleSubjectId.value),
-      Some(googleSubjectId),
-      Some(email)
+      TestSupport.googleServicesConfig.copy(serviceAccountClientEmail = samUser.email, serviceAccountClientId = samUser.googleSubjectId.get.value),
+      user = samUser
     )
 
     val regDAO = new MockRegistrationDAO
 
-    val userInfo = UserInfo(genOAuth2BearerToken.sample.get, user.id, email, 0)
     samDeps.cloudExtensions.asInstanceOf[GoogleExtensions].onBoot(SamApplication(samDeps.userService,
       samDeps.resourceService, samDeps.statusService, new TosService(samDeps.directoryDAO, regDAO, "example.com", TestSupport.tosConfig))).unsafeRunSync()
-    (userInfo.copy(userId = user.id), routes, expectedJson)
+    (user, routes, expectedJson)
   }
 }
