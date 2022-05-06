@@ -18,42 +18,54 @@ import scala.io.Source
 class TosService (val directoryDao: DirectoryDAO, val registrationDao: RegistrationDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   val termsOfServiceFile = "termsOfService.md"
 
-  def resetTermsOfServiceGroupsIfNeeded(): IO[Option[BasicWorkbenchGroup]] = {
+  def resetTermsOfServiceGroupsIfNeeded(samRequestContext: SamRequestContext): IO[Option[WorkbenchGroupName]] = {
     if(tosConfig.enabled) {
-      getTosGroup().flatMap {
+      getTosGroupName(samRequestContext).flatMap {
         case None =>
-          logger.info(s"creating new ToS group ${getGroupName()}")
-          val groupEmail = WorkbenchEmail(s"GROUP_${getGroupName(tosConfig.version)}@$appsDomain")
-          directoryDao.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(getGroupName(tosConfig.version)), Set.empty, groupEmail), None, SamRequestContext(None)).flatMap { createdGroup =>
-            if(tosConfig.version > 0) registrationDao.disableAllHumanIdentities(SamRequestContext(None)).map { _ => Option(createdGroup)} //special clause for v0 ToS, which will be enforced via a migration (see WOR-118)
-            else IO.pure(Option(createdGroup))
+          logger.info(s"creating new ToS group ${getGroupNameString()}")
+          val groupEmail = WorkbenchEmail(s"GROUP_${getGroupNameString(tosConfig.version)}@$appsDomain")
+          val tosGroup = BasicWorkbenchGroup(WorkbenchGroupName(getGroupNameString(tosConfig.version)), Set.empty, groupEmail)
+          directoryDao.createGroup(tosGroup, None, samRequestContext).handleError {
+            case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => tosGroup
+          }.flatMap { createdGroup =>
+            if(tosConfig.version > 0) registrationDao.disableAllHumanIdentities(samRequestContext).handleError { e =>
+              // If this call has failed, then human users won't be disabled and they will not be forced to accept the
+              // new ToS version to use Terra which is a compliance issue. Ensuring that human users are disabled is
+              // challenging. Instead, we have set up log-based alerting to notify us of this issue so we can manually
+              // disable human users (https://broadworkbench.atlassian.net/browse/WOR-280). If you must modify this
+              // log message, please modify the alert as well.
+              logger.error(s"Failed to disable all human identities when setting up ${getGroupNameString()}", e)
+              throw e
+            }.map { _ => Option(createdGroup.id)} //special clause for v0 ToS, which will be enforced via a migration (see WOR-118)
+            else IO.pure(Option(createdGroup.id))
           }
-        case group => IO.pure(group)
+        case groupName => IO.pure(groupName)
       }
     } else IO.none
   }
 
-  def getGroupName(currentVersion:Int = tosConfig.version): String = {
+  def getGroupNameString(currentVersion:Int = tosConfig.version): String = {
     s"tos_accepted_${currentVersion}"
   }
 
-  def getTosGroup(): IO[Option[BasicWorkbenchGroup]] = {
-    directoryDao.loadGroup(WorkbenchGroupName(getGroupName()), SamRequestContext(None))
+  def getTosGroupName(samRequestContext: SamRequestContext): IO[Option[WorkbenchGroupName]] = {
+    val groupName = WorkbenchGroupName(getGroupNameString())
+    directoryDao.loadGroupEmail(groupName, samRequestContext).map(_.map(_ => groupName))
   }
 
-  def acceptTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] =
+  def acceptTosStatus(user: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
-      resetTermsOfServiceGroupsIfNeeded().flatMap {
-        case Some(group) => directoryDao.addGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
-        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} failed to create.")))
+      resetTermsOfServiceGroupsIfNeeded(samRequestContext).flatMap {
+        case Some(groupName) => directoryDao.addGroupMember(groupName, user, samRequestContext).map(Option(_))
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupNameString()} failed to create.")))
       }
     } else IO.pure(None)
 
-  def rejectTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] =
+  def rejectTosStatus(user: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
-      resetTermsOfServiceGroupsIfNeeded().flatMap {
-        case Some(group) => directoryDao.removeGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
-        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} failed to create.")))
+      resetTermsOfServiceGroupsIfNeeded(samRequestContext).flatMap {
+        case Some(groupName) => directoryDao.removeGroupMember(groupName, user, samRequestContext).map(Option(_))
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupNameString()} failed to create.")))
       }
     } else IO.pure(None)
 
@@ -63,11 +75,11 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
     *         IO[Some(false)] if ToS is enabled and the user hasn't accepted
     *         IO[None] if ToS is disabled
     */
-  def getTosStatus(user: WorkbenchSubject): IO[Option[Boolean]] = {
+  def getTosStatus(user: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[Boolean]] = {
     if (tosConfig.enabled) {
-      getTosGroup().flatMap {
-        case Some(group) => directoryDao.isGroupMember(group.id, user, SamRequestContext(None)).map(Option(_))
-        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} not found.")))
+      getTosGroupName(samRequestContext).flatMap {
+        case Some(groupName) => directoryDao.isGroupMember(groupName, user, samRequestContext).map(Option(_))
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupNameString()} not found.")))
       }
     } else IO.none
   }
