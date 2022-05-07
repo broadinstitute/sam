@@ -84,9 +84,9 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     resource
   }
 
-  private def makeGroup(groupName: String, managedGroupService: ManagedGroupService, userInfo: SamUser = dummyUser) = {
+  private def makeGroup(groupName: String, managedGroupService: ManagedGroupService, samUser: SamUser = dummyUser) = {
     makeResourceType(managedGroupResourceType)
-    runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), userInfo, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), samUser, samRequestContext = samRequestContext))
   }
 
   before {
@@ -311,7 +311,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(adminUser.email)
   }
 
-  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: SamUser): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, userInfo, samRequestContext))
+  private def makeResource(resourceType: ResourceType, resourceId: ResourceId, samUser: SamUser): Resource = runAndWait(resourceService.createResource(resourceType, resourceId, samUser, samRequestContext))
 
   "ManagedGroupService listGroups" should "return the list of groups that passed user belongs to" in {
     // Setup multiple managed groups owned by different users.

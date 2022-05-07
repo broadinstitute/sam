@@ -22,7 +22,7 @@ trait MockUserInfoDirectives extends UserInfoDirectives {
     petSAdomain.pattern.matcher(email).matches
   }
 
-  override def requireUserInfo(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
+  override def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
     directoryDAO.loadSubjectFromEmail(user.email, samRequestContext).map { maybeUser =>
       maybeUser.map { _ =>
         if (isPetSA(user.email.value)) {

@@ -42,7 +42,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     val testActionAccess = ResourceActionPattern("test_action_access::.+", "", false)
   }
 
-  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], userInfo: SamUser = defaultUserInfo) = {
+  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], samUser: SamUser = defaultUserInfo) = {
     val directoryDAO = new MockDirectoryDAO()
     val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
     val registrationDAO = new MockRegistrationDAO()
@@ -56,7 +56,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
     mockUserService.createUser(defaultUserInfo, samRequestContext)
 
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO, registrationDAO)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, registrationDAO)
   }
 
   "GET /api/resource/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {

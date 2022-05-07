@@ -25,13 +25,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
   override def extensionRoutes: server.Route =
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo(samRequestContext) { userInfo =>
+        requireActiveUser(samRequestContext) { samUser =>
           path("petServiceAccount" / Segment / Segment) { (project, userEmail) =>
             get {
               requireAction(
                 FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
                 GoogleExtensions.getPetPrivateKeyAction,
-                userInfo.id,
+                samUser.id,
                 samRequestContext) {
                 complete {
                   import spray.json._
@@ -52,7 +52,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     complete {
                       import spray.json._
                       googleExtensions
-                        .getArbitraryPetServiceAccountKey(userInfo, samRequestContext)
+                        .getArbitraryPetServiceAccountKey(samUser, samRequestContext)
                         .map(key => StatusCodes.OK -> key.parseJson)
                     }
                   }
@@ -63,7 +63,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     post {
                       entity(as[Set[String]]) { scopes =>
                         complete {
-                          googleExtensions.getArbitraryPetServiceAccountToken(userInfo, scopes, samRequestContext).map { token =>
+                          googleExtensions.getArbitraryPetServiceAccountToken(samUser, scopes, samRequestContext).map { token =>
                             StatusCodes.OK -> JsString(token)
                           }
                         }
@@ -76,14 +76,14 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                     requireOneOfActionIfParentIsWorkspace(
                       FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                       Set(SamResourceActions.createPet),
-                      userInfo.id,
+                      samUser.id,
                       samRequestContext) {
                       get {
                         complete {
                           import spray.json._
                           // parse json to ensure it is json and tells akka http the right content-type
                           googleExtensions
-                            .getPetServiceAccountKey(userInfo, GoogleProject(project), samRequestContext)
+                            .getPetServiceAccountKey(samUser, GoogleProject(project), samRequestContext)
                             .map { key =>
                               StatusCodes.OK -> key.parseJson
                             }
@@ -94,7 +94,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                         delete {
                           complete {
                             googleExtensions
-                              .removePetServiceAccountKey(userInfo.id, GoogleProject(project), ServiceAccountKeyId(keyId), samRequestContext)
+                              .removePetServiceAccountKey(samUser.id, GoogleProject(project), ServiceAccountKeyId(keyId), samRequestContext)
                               .map(_ => StatusCodes.NoContent)
                           }
                         }
@@ -104,13 +104,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       requireOneOfActionIfParentIsWorkspace(
                         FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                         Set(SamResourceActions.createPet),
-                        userInfo.id,
+                        samUser.id,
                         samRequestContext) {
                         post {
                           entity(as[Set[String]]) { scopes =>
                             complete {
                               googleExtensions
-                                .getPetServiceAccountToken(userInfo, GoogleProject(project), scopes, samRequestContext)
+                                .getPetServiceAccountToken(samUser, GoogleProject(project), scopes, samRequestContext)
                                 .map { token =>
                                   StatusCodes.OK -> JsString(token)
                                 }
@@ -123,11 +123,11 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       requireOneOfActionIfParentIsWorkspace(
                         FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                         Set(SamResourceActions.createPet),
-                        userInfo.id,
+                        samUser.id,
                         samRequestContext) {
                         get {
                           complete {
-                            googleExtensions.createUserPetServiceAccount(userInfo, GoogleProject(project), samRequestContext).map {
+                            googleExtensions.createUserPetServiceAccount(samUser, GoogleProject(project), samRequestContext).map {
                               petSA =>
                                 StatusCodes.OK -> petSA.serviceAccount.email
                             }
@@ -136,7 +136,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with UserInfoDirectives with
                       } ~
                         delete { // NOTE: This endpoint is not visible in Swagger
                           complete {
-                            googleExtensions.deleteUserPetServiceAccount(userInfo.id, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
+                            googleExtensions.deleteUserPetServiceAccount(samUser.id, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
                           }
                         }
                     }

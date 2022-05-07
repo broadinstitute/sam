@@ -24,7 +24,7 @@ import scala.util.matching.Regex
 trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
 
-  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
+  def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
     }

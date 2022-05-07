@@ -47,7 +47,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
-            (changeForbiddenToNotFound & requireUserInfo(samRequestContext)) { user =>
+            (changeForbiddenToNotFound & requireActiveUser(samRequestContext)) { user =>
               get {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
                   complete {
@@ -68,9 +68,9 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
             pathPrefix("status") {
               pathEndOrSingleSlash {
                 get {
-                  requireUserInfo(samRequestContext) { userInfo =>
+                  requireActiveUser(samRequestContext) { samUser =>
                     complete {
-                      userService.getTermsOfServiceStatus(userInfo.id, samRequestContext).map { statusOption =>
+                      userService.getTermsOfServiceStatus(samUser.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(JsBoolean(status))
@@ -84,10 +84,10 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
             } ~
             pathEndOrSingleSlash {
               post {
-                requireUserInfo(samRequestContext) { userInfo =>
+                requireActiveUser(samRequestContext) { samUser =>
                   withTermsOfServiceAcceptance {
                     complete {
-                      userService.acceptTermsOfService(userInfo.id, samRequestContext).map { statusOption =>
+                      userService.acceptTermsOfService(samUser.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(status)
@@ -99,9 +99,9 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 }
               } ~
               delete {
-                requireUserInfo(samRequestContext) { userInfo =>
+                requireActiveUser(samRequestContext) { samUser =>
                   complete {
-                    userService.rejectTermsOfService(userInfo.id, samRequestContext).map { statusOption =>
+                    userService.rejectTermsOfService(samUser.id, samRequestContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -127,7 +127,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
-            (changeForbiddenToNotFound & requireUserInfo(samRequestContext)) { user =>
+            (changeForbiddenToNotFound & requireActiveUser(samRequestContext)) { user =>
               path("info") {
                 get {
                   complete {
@@ -163,8 +163,8 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
   def adminUserRoutes: server.Route =
     pathPrefix("admin") {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo(samRequestContext) { userInfo =>
-          asWorkbenchAdmin(userInfo) {
+        requireActiveUser(samRequestContext) { samUser =>
+          asWorkbenchAdmin(samUser) {
             pathPrefix("user") {
               path("email" / Segment) { email =>
                 complete {
@@ -247,7 +247,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
   val apiUserRoutes: server.Route = pathPrefix("users") {
     pathPrefix("v1") {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo(samRequestContext) { userInfo =>
+        requireActiveUser(samRequestContext) { samUser =>
           get {
             path(Segment) { email =>
               pathEnd {

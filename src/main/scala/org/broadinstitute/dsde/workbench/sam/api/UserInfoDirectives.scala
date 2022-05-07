@@ -24,13 +24,13 @@ trait UserInfoDirectives {
   val cloudExtensions: CloudExtensions
   val termsOfServiceConfig: TermsOfServiceConfig
 
-  def requireUserInfo(samRequestContext: SamRequestContext): Directive1[SamUser]
+  def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
   def requireCreateUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
-  def asWorkbenchAdmin(userInfo: SamUser): Directive0 =
+  def asWorkbenchAdmin(samUser: SamUser): Directive0 =
     Directives.mapInnerRoute { r =>
-      onSuccess(cloudExtensions.isWorkbenchAdmin(userInfo.email)) { isAdmin =>
+      onSuccess(cloudExtensions.isWorkbenchAdmin(samUser.email)) { isAdmin =>
         if (!isAdmin) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You must be an admin.")))
         else r
       }

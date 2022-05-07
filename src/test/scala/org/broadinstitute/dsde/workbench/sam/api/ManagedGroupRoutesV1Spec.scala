@@ -62,10 +62,10 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
   }
 
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
-  def makeOtherUser(samRoutes: SamRoutes, userInfo: SamUser = defaultNewUser) = new {
-    runAndWait(samRoutes.userService.createUser(userInfo, samRequestContext))
-    val email = userInfo.email
-    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.directoryDAO, samRoutes.registrationDAO)
+  def makeOtherUser(samRoutes: SamRoutes, samUser: SamUser = defaultNewUser) = new {
+    runAndWait(samRoutes.userService.createUser(samUser, samRequestContext))
+    val email = samUser.email
+    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, samUser, samRoutes.directoryDAO, samRoutes.registrationDAO)
   }
 
   def setGroupMembers(samRoutes: SamRoutes, members: Set[WorkbenchEmail], expectedStatus: StatusCode): Unit = {

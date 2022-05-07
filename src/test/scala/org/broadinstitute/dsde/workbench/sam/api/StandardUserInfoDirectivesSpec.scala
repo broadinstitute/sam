@@ -144,14 +144,14 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val headers = createRequiredHeaders(externalId, email, accessToken)
     val user = services.directoryDAO.createUser(SamUser(genWorkbenchUserId(System.currentTimeMillis()), externalId.left.toOption, email = email, azureB2CId = externalId.toOption, false), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(x => complete(x.toString))} ~> check {
       status shouldBe StatusCodes.OK
       responseAs[String] shouldEqual user.toString
     }
   }
 
   it should "fail if required headers are missing" in {
-    Get("/") ~> handleExceptions(myExceptionHandler){directives().requireUserInfo(samRequestContext)(x => complete(x.toString))} ~> check {
+    Get("/") ~> handleExceptions(myExceptionHandler){directives().requireActiveUser(samRequestContext)(x => complete(x.toString))} ~> check {
       rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
   }
@@ -163,7 +163,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val existingUser = services.directoryDAO.createUser(googleUser, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler) {
-        services.requireUserInfo(samRequestContext)(x => complete(x.toString))
+        services.requireActiveUser(samRequestContext)(x => complete(x.toString))
       } ~> check {
       status shouldBe StatusCodes.OK
       val exptectedUser = existingUser.copy(azureB2CId = Option(azureB2CId))
@@ -178,7 +178,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val headers = createRequiredHeaders(Right(azureUser.azureB2CId.get), azureUser.email, accessToken, Option(googleSubjectId))
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler) {
-        services.requireUserInfo(samRequestContext)(x => complete(x.toString))
+        services.requireActiveUser(samRequestContext)(x => complete(x.toString))
       } ~> check {
       status shouldBe StatusCodes.OK
     }
