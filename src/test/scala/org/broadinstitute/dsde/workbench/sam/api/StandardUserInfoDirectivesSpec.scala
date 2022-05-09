@@ -81,7 +81,9 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val directoryDAO = new MockDirectoryDAO()
         val registrationDAO = new MockRegistrationDAO()
         val oidcHeaders = OIDCHeaders(token, externalId, email, None)
-        val res = getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        val res = intercept[WorkbenchExceptionWithErrorReport] {
+          getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        }
         res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
   }
@@ -92,23 +94,10 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val directoryDAO = new MockDirectoryDAO()
         val registrationDAO = new MockRegistrationDAO()
         val oidcHeaders = OIDCHeaders(token, Left(googleSubjectId), email, None)
-        val res = getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        val res = intercept[WorkbenchExceptionWithErrorReport] {
+          getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        }
         res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
-    }
-  }
-
-  it should "fail if a regular user email is provided, but subjectId is not for a regular user" in {
-    forAll(genServiceAccountSubjectId, genOAuth2BearerToken, genNonPetEmail){
-      (serviceSubjectId: ServiceAccountSubjectId, token: OAuth2BearerToken, email: WorkbenchEmail) =>
-        val directoryDAO = new MockDirectoryDAO()
-        val registrationDAO = new MockRegistrationDAO()
-        val gSid = GoogleSubjectId(serviceSubjectId.value)
-        val oidcHeaders = OIDCHeaders(token, Left(gSid), email, None)
-        val uid = genWorkbenchUserId(System.currentTimeMillis())
-        directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(uid, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
-        val res = getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
-
-        Eq[WorkbenchExceptionWithErrorReport].eqv(res, new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $gSid is not a WorkbenchUser"))) shouldBe(true)
     }
   }
 
@@ -119,7 +108,9 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         val registrationDAO = new MockRegistrationDAO()
         val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), email, Option(otherGoogleSubjectId))
         directoryDAO.createUser(googleUser, samRequestContext).unsafeRunSync()
-        val res = getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).attempt.unsafeRunSync().swap.toOption.get.asInstanceOf[WorkbenchExceptionWithErrorReport]
+        val res = intercept[WorkbenchExceptionWithErrorReport] {
+          getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        }
         res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
   }
