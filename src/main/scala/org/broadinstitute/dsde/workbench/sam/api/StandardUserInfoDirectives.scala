@@ -72,7 +72,7 @@ object StandardUserInfoDirectives {
 
   def getUserInfo(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[SamUser] = {
     oidcHeaders match {
-      case OIDCHeaders(_, Left(googleSubjectId), saEmail@WorkbenchEmail(SAdomain(_)), _) =>
+      case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _) =>
         // If it's a PET account, we treat it as its owner
         directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
           case Some(petsOwner) => IO.pure(petsOwner)
@@ -114,18 +114,8 @@ object StandardUserInfoDirectives {
   }
 
   private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] =
-    for {
-      maybeSamUser <- directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext)
-      samUser <- maybeSamUser match {
-        case Some(samUser) => IO.pure(samUser)
-        case None => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).flatMap {
-          case Some(_) =>
-            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a WorkbenchUser")))
-          case None =>
-            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam")))
-        }
-      }
-    } yield samUser
+    directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext).map(
+      _.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam"))))
 }
 
 final case class OIDCHeaders(token: OAuth2BearerToken, externalId: Either[GoogleSubjectId, AzureB2CId], email: WorkbenchEmail, googleSubjectIdFromAzure: Option[GoogleSubjectId])
