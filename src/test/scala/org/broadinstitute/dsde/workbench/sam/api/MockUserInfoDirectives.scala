@@ -35,7 +35,9 @@ trait MockUserInfoDirectives extends UserInfoDirectives {
     }.unsafeToFuture()
   }
 
-  override def requireCreateUser(samRequestContext: SamRequestContext): Directive1[SamUser] = workbenchUser match {
+  override def requireUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireActiveUser(samRequestContext)
+
+  override def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = workbenchUser match {
     case None => failWith(new Exception("workbenchUser not specified"))
     case Some(u) => provide(u)
   }

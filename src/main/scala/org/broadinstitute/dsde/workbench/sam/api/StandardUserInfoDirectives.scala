@@ -26,11 +26,28 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
 
   def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
+      val requireActiveUserIO = for {
+        user <- getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext)
+        tosStatus <- tosService.getTosStatus(user.id, samRequestContext)
+      } yield {
+        val permittedToAccessTerra = tosStatus.getOrElse(true) && user.enabled
+        if (permittedToAccessTerra) {
+          user
+        } else {
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled or has not accepted the terms of service."))
+        }
+      }
+      requireActiveUserIO.unsafeToFuture()
     }
   }
 
-  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildWorkbenchUser)
+  def requireUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
+    onSuccess {
+      getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
+    }
+  }
+
+  def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildWorkbenchUser)
 
   private def buildWorkbenchUser(oidcHeaders: OIDCHeaders): SamUser = {
     // google id can either be in the external id or google id from azure headers, favor the external id as the source
@@ -70,7 +87,7 @@ object StandardUserInfoDirectives {
   val userIdHeader = "OIDC_CLAIM_user_id"
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
 
-  def getUserInfo(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[SamUser] = {
+  def getSamUser(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[SamUser] = {
     oidcHeaders match {
       case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _) =>
         // If it's a PET account, we treat it as its owner
