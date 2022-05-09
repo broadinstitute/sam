@@ -65,14 +65,14 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "generate the expected group name" in {
-    assert(tosServiceEnabled.getGroupNameString(0) == "tos_accepted_0")
-    assert(tosServiceEnabled.getGroupNameString(10) == "tos_accepted_10")
+    assert(tosServiceEnabled.getGroupName(0).value == "tos_accepted_0")
+    assert(tosServiceEnabled.getGroupName(10).value == "tos_accepted_10")
   }
 
   it should "create the group once" in {
-    assert(tosServiceEnabled.getTosGroupName(samRequestContext).unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
+    assert(tosServiceEnabled.getTosGroupNameIfExists(samRequestContext).unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
     assert(tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync().isDefined, "resetTermsOfServiceGroupsIfNeeded() should create the group initially")
-    val maybeGroup = tosServiceEnabled.getTosGroupName(samRequestContext).unsafeRunSync()
+    val maybeGroup = tosServiceEnabled.getTosGroupNameIfExists(samRequestContext).unsafeRunSync()
     assert(maybeGroup.isDefined, "ToS Group should exist after above call")
     assert(maybeGroup.get.value == "tos_accepted_0")
     assert(tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync().isDefined, "resetTermsOfServiceGroupsIfNeeded() should return the same response when called again")
@@ -86,7 +86,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
       .thenReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "group already exists!")(ErrorReportSource("sam")))))
     when(mockDirDAO.loadGroupEmail(any[WorkbenchGroupName], any[SamRequestContext])).thenReturn(IO(None))
 
-    assert(tosService.getTosGroupName(samRequestContext).unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
+    assert(tosService.getTosGroupNameIfExists(samRequestContext).unsafeRunSync().isEmpty, "ToS Group should not exist at the start")
     assert(tosService.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync().isDefined, "resetTermsOfServiceGroupsIfNeeded() should not fail if the group is created after it tries to load it")
   }
 

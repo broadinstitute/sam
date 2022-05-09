@@ -67,9 +67,6 @@ object TestSupport extends TestSupport {
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
 
-  implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] =
-    (x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport) =>
-      x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message
   val config = ConfigFactory.load()
   val appConfig = AppConfig.readConfig(config)
   val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig

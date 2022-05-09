@@ -113,6 +113,6 @@ object NoExtensionsInitializer extends CloudExtensionsInitializer {
 }
 
 trait NoExtensionRoutes extends ExtensionRoutes {
-  def extensionRoutes: server.Route = reject
+  def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   val cloudExtensions = NoExtensions
 }
