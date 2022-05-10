@@ -305,14 +305,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     rejectedStatus shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)))
   }
 
-  it should "not accept the tos for users who do not exist" in {
-    tosServiceEnabled.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
-    val res = intercept[WorkbenchExceptionWithErrorReport] {
-      serviceTosEnabled.acceptTermsOfService(genWorkbenchUserId(System.currentTimeMillis()), samRequestContext).unsafeRunSync()
-    }
-    res.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
-  }
-
   it should "not accept the tos for users when the terms of service is not enabled" in {
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue

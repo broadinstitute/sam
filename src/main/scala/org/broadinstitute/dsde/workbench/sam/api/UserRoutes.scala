@@ -69,7 +69,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 get {
                   requireUserAllowInactive(samRequestContext) { samUser =>
                     complete {
-                      userService.getTermsOfServiceStatus(samUser.id, samRequestContext).map { statusOption =>
+                      tosService.getTosStatus(samUser.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(JsBoolean(status))

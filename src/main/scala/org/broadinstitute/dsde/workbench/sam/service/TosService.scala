@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName, WorkbenchSubject}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -53,18 +53,18 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
     directoryDao.loadGroupEmail(groupName, samRequestContext).map(_.map(_ => groupName))
   }
 
-  def acceptTosStatus(user: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
+  def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
       resetTermsOfServiceGroupsIfNeeded(samRequestContext).flatMap {
-        case Some(groupName) => directoryDao.addGroupMember(groupName, user, samRequestContext).map(Option(_))
+        case Some(groupName) => directoryDao.addGroupMember(groupName, userId, samRequestContext).map(Option(_))
         case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} failed to create.")))
       }
     } else IO.pure(None)
 
-  def rejectTosStatus(user: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
+  def rejectTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
       resetTermsOfServiceGroupsIfNeeded(samRequestContext).flatMap {
-        case Some(groupName) => directoryDao.removeGroupMember(groupName, user, samRequestContext).map(Option(_))
+        case Some(groupName) => directoryDao.removeGroupMember(groupName, userId, samRequestContext).map(Option(_))
         case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Terms of Service group ${getGroupName()} failed to create.")))
       }
     } else IO.pure(None)
@@ -75,10 +75,23 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
     *         IO[Some(false)] if ToS is enabled and the user hasn't accepted
     *         IO[None] if ToS is disabled
     */
-  def getTosStatus(user: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[Boolean]] = {
+  def getTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] = {
     if (tosConfig.enabled) {
-      directoryDao.isGroupMember(getGroupName(), user, samRequestContext).map(Option(_))
+      directoryDao.isGroupMember(getGroupName(), userId, samRequestContext).map(Option(_))
     } else IO.none
+  }
+
+  /**
+    * If grace period enabled, don't check ToS, return true
+    * If ToS disabled, return true
+    * Otherwise return true if user has accepted ToS
+    */
+  def isTermsOfServiceStatusAcceptable(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    if (tosConfig.isGracePeriodEnabled) {
+      IO.pure(true)
+    } else {
+      getTosStatus(userId, samRequestContext).map(_.getOrElse(true))
+    }
   }
 
   /**

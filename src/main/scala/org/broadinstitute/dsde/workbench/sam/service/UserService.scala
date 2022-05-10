@@ -140,58 +140,33 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   }
 
   def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
-    directoryDAO.loadUser(userId, samRequestContext).flatMap {
-      case Some(_) =>
-        for {
-          _ <- tosService.acceptTosStatus(userId, samRequestContext)
-          enabled <- directoryDAO.isEnabled(userId, samRequestContext)
-          _ <- if (enabled) registrationDAO.enableIdentity(userId, samRequestContext) else IO.none
-          status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
-        } yield status
-      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not accept the Terms of Service. User not found.")))
-    }
+    for {
+      _ <- tosService.acceptTosStatus(userId, samRequestContext)
+      enabled <- directoryDAO.isEnabled(userId, samRequestContext)
+      _ <- if (enabled) registrationDAO.enableIdentity(userId, samRequestContext) else IO.none
+      status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
+    } yield status
   }
 
   def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
-    directoryDAO.loadUser(userId, samRequestContext).flatMap {
-      case Some(_) =>
-        for {
-          _ <- tosService.rejectTosStatus(userId, samRequestContext)
-          _ <- registrationDAO.disableIdentity(userId, samRequestContext)
-          status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
-        } yield status
-      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not reject the Terms of Service. User not found.")))
-    }
-  }
-
-  def getTermsOfServiceStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] = {
-    tosService.getTosStatus(userId, samRequestContext)
+    for {
+      _ <- tosService.rejectTosStatus(userId, samRequestContext)
+      _ <- registrationDAO.disableIdentity(userId, samRequestContext)
+      status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
+    } yield status
   }
 
   def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         for {
-          tosStatus <- getTermsOfServiceStatusInternal(user, samRequestContext)
+          tosStatus <- tosService.isTermsOfServiceStatusAcceptable(user.id, samRequestContext)
           adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
         } yield {
           Some(UserStatusInfo(user.id.value, user.email.value, tosStatus && adminEnabled, adminEnabled))
         }
       case None => IO.pure(None)
     }
-
-  /**
-    * If grace period enabled, don't check ToS, return true
-    * If ToS disabled, return true
-    * Otherwise return true if user has accepted ToS
-    */
-  private def getTermsOfServiceStatusInternal(user: SamUser, samRequestContext: SamRequestContext) = {
-    if (tosService.tosConfig.isGracePeriodEnabled) {
-      IO.pure(true)
-    } else {
-      getTermsOfServiceStatus(user.id, samRequestContext).map(_.getOrElse(true))
-    }
-  }
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatusDiagnostics]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {

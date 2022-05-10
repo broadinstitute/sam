@@ -28,9 +28,9 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     onSuccess {
       val requireActiveUserIO = for {
         user <- getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext)
-        tosStatus <- tosService.getTosStatus(user.id, samRequestContext)
+        tosStatusAcceptable <- tosService.isTermsOfServiceStatusAcceptable(user.id, samRequestContext)
       } yield {
-        val permittedToAccessTerra = tosStatus.getOrElse(true) && user.enabled
+        val permittedToAccessTerra = tosStatusAcceptable && user.enabled
         if (permittedToAccessTerra) {
           user
         } else {
