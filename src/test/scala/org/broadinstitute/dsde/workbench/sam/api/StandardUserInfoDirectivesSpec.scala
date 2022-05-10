@@ -161,6 +161,17 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     }
   }
 
+  it should "pass if user has rejected terms of service within grace period" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
+    val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true, isGracePeriodEnabled = true))
+    val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
+    services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
+    services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(_ => complete(""))} ~> check {
+      status shouldBe StatusCodes.OK
+    }
+  }
+
   it should "pass if user has accepted terms of service" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
     val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true))
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
