@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import cats.effect.unsafe.implicits.global
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -16,7 +17,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import java.net.URI
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.language.reflectiveCalls
 
 /**
@@ -65,7 +66,7 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao, ldapDirDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
-    val userService = new UserService(ldapDirDao, NoExtensions, registrationDAO, Seq.empty, new TosService(ldapDirDao, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val userService = new UserService(ldapDirDao, NoExtensions, registrationDAO, Seq.empty, new TosService(ldapDirDao, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     shared.resourceTypes foreach {case (_, resourceType) => resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync() }
   }
@@ -79,7 +80,7 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain)
-    val userService = new UserService(mockDirectoryDAO, NoExtensions, mockRegistrationDAO, Seq.empty, new TosService(mockDirectoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val userService = new UserService(mockDirectoryDAO, NoExtensions, mockRegistrationDAO, Seq.empty, new TosService(mockDirectoryDAO, mockRegistrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain)
   }
 

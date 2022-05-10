@@ -2,9 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import java.net.URI
 import java.util.UUID
-
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.IO
+import cats.effect.unsafe.implicits.{global => globalEc}
 import cats.implicits._
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
@@ -569,7 +569,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 }
 
-@deprecated("this allows testing of deprecated functions, remove as part of CA-1031", "")
+@deprecated("this allows testing of deprecated functions, remove as part of CA-1783", "")
 class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
   "listUserAccessPolicies" should "list user's access policies but not others" in {
     val resource1 = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource1"))

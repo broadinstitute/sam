@@ -3,13 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.google
 import java.net.URI
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{Date, GregorianCalendar, UUID}
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.testkit.TestKit
 import cats.data.NonEmptyList
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.api.services.cloudresourcemanager.model.Ancestor
@@ -38,7 +38,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
@@ -63,7 +63,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   lazy val googleServicesConfig = TestSupport.googleServicesConfig
 
   val configResourceTypes = TestSupport.configResourceTypes
-  override implicit val patienceConfig = PatienceConfig(1 second)
+  override implicit val patienceConfig = PatienceConfig(5 seconds)
   "Google group sync" should "add/remove the right emails and handle errors" in {
     // tests that emails only in sam get added to google
     // emails only in google are removed
@@ -344,8 +344,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
 
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, newRegistrationDAO(), null, mockGoogleDirectoryDAO, null, null, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
-    val tosService = new TosService(dirDAO, "example.com", TestSupport.tosConfig)
-    val service = new UserService(dirDAO, googleExtensions, googleExtensions.registrationDAO, Seq.empty, new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val tosService = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig)
+    val service = new UserService(dirDAO, googleExtensions, googleExtensions.registrationDAO, Seq.empty, new TosService(dirDAO, regDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
 
     val defaultUserId = WorkbenchUserId("newuser123")
     val defaultUserEmail = WorkbenchEmail("newuser@new.com")
@@ -534,8 +534,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mockRegistrationDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGoogleNotificationPubSubDAO, mockGoogleGroupSyncPubSubDAO, mockGoogleDisableUsersPubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, FakeGoogleKmsInterpreter, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
-    val app = SamApplication(new UserService(mockDirectoryDAO, ge, mockRegistrationDAO, Seq.empty, new TosService(mockDirectoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null,
-      new TosService(mockDirectoryDAO, "example.com", TestSupport.tosConfig))
+    val app = SamApplication(new UserService(mockDirectoryDAO, ge, mockRegistrationDAO, Seq.empty, new TosService(mockDirectoryDAO, mockRegistrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null,
+      new TosService(mockDirectoryDAO, mockRegistrationDAO, "example.com", TestSupport.tosConfig))
     val resourceAndPolicyName = FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
 
     mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), samRequestContext).unsafeRunSync() shouldBe None
@@ -599,6 +599,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    when(mockGoogleDirectoryDAO.lockedDownGroupSettings).thenCallRealMethod()
 
     googleExtensions.onUserCreate(user, samRequestContext).futureValue
 
@@ -728,7 +729,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val regDAO = newRegistrationDAO()
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, regDAO, null, mockGoogleDirectoryDAO, mockGoogleNotificationPubSubDAO, null, null, mockGoogleIamDAO, mockGoogleStorageDAO, mockGoogleProjectDAO, googleKeyCache, notificationDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
-    val service = new UserService(dirDAO, googleExtensions, regDAO, Seq.empty, new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val service = new UserService(dirDAO, googleExtensions, regDAO, Seq.empty, new TosService(dirDAO, regDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
 
     (googleExtensions, service)
   }
@@ -838,7 +839,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     * the ResourceService and clears the database
     */
   private def initPrivateTest: (DirectoryDAO, RegistrationDAO, GoogleExtensions, ResourceService, ManagedGroupService, ResourceType, ResourceRole, GoogleGroupSynchronizer) = {
-    implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
     //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
     val realResourceTypes = TestSupport.appConfig.resourceTypes
     val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap

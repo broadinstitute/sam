@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
+import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
 
@@ -52,6 +53,56 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
                   complete {
                     userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
+                      statusOption
+                        .map { status =>
+                          StatusCodes.OK -> Option(status)
+                        }
+                        .getOrElse(StatusCodes.NotFound -> None)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } ~ withSamRequestContext { samRequestContext =>
+          pathPrefix("termsofservice") {
+            pathPrefix("status") {
+              pathEndOrSingleSlash {
+                get {
+                  requireUserInfo(samRequestContext) { userInfo =>
+                    complete {
+                      userService.getTermsOfServiceStatus(userInfo.userId, samRequestContext).map { statusOption =>
+                        statusOption
+                          .map { status =>
+                            StatusCodes.OK -> Option(JsBoolean(status))
+                          }
+                          .getOrElse(StatusCodes.NotFound -> None)
+                      }
+                    }
+                  }
+                }
+              }
+            } ~
+            pathEndOrSingleSlash {
+              post {
+                requireUserInfo(samRequestContext) { userInfo =>
+                  withTermsOfServiceAcceptance {
+                    complete {
+                      userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                        statusOption
+                          .map { status =>
+                            StatusCodes.OK -> Option(status)
+                          }
+                          .getOrElse(StatusCodes.NotFound -> None)
+                      }
+                    }
+                  }
+                }
+              } ~
+              delete {
+                requireUserInfo(samRequestContext) { userInfo =>
+                  complete {
+                    userService.rejectTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -150,7 +201,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                       pathEndOrSingleSlash {
                         put {
                           complete {
-                            userService.enableUser(WorkbenchUserId(userId), userInfo, samRequestContext).map { statusOption =>
+                            userService.enableUser(WorkbenchUserId(userId), samRequestContext).map { statusOption =>
                               statusOption
                                 .map { status =>
                                   StatusCodes.OK -> Option(status)
@@ -198,23 +249,6 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
     pathPrefix("v1") {
       withSamRequestContext { samRequestContext =>
         requireUserInfo(samRequestContext) { userInfo =>
-          pathPrefix("tos" / "accept") {
-            pathEndOrSingleSlash {
-              post {
-                withTermsOfServiceAcceptance {
-                  complete {
-                    userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
-                      statusOption
-                        .map { status =>
-                          StatusCodes.OK -> Option(status)
-                        }
-                        .getOrElse(StatusCodes.NotFound -> None)
-                    }
-                  }
-                }
-              }
-            }
-          } ~
           get {
             path(Segment) { email =>
               pathEnd {

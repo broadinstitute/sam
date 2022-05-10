@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
@@ -24,7 +25,6 @@ class ResourceService(
     private val cloudExtensions: CloudExtensions,
     val emailDomain: String)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
-  implicit val cs = IO.contextShift(executionContext) //for running IOs in paralell
 
   private[service] case class ValidatableAccessPolicy(
                                               policyName: AccessPolicyName,
@@ -468,10 +468,10 @@ class ResourceService(
   }
 
   private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] =
-    IO.fromFuture(IO(cloudExtensions.onGroupUpdate(Seq(groupId), samRequestContext))).runAsync {
+    IO.fromFuture(IO(cloudExtensions.onGroupUpdate(Seq(groupId), samRequestContext))).attempt.flatMap {
       case Left(regrets) => IO(logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", regrets))
       case Right(_) => IO.unit
-    }.toIO
+    }
 
   def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     subject match {

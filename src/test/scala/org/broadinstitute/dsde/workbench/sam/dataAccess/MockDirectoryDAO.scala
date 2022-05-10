@@ -14,14 +14,11 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext
 
 /**
   * Created by mbemis on 6/23/17.
   */
 class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
-  implicit val cs = IO.contextShift(ExecutionContext.global)
-
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
@@ -45,6 +42,8 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
       groupsWithEmails += group.email -> group.id
       IO.pure(group)
     }
+
+  override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
@@ -159,6 +158,10 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
 
   override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO {
     enabledUsers -= subject
+  }
+
+  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = IO {
+    enabledUsers --= enabledUsers.keys
   }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
@@ -288,14 +291,12 @@ class MockDirectoryDAO(private val groups: mutable.Map[WorkbenchGroupIdentity, W
   override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext)
       : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.azureB2CId.contains(userId)))
 
-  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Int] = IO {
-    val result = for {
+  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] = IO {
+    for {
       user <- users.get(userId)
     } yield {
       users += user.id -> user.copy(azureB2CId = Option(b2CId))
-      1
     }
-    result.getOrElse(0)
   }
 
   override def checkStatus(samRequestContext: SamRequestContext): Boolean = true

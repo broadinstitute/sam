@@ -18,11 +18,14 @@ trait RegistrationDAO {
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
   def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
   def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
+  def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit]
   def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean]
+  def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit]
   def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
   def loadPetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
   def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit]
   def checkStatus(samRequestContext: SamRequestContext): Boolean
+  def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit]
 }

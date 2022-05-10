@@ -2,20 +2,20 @@ import sbt._
 
 object Dependencies {
   val akkaV = "2.6.10"
-  val akkaHttpV = "10.2.2"
+  val akkaHttpV = "10.2.6"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.9.2"
   val scalaTestV    = "3.2.3"
   val scalaCheckV    = "1.14.0"
   val scalikejdbcVersion    = "3.4.1"
-  val postgresDriverVersion = "42.2.8"
+  val postgresDriverVersion = "42.3.3"
   val http4sVersion = "0.21.13"
 
   val workbenchUtilV   = "0.6-74c9fc2"
   val workbenchUtil2V   = "0.1-74c9fc2"
   val workbenchModelV  = "0.15-f9f0d4c"
-  val workbenchGoogleV = "0.21-51d7fff"
-  val workbenchGoogle2V = "0.21-9d25534"
+  val workbenchGoogleV = "0.21-8ce5b9b"
+  val workbenchGoogle2V = "0.23-11a45ad"
   val workbenchNotificationsV = "0.3-d74ff96"
   val monocleVersion = "2.0.3"
 
@@ -32,10 +32,10 @@ object Dependencies {
   val jacksonCore: ModuleID =        "com.fasterxml.jackson.core" % "jackson-core"        % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback"      % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.3"
+  val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.10"
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
-  val swaggerUi: ModuleID =      "org.webjars"                %  "swagger-ui"      % "3.52.3"
+  val swaggerUi: ModuleID =      "org.webjars.npm"                %  "swagger-ui-dist"      % "4.6.1"
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.5.0"
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
@@ -79,6 +79,8 @@ object Dependencies {
   val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.122.3" % "test" //needed for mocking google cloud storage
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
+
+  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.13.1"
 
   val scalikeCore =       "org.scalikejdbc"                   %% "scalikejdbc"         % scalikejdbcVersion
   val scalikeCoreConfig = "org.scalikejdbc"                   %% "scalikejdbc-config"  % scalikejdbcVersion
@@ -144,6 +146,8 @@ object Dependencies {
     commonsCodec,
 
     liquibaseCore,
+
+    circeYAML,
 
     scalikeCore,
     scalikeCoreConfig,

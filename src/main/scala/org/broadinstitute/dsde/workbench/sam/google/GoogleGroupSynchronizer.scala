@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model._

@@ -3,7 +3,8 @@ package service
 
 import java.security.SecureRandom
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 
@@ -21,7 +22,7 @@ import scala.util.matching.Regex
 /**
   * Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext, contextShift: ContextShift[IO]) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, val registrationDAO: RegistrationDAO, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext) extends LazyLogging {
 
   def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
     for {
@@ -124,10 +125,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
             tosAcceptedStatus <- tosService.getTosStatus(user.id).unsafeToFuture()
             ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
+            adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
             val enabledMap = Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
             val enabledStatuses = tosAcceptedStatus match {
-              case Some(status) => enabledMap + ("tosAccepted" -> status)
+              case Some(status) => enabledMap + ("tosAccepted" -> status) + ("adminEnabled" -> adminEnabled)
               case None => enabledMap
             }
             val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledStatuses))
@@ -142,18 +144,37 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(_) =>
         for {
           _ <- tosService.acceptTosStatus(userId)
+          enabled <- directoryDAO.isEnabled(userId, samRequestContext)
+          _ <- if (enabled) registrationDAO.enableIdentity(userId, samRequestContext) else IO.none
           status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
         } yield status
       case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not accept the Terms of Service. User not found.")))
     }
   }
 
+  def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
+    directoryDAO.loadUser(userId, samRequestContext).flatMap {
+      case Some(_) =>
+        for {
+          _ <- tosService.rejectTosStatus(userId)
+          _ <- registrationDAO.disableIdentity(userId, samRequestContext)
+          status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
+        } yield status
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not reject the Terms of Service. User not found.")))
+    }
+  }
+
+  def getTermsOfServiceStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] = {
+    tosService.getTosStatus(userId)
+  }
+
   def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
-        registrationDAO.isEnabled(user.id, samRequestContext).flatMap { ldapStatus =>
-          IO.pure(Option(UserStatusInfo(user.id.value, user.email.value, ldapStatus)))
-        }
+        for {
+          ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext)
+          adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
+        } yield Some(UserStatusInfo(user.id.value, user.email.value, ldapStatus, adminEnabled))
       case None => IO.pure(None)
     }
 
@@ -163,6 +184,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         // pulled out of for comprehension to allow concurrent execution
         val ldapStatus = registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
         val tosAcceptedStatus = tosService.getTosStatus(user.id).unsafeToFuture()
+        val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
           directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case e: NameNotFoundException => false }
         }
@@ -173,7 +195,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           allUsers <- allUsersStatus
           tosAccepted <- tosAcceptedStatus
           google <- googleStatus
-        } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted))
+          adminEnabled <- adminEnabledStatus
+        } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted, adminEnabled))
       }
       case None => Future.successful(None)
     }
@@ -198,7 +221,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case _ => Future.successful(None)
     }
 
-  def enableUser(userId: WorkbenchUserId, userInfo: UserInfo, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
+  def enableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) =>
         for {
@@ -211,9 +234,38 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def enableUserInternal(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
-      _ <- registrationDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
+      _ <- enableIdentityIfTosAccepted(user, samRequestContext).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user, samRequestContext)
     } yield ()
+  }
+
+  val serviceAccountDomain = "\\S+@\\S+\\.gserviceaccount\\.com".r
+
+  private def isServiceAccount(email: String) = {
+    serviceAccountDomain.pattern.matcher(email).matches
+  }
+
+  private def enableIdentityIfTosAccepted(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[Unit] = {
+    val gracePeriodEnabled = tosService.tosConfig.isGracePeriodEnabled
+    tosService.getTosStatus(user.id)
+      .flatMap {
+        // If the user has accepted TOS, the grace period is enabled, or TOS is disabled, then enable the user in LDAP
+        // Additionally, if the user is an SA, it's also acceptable to enable them in LDAP
+        case Some(true) | None => {
+          logger.info(s"ToS requirement will not be bypassed for user ${user.id} / ${user.email}. termsOfService.enabled: ${tosService.tosConfig.enabled}, gracePeriod: ${gracePeriodEnabled}")
+          registrationDAO.enableIdentity(user.id, samRequestContext)
+        }
+        case _ =>
+          if(isServiceAccount(user.email.value) || gracePeriodEnabled) {
+            logger.info(s"Bypassing ToS requirement for user ${user.id} / ${user.email}. " +
+              s"gracePeriod: ${gracePeriodEnabled}, isServiceAccount: ${isServiceAccount(user.email.value)}")
+            registrationDAO.enableIdentity(user.id, samRequestContext)
+          }
+          else {
+            logger.info(s"ToS requirement will not be bypassed for user ${user.id} / ${user.email}. termsOfService.enabled: ${tosService.tosConfig.enabled}, gracePeriod: ${gracePeriodEnabled}")
+            IO.unit
+          }
+      }
   }
 
   def disableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =

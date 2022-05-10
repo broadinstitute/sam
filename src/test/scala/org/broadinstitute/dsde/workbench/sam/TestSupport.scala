@@ -7,6 +7,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.stream.Materializer
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
 import com.typesafe.config.ConfigFactory
@@ -37,9 +38,10 @@ import scalikejdbc.withSQL
 import scalikejdbc.QueryDSL.delete
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
 import org.scalatest.matchers.should.Matchers
+
 
 /**
   * Created by dvoet on 6/27/17.
@@ -49,8 +51,6 @@ trait TestSupport{
   def runAndWait[T](f: IO[T]): T = f.unsafeRunSync()
 
   implicit val futureTimeout = Timeout(Span(10, Seconds))
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
 
   val samRequestContext = SamRequestContext(None)
@@ -119,15 +119,15 @@ object TestSupport extends TestSupport {
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
     val mockResourceService = resourceServiceOpt.getOrElse(new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com"))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
 
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt)
+    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt)
 
   }
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false))
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: UserInfo)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, null, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false))
     with MockUserInfoDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
@@ -186,7 +186,7 @@ object TestSupport extends TestSupport {
   }
 }
 
-final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, policyDao: AccessPolicyDAO, val cloudExtensions: CloudExtensions)
+final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, registrationDAO: MockRegistrationDAO, policyDao: AccessPolicyDAO, val cloudExtensions: CloudExtensions)
 
 object FakeGoogleFirestore extends GoogleFirestoreService[IO]{
   override def set(

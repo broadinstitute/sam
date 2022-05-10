@@ -1,9 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.util.UUID
-
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport
@@ -14,15 +13,14 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.postgresql.util.PSQLException
 import org.scalatest.BeforeAndAfterEach
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
 class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
-  implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-  implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
   val dao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
   val dirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
 

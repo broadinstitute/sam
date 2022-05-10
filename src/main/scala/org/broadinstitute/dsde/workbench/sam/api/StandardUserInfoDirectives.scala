@@ -7,11 +7,12 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.server.directives.OnSuccessMagnet._
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -24,7 +25,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
 
   def requireUserInfo(samRequestContext: SamRequestContext): Directive1[UserInfo] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getUserInfo(directoryDAO, oidcHeaders, samRequestContext).unsafeToFuture()
+      getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
     }
   }
 
@@ -82,7 +83,7 @@ object StandardUserInfoDirectives {
   val userIdHeader = "OIDC_CLAIM_user_id"
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
 
-  def getUserInfo(directoryDAO: DirectoryDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] = {
+  def getUserInfo(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[UserInfo] = {
     oidcHeaders match {
       case OIDCHeaders(_, Left(googleSubjectId), _, saEmail@WorkbenchEmail(SAdomain(_)), _) =>
         // If it's a PET account, we treat it as its owner
@@ -95,26 +96,28 @@ object StandardUserInfoDirectives {
         lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext).map(uid => UserInfo(oidcHeaders.token, uid, oidcHeaders.email, oidcHeaders.expiresIn))
 
       case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
-        loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, samRequestContext).map(user => UserInfo(oidcHeaders.token, user.id, oidcHeaders.email, oidcHeaders.expiresIn))
+        loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, registrationDAO, samRequestContext).map(user => UserInfo(oidcHeaders.token, user.id, oidcHeaders.email, oidcHeaders.expiresIn))
     }
   }
 
-  private def loadUserMaybeUpdateAzureB2CId(azureB2CId: AzureB2CId, maybeGoogleSubjectId: Option[GoogleSubjectId], directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext) = {
+  private def loadUserMaybeUpdateAzureB2CId(azureB2CId: AzureB2CId, maybeGoogleSubjectId: Option[GoogleSubjectId], directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, samRequestContext: SamRequestContext) = {
     for {
       maybeUser <- directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext)
       maybeUserAgain <- (maybeUser, maybeGoogleSubjectId) match {
         case (None, Some(googleSubjectId)) =>
-          updateUserAzureB2CId(azureB2CId, googleSubjectId, directoryDAO, samRequestContext)
+          updateUserAzureB2CId(azureB2CId, googleSubjectId, directoryDAO, registrationDAO, samRequestContext)
         case _ => IO.pure(maybeUser)
       }
     } yield maybeUserAgain.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Azure Id $azureB2CId not found in sam")))
   }
 
-  private def updateUserAzureB2CId(azureB2CId: AzureB2CId, googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext) = {
+  private def updateUserAzureB2CId(azureB2CId: AzureB2CId, googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, samRequestContext: SamRequestContext) = {
     for {
       maybeSubject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
       _ <- maybeSubject match {
-        case Some(userId: WorkbenchUserId) => directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
+        case Some(userId: WorkbenchUserId) =>
+          directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
+            .flatMap(_ => registrationDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext))
         case _ => IO.unit
       }
       maybeUser <- directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext)

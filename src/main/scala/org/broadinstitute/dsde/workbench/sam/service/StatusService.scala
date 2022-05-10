@@ -4,6 +4,7 @@ import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.util.Timeout
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{ConnectionType, DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.db.DbReference

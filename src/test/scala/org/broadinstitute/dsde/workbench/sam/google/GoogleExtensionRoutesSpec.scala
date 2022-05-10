@@ -6,6 +6,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
@@ -14,6 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, _}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
+import org.broadinstitute.dsde.workbench.sam.dataAccess.MockRegistrationDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -339,9 +341,11 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       Some(email)
     )
 
+    val regDAO = new MockRegistrationDAO
+
     val userInfo = UserInfo(genOAuth2BearerToken.sample.get, user.id, email, 0)
     samDeps.cloudExtensions.asInstanceOf[GoogleExtensions].onBoot(SamApplication(samDeps.userService,
-      samDeps.resourceService, samDeps.statusService, new TosService(samDeps.directoryDAO, "example.com", TestSupport.tosConfig))).unsafeRunSync()
+      samDeps.resourceService, samDeps.statusService, new TosService(samDeps.directoryDAO, regDAO, "example.com", TestSupport.tosConfig))).unsafeRunSync()
     (userInfo.copy(userId = user.id), routes, expectedJson)
   }
 }

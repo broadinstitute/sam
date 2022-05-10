@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
 import cats.effect
-import cats.effect.{Blocker, ExitCode, IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -75,7 +75,7 @@ object Boot extends IOApp with LazyLogging {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
 
-        _ <- dependencies.samApplication.tosService.createNewGroupIfNeeded()
+        _ <- dependencies.samApplication.tosService.resetTermsOfServiceGroupsIfNeeded()
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
 
@@ -148,9 +148,8 @@ object Boot extends IOApp with LazyLogging {
           googleFire <- GoogleFirestoreInterpreter.firestore[IO](
             config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
           googleStorage <- GoogleStorageInterpreter.storage[IO](
-            config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString,
-            Blocker.liftExecutionContext(blockingEc),
-            None)
+            config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString
+          )
           googleKmsClient <- GoogleKmsInterpreter.client[IO](config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
         } yield {
           implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
@@ -160,8 +159,8 @@ object Boot extends IOApp with LazyLogging {
           // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
           val lock =
             DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
-          val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, Blocker.liftExecutionContext(blockingEc), None)
-          val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient, blockingEc)
+          val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockerBound = None)
+          val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient)
           val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
           val cloudExtension = createGoogleCloudExt(
             foregroundAccessPolicyDAO,
@@ -307,7 +306,7 @@ object Boot extends IOApp with LazyLogging {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
-    val tosService = new TosService(directoryDAO, config.googleConfig.get.googleServicesConfig.appsDomain, config.termsOfServiceConfig)
+    val tosService = new TosService(directoryDAO, registrationDAO, config.googleConfig.get.googleServicesConfig.appsDomain, config.termsOfServiceConfig)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.blockedEmailDomains, tosService)
     val statusService = new StatusService(directoryDAO, registrationDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
     val managedGroupService =
@@ -316,7 +315,7 @@ object Boot extends IOApp with LazyLogging {
 
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
         with StandardUserInfoDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
@@ -324,7 +323,7 @@ object Boot extends IOApp with LazyLogging {
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
         with StandardUserInfoDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }
