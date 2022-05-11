@@ -11,4 +11,10 @@
             </column>
         </addColumn>
     </changeSet>
+    <changeSet logicalFilePath="dummy" author="dvoet" id="migrate_tos">
+        <sql>
+            update sam_user set accepted_tos_version = '0' where id in
+            (select gmf.member_user_id from sam_group_member_flat gmf join sam_group g on g.id = gmf.group_id where g.name = 'tos_accepted_0' and gmf.member_user_id is not null)
+        </sql>
+    </changeSet>
 </databaseChangeLog>

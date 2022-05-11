@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, Registrat
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
+import org.broadinstitute.dsde.workbench.sam.model.SamUser
 
 import scala.concurrent.ExecutionContext
 import java.io.{FileNotFoundException, IOException}
@@ -44,12 +45,8 @@ class TosService (val directoryDao: DirectoryDAO, val registrationDao: Registrat
     * If ToS disabled, return true
     * Otherwise return true if user has accepted ToS
     */
-  def isTermsOfServiceStatusAcceptable(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
-    if (tosConfig.isGracePeriodEnabled) {
-      IO.pure(true)
-    } else {
-      getTosStatus(userId, samRequestContext).map(_.getOrElse(true))
-    }
+  def isTermsOfServiceStatusAcceptable(user: SamUser): Boolean = {
+    tosConfig.isGracePeriodEnabled || !tosConfig.enabled || user.acceptedTosVersion.contains(tosConfig.version)
   }
 
   /**
