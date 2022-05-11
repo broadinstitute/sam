@@ -18,4 +18,5 @@
     <include file="changesets/20201123_flat_group_membership.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20211010_azure_b2c_id.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20220328_idx_serp_source_policy_id.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20220511_tos_version.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -290,4 +290,30 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(users.values.find(_.googleSubjectId.contains(userId)))
+
+  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] = {
+    loadUser(userId, samRequestContext).map {
+      case None => false
+      case Some(user) =>
+        if (user.acceptedTosVersion.contains(tosVersion)) {
+          false
+        } else {
+          users.put(userId, user.copy(acceptedTosVersion = Option(tosVersion)))
+          true
+        }
+    }
+  }
+
+  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    loadUser(userId, samRequestContext).map {
+      case None => false
+      case Some(user) =>
+        if (user.acceptedTosVersion.isEmpty) {
+          false
+        } else {
+          users.put(userId, user.copy(acceptedTosVersion = None))
+          true
+        }
+    }
+  }
 }

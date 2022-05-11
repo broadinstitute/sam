@@ -40,7 +40,7 @@ trait LdapSupport {
     for {
       uid <- getAttribute(results, Attr.uid).toRight(s"${Attr.uid} attribute missing")
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
-    } yield SamUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None, false)
+    } yield SamUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None, false, None)
 
   /**
     * Executes ldap query.

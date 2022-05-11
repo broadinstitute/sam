@@ -132,7 +132,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
   "requireActiveUser" should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
     val services = directives()
     val headers = createRequiredHeaders(externalId, email, accessToken)
-    val user = services.directoryDAO.createUser(SamUser(genWorkbenchUserId(System.currentTimeMillis()), externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true), samRequestContext).unsafeRunSync()
+    val user = services.directoryDAO.createUser(SamUser(genWorkbenchUserId(System.currentTimeMillis()), externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(x => complete(x.toString))} ~> check {
       status shouldBe StatusCodes.OK
@@ -164,6 +164,17 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
   it should "pass if user has rejected terms of service within grace period" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
     val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true, isGracePeriodEnabled = true))
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
+    services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
+    services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(_ => complete(""))} ~> check {
+      status shouldBe StatusCodes.OK
+    }
+  }
+
+  it should "pass if service account has rejected terms" in forAll(genWorkbenchUserServiceAccount, genOAuth2BearerToken) { (user, token) =>
+    val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true))
+    val headers = createRequiredHeaders(Left(user.googleSubjectId.get), user.email, token)
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
@@ -222,7 +233,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.withNewUser(samRequestContext)(user => complete(user.copy(id = WorkbenchUserId("")).toString))} ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption, false).toString
+      responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption, false, None).toString
     }
   }
 
@@ -234,7 +245,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
         services.withNewUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))
       } ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId), false).toString
+      responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId), false, None).toString
     }
   }
 

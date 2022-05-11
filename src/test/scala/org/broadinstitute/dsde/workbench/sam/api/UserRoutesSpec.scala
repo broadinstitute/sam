@@ -181,13 +181,11 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO, tosEnabled = tosEnabled)
     val routes = genSamRoutes(samDependencies, testUser)
 
-    if (tosEnabled) routes.tosService.resetTermsOfServiceGroupsIfNeeded(samRequestContext).unsafeRunSync()
-
     Post("/register/user/v1/") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
       res.userInfo.userEmail shouldBe testUser.email
-      val enabledBaseArray = Map("ldap" -> !tosEnabled, "allUsersGroup" -> true, "google" -> true)
+      val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
       if (tosEnabled) res.enabled shouldBe  enabledBaseArray + ("tosAccepted" -> false) + ("adminEnabled" -> true)
       else res.enabled shouldBe enabledBaseArray
@@ -239,7 +237,6 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val registrationDAO = new MockRegistrationDAO()
 
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
-    tosService.resetTermsOfServiceGroupsIfNeeded(samRequestContext)
 
     val samRoutes = new TestSamTosEnabledRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO,
       workbenchUser = Option(defaultUser), tosService = tosService)

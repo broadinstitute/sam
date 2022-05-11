@@ -139,7 +139,7 @@ object AppConfig {
     TermsOfServiceConfig(
       config.getBoolean("enabled"),
       config.getBoolean("isGracePeriodEnabled"),
-      config.getInt("version"),
+      config.getString("version"),
       config.getString("url")
     )
   }
