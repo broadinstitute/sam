@@ -322,6 +322,7 @@ class GoogleExtensions(
               // See: https://broadworkbench.atlassian.net/browse/CA-1005
               googleDirectoryDAO.addServiceAccountToGroup(proxyEmail, sa)
             }))
+            _ <- IO.fromFuture(IO(googleIamDAO.addServiceAccountUserRoleForUser(project, sa.email, sa.email)))
           } yield sa
         // SA already exists in google, use it
         case Some(sa) => IO.pure(sa)
