@@ -332,7 +332,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     serializableWriteTransaction("createUser", samRequestContext)({ implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, ${user.enabled}, ${user.azureB2CId})"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}, ${userColumn.acceptedTosVersion}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, ${user.enabled}, ${user.azureB2CId}, ${user.acceptedTosVersion})"
 
       Try {
         insertUserQuery.update().apply()
@@ -539,6 +539,25 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
           samsql"update ${UserTable.table} set ${u.enabled} = false where ${u.id} = ${userId}".update().apply()
         case _ => // other types of WorkbenchSubjects cannot be disabled
       }
+    })
+  }
+
+  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] = {
+    serializableWriteTransaction("acceptTermsOfService", samRequestContext)({ implicit session =>
+      val u = UserTable.column
+      samsql"""update ${UserTable.table} set ${u.acceptedTosVersion} = ${tosVersion}
+              where ${u.id} = ${userId}
+              and (${u.acceptedTosVersion} is null
+                or ${u.acceptedTosVersion} != ${tosVersion})""".update().apply() > 0
+    })
+  }
+
+  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    serializableWriteTransaction("rejectTermsOfService", samRequestContext)({ implicit session =>
+      val u = UserTable.column
+      samsql"""update ${UserTable.table} set ${u.acceptedTosVersion} = null
+              where ${u.id} = ${userId}
+              and ${u.acceptedTosVersion} is not null""".update().apply() > 0
     })
   }
 

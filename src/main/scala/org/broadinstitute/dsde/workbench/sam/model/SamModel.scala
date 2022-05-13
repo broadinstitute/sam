@@ -246,7 +246,8 @@ final case class SamUser(id: WorkbenchUserId,
                          googleSubjectId: Option[GoogleSubjectId],
                          email: WorkbenchEmail,
                          azureB2CId: Option[AzureB2CId],
-                         enabled: Boolean) {
+                         enabled: Boolean,
+                         acceptedTosVersion: Option[String]) {
   def toUserIdInfo = UserIdInfo(id, email, googleSubjectId)
 }
 

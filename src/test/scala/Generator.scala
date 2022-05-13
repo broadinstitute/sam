@@ -32,26 +32,26 @@ object Generator {
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield SamUser(userId, Option(googleSubjectId), email, None, false)
+  }yield SamUser(userId, Option(googleSubjectId), email, None, false, None)
 
   val genWorkbenchUserServiceAccount = for{
     email <- genServiceAccountEmail
     googleSubjectId <- genGoogleSubjectId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield SamUser(userId, Option(googleSubjectId), email, None, false)
+  }yield SamUser(userId, Option(googleSubjectId), email, None, false, None)
 
   val genWorkbenchUserAzure = for {
     email <- genNonPetEmail
     azureB2CId <- genAzureB2CId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  } yield SamUser(userId, None, email, Option(azureB2CId), false)
+  } yield SamUser(userId, None, email, Option(azureB2CId), false, None)
 
   val genWorkbenchUserBoth = for {
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId
     azureB2CId <- genAzureB2CId
     userId = genWorkbenchUserId(System.currentTimeMillis())
-  } yield SamUser(userId, Option(googleSubjectId), email, Option(azureB2CId), false)
+  } yield SamUser(userId, Option(googleSubjectId), email, Option(azureB2CId), false, None)
 
   val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s${x.take(50)}")) //prepending `s` just so this won't be an empty string
   val genGoogleProject = Gen.alphaStr.map(x => GoogleProject(s"s$x")) //prepending `s` just so this won't be an empty string

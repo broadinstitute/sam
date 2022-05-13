@@ -28,8 +28,9 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     onSuccess {
       val requireActiveUserIO = for {
         user <- getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext)
-        tosStatusAcceptable <- tosService.isTermsOfServiceStatusAcceptable(user.id, samRequestContext)
       } yield {
+        // service account users do not need to accept ToS
+        val tosStatusAcceptable = tosService.isTermsOfServiceStatusAcceptable(user) || SAdomain.matches(user.email.value)
         val permittedToAccessTerra = tosStatusAcceptable && user.enabled
         if (permittedToAccessTerra) {
           user
@@ -59,7 +60,8 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
       googleSubjectId,
       oidcHeaders.email,
       azureB2CId,
-      false)
+      false,
+      None)
   }
 
   /**

@@ -42,7 +42,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       _ <- UserService.validateEmailAddress(inviteeEmail, blockedEmailDomains)
       existingSubject <- directoryDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext)
       createdUser <- existingSubject match {
-        case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false), samRequestContext)
+        case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false, None), samRequestContext)
         case Some(_) =>
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${inviteeEmail} already exists")))
       }
@@ -63,7 +63,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           acceptInvitedUser(user, samRequestContext, uid)
 
         case None =>
-          createUserInternal(SamUser(user.id, user.googleSubjectId, user.email, user.azureB2CId, false), samRequestContext)
+          createUserInternal(user, samRequestContext)
 
         case Some(_) =>
           //We don't support inviting a group account or pet service account
@@ -92,8 +92,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def validateNewWorkbenchUser(newWorkbenchUser: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
     for {
       existingUser <- newWorkbenchUser match {
-        case SamUser(_, Some(googleSubjectId), _, _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
-        case SamUser(_, _, _, Some(azureB2CId), _) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
+        case SamUser(_, Some(googleSubjectId), _, _, _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
+        case SamUser(_, _, _, Some(azureB2CId), _, _) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
         case _ => IO.raiseError(new WorkbenchException("cannot create user when neither google subject id nor azure b2c id exists"))
       }
 
@@ -142,8 +142,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
     for {
       _ <- tosService.acceptTosStatus(userId, samRequestContext)
-      enabled <- directoryDAO.isEnabled(userId, samRequestContext)
-      _ <- if (enabled) registrationDAO.enableIdentity(userId, samRequestContext) else IO.none
       status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
     } yield status
   }
@@ -151,7 +149,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
     for {
       _ <- tosService.rejectTosStatus(userId, samRequestContext)
-      _ <- registrationDAO.disableIdentity(userId, samRequestContext)
       status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
     } yield status
   }
@@ -160,9 +157,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         for {
-          tosStatus <- tosService.isTermsOfServiceStatusAcceptable(user.id, samRequestContext)
           adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
         } yield {
+          val tosStatus = tosService.isTermsOfServiceStatusAcceptable(user)
           Some(UserStatusInfo(user.id.value, user.email.value, tosStatus && adminEnabled, adminEnabled))
         }
       case None => IO.pure(None)
@@ -224,7 +221,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def enableUserInternal(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = {
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
-      _ <- enableIdentityIfTosAccepted(user, samRequestContext).unsafeToFuture()
+      _ <- registrationDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user, samRequestContext)
     } yield ()
   }
@@ -233,29 +230,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   private def isServiceAccount(email: String) = {
     serviceAccountDomain.pattern.matcher(email).matches
-  }
-
-  private def enableIdentityIfTosAccepted(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
-    val gracePeriodEnabled = tosService.tosConfig.isGracePeriodEnabled
-    tosService.getTosStatus(user.id, samRequestContext)
-      .flatMap {
-        // If the user has accepted TOS, the grace period is enabled, or TOS is disabled, then enable the user in LDAP
-        // Additionally, if the user is an SA, it's also acceptable to enable them in LDAP
-        case Some(true) | None => {
-          logger.info(s"ToS requirement will not be bypassed for user ${user.id} / ${user.email}. termsOfService.enabled: ${tosService.tosConfig.enabled}, gracePeriod: ${gracePeriodEnabled}")
-          registrationDAO.enableIdentity(user.id, samRequestContext)
-        }
-        case _ =>
-          if(isServiceAccount(user.email.value) || gracePeriodEnabled) {
-            logger.info(s"Bypassing ToS requirement for user ${user.id} / ${user.email}. " +
-              s"gracePeriod: ${gracePeriodEnabled}, isServiceAccount: ${isServiceAccount(user.email.value)}")
-            registrationDAO.enableIdentity(user.id, samRequestContext)
-          }
-          else {
-            logger.info(s"ToS requirement will not be bypassed for user ${user.id} / ${user.email}. termsOfService.enabled: ${tosService.tosConfig.enabled}, gracePeriod: ${gracePeriodEnabled}")
-            IO.unit
-          }
-      }
   }
 
   def disableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =

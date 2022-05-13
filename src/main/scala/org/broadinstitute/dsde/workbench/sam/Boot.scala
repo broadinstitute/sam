@@ -32,7 +32,6 @@ import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 
@@ -76,8 +75,6 @@ object Boot extends IOApp with LazyLogging {
         _ <- dependencies.samApplication.resourceService.initResourceTypes().onError {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
-
-        _ <- dependencies.samApplication.tosService.resetTermsOfServiceGroupsIfNeeded(SamRequestContext(None))
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
 
