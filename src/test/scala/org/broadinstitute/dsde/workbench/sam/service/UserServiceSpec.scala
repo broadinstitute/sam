@@ -11,7 +11,6 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegis
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
-import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
@@ -192,13 +191,13 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   it should "generate unique identifier properly" in {
     val current = 1534253386722L
-    val res = genWorkbenchUserId(current).value
+    val res = UserService.genWorkbenchUserId(current).value
     res.length shouldBe(21)
     res.substring(0, current.toString.length) shouldBe("2534253386722")
 
     // validate when currentMillis doesn't start
     val current2 = 25342533867225L
-    val res2 = genWorkbenchUserId(current2).value
+    val res2 = UserService.genWorkbenchUserId(current2).value
     res2.substring(0, current2.toString.length) shouldBe("25342533867225")
   }
 

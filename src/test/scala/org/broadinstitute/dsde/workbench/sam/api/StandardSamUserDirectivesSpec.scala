@@ -16,7 +16,6 @@ import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO, MockRegistrationDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
-import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosService, UserService}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
@@ -63,11 +62,10 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
   }
 
   it should "be able to get a SamUser object for service account if it is a not PET" in {
-    forAll(genWorkbenchUserServiceAccount, genOAuth2BearerToken) {
-      (serviceAccountUser: SamUser, token: OAuth2BearerToken) =>
+    forAll(genWorkbenchUserServiceAccount, genOAuth2BearerToken, genWorkbenchUserId) {
+      (serviceAccountUser: SamUser, token: OAuth2BearerToken, uid: WorkbenchUserId) =>
         val directoryDAO = new MockDirectoryDAO()
         val registrationDAO = new MockRegistrationDAO()
-        val uid = genWorkbenchUserId(System.currentTimeMillis())
         val oidcHeaders = OIDCHeaders(token, Left(serviceAccountUser.googleSubjectId.get), serviceAccountUser.email, None)
         directoryDAO.createUser(serviceAccountUser, samRequestContext).unsafeRunSync()
         val res = getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
@@ -129,10 +127,10 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     }
   }
 
-  "withActiveUser" should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
+  "withActiveUser" should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, genWorkbenchUserId, minSuccessful(20)) { (externalId, email, accessToken, userId) =>
     val services = directives()
     val headers = createRequiredHeaders(externalId, email, accessToken)
-    val user = services.directoryDAO.createUser(SamUser(genWorkbenchUserId(System.currentTimeMillis()), externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None), samRequestContext).unsafeRunSync()
+    val user = services.directoryDAO.createUser(SamUser(userId, externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler){services.withActiveUser(samRequestContext)(x => complete(x.toString))} ~> check {
       status shouldBe StatusCodes.OK

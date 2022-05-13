@@ -17,7 +17,6 @@ import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockRegistrationDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
@@ -281,7 +280,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
 }
 
 trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar{
-  val defaultUserId = genWorkbenchUserId(System.currentTimeMillis())
+  val defaultUserId = genWorkbenchUserId.sample.get
   val defaultUserEmail = genNonPetEmail.sample.get
   val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsDomain}")
 
