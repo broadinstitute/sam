@@ -33,7 +33,7 @@ trait UserInfoDirectives {
     * @param samRequestContext
     * @return
     */
-  def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser]
+  def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
   /**
     * Extracts authentication information from headers, looks up user in database,
@@ -43,11 +43,11 @@ trait UserInfoDirectives {
     * @param samRequestContext
     * @return
     */
-  def requireUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser]
+  def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser]
 
   def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
-  def asWorkbenchAdmin(samUser: SamUser): Directive0 =
+  def withWorkbenchAdmin(samUser: SamUser): Directive0 =
     Directives.mapInnerRoute { r =>
       onSuccess(cloudExtensions.isWorkbenchAdmin(samUser.email)) { isAdmin =>
         if (!isAdmin) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You must be an admin.")))

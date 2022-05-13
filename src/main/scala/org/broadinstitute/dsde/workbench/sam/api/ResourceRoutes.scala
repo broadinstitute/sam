@@ -38,7 +38,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def resourceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
-        requireActiveUser(SamRequestContext(None)) { samUser => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
+        withActiveUser(SamRequestContext(None)) { samUser => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
           pathEndOrSingleSlash {
             get {
               complete(resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet))

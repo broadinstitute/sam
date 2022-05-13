@@ -24,7 +24,7 @@ import scala.util.matching.Regex
 trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
 
-  def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
+  def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       val requireActiveUserIO = for {
         user <- getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext)
@@ -42,16 +42,16 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
     }
   }
 
-  def requireUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
+  def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
     }
   }
 
-  def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildWorkbenchUser)
+  def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildSamUser)
 
-  private def buildWorkbenchUser(oidcHeaders: OIDCHeaders): SamUser = {
-    // google id can either be in the external id or google id from azure headers, favor the external id as the source
+  private def buildSamUser(oidcHeaders: OIDCHeaders): SamUser = {
+    // google id can either be in the external id or google id from azure headers, favor the externalo id as the source
     val googleSubjectId = (oidcHeaders.externalId.left.toOption ++ oidcHeaders.googleSubjectIdFromAzure).headOption
     val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
 

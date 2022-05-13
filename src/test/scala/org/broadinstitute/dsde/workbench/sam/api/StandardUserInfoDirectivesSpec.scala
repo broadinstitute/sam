@@ -129,12 +129,12 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     }
   }
 
-  "requireActiveUser" should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
+  "withActiveUser" should "accept request with oidc headers" in forAll(genExternalId, genNonPetEmail, genOAuth2BearerToken, minSuccessful(20)) { (externalId, email, accessToken) =>
     val services = directives()
     val headers = createRequiredHeaders(externalId, email, accessToken)
     val user = services.directoryDAO.createUser(SamUser(genWorkbenchUserId(System.currentTimeMillis()), externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(x => complete(x.toString))} ~> check {
+      handleExceptions(myExceptionHandler){services.withActiveUser(samRequestContext)(x => complete(x.toString))} ~> check {
       status shouldBe StatusCodes.OK
       responseAs[String] shouldEqual user.toString
     }
@@ -145,7 +145,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     services.directoryDAO.createUser(user.copy(enabled = false), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(_ => complete(""))} ~> check {
+      handleExceptions(myExceptionHandler){services.withActiveUser(samRequestContext)(_ => complete(""))} ~> check {
       status shouldBe StatusCodes.Unauthorized
     }
   }
@@ -156,7 +156,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(_ => complete(""))} ~> check {
+      handleExceptions(myExceptionHandler){services.withActiveUser(samRequestContext)(_ => complete(""))} ~> check {
       status shouldBe StatusCodes.Unauthorized
     }
   }
@@ -167,7 +167,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(_ => complete(""))} ~> check {
+      handleExceptions(myExceptionHandler){services.withActiveUser(samRequestContext)(_ => complete(""))} ~> check {
       status shouldBe StatusCodes.OK
     }
   }
@@ -189,13 +189,13 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.acceptTosStatus(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(_ => complete(""))} ~> check {
+      handleExceptions(myExceptionHandler){services.withActiveUser(samRequestContext)(_ => complete(""))} ~> check {
       status shouldBe StatusCodes.OK
     }
   }
 
   it should "fail if required headers are missing" in {
-    Get("/") ~> handleExceptions(myExceptionHandler){directives().requireActiveUser(samRequestContext)(x => complete(x.toString))} ~> check {
+    Get("/") ~> handleExceptions(myExceptionHandler){directives().withActiveUser(samRequestContext)(x => complete(x.toString))} ~> check {
       rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
   }
@@ -206,7 +206,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val existingUser = services.directoryDAO.createUser(googleUser.copy(enabled = true), samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler) {
-        services.requireActiveUser(samRequestContext)(x => complete(x.toString))
+        services.withActiveUser(samRequestContext)(x => complete(x.toString))
       } ~> check {
       status shouldBe StatusCodes.OK
       val exptectedUser = existingUser.copy(azureB2CId = Option(azureB2CId))
@@ -221,7 +221,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     val headers = createRequiredHeaders(Right(azureUser.azureB2CId.get), azureUser.email, accessToken, Option(googleSubjectId))
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler) {
-        services.requireActiveUser(samRequestContext)(x => complete(x.toString))
+        services.withActiveUser(samRequestContext)(x => complete(x.toString))
       } ~> check {
       status shouldBe StatusCodes.OK
     }

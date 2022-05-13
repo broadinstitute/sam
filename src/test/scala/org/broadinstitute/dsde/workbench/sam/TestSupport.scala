@@ -141,7 +141,7 @@ object TestSupport extends TestSupport {
         case _ => null
       }
       override val user: SamUser = uInfo
-      override val workbenchUser: Option[SamUser] = Option(uInfo)
+      override val newSamUser: Option[SamUser] = Option(uInfo)
   }
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)

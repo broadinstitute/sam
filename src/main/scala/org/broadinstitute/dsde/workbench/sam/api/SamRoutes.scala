@@ -59,7 +59,7 @@ abstract class SamRoutes(
           pathPrefix("register") { userRoutes(samRequestContext) } ~
           pathPrefix("api") {
             // IMPORTANT - all routes under /api must have an active user
-            requireActiveUser(samRequestContext) { samUser =>
+            withActiveUser(samRequestContext) { samUser =>
               resourceRoutes(samUser, samRequestContext) ~
                 adminUserRoutes(samUser, samRequestContext) ~
                 extensionRoutes(samUser, samRequestContext) ~
