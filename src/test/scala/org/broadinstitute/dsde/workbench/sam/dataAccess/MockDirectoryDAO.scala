@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.util.Date
-
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
@@ -9,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
@@ -20,7 +19,7 @@ import scala.collection.mutable
   */
 class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
-  private val users: mutable.Map[WorkbenchUserId, WorkbenchUser] = new TrieMap()
+  private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
   private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
 
@@ -88,7 +87,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     Option(usersWithEmails.getOrElse(email, groupsWithEmails.getOrElse(email, petsWithEmails.getOrElse(email, null))))
   }
 
-  override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] =
+  override def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     if (users.keySet.contains(user.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.id} already exists")))
     } else {
@@ -99,7 +98,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       IO.pure(user)
     }
 
-  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = IO {
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = IO {
     users.get(userId)
   }
 
@@ -211,7 +210,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     IO.pure(groups.get(WorkbenchGroupName(groupId.toString)).map(_.email))
   }
 
-  override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     val userIds = petServiceAccountsByUser.toSeq.collect {
       case (PetServiceAccountId(userId, _), petSA) if petSA.serviceAccount.subjectId == petSAId => userId
     }
@@ -277,7 +276,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   }
 
   override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext)
-      : IO[Option[WorkbenchUser]] = IO.pure(users.values.find(_.azureB2CId.contains(userId)))
+      : IO[Option[SamUser]] = IO.pure(users.values.find(_.azureB2CId.contains(userId)))
 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     for {
@@ -288,4 +287,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   }
 
   override def checkStatus(samRequestContext: SamRequestContext): Boolean = true
+
+  override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    IO.pure(users.values.find(_.googleSubjectId.contains(userId)))
 }

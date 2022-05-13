@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.BeforeAndAfterEach
@@ -20,8 +20,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
-  val defaultUserId = WorkbenchUserId("testUser")
-  val defaultUser = WorkbenchUser(defaultUserId, Option(GoogleSubjectId("testGoogleSubject")), WorkbenchEmail("user@foo.com"), Option(AzureB2CId("testICid")))
+  val defaultUser = Generator.genWorkbenchUserBoth.sample.get
   val defaultPetSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
 
   val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false),
@@ -415,15 +414,15 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
     "listUsersGroups" - {
       "list all of the groups a user is in" in {
         val subGroupId = WorkbenchGroupName("subGroup")
-        val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUserId), WorkbenchEmail("subGroup@foo.com"))
+        val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUser.id), WorkbenchEmail("subGroup@foo.com"))
         val parentGroupId = WorkbenchGroupName("parentGroup")
-        val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(defaultUserId, subGroupId), WorkbenchEmail("parentGroup@foo.com"))
+        val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(defaultUser.id, subGroupId), WorkbenchEmail("parentGroup@foo.com"))
 
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        val usersGroups = dao.listUsersGroups(defaultUserId, samRequestContext).unsafeRunSync()
+        val usersGroups = dao.listUsersGroups(defaultUser.id, samRequestContext).unsafeRunSync()
         usersGroups should contain theSameElementsAs Set(subGroupId, parentGroupId)
       }
 
@@ -490,7 +489,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         val petSA2 = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject2")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId2"), WorkbenchEmail("test2@pet.co"), ServiceAccountDisplayName("whoCares")))
         dao.createPetServiceAccount(petSA2, samRequestContext).unsafeRunSync()
 
-        dao.getAllPetServiceAccountsForUser(defaultUserId, samRequestContext).unsafeRunSync() should contain theSameElementsAs Seq(petSA1, petSA2)
+        dao.getAllPetServiceAccountsForUser(defaultUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Seq(petSA1, petSA2)
       }
     }
 
@@ -710,13 +709,13 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       "intersect groups" in {
         for (groupCount <- 1 to 3) {
           beforeEach()
-          val inAllGroups = WorkbenchUser(WorkbenchUserId("allgroups"), None, WorkbenchEmail("allgroups"), None)
+          val inAllGroups = Generator.genWorkbenchUserGoogle.sample.get
           dao.createUser(inAllGroups, samRequestContext).unsafeRunSync()
 
           val allGroups = for (i <- 1 to groupCount) yield {
             // create a group with 1 user and 1 subgroup, subgroup with "allgroups" users and another user
-            val userInGroup = WorkbenchUser(WorkbenchUserId(s"ingroup$i"), None, WorkbenchEmail(s"ingroup$i"), None)
-            val userInSubGroup = WorkbenchUser(WorkbenchUserId(s"insubgroup$i"), None, WorkbenchEmail(s"insubgroup$i"), None)
+            val userInGroup = Generator.genWorkbenchUserGoogle.sample.get
+            val userInSubGroup = Generator.genWorkbenchUserGoogle.sample.get
             val subGroup = BasicWorkbenchGroup(WorkbenchGroupName(s"subgroup$i"), Set(inAllGroups.id, userInSubGroup.id), WorkbenchEmail(s"subgroup$i"))
             val group = BasicWorkbenchGroup(WorkbenchGroupName(s"group$i"), Set(userInGroup.id, subGroup.id), WorkbenchEmail(s"group$i"))
             dao.createUser(userInSubGroup, samRequestContext).unsafeRunSync()
@@ -725,9 +724,13 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
             dao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
           }
 
-          val expected = if (groupCount == 1) Set(WorkbenchUserId("allgroups"), WorkbenchUserId("ingroup1"), WorkbenchUserId("insubgroup1")) else Set(inAllGroups.id)
-
-          dao.listIntersectionGroupUsers(allGroups.map(_.id).toSet, samRequestContext).unsafeRunSync() should contain theSameElementsAs expected
+          if (groupCount == 1) {
+            val intersection = dao.listIntersectionGroupUsers(allGroups.map(_.id).toSet, samRequestContext).unsafeRunSync()
+            intersection should contain oneElementOf Set(inAllGroups.id)
+            intersection.size shouldBe 3
+          } else {
+            dao.listIntersectionGroupUsers(allGroups.map(_.id).toSet, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(inAllGroups.id)
+          }
         }
       }
 
@@ -737,7 +740,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
         // create a user and a group containing that single user
         val allUserGroups = for (i <- 1 to userCount) yield {
-          val user = dao.createUser(WorkbenchUser(WorkbenchUserId(s"user$i"), None, WorkbenchEmail(s"user$i"), None), samRequestContext).unsafeRunSync()
+          val user = dao.createUser(Generator.genWorkbenchUserGoogle.sample.get, samRequestContext).unsafeRunSync()
           val group = BasicWorkbenchGroup(WorkbenchGroupName(s"usergroup$i"), Set(user.id), WorkbenchEmail(s"usergroup$i"))
           dao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
         }

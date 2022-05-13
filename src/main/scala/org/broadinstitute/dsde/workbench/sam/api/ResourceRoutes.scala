@@ -38,7 +38,7 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
 
   def resourceRoutes: server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
-        requireUserInfo(SamRequestContext(None)) { userInfo => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
+        requireActiveUser(SamRequestContext(None)) { samUser => // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods ; these in particular are unpublished APIs
           pathEndOrSingleSlash {
             get {
               complete(resourceService.getResourceTypes().map(typeMap => StatusCodes.OK -> typeMap.values.toSet))
@@ -48,53 +48,53 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     } ~
     (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo(samRequestContext) { userInfo =>
+        requireActiveUser(samRequestContext) { samUser =>
           pathPrefix(Segment) { resourceTypeName =>
             withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
               pathEndOrSingleSlash {
-                getUserPoliciesForResourceType(resourceType, userInfo, samRequestContext) ~
-                  postResource(resourceType, userInfo, samRequestContext)
+                getUserPoliciesForResourceType(resourceType, samUser, samRequestContext) ~
+                  postResource(resourceType, samUser, samRequestContext)
               } ~ pathPrefix(Segment) { resourceId =>
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
 
                 pathEndOrSingleSlash {
-                  deleteResource(resource, userInfo, samRequestContext) ~
-                    postDefaultResource(resourceType, resource, userInfo, samRequestContext)
+                  deleteResource(resource, samUser, samRequestContext) ~
+                    postDefaultResource(resourceType, resource, samUser, samRequestContext)
                 } ~ pathPrefix("action") {
                   pathPrefix(Segment) { action =>
                     pathEndOrSingleSlash {
-                      getActionPermissionForUser(resource, userInfo, action, samRequestContext)
+                      getActionPermissionForUser(resource, samUser, action, samRequestContext)
                     } ~ pathPrefix("userEmail") {
                       pathPrefix(Segment) { userEmail =>
                         pathEndOrSingleSlash {
-                          getActionPermissionForUserEmail(resource, userInfo, ResourceAction(action), WorkbenchEmail(userEmail), samRequestContext)
+                          getActionPermissionForUserEmail(resource, samUser, ResourceAction(action), WorkbenchEmail(userEmail), samRequestContext)
                         }
                       }
                     }
                   }
                 } ~ pathPrefix("authDomain") {
                   pathEndOrSingleSlash {
-                    getResourceAuthDomain(resource, userInfo, samRequestContext)
+                    getResourceAuthDomain(resource, samUser, samRequestContext)
                   }
                 } ~ pathPrefix("policies") {
                   pathEndOrSingleSlash {
-                    getResourcePolicies(resource, userInfo, samRequestContext)
+                    getResourcePolicies(resource, samUser, samRequestContext)
                   } ~ pathPrefix(Segment) { policyName =>
                     val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
 
                     pathEndOrSingleSlash {
-                      getPolicy(policyId, userInfo, samRequestContext) ~
-                        putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext)
+                      getPolicy(policyId, samUser, samRequestContext) ~
+                        putPolicyOverwrite(resourceType, policyId, samUser, samRequestContext)
                     } ~ pathPrefix("memberEmails") {
                       pathEndOrSingleSlash {
-                        putPolicyMembershipOverwrite(policyId, userInfo, samRequestContext)
+                        putPolicyMembershipOverwrite(policyId, samUser, samRequestContext)
                       } ~ pathPrefix(Segment) { email =>
                         withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
                           pathEndOrSingleSlash {
                             requireOneOfAction(
                               resource,
                               Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
-                              userInfo.userId,
+                              samUser.id,
                               samRequestContext) {
                               putUserInPolicy(policyId, subject, samRequestContext) ~
                                 deleteUserFromPolicy(policyId, subject, samRequestContext)
@@ -104,22 +104,22 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                       }
                     } ~ pathPrefix("public") {
                       pathEndOrSingleSlash {
-                        getPublicFlag(policyId, userInfo, samRequestContext) ~
-                          putPublicFlag(policyId, userInfo, samRequestContext)
+                        getPublicFlag(policyId, samUser, samRequestContext) ~
+                          putPublicFlag(policyId, samUser, samRequestContext)
                       }
                     }
                   }
                 } ~ pathPrefix("roles") {
                   pathEndOrSingleSlash {
-                    getUserResourceRoles(resource, userInfo, samRequestContext)
+                    getUserResourceRoles(resource, samUser, samRequestContext)
                   }
                 } ~ pathPrefix("actions") {
                   pathEndOrSingleSlash {
-                    listActionsForUser(resource, userInfo, samRequestContext)
+                    listActionsForUser(resource, samUser, samRequestContext)
                   }
                 } ~ pathPrefix("allUsers") {
                   pathEndOrSingleSlash {
-                    getAllResourceUsers(resource, userInfo, samRequestContext)
+                    getAllResourceUsers(resource, samUser, samRequestContext)
                   }
                 }
               }
@@ -129,29 +129,29 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     } ~ pathPrefix("resources" / "v2") {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo(samRequestContext) { userInfo =>
+        requireActiveUser(samRequestContext) { samUser =>
           pathPrefix(Segment) { resourceTypeName =>
             withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
               pathEndOrSingleSlash {
-                getUserResourcesOfType(resourceType, userInfo, samRequestContext) ~
-                postResource(resourceType, userInfo, samRequestContext)
+                getUserResourcesOfType(resourceType, samUser, samRequestContext) ~
+                postResource(resourceType, samUser, samRequestContext)
               } ~
               pathPrefix(Segment) { resourceId =>
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
 
                 pathEndOrSingleSlash {
-                  deleteResource(resource, userInfo, samRequestContext) ~
-                  postDefaultResource(resourceType, resource, userInfo, samRequestContext)
+                  deleteResource(resource, samUser, samRequestContext) ~
+                  postDefaultResource(resourceType, resource, samUser, samRequestContext)
                 } ~
                 pathPrefix("action") {
                   pathPrefix(Segment) { action =>
                     pathEndOrSingleSlash {
-                      getActionPermissionForUser(resource, userInfo, action, samRequestContext)
+                      getActionPermissionForUser(resource, samUser, action, samRequestContext)
                     } ~
                     pathPrefix("userEmail") {
                       pathPrefix(Segment) { userEmail =>
                         pathEndOrSingleSlash {
-                          getActionPermissionForUserEmail(resource, userInfo, ResourceAction(action), WorkbenchEmail(userEmail), samRequestContext)
+                          getActionPermissionForUserEmail(resource, samUser, ResourceAction(action), WorkbenchEmail(userEmail), samRequestContext)
                         }
                       }
                     }
@@ -159,51 +159,51 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                 } ~
                 pathPrefix("authDomain") {
                   pathEndOrSingleSlash {
-                    getResourceAuthDomain(resource, userInfo, samRequestContext)
+                    getResourceAuthDomain(resource, samUser, samRequestContext)
                   }
                 } ~
                 pathPrefix("roles") {
                     pathEndOrSingleSlash {
-                      getUserResourceRoles(resource, userInfo, samRequestContext)
+                      getUserResourceRoles(resource, samUser, samRequestContext)
                     }
                 } ~
                 pathPrefix("actions") {
                   pathEndOrSingleSlash {
-                    listActionsForUser(resource, userInfo, samRequestContext)
+                    listActionsForUser(resource, samUser, samRequestContext)
                   }
                 } ~
                 pathPrefix("allUsers") {
                   pathEndOrSingleSlash {
-                    getAllResourceUsers(resource, userInfo, samRequestContext)
+                    getAllResourceUsers(resource, samUser, samRequestContext)
                   }
                 } ~
                 pathPrefix("parent") {
                   pathEndOrSingleSlash {
-                    getResourceParent(resource, userInfo, samRequestContext) ~
-                    setResourceParent(resource, userInfo, samRequestContext) ~
-                    deleteResourceParent(resource, userInfo, samRequestContext)
+                    getResourceParent(resource, samUser, samRequestContext) ~
+                    setResourceParent(resource, samUser, samRequestContext) ~
+                    deleteResourceParent(resource, samUser, samRequestContext)
                   }
                 } ~
                 pathPrefix("children") {
                   pathEndOrSingleSlash {
-                    getResourceChildren(resource, userInfo, samRequestContext)
+                    getResourceChildren(resource, samUser, samRequestContext)
                   }
                 } ~
                 pathPrefix ("policies") {
                   pathEndOrSingleSlash {
-                    getResourcePolicies(resource, userInfo, samRequestContext)
+                    getResourcePolicies(resource, samUser, samRequestContext)
                   } ~ pathPrefix(Segment) { policyName =>
                     val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
 
                     pathEndOrSingleSlash {
-                      getPolicy(policyId, userInfo, samRequestContext) ~
-                        putPolicyOverwrite(resourceType, policyId, userInfo, samRequestContext) ~
-                        deletePolicy(policyId, userInfo, samRequestContext)
+                      getPolicy(policyId, samUser, samRequestContext) ~
+                        putPolicyOverwrite(resourceType, policyId, samUser, samRequestContext) ~
+                        deletePolicy(policyId, samUser, samRequestContext)
                     } ~
                     pathPrefix("memberEmails") {
-                      requireActionsForSharePolicy(policyId, userInfo, samRequestContext) {
+                      requireActionsForSharePolicy(policyId, samUser, samRequestContext) {
                         pathEndOrSingleSlash {
-                          putPolicyMembershipOverwrite(policyId, userInfo, samRequestContext)
+                          putPolicyMembershipOverwrite(policyId, samUser, samRequestContext)
                         } ~
                         pathPrefix(Segment) { email =>
                           withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
@@ -217,8 +217,8 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
                     } ~
                     pathPrefix("public") {
                       pathEndOrSingleSlash {
-                        getPublicFlag(policyId, userInfo, samRequestContext) ~
-                        putPublicFlag(policyId, userInfo, samRequestContext)
+                        getPublicFlag(policyId, samUser, samRequestContext) ~
+                        putPublicFlag(policyId, samUser, samRequestContext)
                       }
                     }
                   }
@@ -234,26 +234,26 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
   // see https://github.com/scala/bug/issues/7934
   object Deprecated { @deprecated("remove as part of CA-1783", "") class Corral { def listUserAccessPolicies = policyEvaluatorService.listUserAccessPolicies _ }; object Corral extends Corral }
 
-  def getUserPoliciesForResourceType(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getUserPoliciesForResourceType(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      complete(Deprecated.Corral.listUserAccessPolicies(resourceType.name, userInfo.userId, samRequestContext))
+      complete(Deprecated.Corral.listUserAccessPolicies(resourceType.name, samUser.id, samRequestContext))
     }
 
-  def getUserResourcesOfType(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getUserResourcesOfType(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      complete(policyEvaluatorService.listUserResources(resourceType.name, userInfo.userId, samRequestContext))
+      complete(policyEvaluatorService.listUserResources(resourceType.name, samUser.id, samRequestContext))
     }
 
-  def postResource(resourceType: ResourceType, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def postResource(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     post {
       entity(as[CreateResourceRequest]) { createResourceRequest =>
-        requireCreateWithOptionalParent(createResourceRequest.parent, resourceType, userInfo.userId, samRequestContext) {
+        requireCreateWithOptionalParent(createResourceRequest.parent, resourceType, samUser.id, samRequestContext) {
           if (resourceType.reuseIds && resourceType.isAuthDomainConstrainable) {
             throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "this api may not be used for resource types that allow both authorization domains and id reuse"))
           }
 
           def resourceMaker(samRequestContext: SamRequestContext): IO[ToResponseMarshallable] = resourceService
-            .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, createResourceRequest.parent, userInfo.userId, samRequestContext)
+            .createResource(resourceType, createResourceRequest.resourceId, createResourceRequest.policies, createResourceRequest.authDomain, createResourceRequest.parent, samUser.id, samRequestContext)
             .map { r =>
               if (createResourceRequest.returnResource.contains(true)) {
                 StatusCodes.Created -> CreateResourceResponse(r.resourceTypeName, r.resourceId, r.authDomain, r.accessPolicies.map(ap => CreateResourcePolicyResponse(ap.id, ap.email)))
@@ -267,25 +267,25 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  def deleteResource(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def deleteResource(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     delete {
       // Note that this does not require remove_child on the parent if it exists. remove_child is meant to prevent
       // users from removing a child only to add it to a different parent and thus circumvent any permissions
       // a parent may be enforcing. Deleting a child does not allow this situation.
-      requireAction(resource, SamResourceActions.delete, userInfo.userId, samRequestContext) {
+      requireAction(resource, SamResourceActions.delete, samUser.id, samRequestContext) {
         complete(resourceService.deleteResource(resource, samRequestContext).map(_ => StatusCodes.NoContent))
       }
     }
 
-  def postDefaultResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def postDefaultResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     post {
-      complete(resourceService.createResource(resourceType, resource.resourceId, userInfo, samRequestContext).map(_ => StatusCodes.NoContent))
+      complete(resourceService.createResource(resourceType, resource.resourceId, samUser, samRequestContext).map(_ => StatusCodes.NoContent))
     }
 
-  def getActionPermissionForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: String, samRequestContext: SamRequestContext): server.Route =
+  def getActionPermissionForUser(resource: FullyQualifiedResourceId, samUser: SamUser, action: String, samRequestContext: SamRequestContext): server.Route =
     get {
       complete {
-        policyEvaluatorService.hasPermission(resource, ResourceAction(action), userInfo.userId, samRequestContext).map { hasPermission =>
+        policyEvaluatorService.hasPermission(resource, ResourceAction(action), samUser.id, samRequestContext).map { hasPermission =>
           StatusCodes.OK -> JsBoolean(hasPermission)
         }
       }
@@ -296,9 +296,9 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
     *
     * <p> The caller should have readPolicies, OR testAnyActionAccess or testActionAccess::{action} to make this call.
     */
-  def getActionPermissionForUserEmail(resource: FullyQualifiedResourceId, userInfo: UserInfo, action: ResourceAction, userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): server.Route =
+  def getActionPermissionForUserEmail(resource: FullyQualifiedResourceId, samUser: SamUser, action: ResourceAction, userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.testAnyActionAccess, SamResourceActions.testActionAccess(action)), userInfo.userId, samRequestContext) {
+      requireOneOfAction(resource, Set(SamResourceActions.readPolicies, SamResourceActions.testAnyActionAccess, SamResourceActions.testActionAccess(action)), samUser.id, samRequestContext) {
         complete {
           policyEvaluatorService.hasPermissionByUserEmail(resource, action, userEmail, samRequestContext).map { hasPermission =>
             StatusCodes.OK -> JsBoolean(hasPermission)
@@ -307,34 +307,34 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  def listActionsForUser(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def listActionsForUser(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      complete(policyEvaluatorService.listUserResourceActions(resource, userInfo.userId, samRequestContext = samRequestContext).map { actions =>
+      complete(policyEvaluatorService.listUserResourceActions(resource, samUser.id, samRequestContext = samRequestContext).map { actions =>
         StatusCodes.OK -> actions
       })
     }
 
-  def getResourceAuthDomain(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getResourceAuthDomain(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireAction(resource, SamResourceActions.readAuthDomain, userInfo.userId, samRequestContext) {
+      requireAction(resource, SamResourceActions.readAuthDomain, samUser.id, samRequestContext) {
         complete(resourceService.loadResourceAuthDomain(resource, samRequestContext).map { response =>
           StatusCodes.OK -> response
         })
       }
     }
 
-  def getResourcePolicies(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getResourcePolicies(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireAction(resource, SamResourceActions.readPolicies, userInfo.userId, samRequestContext) {
+      requireAction(resource, SamResourceActions.readPolicies, samUser.id, samRequestContext) {
         complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
           StatusCodes.OK -> response.toSet
         })
       }
     }
 
-  def getPolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getPolicy(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+      requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), samUser.id, samRequestContext) {
         complete(resourceService.loadResourcePolicy(policyId, samRequestContext).map {
           case Some(response) => StatusCodes.OK -> response
           case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found"))
@@ -342,23 +342,23 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     put {
-      requireAction(policyId.resource, SamResourceActions.alterPolicies, userInfo.userId, samRequestContext) {
+      requireAction(policyId.resource, SamResourceActions.alterPolicies, samUser.id, samRequestContext) {
         entity(as[AccessPolicyMembership]) { membershipUpdate =>
           complete(resourceService.overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext).map(_ => StatusCodes.Created))
         }
       }
     }
 
-  private def requireActionsForSharePolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext)(sharePolicy: server.Route): server.Route =
-    requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+  private def requireActionsForSharePolicy(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext)(sharePolicy: server.Route): server.Route =
+    requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), samUser.id, samRequestContext) {
       sharePolicy
     }
 
-  def putPolicyMembershipOverwrite(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def putPolicyMembershipOverwrite(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     put {
-      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), samUser.id, samRequestContext) {
         entity(as[Set[WorkbenchEmail]]) { membersList =>
           complete(
             resourceService.overwritePolicyMembers(policyId, membersList, samRequestContext).map(_ => StatusCodes.NoContent))
@@ -376,20 +376,20 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       complete(resourceService.removeSubjectFromPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
     }
 
-  def getPublicFlag(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getPublicFlag(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+      requireOneOfAction(policyId.resource, Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)), samUser.id, samRequestContext) {
         complete(resourceService.isPublic(policyId, samRequestContext))
       }
     }
 
-  def putPublicFlag(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def putPublicFlag(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     put {
-      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)), samUser.id, samRequestContext) {
         requireOneOfAction(
           FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(policyId.resource.resourceTypeName.value)),
           Set(SamResourceActions.setPublic, SamResourceActions.setPublicPolicy(policyId.accessPolicyName)),
-          userInfo.userId,
+          samUser.id,
           samRequestContext
         ) {
           entity(as[Boolean]) { isPublic =>
@@ -399,27 +399,27 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  def getUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
       complete {
-        resourceService.listUserResourceRoles(resource, userInfo, samRequestContext).map { roles =>
+        resourceService.listUserResourceRoles(resource, samUser, samRequestContext).map { roles =>
           StatusCodes.OK -> roles
         }
       }
     }
 
-  def getAllResourceUsers(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getAllResourceUsers(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireAction(resource, SamResourceActions.readPolicies, userInfo.userId, samRequestContext) {
+      requireAction(resource, SamResourceActions.readPolicies, samUser.id, samRequestContext) {
         complete(resourceService.listAllFlattenedResourceUsers(resource, samRequestContext).map { allUsers =>
           StatusCodes.OK -> allUsers
         })
       }
     }
 
-  def getResourceParent(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getResourceParent(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireAction(resource, SamResourceActions.getParent, userInfo.userId, samRequestContext) {
+      requireAction(resource, SamResourceActions.getParent, samUser.id, samRequestContext) {
         complete(resourceService.getResourceParent(resource, samRequestContext).map {
           case Some(response) => StatusCodes.OK -> response
           case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource parent not found"))
@@ -427,12 +427,12 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  def setResourceParent(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def setResourceParent(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     put {
       entity(as[FullyQualifiedResourceId]) { newResourceParent =>
-        requireAction(resource, SamResourceActions.setParent, userInfo.userId, samRequestContext) {
-          requireParentAction(resource, None, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
-            requireParentAction(resource, Option(newResourceParent), SamResourceActions.addChild, userInfo.userId, samRequestContext) {
+        requireAction(resource, SamResourceActions.setParent, samUser.id, samRequestContext) {
+          requireParentAction(resource, None, SamResourceActions.removeChild, samUser.id, samRequestContext) {
+            requireParentAction(resource, Option(newResourceParent), SamResourceActions.addChild, samUser.id, samRequestContext) {
               complete(resourceService.setResourceParent(resource, newResourceParent, samRequestContext).map(_ => StatusCodes.NoContent))
             }
           }
@@ -440,10 +440,10 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  def deleteResourceParent(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def deleteResourceParent(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     delete {
-      requireAction(resource, SamResourceActions.setParent, userInfo.userId, samRequestContext) {
-        requireParentAction(resource, None, SamResourceActions.removeChild, userInfo.userId, samRequestContext) {
+      requireAction(resource, SamResourceActions.setParent, samUser.id, samRequestContext) {
+        requireParentAction(resource, None, SamResourceActions.removeChild, samUser.id, samRequestContext) {
           complete(resourceService.deleteResourceParent(resource, samRequestContext).map { parentDeleted =>
             if (parentDeleted) {
               StatusCodes.NoContent
@@ -455,16 +455,16 @@ trait ResourceRoutes extends UserInfoDirectives with SecurityDirectives with Sam
       }
     }
 
-  def getResourceChildren(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def getResourceChildren(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      requireAction(resource, SamResourceActions.listChildren, userInfo.userId, samRequestContext) {
+      requireAction(resource, SamResourceActions.listChildren, samUser.id, samRequestContext) {
         complete(resourceService.listResourceChildren(resource, samRequestContext).map(children => StatusCodes.OK -> children))
       }
     }
 
-  def deletePolicy(policyId: FullyQualifiedPolicyId, userInfo: UserInfo, samRequestContext: SamRequestContext): server.Route =
+  def deletePolicy(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     delete {
-      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.deletePolicy(policyId.accessPolicyName)), userInfo.userId, samRequestContext) {
+      requireOneOfAction(policyId.resource, Set(SamResourceActions.alterPolicies, SamResourceActions.deletePolicy(policyId.accessPolicyName)), samUser.id, samRequestContext) {
         complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
       }
     }

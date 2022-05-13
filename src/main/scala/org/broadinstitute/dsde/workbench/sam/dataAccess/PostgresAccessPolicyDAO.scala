@@ -1330,7 +1330,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[WorkbenchUser]] = {
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[SamUser]] = {
     val f = GroupMemberFlatTable.syntax("f")
     val u = UserTable.syntax("u")
     val p = PolicyTable.syntax("p")

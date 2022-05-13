@@ -3,7 +3,6 @@ package api
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.stream.Materializer
@@ -41,7 +40,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
   private val managedGroupResourceType = ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
   private val resourceTypes = Map(managedGroupResourceType.name -> managedGroupResourceType)
   private val groupId = "foo"
-  private val defaultNewUser = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), WorkbenchEmail("newGuy@organization.org"), 0)
+  private val defaultNewUser = Generator.genWorkbenchUserGoogle.sample.get
   private def defaultGoogleSubjectId = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
 
   def assertGroupDoesNotExist(samRoutes: TestSamRoutes, groupId: String = groupId): Unit = {
@@ -69,10 +68,10 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
   }
 
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
-  def makeOtherUser(samRoutes: TestSamRoutes, userInfo: UserInfo = defaultNewUser) = new {
-    runAndWait(samRoutes.userService.createUser(WorkbenchUser(userInfo.userId, defaultGoogleSubjectId, userInfo.userEmail, None), samRequestContext))
-    val email = userInfo.userEmail
-    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, userInfo, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao)
+  def makeOtherUser(samRoutes: TestSamRoutes, samUser: SamUser = defaultNewUser) = new {
+    runAndWait(samRoutes.userService.createUser(samUser, samRequestContext))
+    val email = samUser.email
+    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, samUser, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao)
   }
 
   def setGroupMembers(samRoutes: TestSamRoutes, members: Set[WorkbenchEmail], expectedStatus: StatusCode): Unit = {
@@ -85,8 +84,8 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
     assertCreateGroup(defaultRoutes)
     assertGetGroup(defaultRoutes)
 
-    val theDude = UserInfo(OAuth2BearerToken("tokenDude"), WorkbenchUserId("ElDudarino"), WorkbenchEmail("ElDudarino@example.com"), 0)
-    defaultRoutes.directoryDAO.createUser(WorkbenchUser(theDude.userId, None, theDude.userEmail, None), samRequestContext).unsafeRunSync()
+    val theDude = Generator.genWorkbenchUserGoogle.sample.get
+    defaultRoutes.directoryDAO.createUser(theDude, samRequestContext).unsafeRunSync()
     val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.policyEvaluatorService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.mockDirectoryDao, defaultRoutes.mockRegistrationDao)
 
     body(dudesRoutes)
@@ -102,17 +101,15 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
   it should "respond with 200 if the requesting user is in the member policy for the group" in {
     val samRoutes = TestSamRoutes(resourceTypes)
 
-
-    val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
-    val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
+    val newGuy = Generator.genWorkbenchUserGoogle.sample.get
     val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao)
 
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
 
-    runAndWait(samRoutes.userService.createUser(WorkbenchUser(newGuy.userId, defaultGoogleSubjectId, newGuy.userEmail, None), samRequestContext))
+    runAndWait(samRoutes.userService.createUser(newGuy, samRequestContext))
 
-    setGroupMembers(samRoutes, Set(newGuyEmail), expectedStatus = StatusCodes.Created)
+    setGroupMembers(samRoutes, Set(newGuy.email), expectedStatus = StatusCodes.Created)
 
     assertGetGroup(newGuyRoutes)
   }
@@ -128,9 +125,8 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     assertCreateGroup(samRoutes)
 
-    val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
-    val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
-    samRoutes.directoryDAO.createUser(WorkbenchUser(newGuy.userId, None, newGuyEmail, None), samRequestContext).unsafeRunSync()
+    val newGuy = Generator.genWorkbenchUserGoogle.sample.get
+    samRoutes.directoryDAO.createUser(newGuy, samRequestContext).unsafeRunSync()
     val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao)
 
 
@@ -319,7 +315,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     Get(s"/api/group/$groupId/admin") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[String] should include (TestSamRoutes.defaultUserInfo.userEmail.value)
+      responseAs[String] should include (TestSamRoutes.defaultUserInfo.email.value)
     }
   }
 
@@ -399,10 +395,9 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
   it should "fail with 404 when the group does not exist" in {
     val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
 
-    val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
-    val newGuy = UserInfo(OAuth2BearerToken("newToken"), WorkbenchUserId("NewGuy"), newGuyEmail, 0)
+    val newGuy = Generator.genWorkbenchUserGoogle.sample.get
 
-    val members = Set(newGuyEmail)
+    val members = Set(newGuy.email)
     Put(s"/api/group/$groupId/admin", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
@@ -440,8 +435,8 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     assertCreateGroup(samRoutes)
 
-    val defaultUserInfo = samRoutes.userInfo
-    Put(s"/api/group/$groupId/admin/${defaultUserInfo.userEmail}") ~> samRoutes.route ~> check {
+    val defaultUserInfo = samRoutes.user
+    Put(s"/api/group/$groupId/admin/${defaultUserInfo.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -489,7 +484,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
     val newGuy = makeOtherUser(samRoutes)
 
 
-    Put(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
+    Put(s"/api/group/$groupId/admin/${samRoutes.user.email}") ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -500,7 +495,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     assertCreateGroup(samRoutes)
 
-    Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/group/$groupId/admin/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -512,14 +507,14 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     assertCreateGroup(samRoutes)
 
-    Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/group/$groupId/admin/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
 
   it should "respond with 404 when the group does not exist" in {
     val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, ResourceId("foo"), Set.empty))
-    Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/group/$groupId/admin/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -529,7 +524,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     assertCreateGroup(samRoutes)
 
-    Delete(s"/api/group/$groupId/people/${samRoutes.userInfo.userEmail}") ~> samRoutes.route ~> check {
+    Delete(s"/api/group/$groupId/people/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -542,7 +537,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
     val newGuy = makeOtherUser(samRoutes)
 
 
-    Delete(s"/api/group/$groupId/admin/${samRoutes.userInfo.userEmail}") ~> newGuy.routes.route ~> check {
+    Delete(s"/api/group/$groupId/admin/${samRoutes.user.email}") ~> newGuy.routes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }

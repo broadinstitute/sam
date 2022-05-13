@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream
 import java.util.Date
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Clock, IO}
 import cats.implicits._
@@ -105,28 +104,19 @@ class GoogleExtensions(
     val samRequestContext = SamRequestContext(None) // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods
     val extensionResourceType =
       resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
-    val ownerGoogleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
+    val googleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
     for {
-      user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId, samRequestContext)
-
-      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId), samRequestContext)
-      serviceAccountUserInfo <- subject match {
-        case Some(uid: WorkbenchUserId) => IO.pure(UserInfo(OAuth2BearerToken(""), uid, googleServicesConfig.serviceAccountClientEmail, 0))
-        case Some(_) =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.Conflict, s"subjectId in configuration ${googleServicesConfig.serviceAccountClientId} is not a valid user")))
-        case None => IO.pure(UserInfo(OAuth2BearerToken(""), genWorkbenchUserId(System.currentTimeMillis()), googleServicesConfig.serviceAccountClientEmail, 0))
+      maybeSamUser <- directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext)
+      samUser <- maybeSamUser match {
+        case Some(samUser) => IO.pure(samUser)
+        case None => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).flatMap {
+          case Some(_) =>
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a SamUser")))
+          case None =>
+            val newUser = SamUser(genWorkbenchUserId(System.currentTimeMillis()), Option(googleSubjectId), googleServicesConfig.serviceAccountClientEmail, None, false)
+            IO.fromFuture(IO(samApplication.userService.createUser(newUser, samRequestContext))).map(_ => newUser)
+        }
       }
-      _ <- IO.fromFuture(
-        IO(
-          samApplication.userService.createUser(WorkbenchUser(
-            serviceAccountUserInfo.userId,
-            Option(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)),
-            serviceAccountUserInfo.userEmail,
-            None), samRequestContext) recover {
-            case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) =>
-          }))
 
       _ <- googleKms.createKeyRing(googleServicesConfig.googleKms.project,
         googleServicesConfig.googleKms.location,
@@ -149,7 +139,7 @@ class GoogleExtensions(
 
       _ <- samApplication.resourceService.createResourceType(extensionResourceType, samRequestContext)
 
-      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo, samRequestContext) handleErrorWith {
+      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, samUser, samRequestContext) handleErrorWith {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
       }
       _ <- googleKeyCache.onBoot()
@@ -240,7 +230,7 @@ class GoogleExtensions(
     googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, messages)
   }
 
-  override def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = {
+  override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
     for {
       _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
@@ -252,7 +242,7 @@ class GoogleExtensions(
     } yield ()
   }
 
-  override def getUserStatus(user: WorkbenchUser): Future[Boolean] =
+  override def getUserStatus(user: SamUser): Future[Boolean] =
     getUserProxy(user.id).flatMap {
       case Some(proxyEmail) => googleDirectoryDAO.isGroupMember(proxyEmail, WorkbenchEmail(user.email.value))
       case None => Future.successful(false)
@@ -269,7 +259,7 @@ class GoogleExtensions(
       }
     } yield a
 
-  override def onUserEnable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] =
+  override def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- withProxyEmail(user.id) { proxyEmail =>
         googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
@@ -277,7 +267,7 @@ class GoogleExtensions(
       _ <- forAllPets(user.id, samRequestContext)({ (petServiceAccount: PetServiceAccount) => enablePetServiceAccount(petServiceAccount, samRequestContext) })
     } yield ()
 
-  override def onUserDisable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] =
+  override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- forAllPets(user.id, samRequestContext)({ (petServiceAccount: PetServiceAccount) => disablePetServiceAccount(petServiceAccount, samRequestContext) })
       _ <- withProxyEmail(user.id) { proxyEmail =>
@@ -303,7 +293,7 @@ class GoogleExtensions(
       }
     } yield deletedSomething
 
-  def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
+  def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
     // The normal situation is that the pet either exists in both ldap and google or neither.
     // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
@@ -384,31 +374,31 @@ class GoogleExtensions(
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
-        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail, None), project, samRequestContext).map(Option(_))
+        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), project, samRequestContext).map(Option(_))
         case _ => IO.pure(None)
       }
     } yield key
 
-  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[String] =
+  def getPetServiceAccountKey(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[String] =
     for {
       pet <- createUserPetServiceAccount(user, project, samRequestContext)
       key <- googleKeyCache.getKey(pet)
     } yield key
 
-  def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
+  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
     getPetServiceAccountKey(user, project, samRequestContext).unsafeToFuture().flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
 
-  def getArbitraryPetServiceAccountKey(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[String] =
+  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): Future[String] =
     getDefaultServiceAccountForShellProject(user, samRequestContext)
 
-  def getArbitraryPetServiceAccountToken(user: WorkbenchUser, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
+  def getArbitraryPetServiceAccountToken(user: SamUser, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
     getArbitraryPetServiceAccountKey(user, samRequestContext).flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
 
-  private def getDefaultServiceAccountForShellProject(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[String] = {
+  private def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
     val projectName = s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
     for {
       creationOperationId <- googleProjectDAO.createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization).map(opId => Option(opId)) recover {
@@ -506,7 +496,7 @@ class GoogleExtensions(
   def getSynchronizedEmail(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     directoryDAO.getSynchronizedEmail(groupId, samRequestContext)
 
-  private[google] def toPetSAFromUser(user: WorkbenchUser): (ServiceAccountName, ServiceAccountDisplayName) = {
+  private[google] def toPetSAFromUser(user: SamUser): (ServiceAccountName, ServiceAccountDisplayName) = {
     /*
      * Service account IDs must be:
      * 1. between 6 and 30 characters

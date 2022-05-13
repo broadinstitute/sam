@@ -328,11 +328,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
+  override def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
     serializableWriteTransaction("createUser", samRequestContext)({ implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.azureB2CId})"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, ${user.enabled}, ${user.azureB2CId})"
 
       Try {
         insertUserQuery.update().apply()
@@ -344,7 +344,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     readOnlyTransaction("loadUser", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
@@ -354,7 +354,17 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
+    readOnlyTransaction("loadUserByGoogleSubjectId", samRequestContext)({ implicit session =>
+      val userTable = UserTable.syntax
+
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.googleSubjectId} = ${userId}"
+      loadUserQuery.map(UserTable(userTable))
+        .single().apply().map(UserTable.unmarshalUserRecord)
+    })
+  }
+
+  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     readOnlyTransaction("loadUserByAzureB2CId", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
@@ -553,7 +563,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     readOnlyTransaction("getUserFromPetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
       val userTable = UserTable.syntax

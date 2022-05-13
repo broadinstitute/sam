@@ -10,7 +10,6 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
-import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
@@ -48,11 +47,11 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
-            (changeForbiddenToNotFound & requireUserInfo(samRequestContext)) { user =>
+            (changeForbiddenToNotFound & requireActiveUser(samRequestContext)) { user =>
               get {
                 parameter("userDetailsOnly".?) { userDetailsOnly =>
                   complete {
-                    userService.getUserStatus(user.userId, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
+                    userService.getUserStatus(user.id, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -69,9 +68,9 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
             pathPrefix("status") {
               pathEndOrSingleSlash {
                 get {
-                  requireUserInfo(samRequestContext) { userInfo =>
+                  requireActiveUser(samRequestContext) { samUser =>
                     complete {
-                      userService.getTermsOfServiceStatus(userInfo.userId, samRequestContext).map { statusOption =>
+                      userService.getTermsOfServiceStatus(samUser.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(JsBoolean(status))
@@ -85,10 +84,10 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
             } ~
             pathEndOrSingleSlash {
               post {
-                requireUserInfo(samRequestContext) { userInfo =>
+                requireActiveUser(samRequestContext) { samUser =>
                   withTermsOfServiceAcceptance {
                     complete {
-                      userService.acceptTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                      userService.acceptTermsOfService(samUser.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(status)
@@ -100,9 +99,9 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 }
               } ~
               delete {
-                requireUserInfo(samRequestContext) { userInfo =>
+                requireActiveUser(samRequestContext) { samUser =>
                   complete {
-                    userService.rejectTermsOfService(userInfo.userId, samRequestContext).map { statusOption =>
+                    userService.rejectTermsOfService(samUser.id, samRequestContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -128,11 +127,11 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
               }
             }
           } ~ withSamRequestContext { samRequestContext =>
-            (changeForbiddenToNotFound & requireUserInfo(samRequestContext)) { user =>
+            (changeForbiddenToNotFound & requireActiveUser(samRequestContext)) { user =>
               path("info") {
                 get {
                   complete {
-                    userService.getUserStatusInfo(user.userId, samRequestContext).map { statusOption =>
+                    userService.getUserStatusInfo(user.id, samRequestContext).map { statusOption =>
                       statusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
@@ -145,7 +144,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 path("diagnostics") {
                   get {
                     complete {
-                      userService.getUserStatusDiagnostics(user.userId, samRequestContext).map { statusOption =>
+                      userService.getUserStatusDiagnostics(user.id, samRequestContext).map { statusOption =>
                         statusOption
                           .map { status =>
                             StatusCodes.OK -> Option(status)
@@ -164,8 +163,8 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
   def adminUserRoutes: server.Route =
     pathPrefix("admin") {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo(samRequestContext) { userInfo =>
-          asWorkbenchAdmin(userInfo) {
+        requireActiveUser(samRequestContext) { samUser =>
+          asWorkbenchAdmin(samUser) {
             pathPrefix("user") {
               path("email" / Segment) { email =>
                 complete {
@@ -182,7 +181,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                   pathEnd {
                     delete {
                       complete {
-                        userService.deleteUser(WorkbenchUserId(userId), userInfo, samRequestContext).map(_ => StatusCodes.OK)
+                        userService.deleteUser(WorkbenchUserId(userId), samRequestContext).map(_ => StatusCodes.OK)
                       }
                     } ~
                       get {
@@ -248,7 +247,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
   val apiUserRoutes: server.Route = pathPrefix("users") {
     pathPrefix("v1") {
       withSamRequestContext { samRequestContext =>
-        requireUserInfo(samRequestContext) { userInfo =>
+        requireActiveUser(samRequestContext) { samUser =>
           get {
             path(Segment) { email =>
               pathEnd {
@@ -267,7 +266,7 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
                 path(Segment) { inviteeEmail =>
                   complete {
                     userService
-                      .inviteUser(InviteUser(genWorkbenchUserId(System.currentTimeMillis()), WorkbenchEmail(inviteeEmail.trim)), samRequestContext)
+                      .inviteUser(WorkbenchEmail(inviteeEmail.trim), samRequestContext)
                       .map(userStatus => StatusCodes.Created -> userStatus)
                   }
                 }
@@ -278,5 +277,3 @@ trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
     }
   }
 }
-
-final case class InviteUser(inviteeId: WorkbenchUserId, inviteeEmail: WorkbenchEmail)
