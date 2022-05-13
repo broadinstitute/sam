@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 /**
   * Created by dvoet on 6/7/17.
   */
-trait MockUserInfoDirectives extends UserInfoDirectives {
+trait MockSamUserDirectives extends SamUserDirectives {
   val user: SamUser
   val newSamUser: Option[SamUser] = None
 

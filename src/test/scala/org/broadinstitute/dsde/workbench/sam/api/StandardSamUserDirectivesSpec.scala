@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
-import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
+import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO, MockRegistrationDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
@@ -24,8 +24,8 @@ import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext
 
-class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesting with ScalatestRouteTest with ScalaFutures with MockitoSugar with TestSupport {
-  def directives(dirDAO: DirectoryDAO = new MockDirectoryDAO(), regDAO: RegistrationDAO = new MockRegistrationDAO(), tosConfig: TermsOfServiceConfig = TestSupport.tosConfig): StandardUserInfoDirectives = new StandardUserInfoDirectives {
+class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTesting with ScalatestRouteTest with ScalaFutures with MockitoSugar with TestSupport {
+  def directives(dirDAO: DirectoryDAO = new MockDirectoryDAO(), regDAO: RegistrationDAO = new MockRegistrationDAO(), tosConfig: TermsOfServiceConfig = TestSupport.tosConfig): StandardSamUserDirectives = new StandardSamUserDirectives {
     override implicit val executionContext: ExecutionContext = null
     override val directoryDAO: DirectoryDAO = dirDAO
     override val registrationDAO: RegistrationDAO = regDAO
@@ -178,7 +178,7 @@ class StandardUserInfoDirectivesSpec extends AnyFlatSpec with PropertyBasedTesti
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
-      handleExceptions(myExceptionHandler){services.requireActiveUser(samRequestContext)(_ => complete(""))} ~> check {
+      handleExceptions(myExceptionHandler){services.withActiveUser(samRequestContext)(_ => complete(""))} ~> check {
       status shouldBe StatusCodes.OK
     }
   }

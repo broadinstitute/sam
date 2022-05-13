@@ -11,7 +11,7 @@ import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
+import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -21,7 +21,7 @@ import scala.concurrent.ExecutionContext
 import scala.util.Try
 import scala.util.matching.Regex
 
-trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamRequestContextDirectives {
+trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
@@ -31,12 +31,14 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
       } yield {
         // service account users do not need to accept ToS
         val tosStatusAcceptable = tosService.isTermsOfServiceStatusAcceptable(user) || SAdomain.matches(user.email.value)
-        val permittedToAccessTerra = tosStatusAcceptable && user.enabled
-        if (permittedToAccessTerra) {
-          user
-        } else {
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled or has not accepted the terms of service."))
+        if (!tosStatusAcceptable) {
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User has not accepted the terms of service."))
         }
+        if (!user.enabled) {
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
+        }
+
+        user
       }
       requireActiveUserIO.unsafeToFuture()
     }
@@ -82,7 +84,7 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
   }
 }
 
-object StandardUserInfoDirectives {
+object StandardSamUserDirectives {
   val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com$)".r
   val accessTokenHeader = "OIDC_access_token"
   val emailHeader = "OIDC_CLAIM_email"

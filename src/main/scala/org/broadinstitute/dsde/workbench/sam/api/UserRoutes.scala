@@ -19,7 +19,7 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by mbemis on 5/22/17.
   */
-trait UserRoutes extends UserInfoDirectives with SamRequestContextDirectives {
+trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val userService: UserService
 

@@ -21,7 +21,7 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by gpolumbo on 2/20/2018.
   */
-trait ManagedGroupRoutes extends UserInfoDirectives with SecurityDirectives with SamModelDirectives with SamRequestContextDirectives {
+trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with SamModelDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
 
   val managedGroupService: ManagedGroupService

@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 /**
   * Directives to get user information.
   */
-trait UserInfoDirectives {
+trait SamUserDirectives {
   val directoryDAO: DirectoryDAO
   val registrationDAO: RegistrationDAO
   val cloudExtensions: CloudExtensions

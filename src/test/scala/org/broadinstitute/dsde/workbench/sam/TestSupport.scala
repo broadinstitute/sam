@@ -124,7 +124,7 @@ object TestSupport extends TestSupport {
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
   def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config)
-    with MockUserInfoDirectives
+    with MockSamUserDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
       override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
