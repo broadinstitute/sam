@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, Directive1, Directives, MalformedRequestContentRejection}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosService}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.RejectionHandlers.{MethodDisabled, termsOfServiceRejectionHandler}
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
@@ -18,17 +18,36 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 /**
   * Directives to get user information.
   */
-trait UserInfoDirectives {
+trait SamUserDirectives {
   val directoryDAO: DirectoryDAO
   val registrationDAO: RegistrationDAO
   val cloudExtensions: CloudExtensions
+  val tosService: TosService
   val termsOfServiceConfig: TermsOfServiceConfig
 
-  def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser]
+  /**
+    * Extracts authentication information from headers, looks up user in database,
+    * returns user only if the user is enabled and has accepted latest terms of service.
+    * Throws 401 exception if user has not accepted latest terms of service or is disabled.
+    * Throws 403 exception if user does not exist (not 404 because that would mean the requested URL does not exist).
+    * @param samRequestContext
+    * @return
+    */
+  def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
-  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[SamUser]
+  /**
+    * Extracts authentication information from headers, looks up user in database,
+    * returns user regardless of enabled or terms of service status.
+    * Specifically named to be clear that inactive users are permitted.
+    * Throws 403 exception if user does not exist (not 404 because that would mean the requested URL does not exist).
+    * @param samRequestContext
+    * @return
+    */
+  def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser]
 
-  def asWorkbenchAdmin(samUser: SamUser): Directive0 =
+  def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser]
+
+  def withWorkbenchAdmin(samUser: SamUser): Directive0 =
     Directives.mapInnerRoute { r =>
       onSuccess(cloudExtensions.isWorkbenchAdmin(samUser.email)) { isAdmin =>
         if (!isAdmin) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You must be an admin.")))
@@ -50,5 +69,4 @@ trait UserInfoDirectives {
       }
     }
   }
-
 }

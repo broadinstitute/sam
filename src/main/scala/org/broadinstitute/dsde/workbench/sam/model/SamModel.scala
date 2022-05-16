@@ -246,9 +246,8 @@ final case class SamUser(id: WorkbenchUserId,
                          googleSubjectId: Option[GoogleSubjectId],
                          email: WorkbenchEmail,
                          azureB2CId: Option[AzureB2CId],
-//                         acceptedToS: Option[Boolean], // None means ToS acceptance not required (disabled or grace period)
-                         enabled: Boolean) {
-//  val permittedToAccessTerra = acceptedToS.getOrElse(true) && enabled
+                         enabled: Boolean,
+                         acceptedTosVersion: Option[String]) {
   def toUserIdInfo = UserIdInfo(id, email, googleSubjectId)
 }
 

@@ -55,8 +55,19 @@ abstract class SamRoutes(
       statusRoutes ~
       termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
-        pathPrefix("register") { userRoutes } ~
-        pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes ~ apiUserRoutes }
+        withSamRequestContext { samRequestContext =>
+          pathPrefix("register") { userRoutes(samRequestContext) } ~
+          pathPrefix("api") {
+            // IMPORTANT - all routes under /api must have an active user
+            withActiveUser(samRequestContext) { samUser =>
+              resourceRoutes(samUser, samRequestContext) ~
+                adminUserRoutes(samUser, samRequestContext) ~
+                extensionRoutes(samUser, samRequestContext) ~
+                groupRoutes(samUser, samRequestContext) ~
+                apiUserRoutes(samUser, samRequestContext)
+            }
+          }
+        }
       }
   }
 

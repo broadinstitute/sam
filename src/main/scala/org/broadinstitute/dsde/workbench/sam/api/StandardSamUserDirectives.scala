@@ -11,7 +11,7 @@ import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
+import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -21,19 +21,39 @@ import scala.concurrent.ExecutionContext
 import scala.util.Try
 import scala.util.matching.Regex
 
-trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging with SamRequestContextDirectives {
+trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
 
-  def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
+  def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getUserInfo(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
+      val requireActiveUserIO = for {
+        user <- getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext)
+      } yield {
+        // service account users do not need to accept ToS
+        val tosStatusAcceptable = tosService.isTermsOfServiceStatusAcceptable(user) || SAdomain.matches(user.email.value)
+        if (!tosStatusAcceptable) {
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User has not accepted the terms of service."))
+        }
+        if (!user.enabled) {
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
+        }
+
+        user
+      }
+      requireActiveUserIO.unsafeToFuture()
     }
   }
 
-  def requireCreateUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildWorkbenchUser)
+  def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
+    onSuccess {
+      getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
+    }
+  }
 
-  private def buildWorkbenchUser(oidcHeaders: OIDCHeaders): SamUser = {
-    // google id can either be in the external id or google id from azure headers, favor the external id as the source
+  def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildSamUser)
+
+  private def buildSamUser(oidcHeaders: OIDCHeaders): SamUser = {
+    // google id can either be in the external id or google id from azure headers, favor the externalo id as the source
     val googleSubjectId = (oidcHeaders.externalId.left.toOption ++ oidcHeaders.googleSubjectIdFromAzure).headOption
     val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
 
@@ -42,7 +62,8 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
       googleSubjectId,
       oidcHeaders.email,
       azureB2CId,
-      false)
+      false,
+      None)
   }
 
   /**
@@ -63,16 +84,16 @@ trait StandardUserInfoDirectives extends UserInfoDirectives with LazyLogging wit
   }
 }
 
-object StandardUserInfoDirectives {
+object StandardSamUserDirectives {
   val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com$)".r
   val accessTokenHeader = "OIDC_access_token"
   val emailHeader = "OIDC_CLAIM_email"
   val userIdHeader = "OIDC_CLAIM_user_id"
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
 
-  def getUserInfo(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[SamUser] = {
+  def getSamUser(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[SamUser] = {
     oidcHeaders match {
-      case OIDCHeaders(_, Left(googleSubjectId), saEmail@WorkbenchEmail(SAdomain(_)), _) =>
+      case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _) =>
         // If it's a PET account, we treat it as its owner
         directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
           case Some(petsOwner) => IO.pure(petsOwner)
@@ -114,18 +135,9 @@ object StandardUserInfoDirectives {
   }
 
   private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] =
-    for {
-      maybeSamUser <- directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext)
-      samUser <- maybeSamUser match {
-        case Some(samUser) => IO.pure(samUser)
-        case None => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).flatMap {
-          case Some(_) =>
-            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a WorkbenchUser")))
-          case None =>
-            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam")))
-        }
-      }
-    } yield samUser
+    directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext).flatMap { maybeUser =>
+      IO.fromOption(maybeUser)(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam")))
+    }
 }
 
 final case class OIDCHeaders(token: OAuth2BearerToken, externalId: Either[GoogleSubjectId, AzureB2CId], email: WorkbenchEmail, googleSubjectIdFromAzure: Option[GoogleSubjectId])

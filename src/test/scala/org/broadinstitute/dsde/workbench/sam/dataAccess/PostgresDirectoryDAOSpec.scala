@@ -740,7 +740,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
         // create a user and a group containing that single user
         val allUserGroups = for (i <- 1 to userCount) yield {
-          val user = dao.createUser(Generator.genWorkbenchUserGoogle.sample.get, samRequestContext).unsafeRunSync()
+          val user = dao.createUser(Generator.genWorkbenchUserGoogle.sample.get.copy(id = WorkbenchUserId(s"user$i")), samRequestContext).unsafeRunSync()
           val group = BasicWorkbenchGroup(WorkbenchGroupName(s"usergroup$i"), Set(user.id), WorkbenchEmail(s"usergroup$i"))
           dao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
         }

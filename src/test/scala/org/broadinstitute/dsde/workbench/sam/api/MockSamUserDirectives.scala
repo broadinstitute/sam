@@ -12,9 +12,9 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 /**
   * Created by dvoet on 6/7/17.
   */
-trait MockUserInfoDirectives extends UserInfoDirectives {
+trait MockSamUserDirectives extends SamUserDirectives {
   val user: SamUser
-  val workbenchUser: Option[SamUser] = None
+  val newSamUser: Option[SamUser] = None
 
   val petSAdomain = "\\S+@\\S+\\.iam\\.gserviceaccount\\.com".r
 
@@ -22,7 +22,7 @@ trait MockUserInfoDirectives extends UserInfoDirectives {
     petSAdomain.pattern.matcher(email).matches
   }
 
-  override def requireActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
+  override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
     directoryDAO.loadSubjectFromEmail(user.email, samRequestContext).map { maybeUser =>
       maybeUser.map { _ =>
         if (isPetSA(user.email.value)) {
@@ -35,8 +35,10 @@ trait MockUserInfoDirectives extends UserInfoDirectives {
     }.unsafeToFuture()
   }
 
-  override def requireCreateUser(samRequestContext: SamRequestContext): Directive1[SamUser] = workbenchUser match {
-    case None => failWith(new Exception("workbenchUser not specified"))
+  override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = withActiveUser(samRequestContext)
+
+  override def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = newSamUser match {
+    case None => failWith(new Exception("samUser not specified"))
     case Some(u) => provide(u)
   }
 }

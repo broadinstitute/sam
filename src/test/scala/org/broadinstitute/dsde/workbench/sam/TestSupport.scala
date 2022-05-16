@@ -67,9 +67,6 @@ object TestSupport extends TestSupport {
   private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
 
-  implicit val eqWorkbenchExceptionErrorReport: Eq[WorkbenchExceptionWithErrorReport] =
-    (x: WorkbenchExceptionWithErrorReport, y: WorkbenchExceptionWithErrorReport) =>
-      x.errorReport.statusCode == y.errorReport.statusCode && x.errorReport.message == y.errorReport.message
   val config = ConfigFactory.load()
   val appConfig = AppConfig.readConfig(config)
   val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
@@ -127,7 +124,7 @@ object TestSupport extends TestSupport {
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
   def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config)
-    with MockUserInfoDirectives
+    with MockSamUserDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
       override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
@@ -144,7 +141,7 @@ object TestSupport extends TestSupport {
         case _ => null
       }
       override val user: SamUser = uInfo
-      override val workbenchUser: Option[SamUser] = Option(uInfo)
+      override val newSamUser: Option[SamUser] = Option(uInfo)
   }
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)

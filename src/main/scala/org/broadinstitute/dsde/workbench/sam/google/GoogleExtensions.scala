@@ -113,7 +113,7 @@ class GoogleExtensions(
           case Some(_) =>
             IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a SamUser")))
           case None =>
-            val newUser = SamUser(genWorkbenchUserId(System.currentTimeMillis()), Option(googleSubjectId), googleServicesConfig.serviceAccountClientEmail, None, false)
+            val newUser = SamUser(genWorkbenchUserId(System.currentTimeMillis()), Option(googleSubjectId), googleServicesConfig.serviceAccountClientEmail, None, false, None)
             IO.fromFuture(IO(samApplication.userService.createUser(newUser, samRequestContext))).map(_ => newUser)
         }
       }
@@ -374,7 +374,7 @@ class GoogleExtensions(
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
-        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), project, samRequestContext).map(Option(_))
+        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), project, samRequestContext).map(Option(_))
         case _ => IO.pure(None)
       }
     } yield key
