@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
@@ -34,13 +34,13 @@ trait CloudExtensions {
 
   def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit]
 
-  def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit]
+  def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): Future[Unit]
 
-  def getUserStatus(user: WorkbenchUser): Future[Boolean]
+  def getUserStatus(user: SamUser): Future[Boolean]
 
-  def onUserEnable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit]
+  def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit]
 
-  def onUserDisable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit]
+  def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit]
 
   def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit]
 
@@ -73,13 +73,13 @@ trait NoExtensions extends CloudExtensions {
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = Future.successful(())
 
-  override def onUserCreate(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
+  override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
-  override def getUserStatus(user: WorkbenchUser): Future[Boolean] = Future.successful(true)
+  override def getUserStatus(user: SamUser): Future[Boolean] = Future.successful(true)
 
-  override def onUserEnable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
+  override def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
-  override def onUserDisable(user: WorkbenchUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
+  override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
   override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
@@ -113,6 +113,6 @@ object NoExtensionsInitializer extends CloudExtensionsInitializer {
 }
 
 trait NoExtensionRoutes extends ExtensionRoutes {
-  def extensionRoutes: server.Route = reject
+  def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   val cloudExtensions = NoExtensions
 }

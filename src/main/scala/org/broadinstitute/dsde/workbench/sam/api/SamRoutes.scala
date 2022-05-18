@@ -14,9 +14,10 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
-import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, SwaggerConfig, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.service._
 
@@ -30,32 +31,43 @@ abstract class SamRoutes(
     val userService: UserService,
     val statusService: StatusService,
     val managedGroupService: ManagedGroupService,
-    val swaggerConfig: SwaggerConfig,
     val termsOfServiceConfig: TermsOfServiceConfig,
     val directoryDAO: DirectoryDAO,
     val registrationDAO: RegistrationDAO,
     val policyEvaluatorService: PolicyEvaluatorService,
     val tosService: TosService,
-    val liquibaseConfig: LiquibaseConfig)(
+    val liquibaseConfig: LiquibaseConfig,
+    val oidcConfig: OpenIDConnectConfiguration)(
     implicit val system: ActorSystem,
     val materializer: Materializer,
     val executionContext: ExecutionContext)
     extends LazyLogging
     with ResourceRoutes
     with UserRoutes
-    with SwaggerRoutes
     with StatusRoutes
     with TermsOfServiceRoutes
     with ExtensionRoutes
     with ManagedGroupRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
-    swaggerRoutes ~
+    oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
+      oidcConfig.oauth2Routes ~
       statusRoutes ~
       termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
-        pathPrefix("register") { userRoutes } ~
-        pathPrefix("api") { resourceRoutes ~ adminUserRoutes ~ extensionRoutes ~ groupRoutes ~ apiUserRoutes }
+        withSamRequestContext { samRequestContext =>
+          pathPrefix("register") { userRoutes(samRequestContext) } ~
+          pathPrefix("api") {
+            // IMPORTANT - all routes under /api must have an active user
+            withActiveUser(samRequestContext) { samUser =>
+              resourceRoutes(samUser, samRequestContext) ~
+                adminUserRoutes(samUser, samRequestContext) ~
+                extensionRoutes(samUser, samRequestContext) ~
+                groupRoutes(samUser, samRequestContext) ~
+                apiUserRoutes(samUser, samRequestContext)
+            }
+          }
+        }
       }
   }
 

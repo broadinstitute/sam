@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.kernel.Async
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO.Attr
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithContext
 
@@ -35,11 +36,11 @@ trait LdapSupport {
   }.getOrElse(Set.empty)
 
 
-  protected def unmarshalUser(results: Entry): Either[String, WorkbenchUser] =
+  protected def unmarshalUser(results: Entry): Either[String, SamUser] =
     for {
       uid <- getAttribute(results, Attr.uid).toRight(s"${Attr.uid} attribute missing")
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
-    } yield WorkbenchUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None)
+    } yield SamUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None, false, None)
 
   /**
     * Executes ldap query.

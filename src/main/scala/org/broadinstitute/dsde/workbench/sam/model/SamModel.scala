@@ -242,6 +242,15 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
+final case class SamUser(id: WorkbenchUserId,
+                         googleSubjectId: Option[GoogleSubjectId],
+                         email: WorkbenchEmail,
+                         azureB2CId: Option[AzureB2CId],
+                         enabled: Boolean,
+                         acceptedTosVersion: Option[String]) {
+  def toUserIdInfo = UserIdInfo(id, email, googleSubjectId)
+}
+
 object SamLenses {
   val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource
   val resourceTypeNameInAccessPolicy = resourceIdentityAccessPolicy composeLens FullyQualifiedResourceId.resourceTypeName

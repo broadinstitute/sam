@@ -22,7 +22,8 @@ import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsIn
 import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
-import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardUserInfoDirectives}
+import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
+import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
@@ -31,7 +32,6 @@ import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 
@@ -75,8 +75,6 @@ object Boot extends IOApp with LazyLogging {
         _ <- dependencies.samApplication.resourceService.initResourceTypes().onError {
           case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
-
-        _ <- dependencies.samApplication.tosService.resetTermsOfServiceGroupsIfNeeded(SamRequestContext(None))
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
 
@@ -132,7 +130,16 @@ object Boot extends IOApp with LazyLogging {
         backgroundAccessPolicyDAO,
         backgroundLdapExecutionContext,
         blockingEc)
-    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO)
+
+      oauth2Config <- cats.effect.Resource.eval(
+        OpenIDConnectConfiguration[IO](
+          appConfig.oidcConfig.authorityEndpoint,
+          ClientId(appConfig.oidcConfig.clientId),
+          oidcClientSecret = appConfig.oidcConfig.clientSecret.map(ClientSecret),
+          extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
+          extraAuthParams = Some("prompt=login"))
+      )
+    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, oauth2Config)
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -303,7 +310,8 @@ object Boot extends IOApp with LazyLogging {
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
-      registrationDAO: RegistrationDAO)(implicit actorSystem: ActorSystem): AppDependencies = {
+      registrationDAO: RegistrationDAO,
+      oauth2Config: OpenIDConnectConfiguration)(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
@@ -316,16 +324,16 @@ object Boot extends IOApp with LazyLogging {
 
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
-        with StandardUserInfoDirectives with GoogleExtensionRoutes {
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config)
+        with StandardSamUserDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.swaggerConfig, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig)
-        with StandardUserInfoDirectives with NoExtensionRoutes
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config)
+        with StandardSamUserDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }
   }

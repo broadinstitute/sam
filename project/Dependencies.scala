@@ -2,13 +2,13 @@ import sbt._
 
 object Dependencies {
   val akkaV = "2.6.19"
-  val akkaHttpV = "10.2.6"
+  val akkaHttpV = "10.2.9"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.9.2"
   val scalaTestV    = "3.2.3"
-  val scalaCheckV    = "1.14.0"
+  val scalaCheckV    = "1.14.3"
   val scalikejdbcVersion    = "3.4.2"
-  val postgresDriverVersion = "42.3.5"
+  val postgresDriverVersion = "42.3.4"
   val http4sVersion = "0.21.13"
 
   val workbenchUtilV   = "0.6-74c9fc2"
@@ -17,6 +17,7 @@ object Dependencies {
   val workbenchGoogleV = "0.21-8ce5b9b"
   val workbenchGoogle2V = "0.24-447afa5"
   val workbenchNotificationsV = "0.3-d74ff96"
+  val workbenchOauth2V = "0.1-448015f"
   val monocleVersion = "2.0.5"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -35,7 +36,6 @@ object Dependencies {
   val logbackClassic: ModuleID = "ch.qos.logback"             %  "logback-classic" % "1.2.11"
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
-  val swaggerUi: ModuleID =      "org.webjars.npm"                %  "swagger-ui-dist"      % "4.6.1"
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.5.2"
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
@@ -48,7 +48,7 @@ object Dependencies {
   val scalaCheck: ModuleID =        "org.scalacheck"      %%  "scalacheck"           % scalaCheckV % "test"
 
   val excludIoGrpc =  ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.0"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.1"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll(excludIoGrpc)
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20220401-1.32.1" excludeAll(excludIoGrpc) //force this version
@@ -60,7 +60,7 @@ object Dependencies {
   val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-15" % s"${scalaTestV}.0" % Test
   val scalaTestMockito = "org.scalatestplus" %% "mockito-3-4" % s"${scalaTestV}.0" % Test
 
-  val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.12"
+  val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.14"
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -68,6 +68,8 @@ object Dependencies {
   val workbenchUtil2: ModuleID =      "org.broadinstitute.dsde.workbench" %% "workbench-util2"   % workbenchUtil2V excludeAll(excludeWorkbenchModel)
   val workbenchModel: ModuleID =     "org.broadinstitute.dsde.workbench" %% "workbench-model"  % workbenchModelV
   val workbenchGoogle: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll(excludeWorkbenchModel, excludeWorkbenchUtil)
+  val workbenchOauth2: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V
+  val workbenchOauth2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V % "test" classifier "tests"
   // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted
   // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
   // workbench-libs dependency so exclude auto-value from there
@@ -80,7 +82,7 @@ object Dependencies {
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
-  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.13.1"
+  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.1"
 
   val scalikeCore =       "org.scalikejdbc"                   %% "scalikejdbc"         % scalikejdbcVersion
   val scalikeCoreConfig = "org.scalikejdbc"                   %% "scalikejdbc-config"  % scalikejdbcVersion
@@ -101,7 +103,7 @@ object Dependencies {
   )
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.13"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -111,7 +113,6 @@ object Dependencies {
     logstashLogback,
     ravenLogback,
     scalaLogging,
-    swaggerUi,
     ficus,
 
     akkaActor,
@@ -141,6 +142,8 @@ object Dependencies {
     workbenchGoogleTests,
     workbenchGoogle2Tests,
     googleStorageLocal,
+    workbenchOauth2,
+    workbenchOauth2Tests,
 
     unboundid,
     commonsCodec,
