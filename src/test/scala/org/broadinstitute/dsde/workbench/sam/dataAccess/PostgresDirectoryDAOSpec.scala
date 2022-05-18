@@ -1102,5 +1102,40 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
     }
 
+    "loadUserByAzureB2CId" - {
+      "load a user from their azure b2c id" in {
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.loadUserByAzureB2CId(defaultUser.azureB2CId.get, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
+      }
+    }
+
+    "setUserAzureB2CId" - {
+      "set the azureB2CId for a user with no pre-existing azureB2CId" in {
+        val newAzureB2cId = AzureB2CId("newAzureB2cId")
+        dao.createUser(defaultUser.copy(azureB2CId = None), samRequestContext).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
+        dao.setUserAzureB2CId(defaultUser.id, newAzureB2cId, samRequestContext).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(newAzureB2cId)
+      }
+
+      "set the azureB2CId for a user with a pre-existing azureB2CId of the same value" in {
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
+      }
+
+      "throw an exception when trying to overwrite a azureB2CId with a different value" in {
+        val newAzureB2cId = AzureB2CId("newAzureB2cId")
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        assertThrows[WorkbenchException] {
+          dao.setUserAzureB2CId(defaultUser.id, newAzureB2cId, samRequestContext).unsafeRunSync()
+        }
+      }
+    }
+
   }
 }
