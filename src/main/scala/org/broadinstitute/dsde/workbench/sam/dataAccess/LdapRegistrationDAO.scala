@@ -64,12 +64,13 @@ class LdapRegistrationDAO(
     } *> IO.pure(user)
   }
 
-  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = executeLdap(IO(loadUserInternal(userId)), "loadUser", samRequestContext)
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = executeLdap(loadUserInternal(userId), "loadUser", samRequestContext)
 
-  def loadUserInternal(userId: WorkbenchUserId) =
-    Option(ldapConnectionPool.getEntry(userDn(userId))) flatMap { results =>
-      unmarshalUser(results).toOption
+  private def loadUserInternal(userId: WorkbenchUserId): IO[Option[SamUser]] = {
+    IO(ldapConnectionPool.getEntry(userDn(userId))).map { entry =>
+      Option(entry).flatMap(unmarshalUser(_).toOption)
     }
+  }
 
   // Deleting a user in ldap will also disable them to clear them out of the enabled-users group
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
@@ -212,7 +213,20 @@ class LdapRegistrationDAO(
     ldapIsHealthy
   }
 
-  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
-    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.azureB2CId, b2CId.value))), "setUserAzureB2CId", samRequestContext)
+  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] = {
+    val getAndUpdate = for {
+      ldapUserOpt <- loadUserInternal(userId)
+      ldapUser <- IO.fromOption(ldapUserOpt)(
+        new WorkbenchException(s"Cannot update azureB2CId for user ${userId} because user does not exist"))
+      _ <- ldapUser.azureB2CId match {
+        case Some(existing) if existing != b2CId =>
+          IO.raiseError(new WorkbenchException(
+            s"Cannot update azureB2CId for user ${userId} because the azureB2CId has already been set for this user"))
+        case _ =>
+          IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.REPLACE, Attr.azureB2CId, b2CId.value)))
+      }
+    } yield ()
+    executeLdap(getAndUpdate, "setUserAzureB2CId", samRequestContext)
+  }
 
 }
