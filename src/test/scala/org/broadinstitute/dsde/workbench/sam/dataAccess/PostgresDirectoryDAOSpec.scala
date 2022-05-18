@@ -1124,7 +1124,9 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       "set the azureB2CId for a user with a pre-existing azureB2CId of the same value" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
-        dao.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
+        dao.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(defaultUser.azureB2CId.get)
       }
 
       "throw an exception when trying to overwrite a azureB2CId with a different value" in {
