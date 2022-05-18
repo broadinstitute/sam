@@ -93,7 +93,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     verify(googleExtensions).onUserCreate(defaultUser, samRequestContext)
 
     dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
-    registrationDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(azureB2CId = None)) // ldap does not know about azure or enabled
+    registrationDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
     registrationDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
