@@ -5,11 +5,10 @@ import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedPolicyId, Full
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, RootJsonFormat, SerializationException}
 
 import java.net.InetAddress
-import java.time.Instant
 
 sealed trait AuditEvent
 
-final case class AuditInfo(userId: Option[WorkbenchUserId], timestamp: Instant, clientIp: Option[InetAddress])
+final case class AuditInfo(userId: Option[WorkbenchUserId], clientIp: Option[InetAddress])
 
 final case class ResourceChange(parent: Option[FullyQualifiedResourceId])
 
@@ -40,7 +39,6 @@ final case class AccessChangeEvent(eventType: AccessChangeEventType,
 object SamAuditModelJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-  import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
   import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 
   implicit object InetAddressFormat extends RootJsonFormat[InetAddress] {
@@ -52,7 +50,7 @@ object SamAuditModelJsonSupport {
     }
   }
 
-  implicit val AuditInfoFormat = jsonFormat3(AuditInfo)
+  implicit val AuditInfoFormat = jsonFormat2(AuditInfo)
 
   implicit val ResourceChangeFormat = jsonFormat1(ResourceChange)
   implicit val ResourceEventTypeFormat = new RootJsonFormat[ResourceEventType] {

@@ -5,7 +5,6 @@ import org.broadinstitute.dsde.workbench.sam.audit.AuditInfo
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 
 import java.net.InetAddress
-import java.time.Instant
 
 /**
   * Contains any additional data for the request.
@@ -21,5 +20,5 @@ import java.time.Instant
 case class SamRequestContext(parentSpan: Option[Span] = None,
                              clientIp: Option[InetAddress] = None,
                              samUser: Option[SamUser] = None) {
-  def createAuditInfo: AuditInfo = AuditInfo(samUser.map(_.id), Instant.now(), clientIp)
+  def createAuditInfo: AuditInfo = AuditInfo(samUser.map(_.id), clientIp)
 }
