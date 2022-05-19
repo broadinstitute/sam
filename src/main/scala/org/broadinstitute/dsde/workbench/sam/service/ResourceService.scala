@@ -4,12 +4,15 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.implicits._
+import com.google.common.annotations.VisibleForTesting
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChangeEvent, AuditLogger, ResourceChange, ResourceCreated, ResourceDeleted, ResourceEvent, ResourceUpdated}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
@@ -44,7 +47,7 @@ class ResourceService(
     *
     * This will fail if SamResourceTypes.resourceTypeAdmin does not exist in resourceTypes
     */
-  def initResourceTypes(samRequestContext: SamRequestContext = SamRequestContext(None)): IO[Iterable[ResourceType]] = // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods
+  def initResourceTypes(samRequestContext: SamRequestContext = SamRequestContext()): IO[Iterable[ResourceType]] = // `SamRequestContext()` is used so that we don't trace 1-off boot/init methods
     resourceTypes.get(SamResourceTypes.resourceTypeAdminName) match {
       case None =>
         IO.raiseError(new WorkbenchException(s"Could not initialize resource types because ${SamResourceTypes.resourceTypeAdminName.value} does not exist."))
@@ -106,7 +109,19 @@ class ResourceService(
     logger.info(s"Creating new `${resourceType.name}` with resourceId: `${resourceId}`")
     makeValidatablePolicies(policiesMap, samRequestContext).flatMap { policies =>
       validateCreateResource(resourceType, resourceId, policies, authDomain, userId, parentOpt, samRequestContext).flatMap {
-        case Seq() => persistResource(resourceType, resourceId, policies, authDomain, parentOpt, samRequestContext)
+        case Seq() => for {
+          persisted <- persistResource(resourceType, resourceId, policies, authDomain, parentOpt, samRequestContext)
+
+          _ <- AuditLogger.logAuditEventIO(
+            samRequestContext,
+            ResourceEvent(ResourceCreated,
+              FullyQualifiedResourceId(resourceType.name, resourceId)))
+
+          changeEvents = createAccessChangeEvents(FullyQualifiedResourceId(resourceType.name, resourceId),
+            LazyList.empty, persisted.accessPolicies)
+
+          _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq:_*)
+        } yield persisted
         case errorReports: Seq[ErrorReport] =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
       }
@@ -203,10 +218,11 @@ class ResourceService(
       case LoadResourceAuthDomainResult.ResourceNotFound => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Resource ${resource} not found")))
     })
 
-  def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
+  @VisibleForTesting
+  private[service] def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
     createPolicy(policyIdentity, members, generateGroupEmail(), roles, actions, descendantPermissions, samRequestContext)
 
-  def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
+  private def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
     accessPolicyDAO.createPolicy(AccessPolicy(policyIdentity, members, email, roles, actions, descendantPermissions, public = false), samRequestContext)
 
   // IF Resource ID reuse is allowed (as defined by the Resource Type), then we can delete the resource
@@ -224,6 +240,10 @@ class ResourceService(
 
       _ <- accessPolicyDAO.deleteAllResourcePolicies(resource, samRequestContext).unsafeToFuture()
       _ <- maybeDeleteResource(resource, samRequestContext).unsafeToFuture()
+
+      _ <- AuditLogger.logAuditEventIO(
+        samRequestContext,
+        ResourceEvent(ResourceDeleted, resource)).unsafeToFuture()
     } yield ()
 
   /** Check if a resource has any children. If so, then throw a 400. */
@@ -302,15 +322,16 @@ class ResourceService(
         case Some(error) => IO.raiseError(new WorkbenchExceptionWithErrorReport(error.copy(statusCode = Option(StatusCodes.BadRequest))))
         case None =>
           val newMembers = emailsToSubjects.values.flatten.toSet
-          accessPolicyDAO.loadPolicy(policyId, samRequestContext).flatMap {
-            case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"policy $policyId does not exist")))
-            case Some(existingPolicy) if existingPolicy.members == newMembers => IO.unit
-            case _ => for {
-              _ <- accessPolicyDAO.overwritePolicyMembers(policyId, newMembers, samRequestContext)
-              _ <- fireGroupUpdateNotification(policyId, samRequestContext)
-            } yield ()
+          accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext).flatMap { originalPolicies =>
+            originalPolicies.find(_.id == policyId) match {
+              case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"policy $policyId does not exist")))
+              case Some(existingPolicy) if existingPolicy.members == newMembers => IO.unit
+              case _ => for {
+                _ <- accessPolicyDAO.overwritePolicyMembers(policyId, newMembers, samRequestContext)
+                _ <- onPolicyUpdate(policyId, originalPolicies, samRequestContext)
+              } yield ()
+            }
           }
-
       }
     }
 
@@ -326,21 +347,29 @@ class ResourceService(
     */
   private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
-    accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext).flatMap {
-      case None => createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, policy.descendantPermissions, samRequestContext)
-      case Some(existingAccessPolicy) =>
-        val newAccessPolicy = AccessPolicy(policyIdentity, workbenchSubjects, existingAccessPolicy.email, policy.roles, policy.actions, policy.descendantPermissions, existingAccessPolicy.public)
-        if (newAccessPolicy == existingAccessPolicy) {
-          // short cut if access policy is unchanged
-          IO.pure(newAccessPolicy)
-        } else {
+    accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext).flatMap { originalPolicies =>
+      originalPolicies.find(_.id == policyIdentity) match {
+        case None =>
           for {
-            result <- accessPolicyDAO.overwritePolicy(newAccessPolicy, samRequestContext)
-            _ <- fireGroupUpdateNotification(policyIdentity, samRequestContext)
+            result <- createPolicy(policyIdentity, workbenchSubjects, generateGroupEmail(), policy.roles, policy.actions, policy.descendantPermissions, samRequestContext)
+            _ <- onPolicyUpdate(policyIdentity, originalPolicies, samRequestContext)
           } yield {
             result
           }
-        }
+        case Some(existingAccessPolicy) =>
+          val newAccessPolicy = AccessPolicy(policyIdentity, workbenchSubjects, existingAccessPolicy.email, policy.roles, policy.actions, policy.descendantPermissions, existingAccessPolicy.public)
+          if (newAccessPolicy == existingAccessPolicy) {
+            // short cut if access policy is unchanged
+            IO.pure(newAccessPolicy)
+          } else {
+            for {
+              result <- accessPolicyDAO.overwritePolicy(newAccessPolicy, samRequestContext)
+              _ <- onPolicyUpdate(policyIdentity, originalPolicies, samRequestContext)
+            } yield {
+              result
+            }
+          }
+      }
     }
   }
 
@@ -438,33 +467,52 @@ class ResourceService(
     validationErrors.map(_.flatten)
   }
 
-  private def fireGroupUpdateNotification(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] =
-    IO.fromFuture(IO(cloudExtensions.onGroupUpdate(Seq(groupId), samRequestContext))).attempt.flatMap {
-      case Left(regrets) => IO(logger.error(s"error calling cloudExtensions.onGroupUpdate for $groupId", regrets))
-      case Right(_) => IO.unit
-    }
+  private def onPolicyUpdate(policyId: FullyQualifiedPolicyId, originalPolicies: Iterable[AccessPolicy], samRequestContext: SamRequestContext): IO[Unit] = {
+    for {
+      updatedPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
+      changeEvents = createAccessChangeEvents(policyId.resource,
+        originalPolicies,
+        updatedPolicies)
+
+      _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq:_*)
+
+      _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(Seq(policyId), samRequestContext))).attempt.flatMap {
+        case Left(regrets) => IO(logger.error(s"error calling cloudExtensions.onGroupUpdate for $policyId", regrets))
+        case Right(_) => IO.unit
+      }
+    } yield ()
+  }
 
   def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     subject match {
       case subject: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
+        // https://broadworkbench.atlassian.net/browse/CA-257
+        // this case was prevented as a performance enhancement in the dark days before Postgres, does it still apply?
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
       case _ =>
-        directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext)
-          .flatMap(fireGroupUpdateNotificationIfGroupChanged(policyIdentity, samRequestContext))
+        for {
+          originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
+          policyChanged <- directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext)
+          _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
+        } yield policyChanged
     }
   }
 
-  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
-    directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
-      .flatMap(fireGroupUpdateNotificationIfGroupChanged(policyIdentity, samRequestContext))
+  def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
+    for {
+      originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
+      policyChanged <- directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
+      _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
+    } yield policyChanged
+  }
 
-  private def fireGroupUpdateNotificationIfGroupChanged(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext)(groupChanged: Boolean) = {
-    val maybeFireNotification = if (groupChanged) {
-      fireGroupUpdateNotification(policyIdentity, samRequestContext)
+  private def onPolicyUpdateIfChanged(policyIdentity: FullyQualifiedPolicyId, orginalPolicies: Iterable[AccessPolicy], samRequestContext: SamRequestContext)(policyChanged: Boolean) = {
+    val maybeFireNotification = if (policyChanged) {
+      onPolicyUpdate(policyIdentity, orginalPolicies, samRequestContext)
     } else {
       IO.unit
     }
-    maybeFireNotification.map(_ => groupChanged)
+    maybeFireNotification.map(_ => policyChanged)
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =
@@ -520,7 +568,11 @@ class ResourceService(
               ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")))
           else IO.unit
         case LoadResourceAuthDomainResult.NotConstrained =>
-          accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext) *> fireGroupUpdateNotification(policyId, samRequestContext)
+          for {
+            originalPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
+            policyChanged <- accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext)
+            _ <- onPolicyUpdateIfChanged(policyId, originalPolicies, samRequestContext)(policyChanged)
+          } yield ()
       }
     } yield ()
 
@@ -546,7 +598,12 @@ class ResourceService(
       authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
       _ <- authDomain match {
         case LoadResourceAuthDomainResult.NotConstrained =>
-          accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
+          for {
+            _ <- accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
+            _ <- AuditLogger.logAuditEventIO(
+              samRequestContext,
+              ResourceEvent(ResourceUpdated, childResource, added = Option(ResourceChange(Option(parentResource)))))
+          } yield ()
         case LoadResourceAuthDomainResult.Constrained(_) => IO.raiseError(
           new WorkbenchExceptionWithErrorReport(
             ErrorReport(StatusCodes.BadRequest, "Cannot set the parent for a constrained resource")
@@ -562,10 +619,36 @@ class ResourceService(
   }
 
   def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
-    accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
+    for {
+      maybeOldParent <- accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
+      deleted <- maybeOldParent match {
+        case None => IO.pure(false)
+        case Some(_) =>
+          for {
+            _ <- accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
+            _ <- AuditLogger.logAuditEventIO(
+              samRequestContext,
+              ResourceEvent(ResourceUpdated, resourceId, removed = Option(ResourceChange(maybeOldParent))))
+          } yield true
+      }
+    } yield deleted
   }
 
   def listResourceChildren(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] = {
     accessPolicyDAO.listResourceChildren(resourceId, samRequestContext)
   }
+
+  private def createAccessChangeEvents(resource: FullyQualifiedResourceId, beforePolicies: Iterable[AccessPolicy], afterPolicies: Iterable[AccessPolicy]): Iterable[AccessChangeEvent] = {
+    val before = new PermissionsByUsers(beforePolicies)
+    val after = new PermissionsByUsers(afterPolicies)
+
+    val removeEvent = AccessChangeEvent(AccessAdded, resource, before.removeAll(after))
+    val addEvent = AccessChangeEvent(AccessAdded, resource, after.removeAll(before))
+
+    // only include event in results if there are changes
+    val removeEventSet = if (removeEvent.changeDetails.isEmpty) Set.empty else Set(removeEvent)
+    val addEventSet = if (addEvent.changeDetails.isEmpty) Set.empty else Set(addEvent)
+    addEventSet ++ removeEventSet
+  }
 }
+

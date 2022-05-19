@@ -67,6 +67,14 @@
         <appender-ref ref="Sentry" />
     </logger>
 
+    <!-- auditing in tests makes a ton of logs, set level to info to see them -->
+    <logger name="org.broadinstitute.dsde.workbench.sam.audit.AuditLogger$" level="off" additivity="false">
+        <appender-ref ref="file"/>
+        <appender-ref ref="console"/>
+        <appender-ref ref="SYSLOG"/>
+        <appender-ref ref="Sentry" />
+    </logger>
+
     <root level="warn">
         <appender-ref ref="file"/>
         <appender-ref ref="console"/>

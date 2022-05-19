@@ -62,7 +62,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     clearDatabase()
 
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
-    when(googleExtensions.allUsersGroupName).thenReturn(NoExtensions.allUsersGroupName)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
@@ -96,8 +95,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     registrationDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(azureB2CId = None)) // ldap does not know about azure or enabled
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
     registrationDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
-    dirDAO.loadGroup(service.cloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
-      Some(BasicWorkbenchGroup(service.cloudExtensions.allUsersGroupName, Set(defaultUser.id), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
+    dirDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
+      Some(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultUser.id), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
   }
 
   it should "reject blocked domain" in {

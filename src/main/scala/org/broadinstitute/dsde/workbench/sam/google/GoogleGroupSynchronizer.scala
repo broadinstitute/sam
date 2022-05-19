@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 
@@ -42,7 +43,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
   extends LazyLogging with FutureSupport {
 
   def init(): IO[Set[ResourceTypeName]] =
-    accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, SamRequestContext(None))
+    accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, SamRequestContext())
 
   def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
@@ -68,7 +69,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
               .map(_.map { loadedPolicy =>
                 if (loadedPolicy.public) {
                   // include all users group when synchronizing a public policy
-                  AccessPolicy.members.modify(_ + googleExtensions.allUsersGroupName)(loadedPolicy)
+                  AccessPolicy.members.modify(_ + CloudExtensions.allUsersGroupName)(loadedPolicy)
                 } else {
                   loadedPolicy
                 }

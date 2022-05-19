@@ -54,7 +54,7 @@ trait TestSupport{
   implicit val futureTimeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
 
-  val samRequestContext = SamRequestContext(None)
+  val samRequestContext = SamRequestContext()
 
   def dummyResourceType(name: ResourceTypeName) = ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
 }

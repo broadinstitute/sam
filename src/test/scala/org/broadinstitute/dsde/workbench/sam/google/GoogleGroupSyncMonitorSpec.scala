@@ -55,7 +55,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
       assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
     }
 
-    import SamJsonSupport.PolicyIdentityFormat
+    import SamJsonSupport.FullyQualifiedPolicyIdFormat
     import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
     mockGooglePubSubDAO.publishMessages(topicName, Seq(groupToSyncId.toJson.compactPrint, policyToSyncId.toJson.compactPrint))
 

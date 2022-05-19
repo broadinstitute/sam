@@ -33,7 +33,7 @@ object OpenCensusIOUtils {
   private def traceIOSpan[T](name: String, spanIO: IO[Span], samRequestContext: SamRequestContext, failureStatus: Throwable => Status) (f: SamRequestContext => IO[T]): IO[T] = {
     for {
       span <- spanIO
-      result <- f(samRequestContext.copy(parentSpan = Option(span))).attempt
+      result <- f(samRequestContext.copy(parentSpan = Option(span), None)).attempt
       _ <- IO(endSpan(span, Status.OK))
     } yield result.toTry.get
   }

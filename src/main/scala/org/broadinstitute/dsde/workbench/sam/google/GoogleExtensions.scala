@@ -74,10 +74,10 @@ class GoogleExtensions(
 
   override val emailDomain = googleServicesConfig.appsDomain
   private[google] val allUsersGroupEmail = WorkbenchEmail(
-    s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${allUsersGroupName.value}@$emailDomain")
+    s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain")
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
-    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, allUsersGroupEmail)
+    val allUsersGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersGroupEmail)
     for {
       createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
@@ -101,7 +101,7 @@ class GoogleExtensions(
 
 
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
-    val samRequestContext = SamRequestContext(None) // `SamRequestContext(None)` is used so that we don't trace 1-off boot/init methods
+    val samRequestContext = SamRequestContext() // `SamRequestContext()` is used so that we don't trace 1-off boot/init methods
     val extensionResourceType =
       resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
     val googleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)

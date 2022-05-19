@@ -51,7 +51,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
     val directoryDAO = new MockDirectoryDAO {
       override def checkStatus(samRequestContext: SamRequestContext): Boolean = response
     }
-    directoryDAO.createGroup(BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, allUsersEmail), samRequestContext = samRequestContext).unsafeRunSync()
+    directoryDAO.createGroup(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersEmail), samRequestContext = samRequestContext).unsafeRunSync()
     directoryDAO
   }
 

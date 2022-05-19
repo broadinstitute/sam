@@ -60,11 +60,12 @@ abstract class SamRoutes(
           pathPrefix("api") {
             // IMPORTANT - all routes under /api must have an active user
             withActiveUser(samRequestContext) { samUser =>
-              resourceRoutes(samUser, samRequestContext) ~
-                adminUserRoutes(samUser, samRequestContext) ~
-                extensionRoutes(samUser, samRequestContext) ~
-                groupRoutes(samUser, samRequestContext) ~
-                apiUserRoutes(samUser, samRequestContext)
+              val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+              resourceRoutes(samUser, samRequestContextWithUser) ~
+                adminUserRoutes(samUser, samRequestContextWithUser) ~
+                extensionRoutes(samUser, samRequestContextWithUser) ~
+                groupRoutes(samUser, samRequestContextWithUser) ~
+                apiUserRoutes(samUser, samRequestContextWithUser)
             }
           }
         }

@@ -158,7 +158,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     }.toSet
   }
 
-  override def setPolicyIsPublic(resourceAndPolicyName: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Unit] = {
+  override def setPolicyIsPublic(resourceAndPolicyName: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Boolean] = {
     val maybePolicy = policies.find {
       case (`resourceAndPolicyName`, policy: AccessPolicy) => true
       case _ => false
@@ -167,7 +167,12 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     maybePolicy match {
       case Some((_, policy: AccessPolicy)) =>
         val newPolicy = policy.copy(public = isPublic)
-        IO(policies.put(resourceAndPolicyName, newPolicy))
+        IO {
+          policies.put(resourceAndPolicyName, newPolicy) match {
+            case Some(AccessPolicy(_, _, _, _, _, _, public)) if public != isPublic => true
+            case _ => false
+          }
+        }
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy does not exist")))
     }
   }

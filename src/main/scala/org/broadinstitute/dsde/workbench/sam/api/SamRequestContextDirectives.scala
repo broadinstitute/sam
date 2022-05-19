@@ -24,8 +24,15 @@ trait SamRequestContextDirectives {
   /**
     * Provides a new SamRequestContext with a root tracing span.
     */
-  def withSamRequestContext: Directive1[SamRequestContext] =
-    traceRequest.map { span => SamRequestContext(Option(span)) }
+  def withSamRequestContext: Directive1[SamRequestContext] ={
+    for {
+      clientIP <- extractClientIP
+      span <- traceRequest
+    } yield {
+      SamRequestContext(Option(span), clientIP.toOption)
+    }
+  }
+
 
   /**
     * Provides a new SamRequestContext with a tracing span that is a child of the existing SamRequestContext's
@@ -41,7 +48,7 @@ trait SamRequestContextDirectives {
         val newSpan = startSpanWithParent(spanName, parentSpan)
         val newSamRequestContext = samRequestContext.copy(parentSpan = Option(newSpan))
         recordSuccess(newSpan) & recordException(newSpan) & provide(newSamRequestContext)
-      case None => provide(SamRequestContext(None))
+      case None => provide(samRequestContext)
     }
 
   // The private methods and objects below are copied wholesale from io/opencensus/scala/akka/http/TracingDirective
