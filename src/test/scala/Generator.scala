@@ -97,13 +97,20 @@ object Generator {
     policyName <- genAccessPolicyName
   } yield FullyQualifiedPolicyId(r, policyName)
 
+  val genAccessPolicyDescendantPermissions: Gen[AccessPolicyDescendantPermissions] = for {
+    resourceType <- genResourceTypeName
+    roles <- Gen.listOf(genRoleName).map(_.toSet)
+    actions <- Gen.listOf(genResourceAction).map(_.toSet)
+  } yield AccessPolicyDescendantPermissions(resourceType, actions, roles)
+
   val genPolicy: Gen[AccessPolicy] = for{
     id <- genPolicyIdentity
     members <- Gen.listOf(genWorkbenchSubject).map(_.toSet)
     email <- genNonPetEmail
     roles <- Gen.listOf(genRoleName).map(_.toSet)
     actions <- Gen.listOf(genResourceAction).map(_.toSet)
-  } yield AccessPolicy(id, members, email, roles, actions, Set.empty, public = false)
+    descendantPermissions <- Gen.listOf(genAccessPolicyDescendantPermissions).map(_.toSet)
+  } yield AccessPolicy(id, members, email, roles, actions, descendantPermissions, public = false)
 
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)

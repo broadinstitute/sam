@@ -8,7 +8,7 @@ import com.google.common.annotations.VisibleForTesting
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChangeEvent, AuditLogger, ResourceChange, ResourceCreated, ResourceDeleted, ResourceEvent, ResourceUpdated}
+import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChangeEvent, AccessRemoved, AuditLogger, ResourceChange, ResourceCreated, ResourceDeleted, ResourceEvent, ResourceUpdated}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -638,11 +638,11 @@ class ResourceService(
     accessPolicyDAO.listResourceChildren(resourceId, samRequestContext)
   }
 
-  private def createAccessChangeEvents(resource: FullyQualifiedResourceId, beforePolicies: Iterable[AccessPolicy], afterPolicies: Iterable[AccessPolicy]): Iterable[AccessChangeEvent] = {
+  private[service] def createAccessChangeEvents(resource: FullyQualifiedResourceId, beforePolicies: Iterable[AccessPolicy], afterPolicies: Iterable[AccessPolicy]): Iterable[AccessChangeEvent] = {
     val before = new PermissionsByUsers(beforePolicies)
     val after = new PermissionsByUsers(afterPolicies)
 
-    val removeEvent = AccessChangeEvent(AccessAdded, resource, before.removeAll(after))
+    val removeEvent = AccessChangeEvent(AccessRemoved, resource, before.removeAll(after))
     val addEvent = AccessChangeEvent(AccessAdded, resource, after.removeAll(before))
 
     // only include event in results if there are changes

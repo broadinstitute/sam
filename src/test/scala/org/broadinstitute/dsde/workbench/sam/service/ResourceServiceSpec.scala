@@ -11,7 +11,8 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved}
+import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -35,7 +36,7 @@ import scala.concurrent.Future
 /**
   * Created by dvoet on 6/27/17.
   */
-class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
+class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar with PropertyBasedTesting {
   val directoryConfig = TestSupport.directoryConfig
   val schemaLockConfig = TestSupport.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
@@ -1425,5 +1426,207 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       AccessPolicyDescendantPermissions(defaultResourceType.name, Set(ResourceAction("I don't exist either")), Set.empty),
       AccessPolicyDescendantPermissions(defaultResourceType.name, Set(ResourceAction("I don't exist either")), Set(ResourceRoleName("I don't exist"))),
     )).unsafeRunSync().size shouldBe 4
+  }
+
+  "createAccessChangeEvents" should "show not changes for empty beforePolicies and afterPolicies" in {
+    val resource = genResource.sample.get
+    val beforePolicies = List.empty
+    val afterPolicies = List.empty
+    val result = service.createAccessChangeEvents(resource.fullyQualifiedId, beforePolicies, afterPolicies)
+    result shouldBe empty
+  }
+
+  it should "not show not changes for the same beforePolicies and afterPolicies" in forAll(genPolicy) { testPolicy =>
+    val resource = genResource.sample.get
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = beforePolicies
+    val result = service.createAccessChangeEvents(resource.fullyQualifiedId, beforePolicies, afterPolicies)
+    result shouldBe empty
+  }
+
+  it should "show changes for empty beforePolicies" in forAll(genPolicy) { testPolicy =>
+    val beforePolicies = List.empty
+    val afterPolicies = List(testPolicy)
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeDetails = testPolicy.members.map(sub => AccessChange(
+      sub,
+      noneIfEmpty(testPolicy.roles),
+      noneIfEmpty(testPolicy.actions),
+      descendantRolesMap(testPolicy.descendantPermissions),
+      descendantActionsMap(testPolicy.descendantPermissions)))
+    val expectedChangeEvents = if (expectedChangeDetails.isEmpty) {
+      Set.empty
+    } else {
+      Set(AccessChangeEvent(AccessAdded, testPolicy.id.resource, expectedChangeDetails))
+    }
+
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  it should "show changes for empty afterPolicies" in forAll(genPolicy) { testPolicy =>
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = List.empty
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeDetails = testPolicy.members.map(sub => AccessChange(
+      sub,
+      noneIfEmpty(testPolicy.roles),
+      noneIfEmpty(testPolicy.actions),
+      descendantRolesMap(testPolicy.descendantPermissions),
+      descendantActionsMap(testPolicy.descendantPermissions)))
+    val expectedChangeEvents = if (expectedChangeDetails.isEmpty) {
+      Set.empty
+    } else {
+      Set(AccessChangeEvent(AccessRemoved, testPolicy.id.resource, expectedChangeDetails))
+    }
+
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  it should "show changes for member addition to a policy" in forAll(genPolicy, genWorkbenchSubject) { (testPolicy, testSubject) =>
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeEvents = changesFromPolicy(testPolicy, testSubject, AccessAdded)
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  it should "show changes for member removal from a policy" in forAll(genPolicy, genWorkbenchSubject) { (testPolicy, testSubject) =>
+    val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
+    val afterPolicies = List(testPolicy)
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeEvents = changesFromPolicy(testPolicy, testSubject, AccessRemoved)
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  it should "not show changes for redundant permission addition for member" in forAll(genPolicy, genWorkbenchSubject) { (testPolicy, testSubject) =>
+    val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
+    val beforePolicies = List(addTestSubject(testPolicy), testPolicy)
+    val afterPolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    result shouldBe empty
+  }
+
+  it should "not show changes for redundant permission removal for member" in forAll(genPolicy, genWorkbenchSubject) { (testPolicy, testSubject) =>
+    val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
+    val beforePolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
+    val afterPolicies = List(addTestSubject(testPolicy), testPolicy)
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    result shouldBe empty
+  }
+
+  it should "show changes for permission removal from a policy " in forAll(genPolicy, genResourceTypeName) { (testPolicy, descendantType) =>
+    val testRole = ResourceRoleName("testRole")
+    val testAction = ResourceAction("testAction")
+    val testDRole = ResourceRoleName("testDRole")
+    val testDAction = ResourceAction("testDAction")
+
+    val addTestRole = AccessPolicy.roles.modify(_ + testRole)
+    val addTestAction = AccessPolicy.actions.modify(_ + testAction)
+    val addTestDescendantRole = AccessPolicy.descendantPermissions.modify(_ + AccessPolicyDescendantPermissions(descendantType, Set.empty, Set(testDRole)))
+    val addTestDescendantAction = AccessPolicy.descendantPermissions.modify(_ + AccessPolicyDescendantPermissions(descendantType, Set(testDAction), Set.empty))
+    val addTestPermissions = addTestRole andThen addTestAction andThen addTestDescendantAction andThen addTestDescendantRole
+
+    val beforePolicies = List(addTestPermissions(testPolicy))
+    val afterPolicies = List(testPolicy)
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    if (testPolicy.members.isEmpty) {
+      result shouldBe empty
+    } else {
+      result.foreach { event =>
+        event.eventType shouldBe AccessRemoved
+        event.changeDetails.foreach { change =>
+          change.roles shouldBe Some(Set(testRole))
+          change.actions shouldBe Some(Set(testAction))
+          change.descendantRoles shouldBe Some(Map(descendantType -> Set(testDRole)))
+          change.descendantActions shouldBe Some(Map(descendantType -> Set(testDAction)))
+        }
+      }
+    }
+  }
+
+  it should "show changes for permission addition to a policy " in forAll(genPolicy, genResourceTypeName) { (testPolicy, descendantType) =>
+    val testRole = ResourceRoleName("testRole")
+    val testAction = ResourceAction("testAction")
+    val testDRole = ResourceRoleName("testDRole")
+    val testDAction = ResourceAction("testDAction")
+
+    val addTestRole = AccessPolicy.roles.modify(_ + testRole)
+    val addTestAction = AccessPolicy.actions.modify(_ + testAction)
+    val addTestDescendantRole = AccessPolicy.descendantPermissions.modify(_ + AccessPolicyDescendantPermissions(descendantType, Set.empty, Set(testDRole)))
+    val addTestDescendantAction = AccessPolicy.descendantPermissions.modify(_ + AccessPolicyDescendantPermissions(descendantType, Set(testDAction), Set.empty))
+    val addTestPermissions = addTestRole andThen addTestAction andThen addTestDescendantAction andThen addTestDescendantRole
+
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = List(addTestPermissions(testPolicy))
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    if (testPolicy.members.isEmpty) {
+      result shouldBe empty
+    } else {
+      result.foreach { event =>
+        event.eventType shouldBe AccessAdded
+        event.changeDetails.foreach { change =>
+          change.roles shouldBe Some(Set(testRole))
+          change.actions shouldBe Some(Set(testAction))
+          change.descendantRoles shouldBe Some(Map(descendantType -> Set(testDRole)))
+          change.descendantActions shouldBe Some(Map(descendantType -> Set(testDAction)))
+        }
+      }
+    }
+  }
+
+  it should "detect additions and removals at the same time" in forAll(genPolicy, genWorkbenchSubject, genWorkbenchSubject) { (testPolicy, testSubject1, testSubject2) =>
+    val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject1)(testPolicy))
+    val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject2)(testPolicy))
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedRemoveEvents = changesFromPolicy(testPolicy, testSubject1, AccessRemoved)
+    val expectedAddEvents = changesFromPolicy(testPolicy, testSubject2, AccessAdded)
+    result should contain theSameElementsAs expectedAddEvents ++ expectedRemoveEvents
+  }
+
+  it should "show changes for switch to public policy " in forAll(genPolicy) { testPolicy =>
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = List(AccessPolicy.public.set(true)(testPolicy))
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeEvents = changesFromPolicy(testPolicy, CloudExtensions.allUsersGroupName, AccessAdded)
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  it should "show changes for switch to private policy " in forAll(genPolicy) { testPolicy =>
+    val beforePolicies = List(AccessPolicy.public.set(true)(testPolicy))
+    val afterPolicies = List(testPolicy)
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeEvents = changesFromPolicy(testPolicy, CloudExtensions.allUsersGroupName, AccessRemoved)
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  def noneIfEmpty[C <: Iterable[_]](it: C): Option[C] = if (it.isEmpty) None else Option(it)
+
+  def descendantRolesMap(descendantPermissions: Set[AccessPolicyDescendantPermissions]): Option[Map[ResourceTypeName, Iterable[ResourceRoleName]]] = {
+    val typesAndRoles = descendantPermissions.groupBy(_.resourceType).map { case (resourceType, perms) =>
+      (resourceType, perms.map(_.roles).reduce(_ ++ _))
+    }.filterNot(_._2.isEmpty)
+    noneIfEmpty(typesAndRoles)
+  }
+
+  def descendantActionsMap(descendantPermissions: Set[AccessPolicyDescendantPermissions]): Option[Map[ResourceTypeName, Iterable[ResourceAction]]] = {
+    val typesAndActions = descendantPermissions.groupBy(_.resourceType).map { case (resourceType, perms) =>
+      (resourceType, perms.map(_.actions).reduce(_ ++ _))
+    }.filterNot(_._2.isEmpty)
+    noneIfEmpty(typesAndActions)
+  }
+
+  private def changesFromPolicy(testPolicy: AccessPolicy, testSubject: WorkbenchSubject, eventType: AccessChangeEventType): Set[AccessChangeEvent] = {
+    val expectedChangeDetails = AccessChange(
+      testSubject,
+      noneIfEmpty(testPolicy.roles),
+      noneIfEmpty(testPolicy.actions),
+      descendantRolesMap(testPolicy.descendantPermissions),
+      descendantActionsMap(testPolicy.descendantPermissions))
+
+    if ((expectedChangeDetails.actions ++ expectedChangeDetails.roles ++ expectedChangeDetails.descendantActions ++ expectedChangeDetails.descendantRoles).isEmpty) {
+      Set.empty
+    } else {
+      Set(AccessChangeEvent(eventType, testPolicy.id.resource, Set(expectedChangeDetails)))
+    }
   }
 }
