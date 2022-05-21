@@ -12,6 +12,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
+import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.TosService
@@ -60,7 +61,8 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
       externalIdFromHeaders &
       headerValueByName(emailHeader).as(WorkbenchEmail) &
-      optionalHeaderValueByName(googleIdFromAzureHeader).map(_.map(GoogleSubjectId))).as(OIDCHeaders)
+      optionalHeaderValueByName(googleIdFromAzureHeader).map(_.map(GoogleSubjectId)) &
+      optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId))).as(OIDCHeaders)
   }
 
   private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
@@ -77,20 +79,28 @@ object StandardSamUserDirectives {
   val emailHeader = "OIDC_CLAIM_email"
   val userIdHeader = "OIDC_CLAIM_user_id"
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
+  val managedIdentityObjectIdHeader = "OAUTH2_CLAIM_xms_mirid"
 
   def getSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, samRequestContext: SamRequestContext): IO[SamUser] = {
     oidcHeaders match {
-      case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _) =>
+      case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _, _) =>
         // If it's a PET account, we treat it as its owner
         directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
           case Some(petsOwner) => IO.pure(petsOwner)
           case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext)
         }
 
-      case OIDCHeaders(_, Left(googleSubjectId), _, _) =>
+      case OIDCHeaders(_, Left(googleSubjectId), _, _, _) =>
         lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext)
 
-      case OIDCHeaders(_, Right(azureB2CId), _, _) =>
+      case OIDCHeaders(_, Right(azureB2CId), _, _, Some(objectId)) =>
+        // If it's a managed identity, treat it as its owner
+        directoryDAO.getUserFromPetManagedIdentity(objectId, samRequestContext).flatMap {
+          case Some(petsOwner) => IO.pure(petsOwner)
+          case None => loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, registrationDAO, samRequestContext)
+        }
+
+      case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
         loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, registrationDAO, samRequestContext)
     }
   }
@@ -144,4 +154,4 @@ object StandardSamUserDirectives {
     }
 }
 
-final case class OIDCHeaders(token: OAuth2BearerToken, externalId: Either[GoogleSubjectId, AzureB2CId], email: WorkbenchEmail, googleSubjectIdFromAzure: Option[GoogleSubjectId])
+final case class OIDCHeaders(token: OAuth2BearerToken, externalId: Either[GoogleSubjectId, AzureB2CId], email: WorkbenchEmail, googleSubjectIdFromAzure: Option[GoogleSubjectId], managedIdentityObjectId: Option[ManagedIdentityObjectId] = None)

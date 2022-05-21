@@ -109,6 +109,7 @@ object SamResourceTypes {
   val resourceTypeAdminName = ResourceTypeName("resource_type_admin")
   val workspaceName = ResourceTypeName("workspace")
   val googleProjectName = ResourceTypeName("google-project")
+  val spendProfile = ResourceTypeName("spend-profile")
 }
 
 @Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API

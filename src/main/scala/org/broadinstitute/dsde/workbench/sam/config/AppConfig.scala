@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import cats.syntax.all._
 import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
@@ -28,7 +29,8 @@ final case class AppConfig(
                             blockedEmailDomains: Seq[String],
                             termsOfServiceConfig: TermsOfServiceConfig,
                             oidcConfig: OidcConfig,
-                            adminConfig: AdminConfig
+                            adminConfig: AdminConfig,
+                            azureServicesConfig: Option[AzureServicesConfig]
                           )
 
 object AppConfig {
@@ -160,6 +162,14 @@ object AppConfig {
     )
   }
 
+  implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
+    (config.getAs[String]("managedAppClientId"),
+      config.getAs[String]("managedAppClientSecret"),
+      config.getAs[String]("managedAppTenantId")
+      ).mapN(AzureServicesConfig.apply)
+  }
+
+
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
@@ -181,7 +191,8 @@ object AppConfig {
       blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty),
       termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
       oidcConfig = config.as[OidcConfig]("oidc"),
-      adminConfig = config.as[AdminConfig]("admin")
+      adminConfig = config.as[AdminConfig]("admin"),
+      azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices")
     )
   }
 }

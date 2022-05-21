@@ -1102,6 +1102,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/azure/v1/user/petManagedIdentity:
+    post:
+      tags:
+        - Azure
+      summary: gets or creates a pet managed identity for the specified user
+      operationId: getPetManagedIdentity
+      requestBody:
+        description: The details of the managed resource group in which to create the pet
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/GetOrCreatePetManagedIdentityRequest'
+        required: true
+      responses:
+        200:
+          description: Successfully retrieved resource without creating it
+          content: { }
+        201:
+          description: Successfully created resource
+          content: { }
+        400:
+          description: Invalid or incomplete request body
+          content: { }
+        403:
+          description: Caller does not have permission to create a pet managed identity in the given managed resource group
+          content: { }
+        404:
+          description: Managed resource group does not exist
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/resources/v2/{resourceTypeName}:
     get:
       tags:
@@ -2856,6 +2891,23 @@ components:
           type: boolean
           description: true if the user is in their proxy group
       description: ""
+    GetOrCreatePetManagedIdentityRequest:
+      required:
+        - tenantId
+        - subscriptionId
+        - managedResourceGroupName
+      type: object
+      properties:
+        tenantId:
+          type: string
+          description: the Azure tenant id
+        subscriptionId:
+          type: string
+          description: the Azure subscription id
+        managedResourceGroupName:
+          type: string
+          description: the name of the Azure managed resource group
+      description: specifies a request for a pet managed identity
   securitySchemes:
     googleoauth:
       type: oauth2

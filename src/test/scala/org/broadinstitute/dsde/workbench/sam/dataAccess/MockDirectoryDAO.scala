@@ -7,6 +7,7 @@ import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -327,4 +328,13 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
         }
     }
   }
+
+  override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] =
+    IO.pure(petManagedIdentity)
+
+  override def loadPetManagedIdentity(petManagedIdentityId: PetManagedIdentityId, samRequestContext: SamRequestContext): IO[Option[PetManagedIdentity]] =
+    IO.pure(None)
+
+  override def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    IO.pure(None)
 }

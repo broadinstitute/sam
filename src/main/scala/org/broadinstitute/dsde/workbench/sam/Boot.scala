@@ -335,10 +335,13 @@ object Boot extends IOApp with LazyLogging {
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
-
+    val azureRoutes = config.azureServicesConfig.map { config =>
+      val azureService = new AzureService(config, ClientConfig.Builder.newBuilder().setClient("sam").build(), directoryDAO)
+      new AzureRoutes(azureService, policyEvaluatorService, resourceService)
+    }
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config, azureRoutes)
         with StandardSamUserDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
@@ -346,7 +349,7 @@ object Boot extends IOApp with LazyLogging {
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config, azureRoutes)
         with StandardSamUserDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }

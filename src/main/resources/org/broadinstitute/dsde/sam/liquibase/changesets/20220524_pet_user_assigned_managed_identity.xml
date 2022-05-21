@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" author="rtitle" id="pet_user_assigned_managed_identity">
+        <createTable tableName="SAM_PET_MANAGED_IDENTITY">
+            <column name="user_id" type="VARCHAR">
+                <constraints nullable="false" foreignKeyName="FK_SPMI_USER" referencedTableName="SAM_USER" referencedColumnNames="id" primaryKey="true"/>
+            </column>
+            <column name="tenant_id" type="VARCHAR(40)">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="subscription_id" type="VARCHAR(40)">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="managed_resource_group_name" type="VARCHAR">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="object_id" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
