@@ -1436,7 +1436,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result shouldBe empty
   }
 
-  it should "not show not changes for the same beforePolicies and afterPolicies" in forAll(genPolicy) { testPolicy =>
+  it should "not show not changes for the same beforePolicies and afterPolicies" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
     val resource = genResource.sample.get
     val beforePolicies = List(testPolicy)
     val afterPolicies = beforePolicies
@@ -1444,7 +1444,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result shouldBe empty
   }
 
-  it should "show changes for empty beforePolicies" in forAll(genPolicy) { testPolicy =>
+  it should "show changes for empty beforePolicies" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
     val beforePolicies = List.empty
     val afterPolicies = List(testPolicy)
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
@@ -1463,7 +1463,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result should contain theSameElementsAs expectedChangeEvents
   }
 
-  it should "show changes for empty afterPolicies" in forAll(genPolicy) { testPolicy =>
+  it should "show changes for empty afterPolicies" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
     val beforePolicies = List(testPolicy)
     val afterPolicies = List.empty
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
@@ -1482,7 +1482,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result should contain theSameElementsAs expectedChangeEvents
   }
 
-  it should "show changes for member addition to a policy" in forAll(genPolicy, genWorkbenchSubject) { (testPolicy, testSubject) =>
+  it should "show changes for member addition to a policy" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject) { (testPolicy, testSubject) =>
     val beforePolicies = List(testPolicy)
     val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
@@ -1490,7 +1490,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result should contain theSameElementsAs expectedChangeEvents
   }
 
-  it should "show changes for member removal from a policy" in forAll(genPolicy, genWorkbenchSubject) { (testPolicy, testSubject) =>
+  it should "show changes for member removal from a policy" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject) { (testPolicy, testSubject) =>
     val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
     val afterPolicies = List(testPolicy)
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
@@ -1498,7 +1498,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result should contain theSameElementsAs expectedChangeEvents
   }
 
-  it should "not show changes for redundant permission addition for member" in forAll(genPolicy, genWorkbenchSubject) { (testPolicy, testSubject) =>
+  it should "not show changes for redundant permission addition for member" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject) { (testPolicy, testSubject) =>
     val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
     val beforePolicies = List(addTestSubject(testPolicy), testPolicy)
     val afterPolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
@@ -1506,7 +1506,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result shouldBe empty
   }
 
-  it should "not show changes for redundant permission removal for member" in forAll(genPolicy, genWorkbenchSubject) { (testPolicy, testSubject) =>
+  it should "not show changes for redundant permission removal for member" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject) { (testPolicy, testSubject) =>
     val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
     val beforePolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
     val afterPolicies = List(addTestSubject(testPolicy), testPolicy)
@@ -1514,7 +1514,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result shouldBe empty
   }
 
-  it should "show changes for permission removal from a policy " in forAll(genPolicy, genResourceTypeName) { (testPolicy, descendantType) =>
+  it should "show changes for permission removal from a policy " in forAll(genPolicyWithDescendantPermissions, genResourceTypeName) { (testPolicy, descendantType) =>
     val testRole = ResourceRoleName("testRole")
     val testAction = ResourceAction("testAction")
     val testDRole = ResourceRoleName("testDRole")
@@ -1544,7 +1544,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     }
   }
 
-  it should "show changes for permission addition to a policy " in forAll(genPolicy, genResourceTypeName) { (testPolicy, descendantType) =>
+  it should "show changes for permission addition to a policy " in forAll(genPolicyWithDescendantPermissions, genResourceTypeName) { (testPolicy, descendantType) =>
     val testRole = ResourceRoleName("testRole")
     val testAction = ResourceAction("testAction")
     val testDRole = ResourceRoleName("testDRole")
@@ -1574,7 +1574,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     }
   }
 
-  it should "detect additions and removals at the same time" in forAll(genPolicy, genWorkbenchSubject, genWorkbenchSubject) { (testPolicy, testSubject1, testSubject2) =>
+  it should "detect additions and removals at the same time" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject, genWorkbenchSubject) { (testPolicy, testSubject1, testSubject2) =>
     val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject1)(testPolicy))
     val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject2)(testPolicy))
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
@@ -1583,7 +1583,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result should contain theSameElementsAs expectedAddEvents ++ expectedRemoveEvents
   }
 
-  it should "show changes for switch to public policy " in forAll(genPolicy) { testPolicy =>
+  it should "show changes for switch to public policy " in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
     val beforePolicies = List(testPolicy)
     val afterPolicies = List(AccessPolicy.public.set(true)(testPolicy))
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
@@ -1591,7 +1591,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result should contain theSameElementsAs expectedChangeEvents
   }
 
-  it should "show changes for switch to private policy " in forAll(genPolicy) { testPolicy =>
+  it should "show changes for switch to private policy " in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
     val beforePolicies = List(AccessPolicy.public.set(true)(testPolicy))
     val afterPolicies = List(testPolicy)
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)

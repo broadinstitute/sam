@@ -109,6 +109,14 @@ object Generator {
     email <- genNonPetEmail
     roles <- Gen.listOf(genRoleName).map(_.toSet)
     actions <- Gen.listOf(genResourceAction).map(_.toSet)
+  } yield AccessPolicy(id, members, email, roles, actions, Set.empty, public = false)
+
+  val genPolicyWithDescendantPermissions: Gen[AccessPolicy] = for{
+    id <- genPolicyIdentity
+    members <- Gen.listOf(genWorkbenchSubject).map(_.toSet)
+    email <- genNonPetEmail
+    roles <- Gen.listOf(genRoleName).map(_.toSet)
+    actions <- Gen.listOf(genResourceAction).map(_.toSet)
     descendantPermissions <- Gen.listOf(genAccessPolicyDescendantPermissions).map(_.toSet)
   } yield AccessPolicy(id, members, email, roles, actions, descendantPermissions, public = false)
 
