@@ -6,12 +6,15 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
+import ch.qos.logback.classic.{Level, Logger}
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved}
+import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved, AuditLogger}
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
@@ -30,6 +33,7 @@ import org.scalatest.matchers.should.Matchers
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalatestplus.mockito.MockitoSugar
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 
@@ -1580,7 +1584,11 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
     val expectedRemoveEvents = changesFromPolicy(testPolicy, testSubject1, AccessRemoved)
     val expectedAddEvents = changesFromPolicy(testPolicy, testSubject2, AccessAdded)
-    result should contain theSameElementsAs expectedAddEvents ++ expectedRemoveEvents
+    if (testSubject1 == testSubject2) {
+      result shouldBe empty
+    } else {
+      result should contain theSameElementsAs expectedAddEvents ++ expectedRemoveEvents
+    }
   }
 
   it should "show changes for switch to public policy " in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
@@ -1627,6 +1635,118 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       Set.empty
     } else {
       Set(AccessChangeEvent(eventType, testPolicy.id.resource, Set(expectedChangeDetails)))
+    }
+  }
+
+  "AuditLogger" should "be called on deleteResource" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(IO.fromFuture(IO(service.deleteResource(resource.fullyQualifiedId, samRequestContext))), tryTwice = false)
+  }
+
+  it should "be called on createResource" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+
+    runAuditLogTest(service.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext), logEventsPerCall = 2, tryTwice = false)
+  }
+
+  it should "be called on setResourceParent" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val parent = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(parent, samRequestContext).unsafeRunSync()
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.setResourceParent(resource.fullyQualifiedId, parent.fullyQualifiedId, samRequestContext), tryTwice = false)
+  }
+
+  it should "be called on deleteResourceParent" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val parent = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty, parent = Option(parent.fullyQualifiedId))
+    policyDAO.createResource(parent, samRequestContext).unsafeRunSync()
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.deleteResourceParent(resource.fullyQualifiedId, samRequestContext))
+  }
+
+  it should "be called on removeSubjectFromPolicy" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+    val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set(dummyUser.id), genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.removeSubjectFromPolicy(policy.id, dummyUser.id, samRequestContext))
+  }
+
+  it should "be called on addSubjectToPolicy" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+    val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.addSubjectToPolicy(policy.id, dummyUser.id, samRequestContext))
+  }
+
+  it should "be called on setPublic" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+    val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.setPublic(policy.id, true, samRequestContext))
+  }
+
+  it should "be called on overwritePolicy" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.overwritePolicy(
+      defaultResourceType,
+      genAccessPolicyName.sample.get,
+      resource.fullyQualifiedId,
+      AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRoleName)),
+      samRequestContext))
+  }
+
+  it should "be called on overwritePolicyMembers" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+    val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.overwritePolicyMembers(policy.id, Set(dummyUser.email), samRequestContext))
+  }
+
+  /**
+    * Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures
+    * that `logEventsPerCall` events were appended. If `tryTwice` run `test` again to make sure
+    * subsequent calls to no log more messages. Ends by tearing down the log appender.
+    */
+  private def runAuditLogTest(test: IO[_], logEventsPerCall: Int = 1, tryTwice: Boolean = true) = {
+    val auditLogger: Logger = LoggerFactory.getLogger(AuditLogger.getClass.getName).asInstanceOf[Logger]
+    val testAppender = new ListAppender[ILoggingEvent]()
+    val startingLevel = auditLogger.getLevel
+    auditLogger.setLevel(Level.INFO)
+    testAppender.start()
+
+    auditLogger.addAppender(testAppender)
+
+    try {
+      testAppender.list.size() shouldBe 0
+      test.unsafeRunSync()
+      testAppender.list.size() shouldBe logEventsPerCall
+      if (tryTwice) {
+        test.unsafeRunSync()
+        testAppender.list.size() shouldBe logEventsPerCall
+      }
+    } finally {
+      auditLogger.detachAppender(testAppender)
+      auditLogger.setLevel(startingLevel)
     }
   }
 }
