@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.Applicative
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.implicits._
@@ -325,11 +326,12 @@ class ResourceService(
           accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext).flatMap { originalPolicies =>
             originalPolicies.find(_.id == policyId) match {
               case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"policy $policyId does not exist")))
-              case Some(existingPolicy) if existingPolicy.members == newMembers => IO.unit
-              case _ => for {
-                _ <- accessPolicyDAO.overwritePolicyMembers(policyId, newMembers, samRequestContext)
-                _ <- onPolicyUpdate(policyId, originalPolicies, samRequestContext)
-              } yield ()
+              case Some(existingPolicy) => Applicative[IO].whenA(existingPolicy.members != newMembers) {
+                for {
+                  _ <- accessPolicyDAO.overwritePolicyMembers(policyId, newMembers, samRequestContext)
+                  _ <- onPolicyUpdate(policyId, originalPolicies, samRequestContext)
+                } yield ()
+              }
             }
           }
       }
@@ -621,17 +623,15 @@ class ResourceService(
   def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
     for {
       maybeOldParent <- accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
-      deleted <- maybeOldParent match {
-        case None => IO.pure(false)
-        case Some(_) =>
-          for {
-            _ <- accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
-            _ <- AuditLogger.logAuditEventIO(
-              samRequestContext,
-              ResourceEvent(ResourceUpdated, resourceId, removed = Option(ResourceChange(maybeOldParent))))
-          } yield true
+      _ <- maybeOldParent.traverse { _ =>
+        for {
+          _ <- accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
+          _ <- AuditLogger.logAuditEventIO(
+            samRequestContext,
+            ResourceEvent(ResourceUpdated, resourceId, removed = Option(ResourceChange(maybeOldParent))))
+        } yield ()
       }
-    } yield deleted
+    } yield maybeOldParent.isDefined
   }
 
   def listResourceChildren(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] = {

@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchSubject
 import org.broadinstitute.dsde.workbench.sam.audit.AccessChange
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, ResourceAction, ResourceRoleName, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyDescendantPermissions, ResourceAction, ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.groupByFirstInPair
 
 /**
@@ -10,10 +10,10 @@ import org.broadinstitute.dsde.workbench.sam.util.groupByFirstInPair
   * @param policies
   */
 private[service] class PermissionsByUsers(policies: Iterable[AccessPolicy]) {
-  private val memberRoles: Set[(WorkbenchSubject, ResourceRoleName)] = flattenMemberRoles(policies)
-  private val memberActions: Set[(WorkbenchSubject, ResourceAction)] = flattenMemberActions(policies)
-  private val memberDescendantRoles: Set[(WorkbenchSubject, (ResourceTypeName, ResourceRoleName))] = flattenMemberDependantRoles(policies)
-  private val memberDescendantActions: Set[(WorkbenchSubject, (ResourceTypeName, ResourceAction))] = flattenMemberDependantActions(policies)
+  private val memberRoles: Set[(WorkbenchSubject, ResourceRoleName)] = flattenMember(policies, _.roles)
+  private val memberActions: Set[(WorkbenchSubject, ResourceAction)] = flattenMember(policies, _.actions)
+  private val memberDescendantRoles: Set[(WorkbenchSubject, (ResourceTypeName, ResourceRoleName))] = flattenMemberDescendant(policies, _.roles)
+  private val memberDescendantActions: Set[(WorkbenchSubject, (ResourceTypeName, ResourceAction))] = flattenMemberDescendant(policies, _.actions)
 
   /**
     * Returns the set of access changes if all the permissions in `other` are removed from `this`.
@@ -44,35 +44,20 @@ private[service] class PermissionsByUsers(policies: Iterable[AccessPolicy]) {
     }
   }
 
-  private def flattenMemberRoles(policies: Iterable[AccessPolicy]): Set[(WorkbenchSubject, ResourceRoleName)] =
+  private def flattenMember[A](policies: Iterable[AccessPolicy], select: AccessPolicy => Set[A]): Set[(WorkbenchSubject, A)] =
     (for {
       policy <- policies
       member <- policy.members ++ maybeAllUsers(policy.public)
-      role <- policy.roles
-    } yield (member, role)).toSet
+      selected <- select(policy)
+    } yield (member, selected)).toSet
 
-  private def flattenMemberActions(policies: Iterable[AccessPolicy]): Set[(WorkbenchSubject, ResourceAction)] =
-    (for {
-      policy <- policies
-      member <- policy.members ++ maybeAllUsers(policy.public)
-      action <- policy.actions
-    } yield (member, action)).toSet
-
-  private def flattenMemberDependantRoles(policies: Iterable[AccessPolicy]): Set[(WorkbenchSubject, (ResourceTypeName, ResourceRoleName))] =
+  private def flattenMemberDescendant[A](policies: Iterable[AccessPolicy], select: AccessPolicyDescendantPermissions => Set[A]): Set[(WorkbenchSubject, (ResourceTypeName, A))] =
     (for {
       policy <- policies
       member <- policy.members ++ maybeAllUsers(policy.public)
       descendantPermission <- policy.descendantPermissions
-      role <- descendantPermission.roles
-    } yield (member, (descendantPermission.resourceType, role))).toSet
-
-  private def flattenMemberDependantActions(policies: Iterable[AccessPolicy]): Set[(WorkbenchSubject, (ResourceTypeName, ResourceAction))] =
-    (for {
-      policy <- policies
-      member <- policy.members ++ maybeAllUsers(policy.public)
-      descendantPermission <- policy.descendantPermissions
-      action <- descendantPermission.actions
-    } yield (member, (descendantPermission.resourceType, action))).toSet
+      selected <- select(descendantPermission)
+    } yield (member, (descendantPermission.resourceType, selected))).toSet
 
   private def maybeAllUsers(public: Boolean) =
     if (public) {
