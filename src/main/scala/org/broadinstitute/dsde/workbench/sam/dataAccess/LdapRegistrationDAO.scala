@@ -18,6 +18,7 @@ import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 import cats.effect.Temporal
+import org.broadinstitute.dsde.workbench.sam.model.SamUser
 
 // use ExecutionContexts.blockingThreadPool for blockingEc
 class LdapRegistrationDAO(
@@ -45,7 +46,7 @@ class LdapRegistrationDAO(
 
   override def getConnectionType(): ConnectionType = ConnectionType.LDAP
 
-  override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
+  override def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
     val attrs = List(
       new Attribute(Attr.email, user.email.value),
       new Attribute(Attr.sn, user.id.value),
@@ -63,7 +64,7 @@ class LdapRegistrationDAO(
     } *> IO.pure(user)
   }
 
-  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = executeLdap(IO(loadUserInternal(userId)), "loadUser", samRequestContext)
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = executeLdap(IO(loadUserInternal(userId)), "loadUser", samRequestContext)
 
   def loadUserInternal(userId: WorkbenchUserId) =
     Option(ldapConnectionPool.getEntry(userDn(userId))) flatMap { results =>
@@ -212,6 +213,6 @@ class LdapRegistrationDAO(
   }
 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
-    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.azureB2CId, b2CId.value))), "setUserAzureB2CId", samRequestContext)
+    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.REPLACE, Attr.azureB2CId, b2CId.value))), "setUserAzureB2CId", samRequestContext)
 
 }

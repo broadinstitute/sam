@@ -731,6 +731,61 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
                values (${policyGroupName}, ${policy.email}, ${Instant.now()})""".updateAndReturnGeneratedKey().apply())
   }
 
+  private def directMemberUserEmailsQuery(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName]) = {
+    val u = UserTable.syntax("u")
+    val p = PolicyTable.syntax("p")
+    val gm = GroupMemberTable.syntax("gm")
+
+    samsql"""select ${p.result.name}, ${u.resultAll} from ${PolicyTable as p}
+        join ${GroupMemberTable as gm} on ${gm.groupId} = ${p.groupId}
+        join ${UserTable as u} on ${u.id} = ${gm.memberUserId}
+        where ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
+        ${limitOnePolicyClause(limitOnePolicy, p)}"""
+      .map(rs => (rs.get[AccessPolicyName](p.resultName.name), UserTable(u)(rs)))
+  }
+
+  private def directMemberGroupEmailsQuery(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName]) = {
+    val g = GroupTable.syntax("g")
+    val p = PolicyTable.syntax("p")
+    val gm = GroupMemberTable.syntax("gm")
+    val op = PolicyTable.syntax("op")
+
+    samsql"""select ${p.result.name}, ${g.resultAll} from ${PolicyTable as p}
+        join ${GroupMemberTable as gm} on ${gm.groupId} = ${p.groupId}
+        join ${GroupTable as g} on ${g.id} = ${gm.memberGroupId}
+        where ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
+        and not exists (select 1 from ${PolicyTable as op} where ${op.groupId} = ${g.id})
+        ${limitOnePolicyClause(limitOnePolicy, p)}"""
+      .map(rs => (rs.get[AccessPolicyName](p.resultName.name), GroupTable(g)(rs)))
+  }
+
+  private def limitOnePolicyClause(limitOnePolicy: Option[AccessPolicyName], p: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord]) = {
+    limitOnePolicy match {
+      case Some(policyName) => samsqls"and ${p.name} = ${policyName}"
+      case None => samsqls""
+    }
+  }
+
+  private def directMemberPolicyIdentifiersQuery(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName]) = {
+    val mp = PolicyTable.syntax("mp") // member policy
+    val mpr = ResourceTable.syntax("mpr") // member policy resource
+    val mprt = ResourceTypeTable.syntax("mprt") // member policy resource type
+    val mpg = GroupTable.syntax("mpg") // member policy group
+
+    val p = PolicyTable.syntax("p")
+    val gm = GroupMemberTable.syntax("gm")
+
+    samsql"""select ${p.result.name}, ${mp.result.name}, ${mpg.result.email}, ${mpr.result.name}, ${mprt.result.name} from ${PolicyTable as p}
+        join ${GroupMemberTable as gm} on ${gm.groupId} = ${p.groupId}
+        join ${PolicyTable as mp} on ${mp.groupId} = ${gm.memberGroupId}
+        join ${GroupTable as mpg} on ${mpg.id} = ${mp.groupId}
+        join ${ResourceTable as mpr} on ${mpr.id} = ${mp.resourceId}
+        join ${ResourceTypeTable as mprt} on ${mprt.id} = ${mpr.resourceTypeId}
+        where ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
+        ${limitOnePolicyClause(limitOnePolicy, p)}"""
+      .map(rs => (rs.get[AccessPolicyName](p.resultName.name), PolicyIdentifiers(rs.get[AccessPolicyName](mp.resultName.name), rs.get[WorkbenchEmail](mpg.resultName.email), rs.get[ResourceTypeName](mprt.resultName.name), rs.get[ResourceId](mpr.resultName.name))))
+  }
+
   // Policies and their roles and actions are set to cascade delete when the associated group is deleted
   override def deletePolicy(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit] = {
     val p = PolicyTable.syntax("p")
@@ -932,73 +987,132 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
   // Abstracts logic to load and unmarshal one or more policies, use to get full AccessPolicy objects from Postgres
   private def listPolicies(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] = {
+    listPoliciesWithMembers(resource, limitOnePolicy, samRequestContext) { (policyInfos, memberGroupsByPolicy, memberUsersByPolicy, memberPoliciesByPolicy) =>
+      policyInfos.map { case (policyInfo, resultsByPolicy) =>
+        val (policyRoles, policyActions, policyDescendantPermissions) = unmarshalPolicyPermissions(resultsByPolicy)
+
+        val memberGroups = memberGroupsByPolicy(policyInfo.name).map(_.name).toSet[WorkbenchSubject]
+        val memberUsers = memberUsersByPolicy(policyInfo.name).map(_.id).toSet[WorkbenchSubject]
+        val memberPolicies = memberPoliciesByPolicy(policyInfo.name).map(p => FullyQualifiedPolicyId(FullyQualifiedResourceId(p.resourceTypeName, p.resourceId), p.policyName)).toSet[WorkbenchSubject]
+
+        val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name)
+        AccessPolicy(policyId, memberUsers ++ memberGroups ++ memberPolicies, policyInfo.email, policyRoles, policyActions, policyDescendantPermissions, policyInfo.public)
+      }.to(LazyList)
+    }
+  }
+
+  /**
+    * Utility function that performs the required queries to list all policies for a resource or a load a single
+    * policy including all actions, roles and members
+    * @param resource resource to list policies for
+    * @param limitOnePolicy name of policy if loading a single
+    * @param samRequestContext
+    * @param unmarshaller function that takes the results of the queries and returns a list of the desired object.
+    *                     The first map keyed by the basic policy info and has values for roles and actions
+    *                     The other maps are keyed by the policy name and have values for
+    *                     member groups, users and policies in that order. These maps also have a default value
+    *                     of List.empty so no need to worry about missing values.
+    * @tparam T the return type
+    * @return
+    */
+  private def listPoliciesWithMembers[T](resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName], samRequestContext: SamRequestContext)
+                                        (unmarshaller: (
+                                          Map[PolicyInfo, List[(RoleResult, ActionResult)]],
+                                          Map[AccessPolicyName, List[GroupRecord]],
+                                          Map[AccessPolicyName, List[UserRecord]],
+                                          Map[AccessPolicyName, List[PolicyIdentifiers]]) => LazyList[T]): IO[LazyList[T]] = {
+    readOnlyTransaction("listPoliciesWithMembers", samRequestContext)({ implicit session =>
+      // query to get policies and all associated roles and actions
+      val policyInfos = groupByFirstInPair(policyInfoQuery(resource, limitOnePolicy).list().apply())
+
+      // queries to get all members, there are 3 kinds, groups, users and policies
+      val memberGroupsByPolicy = groupByFirstInPair(directMemberGroupEmailsQuery(resource, limitOnePolicy).list().apply()).withDefault(_ => List.empty)
+      val memberUsersByPolicy = groupByFirstInPair(directMemberUserEmailsQuery(resource, limitOnePolicy).list().apply()).withDefault(_ => List.empty)
+      val memberPoliciesByPolicy = groupByFirstInPair(directMemberPolicyIdentifiersQuery(resource, limitOnePolicy).list().apply()).withDefault(_ => List.empty)
+
+      // convert query results to desired output
+      unmarshaller(policyInfos, memberGroupsByPolicy, memberUsersByPolicy, memberPoliciesByPolicy)
+    })
+  }
+
+  /**
+    * Takes a list of pairs and returns a map grouped by the first element with values of lists of the second
+    * @param list pairs to group by first element
+    * @tparam X type of first element in pair
+    * @tparam Y type of second element in pair
+    * @return map grouped by first element
+    */
+  private def groupByFirstInPair[X, Y](list: List[(X, Y)]): Map[X, List[Y]] = {
+    list.groupBy(_._1).map { case (key, pairs) => key -> pairs.map(_._2) }
+  }
+
+  private def policyInfoQuery(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName]) = {
     val g = GroupTable.syntax("g")
-    val r = ResourceTable.syntax("r")
-    val rt = ResourceTypeTable.syntax("rt")
-    val gm = GroupMemberTable.syntax("gm")
-    val sg = GroupTable.syntax("sg")
     val p = PolicyTable.syntax("p")
-    val sp = PolicyTable.syntax("sp")
-    val sr = ResourceTable.syntax("sr")
-    val srt = ResourceTypeTable.syntax("srt")
     val pr = PolicyRoleTable.syntax("pr")
     val rr = ResourceRoleTable.syntax("rr")
     val pa = PolicyActionTable.syntax("pa")
     val ra = ResourceActionTable.syntax("ra")
-    val prrt = ResourceTypeTable.syntax("prrt")
-    val part = ResourceTypeTable.syntax("part")
-
-    val limitOnePolicyClause: SQLSyntax = limitOnePolicy match {
-      case Some(policyName) => samsqls"and ${p.name} = ${policyName}"
-      case None => samsqls""
-    }
+    val prrt = ResourceTypeTable.syntax("prrt") // policy role resource type
+    val part = ResourceTypeTable.syntax("part") // policy action resource type
 
     val listPoliciesQuery =
-      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${gm.result.memberUserId}, ${sg.result.name}, ${sp.result.name}, ${sr.result.name}, ${srt.result.name}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descendantsOnly}, ${part.result.name}, ${ra.result.action}, ${pa.result.descendantsOnly}
+      samsql"""select ${p.result.name}, ${g.result.email}, ${p.result.public}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descendantsOnly}, ${part.result.name}, ${ra.result.action}, ${pa.result.descendantsOnly}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
-          join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-          join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-          left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-          left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-          left join ${PolicyTable as sp} on ${sg.id} = ${sp.groupId}
-          left join ${ResourceTable as sr} on ${sp.resourceId} = ${sr.id}
-          left join ${ResourceTypeTable as srt} on ${sr.resourceTypeId} = ${srt.id}
           left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
           left join ${ResourceRoleTable as rr} on ${pr.resourceRoleId} = ${rr.id}
           left join ${ResourceTypeTable as prrt} on ${rr.resourceTypeId} = ${prrt.id}
           left join ${PolicyActionTable as pa} on ${p.id} = ${pa.resourcePolicyId}
           left join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
           left join ${ResourceTypeTable as part} on ${ra.resourceTypeId} = ${part.id}
-          where ${r.name} = ${resource.resourceId}
-          and ${rt.name} = ${resource.resourceTypeName}
-          ${limitOnePolicyClause}"""
+          where ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
+          ${limitOnePolicyClause(limitOnePolicy, p)}"""
 
-    readOnlyTransaction("listPolicies", samRequestContext)({ implicit session =>
-      val results = listPoliciesQuery.map(rs => (PolicyInfo(rs.get[AccessPolicyName](p.resultName.name), rs.get[ResourceId](r.resultName.name), rs.get[ResourceTypeName](rt.resultName.name), rs.get[WorkbenchEmail](g.resultName.email), rs.boolean(p.resultName.public)),
-        MemberResult(rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId), rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName), rs.stringOpt(sp.resultName.name).map(AccessPolicyName(_)), rs.stringOpt(sr.resultName.name).map(ResourceId(_)), rs.stringOpt(srt.resultName.name).map(ResourceTypeName(_))),
-        (RoleResult(rs.stringOpt(prrt.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.booleanOpt(pr.resultName.descendantsOnly)),
-          ActionResult(rs.stringOpt(part.resultName.name).map(ResourceTypeName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)), rs.booleanOpt(pa.resultName.descendantsOnly)))))
-        .list().apply().groupBy(_._1)
-
-      results.map { case (policyInfo, resultsByPolicy) =>
-        val (_, memberResults, permissionsResults) = resultsByPolicy.unzip3
-
-        val policyMembers = unmarshalPolicyMembers(memberResults)
-
-        val (policyRoles, policyActions, policyDescendantPermissions) = unmarshalPolicyPermissions(permissionsResults)
-
-        AccessPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name), policyMembers, policyInfo.email, policyRoles, policyActions, policyDescendantPermissions, policyInfo.public)
-      }.to(LazyList)
-    })
+    listPoliciesQuery.map(rs =>
+      (
+        PolicyInfo(
+          rs.get[AccessPolicyName](p.resultName.name),
+          resource.resourceId,
+          resource.resourceTypeName,
+          rs.get[WorkbenchEmail](g.resultName.email),
+          rs.boolean(p.resultName.public)),
+        (
+          RoleResult(
+            rs.stringOpt(prrt.resultName.name).map(ResourceTypeName(_)),
+            rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)),
+            rs.booleanOpt(pr.resultName.descendantsOnly)),
+          ActionResult(
+            rs.stringOpt(part.resultName.name).map(ResourceTypeName(_)),
+            rs.stringOpt(ra.resultName.action).map(ResourceAction(_)),
+            rs.booleanOpt(pa.resultName.descendantsOnly))
+        )
+      )
+    )
   }
 
-  private def unmarshalPolicyMembers(memberResults: List[MemberResult]): Set[WorkbenchSubject] = {
-    memberResults.collect {
-      case MemberResult(Some(userId), None, None, None, None) => userId
-      case MemberResult(None, Some(groupName), None, None, None) => groupName
-      case MemberResult(None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
-    }.toSet
+  override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] = {
+    listPoliciesMemberships(policyId.resource, Option(policyId.accessPolicyName), samRequestContext).map(_.headOption.map(_.membership))
+  }
+
+  override def listAccessPolicyMemberships(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithMembership]] = {
+    listPoliciesMemberships(resource, None, samRequestContext)
+  }
+
+  // a variant of listPolicies but returns a structure that contains member emails and nested policy information instead of subject ids
+  private def listPoliciesMemberships(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName] = None, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithMembership]] = {
+    listPoliciesWithMembers(resource, limitOnePolicy, samRequestContext) { (policyInfos, memberGroupsByPolicy, memberUsersByPolicy, memberPoliciesByPolicy) =>
+      policyInfos.map { case (policyInfo, resultsByPolicy) =>
+        val (policyRoles, policyActions, policyDescendantPermissions) = unmarshalPolicyPermissions(resultsByPolicy)
+
+        // policies have extra information, users and groups are just emails
+        val memberGroups = memberGroupsByPolicy(policyInfo.name).map(_.email)
+        val memberUsers = memberUsersByPolicy(policyInfo.name).map(_.email)
+        val memberPolicies = memberPoliciesByPolicy(policyInfo.name).toSet
+
+        AccessPolicyWithMembership(policyInfo.name, AccessPolicyMembership(memberPolicies.map(_.policyEmail) ++ memberUsers ++ memberGroups, policyActions, policyRoles, Option(policyDescendantPermissions), Option(memberPolicies)), policyInfo.email)
+      }.to(LazyList)
+    }
   }
 
   private def unmarshalPolicyPermissions(permissionsResults: List[(RoleResult, ActionResult)]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
@@ -1216,7 +1330,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
-  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[WorkbenchUser]] = {
+  override def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[SamUser]] = {
     val f = GroupMemberFlatTable.syntax("f")
     val u = UserTable.syntax("u")
     val p = PolicyTable.syntax("p")
@@ -1483,7 +1597,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 }
 
 private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
-private final case class MemberResult(userId: Option[WorkbenchUserId], groupName: Option[WorkbenchGroupName], policyName: Option[AccessPolicyName], resourceId: Option[ResourceId], resourceTypeName: Option[ResourceTypeName])
 private final case class RoleResult(resourceTypeName: Option[ResourceTypeName], role: Option[ResourceRoleName], descendantsOnly: Option[Boolean])
 private final case class ActionResult(resourceTypeName: Option[ResourceTypeName], action: Option[ResourceAction], descendantsOnly: Option[Boolean])
 

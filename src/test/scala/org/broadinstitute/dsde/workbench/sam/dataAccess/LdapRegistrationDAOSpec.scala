@@ -4,7 +4,7 @@ import cats.effect.unsafe.implicits.global
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool, LDAPException}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
-import org.broadinstitute.dsde.workbench.sam.TestSupport
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -38,8 +38,7 @@ class LdapRegistrationDAOSpec extends AnyFlatSpec with Matchers with TestSupport
 
 
   "LdapGroupDirectoryDAO"  should "create, read, delete users" in {
-    val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"), None)
+    val user = Generator.genWorkbenchUserGoogle.sample.get
 
     assertResult(None) {
       dao.loadUser(user.id, samRequestContext).unsafeRunSync()
@@ -61,12 +60,11 @@ class LdapRegistrationDAOSpec extends AnyFlatSpec with Matchers with TestSupport
   }
 
   it should "create, load, delete pet service accounts" in {
-    val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"), None)
+    val user = Generator.genWorkbenchUserGoogle.sample.get
     val serviceAccountUniqueId = ServiceAccountSubjectId(UUID.randomUUID().toString)
     val serviceAccount = ServiceAccount(serviceAccountUniqueId, WorkbenchEmail("foo@bar.com"), ServiceAccountDisplayName(""))
     val project = GoogleProject("testproject")
-    val petServiceAccount = PetServiceAccount(PetServiceAccountId(userId, project), serviceAccount)
+    val petServiceAccount = PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount)
 
     assertResult(user) {
       dao.createUser(user, samRequestContext).unsafeRunSync()
@@ -92,8 +90,7 @@ class LdapRegistrationDAOSpec extends AnyFlatSpec with Matchers with TestSupport
   }
 
   it should "succeed if the user has been created" in {
-    val userId = WorkbenchUserId(UUID.randomUUID().toString)
-    val user = WorkbenchUser(userId, None, WorkbenchEmail("foo@bar.com"), None)
+    val user = Generator.genWorkbenchUserGoogle.sample.get
 
     assertResult(None) {
       dao.loadUser(user.id, samRequestContext).unsafeRunSync()
@@ -109,7 +106,7 @@ class LdapRegistrationDAOSpec extends AnyFlatSpec with Matchers with TestSupport
   }
 
   it should "disable users when deleting them" in {
-    val user = WorkbenchUser(WorkbenchUserId(UUID.randomUUID().toString), None, WorkbenchEmail("foo@bar.com"), None)
+    val user = Generator.genWorkbenchUserGoogle.sample.get
 
     assertResult(user) {
       dao.createUser(user, samRequestContext).unsafeRunSync()
@@ -133,7 +130,7 @@ class LdapRegistrationDAOSpec extends AnyFlatSpec with Matchers with TestSupport
   }
 
   it should "throw an exception when trying to overwrite an existing googleSubjectId" in {
-    val user = WorkbenchUser(WorkbenchUserId(UUID.randomUUID().toString), Some(GoogleSubjectId("existingGoogleSubjectId")), WorkbenchEmail("foo@bar.com"), None)
+    val user = Generator.genWorkbenchUserGoogle.sample.get
 
     assertResult(user) {
       dao.createUser(user, samRequestContext).unsafeRunSync()

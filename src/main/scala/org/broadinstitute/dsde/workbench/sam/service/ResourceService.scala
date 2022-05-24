@@ -76,20 +76,20 @@ class ResourceService(
 
   /**
     * Create a resource with default policies. The default policies contain 1 policy with the same name as the
-    * owner role for the resourceType, has the owner role, membership contains only userInfo
+    * owner role for the resourceType, has the owner role, membership contains only samUser
     *
     * @param resourceType
     * @param resourceId
-    * @param userInfo
+    * @param samUser
     * @return
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): IO[Resource] = {
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Resource] = {
     val ownerRole = resourceType.roles
       .find(_.roleName == resourceType.ownerRoleName)
       .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
     val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
-      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(userInfo.userEmail), Set.empty, Set(ownerRole.roleName), None))
-    createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, userInfo.userId, samRequestContext)
+      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(samUser.email), Set.empty, Set(ownerRole.roleName), None, None))
+    createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, samUser.id, samRequestContext)
   }
 
   /**
@@ -265,8 +265,8 @@ class ResourceService(
         } yield ()
     }
 
-  def listUserResourceRoles(resource: FullyQualifiedResourceId, userInfo: UserInfo, samRequestContext: SamRequestContext): Future[Set[ResourceRoleName]] =
-    accessPolicyDAO.listUserResourceRoles(resource, userInfo.userId, samRequestContext).unsafeToFuture()
+  def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): Future[Set[ResourceRoleName]] =
+    accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext).unsafeToFuture()
 
   /**
     * Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
@@ -496,37 +496,15 @@ class ResourceService(
     maybeFireNotification.map(_ => groupChanged)
   }
 
-  private[service] def loadAccessPolicyWithEmails(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicyMembership] = {
-    val users = policy.members.collect { case userId: WorkbenchUserId => userId }
-    val groups = policy.members.collect { case groupName: WorkbenchGroupName => groupName }
-    val policyMembers = policy.members.collect { case policyId: FullyQualifiedPolicyId => policyId }
-
-    for {
-      userEmails <- directoryDAO.loadUsers(users, samRequestContext)
-      groupEmails <- directoryDAO.loadGroups(groups, samRequestContext)
-      policyEmails <- policyMembers.toList.parTraverse((resourceAndPolicyName: FullyQualifiedPolicyId) => accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext))
-    } yield
-      AccessPolicyMembership(
-        userEmails.toSet[WorkbenchUser].map(_.email) ++ groupEmails.map(_.email) ++ policyEmails.flatMap(_.map(_.email)),
-        policy.actions,
-        policy.roles,
-        Option(policy.descendantPermissions))
-  }
-
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =
-    accessPolicyDAO.listAccessPolicies(resource, samRequestContext).flatMap { policies =>
-      policies.parTraverse { policy =>
-        loadAccessPolicyWithEmails(policy, samRequestContext).map { membership =>
-          AccessPolicyResponseEntry(policy.id.accessPolicyName, membership, policy.email)
-        }
+    accessPolicyDAO.listAccessPolicyMemberships(resource, samRequestContext).map { policiesWithMembership =>
+      policiesWithMembership.map { policyWithMembership =>
+        AccessPolicyResponseEntry(policyWithMembership.policyName, policyWithMembership.membership, policyWithMembership.email)
       }
     }
 
   def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
-    for {
-      policy <- accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext)
-      res <- policy.traverse(p => loadAccessPolicyWithEmails(p, samRequestContext))
-    } yield res
+    accessPolicyDAO.loadPolicyMembership(policyIdentity, samRequestContext)
 
   private def makeValidatablePolicies(policies: Map[AccessPolicyName, AccessPolicyMembership], samRequestContext: SamRequestContext): IO[Set[ValidatableAccessPolicy]] =
     policies.toList.traverse {
@@ -581,7 +559,7 @@ class ResourceService(
       members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id, samRequestContext))
       workbenchUsers = members.flatten.toSet
     } yield {
-      workbenchUsers.map(user => UserIdInfo(user.id, user.email, user.googleSubjectId))
+      workbenchUsers.map(_.toUserIdInfo)
     }
 
   @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy

@@ -44,7 +44,9 @@ object SamJsonSupport {
 
   implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
 
-  implicit val AccessPolicyMembershipFormat = jsonFormat4(AccessPolicyMembership.apply)
+  implicit val PolicyIdentifiersFormat = jsonFormat4(PolicyIdentifiers.apply)
+
+  implicit val AccessPolicyMembershipFormat = jsonFormat5(AccessPolicyMembership.apply)
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
@@ -193,6 +195,7 @@ object RolesAndActions {
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
+@Lenses final case class PolicyIdentifiers(policyName: AccessPolicyName, policyEmail: WorkbenchEmail, resourceTypeName: ResourceTypeName, resourceId: ResourceId)
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
                                                 resourceId: ResourceId,
@@ -217,12 +220,18 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
+// AccessPolicyMembership.memberPolicies is logically read-only; at some point in the future it could be lazy-loaded
+// (via extra queries) based on the contents of memberEmails.
 @Lenses final case class AccessPolicyMembership(memberEmails: Set[WorkbenchEmail],
                                                 actions: Set[ResourceAction],
                                                 roles: Set[ResourceRoleName],
-                                                descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty)) {
+                                                descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
+                                                memberPolicies: Option[Set[PolicyIdentifiers]] = Option(Set.empty)) {
   def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
 }
+// AccessPolicyWithMembership is practically the same as AccessPolicyResponseEntry but the latter is used in api responses
+// and the former is used at the DAO level so it seems better to keep them separate
+@Lenses final case class AccessPolicyWithMembership(policyName: AccessPolicyName, membership: AccessPolicyMembership, email: WorkbenchEmail)
 @Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
 
 // Access Policy with no membership info to improve efficiency for calls that care about only the roles and actions of a policy, not the membership
@@ -235,6 +244,15 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 @Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
+
+final case class SamUser(id: WorkbenchUserId,
+                         googleSubjectId: Option[GoogleSubjectId],
+                         email: WorkbenchEmail,
+                         azureB2CId: Option[AzureB2CId],
+                         enabled: Boolean,
+                         acceptedTosVersion: Option[String]) {
+  def toUserIdInfo = UserIdInfo(id, email, googleSubjectId)
+}
 
 object SamLenses {
   val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource

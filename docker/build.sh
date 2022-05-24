@@ -23,6 +23,9 @@ set -e
 # Set default variables
 DOCKER_CMD=
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}  # default to current branch
+REGEX_TO_REPLACE_ILLEGAL_CHARACTERS_WITH_DASHES="s/[^a-zA-Z0-9_.\-]/-/g"
+REGEX_TO_REMOVE_DASHES_AND_PERIODS_FROM_BEGINNING="s/^[.\-]*//g"
+DOCKERTAG_SAFE_NAME=$(echo $BRANCH | sed -e $REGEX_TO_REPLACE_ILLEGAL_CHARACTERS_WITH_DASHES -e $REGEX_TO_REMOVE_DASHES_AND_PERIODS_FROM_BEGINNING | cut -c 1-127)  # https://docs.docker.com/engine/reference/commandline/tag/#:~:text=A%20tag%20name%20must%20be,a%20maximum%20of%20128%20characters.
 DOCKERHUB_REGISTRY=${DOCKERHUB_REGISTRY:-broadinstitute/$PROJECT}
 DOCKERHUB_TESTS_REGISTRY=${DOCKERHUB_REGISTRY}-tests
 GCR_REGISTRY=""
@@ -133,13 +136,13 @@ function docker_cmd()
         if [ $DOCKER_CMD="push" ]; then
             echo "pushing ${DOCKERHUB_REGISTRY}:${HASH_TAG}..."
             docker push $DOCKERHUB_REGISTRY:${HASH_TAG}
-            docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $DOCKERHUB_REGISTRY:${BRANCH}
-            docker push $DOCKERHUB_REGISTRY:${BRANCH}
+            docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $DOCKERHUB_REGISTRY:${DOCKERTAG_SAFE_NAME}
+            docker push $DOCKERHUB_REGISTRY:${DOCKERTAG_SAFE_NAME}
 
             echo "pushing ${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}..."
             docker push $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG}
-            docker tag $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} $DOCKERHUB_TESTS_REGISTRY:${BRANCH}
-            docker push $DOCKERHUB_TESTS_REGISTRY:${BRANCH}
+            docker tag $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} $DOCKERHUB_TESTS_REGISTRY:${DOCKERTAG_SAFE_NAME}
+            docker push $DOCKERHUB_TESTS_REGISTRY:${DOCKERTAG_SAFE_NAME}
 
             if [[ -n $GCR_REGISTRY ]]; then
                 docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $GCR_REGISTRY:${HASH_TAG}

@@ -107,51 +107,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
-  override def loadGroups(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[BasicWorkbenchGroup]] = {
-    if (groupNames.isEmpty) {
-      IO.pure(LazyList.empty)
-    } else {
-      for {
-        results <- readOnlyTransaction("loadGroups", samRequestContext)({ implicit session =>
-          val g = GroupTable.syntax("g")
-          val sg = GroupTable.syntax("sg")
-          val gm = GroupMemberTable.syntax("gm")
-          val p = PolicyTable.syntax("p")
-          val r = ResourceTable.syntax("r")
-          val rt = ResourceTypeTable.syntax("rt")
-
-          samsql"""select ${g.result.name}, ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
-                    from ${GroupTable as g}
-                    left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
-                    left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
-                    left join ${PolicyTable as p} on ${p.groupId} = ${sg.id}
-                    left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-                    left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                    where ${g.name} in (${groupNames})"""
-            .map { rs =>
-              (rs.get[WorkbenchGroupName](g.resultName.name),
-                rs.get[WorkbenchEmail](g.resultName.email),
-                rs.stringOpt(gm.resultName.memberUserId).map(WorkbenchUserId),
-                rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
-                rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
-                rs.stringOpt(r.resultName.name).map(ResourceId(_)),
-                rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)))
-            }.list().apply()
-        })
-      } yield {
-        results.groupBy(result => (result._1, result._2)).map { case ((groupName, email), results) =>
-          val members: Set[WorkbenchSubject] = results.collect {
-              case (_, _, Some(userId), None, None, None, None) => userId
-              case (_, _, None, Some(subGroupName), None, None, None) => subGroupName
-              case (_, _, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) => FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
-          }.toSet
-
-          BasicWorkbenchGroup(groupName, members, email)
-        }
-      }.to(LazyList)
-    }
-  }
-
   override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = {
     batchLoadGroupEmail(Set(groupName), samRequestContext).map(_.toMap.get(groupName))
   }
@@ -345,22 +300,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
-  // NOTE: This implementation is a copy/paste of the implementation from LdapDirectoryDAO.  The question was raised
-  // whether this should also handle Pets and Policies.  At this time, we don't know if it should, but for backwards
-  // compatibility with LdapDirectoryDAO, we're going to use the same implementation for now.
-  override def loadSubjectEmails(subjects: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchEmail]] = {
-    val userSubjects = subjects collect { case userId: WorkbenchUserId => userId }
-    val groupSubjects = subjects collect { case groupName: WorkbenchGroupName => groupName }
-
-    val users = loadUsers(userSubjects, samRequestContext)
-    val groups = loadGroups(groupSubjects, samRequestContext)
-
-    for {
-      userEmails <- users.map(_.map(_.email))
-      groupEmails <- groups.map(_.map(_.email))
-    } yield userEmails ++ groupEmails
-  }
-
   override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] = {
     readOnlyTransaction("loadSubjectFromGoogleSubjectId", samRequestContext)({ implicit session =>
       val u = UserTable.syntax
@@ -389,11 +328,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def createUser(user: WorkbenchUser, samRequestContext: SamRequestContext): IO[WorkbenchUser] = {
+  override def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
     serializableWriteTransaction("createUser", samRequestContext)({ implicit session =>
       val userColumn = UserTable.column
 
-      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, false, ${user.azureB2CId})"
+      val insertUserQuery = samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}, ${userColumn.acceptedTosVersion}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, ${user.enabled}, ${user.azureB2CId}, ${user.acceptedTosVersion})"
 
       Try {
         insertUserQuery.update().apply()
@@ -405,7 +344,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     readOnlyTransaction("loadUser", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
@@ -415,7 +354,17 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
+    readOnlyTransaction("loadUserByGoogleSubjectId", samRequestContext)({ implicit session =>
+      val userTable = UserTable.syntax
+
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.googleSubjectId} = ${userId}"
+      loadUserQuery.map(UserTable(userTable))
+        .single().apply().map(UserTable.unmarshalUserRecord)
+    })
+  }
+
+  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     readOnlyTransaction("loadUserByAzureB2CId", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
 
@@ -428,7 +377,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] = {
     serializableWriteTransaction("setUserAzureB2CId", samRequestContext)({ implicit session =>
       val u = UserTable.column
-      val results = samsql"update ${UserTable.table} set ${u.azureB2cId} = $b2cId where ${u.id} = $userId and ${u.azureB2cId} is null".update().apply()
+      val results = samsql"update ${UserTable.table} set ${u.azureB2cId} = $b2cId where ${u.id} = $userId and (${u.azureB2cId} is null or ${u.azureB2cId} = $b2cId)".update().apply()
 
       if (results != 1) {
         throw new WorkbenchException(s"Cannot update azureB2cId for user ${userId} because user does not exist or the azureB2cId has already been set for this user")
@@ -436,18 +385,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         ()
       }
     })
-  }
-
-  override def loadUsers(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[LazyList[WorkbenchUser]] = {
-    if(userIds.nonEmpty) {
-      readOnlyTransaction("loadUsers", samRequestContext)({ implicit session =>
-        val userTable = UserTable.syntax
-
-        val loadUsersQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${userIds})"
-        loadUsersQuery.map(UserTable(userTable))
-          .list().apply().map(UserTable.unmarshalUserRecord).to(LazyList)
-      })
-    } else IO.pure(LazyList.empty)
   }
 
   // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically
@@ -605,6 +542,25 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
+  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] = {
+    serializableWriteTransaction("acceptTermsOfService", samRequestContext)({ implicit session =>
+      val u = UserTable.column
+      samsql"""update ${UserTable.table} set ${u.acceptedTosVersion} = ${tosVersion}
+              where ${u.id} = ${userId}
+              and (${u.acceptedTosVersion} is null
+                or ${u.acceptedTosVersion} != ${tosVersion})""".update().apply() > 0
+    })
+  }
+
+  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    serializableWriteTransaction("rejectTermsOfService", samRequestContext)({ implicit session =>
+      val u = UserTable.column
+      samsql"""update ${UserTable.table} set ${u.acceptedTosVersion} = null
+              where ${u.id} = ${userId}
+              and ${u.acceptedTosVersion} is not null""".update().apply() > 0
+    })
+  }
+
   override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
     IO.unit //no-op for now. throw exception maybe?
   }
@@ -626,7 +582,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUser]] = {
+  override def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     readOnlyTransaction("getUserFromPetServiceAccount", samRequestContext)({ implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
       val userTable = UserTable.syntax

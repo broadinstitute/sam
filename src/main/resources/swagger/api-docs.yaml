@@ -15,7 +15,7 @@ security:
       - openid
       - email
       - profile
-  - b2coauth:
+  - oidc:
       - openid
       - email
       - profile
@@ -2378,6 +2378,10 @@ components:
           type: array
           items:
             type: string
+        memberPolicies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyIdentifiers'
         actions:
           type: array
           items:
@@ -2555,6 +2559,26 @@ components:
           description: The email address associated with the group
       description: specification of a managed group with an access policy and the
         email associated with the managed group
+    PolicyIdentifiers:
+      required:
+        - policyName
+        - policyEmail
+        - resourceTypeName
+        - resourceId
+      type: object
+      properties:
+        policyName:
+          type: string
+          description: The name of the policy
+        policyEmail:
+          type: string
+          description: The email of the policy
+        resourceTypeName:
+          type: string
+          description: The type of the resource
+        resourceId:
+          type: string
+          description: The id of the resource
     ResourceAndAccessPolicy:
       required:
         - accessPolicyName
@@ -2842,14 +2866,12 @@ components:
             openid: open id authorization
             email: email authorization
             profile: profile authorization
-    b2coauth:
+    oidc:
       type: oauth2
-      x-tokenName: id_token
       flows:
-        implicit:
-          # This points at the B2C dev environment. See https://broadworkbench.atlassian.net/browse/TOAZ-85
-          # to make this configurable across environments.
-          authorizationUrl: https://terradevb2c.b2clogin.com/terradevb2c.onmicrosoft.com/oauth2/v2.0/authorize?p=B2C_1A_SIGNUP_SIGNIN
+        authorizationCode:
+          authorizationUrl: /oauth2/authorize
+          tokenUrl: /oauth2/token
           scopes:
             openid: open id authorization
             email: email authorization

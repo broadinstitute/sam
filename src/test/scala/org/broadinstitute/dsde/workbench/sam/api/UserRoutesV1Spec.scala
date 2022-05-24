@@ -3,10 +3,9 @@ package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.Generator.genInviteUser
+import org.broadinstitute.dsde.workbench.sam.Generator.genNonPetEmail
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport.rootBooleanJsonFormat
@@ -23,8 +22,8 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), defaultUserId, defaultUserEmail, 0), directoryDAO, registrationDAO, NoExtensions)
-    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, UserInfo(OAuth2BearerToken(""), petSAUserId, petSAEmail, 0), directoryDAO, registrationDAO, NoExtensions)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO, NoExtensions)
+    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, petSAUser, directoryDAO, registrationDAO, NoExtensions)
     testCode(samRoutes, SARoutes)
   }
 
@@ -43,14 +42,14 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   }
 
   it should "create a user and accept the tos when the user specifies the ToS body correctly" in {
-    val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
+    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
     val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
 
     Post("/register/user/v1/termsofservice", tos) ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.userInfo.userSubjectId shouldBe user.id
+      res.userInfo.userEmail shouldBe user.email
       res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
     }
   }
@@ -104,13 +103,13 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper{
   }
 
   "POST /api/users/v1/invite/{invitee's email}" should "create user" in {
-    val invitee = genInviteUser.sample.get
+    val inviteeEmail = genNonPetEmail.sample.get
 
     val (user, _, routes) = createTestUser() //create a valid user that can invite someone
-    Post(s"/api/users/v1/invite/${invitee.inviteeEmail}") ~> routes.route ~> check{
+    Post(s"/api/users/v1/invite/${inviteeEmail}") ~> routes.route ~> check{
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatusDetails]
-      res.userEmail shouldBe invitee.inviteeEmail
+      res.userEmail shouldBe inviteeEmail
     }
   }
 

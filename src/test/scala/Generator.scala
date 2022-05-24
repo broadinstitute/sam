@@ -3,23 +3,27 @@ package org.broadinstitute.dsde.workbench.sam
 import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
-import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
-import org.broadinstitute.dsde.workbench.sam.api.InviteUser
+import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.scalacheck._
 import SamResourceActions._
+import org.broadinstitute.dsde.workbench.sam.service.UserService
 
 object Generator {
   val genNonPetEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@gmail.com"))
-  val genPetEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@test.iam.gserviceaccount.com"))
+  val genServiceAccountEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@test.iam.gserviceaccount.com"))
   val genGoogleSubjectId: Gen[GoogleSubjectId] = Gen.stringOfN(20, Gen.numChar).map(id => GoogleSubjectId("1" + id))
   val genAzureB2CId: Gen[AzureB2CId] = Gen.uuid.map(uuid => AzureB2CId(uuid.toString))
   val genExternalId: Gen[Either[GoogleSubjectId, AzureB2CId]] = Gen.either(genGoogleSubjectId, genAzureB2CId)
   val genServiceAccountSubjectId: Gen[ServiceAccountSubjectId] = genGoogleSubjectId.map(x => ServiceAccountSubjectId(x.value))
   val genOAuth2BearerToken: Gen[OAuth2BearerToken] = Gen.alphaStr.map(x => OAuth2BearerToken("s"+x))
 
-  val genHeadersWithoutExpiresIn: Gen[List[RawHeader]] = for{
+  // normally the current time in millis is used to create a WorkbenchUserId but too many users are created
+  // during tests that collisions happen despite randomness built into UserService.genWorkbenchUserId
+  // the main requirement is that UserService.genWorkbenchUserId is given a 13 digit Long
+  val genWorkbenchUserId: Gen[WorkbenchUserId] = Gen.choose(1000000000000L, 9999999999999L).map(UserService.genWorkbenchUserId)
+
+  val genValidUserInfoHeaders: Gen[List[RawHeader]] = for{
     email <- genNonPetEmail
     accessToken <- genOAuth2BearerToken
     externalId <- genExternalId
@@ -29,44 +33,37 @@ object Generator {
     RawHeader(accessTokenHeader, accessToken.value)
   )
 
-  val genUserInfoHeadersWithInvalidExpiresIn: Gen[List[RawHeader]] = for{
-    ls <- genHeadersWithoutExpiresIn
-    expiresIn <- Gen.alphaStr.map(x => s"s$x")
-  } yield RawHeader(expiresInHeader, expiresIn) :: ls
-
-  val genValidUserInfoHeaders: Gen[List[RawHeader]] = for{
-     ls <- genHeadersWithoutExpiresIn
-  } yield RawHeader(expiresInHeader, (System.currentTimeMillis() + 1000).toString) :: ls
-
-  val genUserInfo = for{
-    token <- genOAuth2BearerToken
-    email <- genNonPetEmail
-    expires <- Gen.calendar.map(_.getTimeInMillis)
-  } yield UserInfo(token, genWorkbenchUserId(System.currentTimeMillis()), email, expires)
-
   val genWorkbenchUserGoogle = for{
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId
-    userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield WorkbenchUser(userId, Option(googleSubjectId), email, None)
+    userId <- genWorkbenchUserId
+  }yield SamUser(userId, Option(googleSubjectId), email, None, false, None)
+
+  val genWorkbenchUserServiceAccount = for{
+    email <- genServiceAccountEmail
+    googleSubjectId <- genGoogleSubjectId
+    userId <- genWorkbenchUserId
+  }yield SamUser(userId, Option(googleSubjectId), email, None, false, None)
 
   val genWorkbenchUserAzure = for {
     email <- genNonPetEmail
     azureB2CId <- genAzureB2CId
-    userId = genWorkbenchUserId(System.currentTimeMillis())
-  } yield WorkbenchUser(userId, None, email, Option(azureB2CId))
+    userId <- genWorkbenchUserId
+  } yield SamUser(userId, None, email, Option(azureB2CId), false, None)
 
-  val genInviteUser = for{
+  val genWorkbenchUserBoth = for {
     email <- genNonPetEmail
-    userId = genWorkbenchUserId(System.currentTimeMillis())
-  }yield InviteUser(userId, email)
+    googleSubjectId <- genGoogleSubjectId
+    azureB2CId <- genAzureB2CId
+    userId <- genWorkbenchUserId
+  } yield SamUser(userId, Option(googleSubjectId), email, Option(azureB2CId), false, None)
 
   val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s${x.take(50)}")) //prepending `s` just so this won't be an empty string
   val genGoogleProject = Gen.alphaStr.map(x => GoogleProject(s"s$x")) //prepending `s` just so this won't be an empty string
   val genWorkbenchSubject: Gen[WorkbenchSubject] = for{
     groupId <- genWorkbenchGroupName
-    project <- genGoogleProject
-    res <- Gen.oneOf[WorkbenchSubject](List(genWorkbenchUserId(System.currentTimeMillis()), groupId))
+    userId <- genWorkbenchUserId
+    res <- Gen.oneOf[WorkbenchSubject](List(userId, groupId))
   }yield res
 
   val genBasicWorkbenchGroup = for{
@@ -110,7 +107,7 @@ object Generator {
 
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)
-  implicit val arbWorkbenchUser: Arbitrary[WorkbenchUser] = Arbitrary(genWorkbenchUserGoogle)
+  implicit val arbWorkbenchUser: Arbitrary[SamUser] = Arbitrary(genWorkbenchUserGoogle)
   implicit val arbPolicy: Arbitrary[AccessPolicy] = Arbitrary(genPolicy)
   implicit val arbResource: Arbitrary[Resource] = Arbitrary(genResource)
   implicit val arbGoogleSubjectId: Arbitrary[GoogleSubjectId] = Arbitrary(genGoogleSubjectId)
