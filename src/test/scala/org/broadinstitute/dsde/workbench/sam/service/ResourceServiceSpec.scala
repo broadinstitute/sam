@@ -6,12 +6,16 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
+import ch.qos.logback.classic.{Level, Logger}
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved, AuditEventType, AuditLogger, ResourceParentRemoved, ResourceParentUpdated, ResourceCreated, ResourceDeleted}
+import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -29,13 +33,15 @@ import org.scalatest.matchers.should.Matchers
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalatestplus.mockito.MockitoSugar
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
 
 /**
   * Created by dvoet on 6/27/17.
   */
-class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
+class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar with PropertyBasedTesting {
   val directoryConfig = TestSupport.directoryConfig
   val schemaLockConfig = TestSupport.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
@@ -609,7 +615,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
 
     // setup existing policy with a member
-    when(mockAccessPolicyDAO.loadPolicy(ArgumentMatchers.eq(policyId), any[SamRequestContext])).thenReturn(IO.pure(Option(AccessPolicy.members.set(Set(member))(accessPolicy))))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(AccessPolicy.members.set(Set(member))(accessPolicy))))
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
@@ -636,7 +642,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
 
     // setup existing policy with no members
-    when(mockAccessPolicyDAO.loadPolicy(ArgumentMatchers.eq(policyId), any[SamRequestContext])).thenReturn(IO.pure(Option(accessPolicy)))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(accessPolicy)))
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
@@ -682,7 +688,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val member = WorkbenchUserId("testU")
 
     // setup existing policy with a member
-    when(mockAccessPolicyDAO.loadPolicy(ArgumentMatchers.eq(policyId), any[SamRequestContext])).thenReturn(IO.pure(Option(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
@@ -708,7 +714,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
 
     // setup existing policy with no members
-    when(mockAccessPolicyDAO.loadPolicy(ArgumentMatchers.eq(policyId), any[SamRequestContext])).thenReturn(IO.pure(Option(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
@@ -1019,9 +1025,10 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   "addSubjectToPolicy" should "call CloudExtensions.onGroupUpdate when member added" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(Map.empty,
       mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
-      mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
       "")
@@ -1032,6 +1039,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     // return value true at the end indicates group changed
     when(mockDirectoryDAO.addGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
     when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
 
     verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
@@ -1040,9 +1048,10 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   it should "not call CloudExtensions.onGroupUpdate when member added but is already there" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(Map.empty,
       mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
-      mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
       "")
@@ -1053,6 +1062,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     // return value false at the end indicates group did not change
     when(mockDirectoryDAO.addGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(false))
     when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
 
     verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
@@ -1061,9 +1071,10 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   "removeSubjectFromPolicy" should "call CloudExtensions.onGroupUpdate when member removed" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(Map.empty,
       mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
-      mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
       "")
@@ -1074,6 +1085,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     // return value true at the end indicates group changed
     when(mockDirectoryDAO.removeGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
     when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
 
     verify(mockCloudExtensions, Mockito.timeout(1000)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
@@ -1082,9 +1094,10 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   it should "not call CloudExtensions.onGroupUpdate when member removed but wasn't there to start with" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(Map.empty,
       mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
-      mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
       "")
@@ -1095,6 +1108,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     // return value false at the end indicates group did not change
     when(mockDirectoryDAO.removeGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(false))
     when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
 
     verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
@@ -1417,5 +1431,337 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       AccessPolicyDescendantPermissions(defaultResourceType.name, Set(ResourceAction("I don't exist either")), Set.empty),
       AccessPolicyDescendantPermissions(defaultResourceType.name, Set(ResourceAction("I don't exist either")), Set(ResourceRoleName("I don't exist"))),
     )).unsafeRunSync().size shouldBe 4
+  }
+
+  "createAccessChangeEvents" should "not show changes for empty beforePolicies and afterPolicies" in {
+    val resource = genResource.sample.get
+    val beforePolicies = List.empty
+    val afterPolicies = List.empty
+    val result = service.createAccessChangeEvents(resource.fullyQualifiedId, beforePolicies, afterPolicies)
+    result shouldBe empty
+  }
+
+  it should "not show changes for the same beforePolicies and afterPolicies" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    val resource = genResource.sample.get
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = beforePolicies
+    val result = service.createAccessChangeEvents(resource.fullyQualifiedId, beforePolicies, afterPolicies)
+    result shouldBe empty
+  }
+
+  it should "show changes for empty beforePolicies" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    val beforePolicies = List.empty
+    val afterPolicies = List(testPolicy)
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeDetails = testPolicy.members.map(sub => AccessChange(
+      sub,
+      noneIfEmpty(testPolicy.roles),
+      noneIfEmpty(testPolicy.actions),
+      descendantRolesMap(testPolicy.descendantPermissions),
+      descendantActionsMap(testPolicy.descendantPermissions)))
+    val expectedChangeEvents = if (expectedChangeDetails.isEmpty) {
+      Set.empty
+    } else {
+      Set(AccessChangeEvent(AccessAdded, testPolicy.id.resource, expectedChangeDetails))
+    }
+
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  it should "show changes for empty afterPolicies" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = List.empty
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeDetails = testPolicy.members.map(sub => AccessChange(
+      sub,
+      noneIfEmpty(testPolicy.roles),
+      noneIfEmpty(testPolicy.actions),
+      descendantRolesMap(testPolicy.descendantPermissions),
+      descendantActionsMap(testPolicy.descendantPermissions)))
+    val expectedChangeEvents = if (expectedChangeDetails.isEmpty) {
+      Set.empty
+    } else {
+      Set(AccessChangeEvent(AccessRemoved, testPolicy.id.resource, expectedChangeDetails))
+    }
+
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  it should "show changes for member addition to a policy" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
+      val beforePolicies = List(testPolicy)
+      val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      val expectedChangeEvents = changesFromPolicy(testPolicy, testSubject, AccessAdded)
+      result should contain theSameElementsAs expectedChangeEvents
+    }
+  }
+
+  private def genWorkbenchSubjectNotInPolicy(testPolicy: AccessPolicy) = {
+    genWorkbenchSubject.suchThat(!testPolicy.members.contains(_))
+  }
+
+  it should "show changes for member removal from a policy" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
+      val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
+      val afterPolicies = List(testPolicy)
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      val expectedChangeEvents = changesFromPolicy(testPolicy, testSubject, AccessRemoved)
+      result should contain theSameElementsAs expectedChangeEvents
+    }
+  }
+
+  it should "not show changes for redundant permission addition for member" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
+      val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
+      val beforePolicies = List(addTestSubject(testPolicy), testPolicy)
+      val afterPolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      result shouldBe empty
+    }
+  }
+
+  it should "not show changes for redundant permission removal for member" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
+      val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
+      val beforePolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
+      val afterPolicies = List(addTestSubject(testPolicy), testPolicy)
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      result shouldBe empty
+    }
+  }
+
+  it should "show changes for permission removal from a policy " in forAll(genPolicyWithDescendantPermissions, genResourceTypeName) { (testPolicy, descendantType) =>
+    val testRole = ResourceRoleName("testRole")
+    val testAction = ResourceAction("testAction")
+    val testDRole = ResourceRoleName("testDRole")
+    val testDAction = ResourceAction("testDAction")
+
+    val addTestRole = AccessPolicy.roles.modify(_ + testRole)
+    val addTestAction = AccessPolicy.actions.modify(_ + testAction)
+    val addTestDescendantRole = AccessPolicy.descendantPermissions.modify(_ + AccessPolicyDescendantPermissions(descendantType, Set.empty, Set(testDRole)))
+    val addTestDescendantAction = AccessPolicy.descendantPermissions.modify(_ + AccessPolicyDescendantPermissions(descendantType, Set(testDAction), Set.empty))
+    val addTestPermissions = addTestRole andThen addTestAction andThen addTestDescendantAction andThen addTestDescendantRole
+
+    val beforePolicies = List(addTestPermissions(testPolicy))
+    val afterPolicies = List(testPolicy)
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    if (testPolicy.members.isEmpty) {
+      result shouldBe empty
+    } else {
+      result.foreach { event =>
+        event.eventType shouldBe AccessRemoved
+        event.changeDetails.foreach { change =>
+          change.roles shouldBe Some(Set(testRole))
+          change.actions shouldBe Some(Set(testAction))
+          change.descendantRoles shouldBe Some(Map(descendantType -> Set(testDRole)))
+          change.descendantActions shouldBe Some(Map(descendantType -> Set(testDAction)))
+        }
+      }
+    }
+  }
+
+  it should "show changes for permission addition to a policy " in forAll(genPolicyWithDescendantPermissions, genResourceTypeName) { (testPolicy, descendantType) =>
+    val testRole = ResourceRoleName("testRole")
+    val testAction = ResourceAction("testAction")
+    val testDRole = ResourceRoleName("testDRole")
+    val testDAction = ResourceAction("testDAction")
+
+    val addTestRole = AccessPolicy.roles.modify(_ + testRole)
+    val addTestAction = AccessPolicy.actions.modify(_ + testAction)
+    val addTestDescendantRole = AccessPolicy.descendantPermissions.modify(_ + AccessPolicyDescendantPermissions(descendantType, Set.empty, Set(testDRole)))
+    val addTestDescendantAction = AccessPolicy.descendantPermissions.modify(_ + AccessPolicyDescendantPermissions(descendantType, Set(testDAction), Set.empty))
+    val addTestPermissions = addTestRole andThen addTestAction andThen addTestDescendantAction andThen addTestDescendantRole
+
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = List(addTestPermissions(testPolicy))
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    if (testPolicy.members.isEmpty) {
+      result shouldBe empty
+    } else {
+      result.foreach { event =>
+        event.eventType shouldBe AccessAdded
+        event.changeDetails.foreach { change =>
+          change.roles shouldBe Some(Set(testRole))
+          change.actions shouldBe Some(Set(testAction))
+          change.descendantRoles shouldBe Some(Map(descendantType -> Set(testDRole)))
+          change.descendantActions shouldBe Some(Map(descendantType -> Set(testDAction)))
+        }
+      }
+    }
+  }
+
+  it should "detect additions and removals at the same time" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy), genWorkbenchSubjectNotInPolicy(testPolicy)) { (testSubject1, testSubject2) =>
+      val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject1)(testPolicy))
+      val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject2)(testPolicy))
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      val expectedRemoveEvents = changesFromPolicy(testPolicy, testSubject1, AccessRemoved)
+      val expectedAddEvents = changesFromPolicy(testPolicy, testSubject2, AccessAdded)
+      if (testSubject1 == testSubject2) {
+        result shouldBe empty
+      } else {
+        result should contain theSameElementsAs expectedAddEvents ++ expectedRemoveEvents
+      }
+    }
+  }
+
+  it should "show changes for switch to public policy " in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    val beforePolicies = List(testPolicy)
+    val afterPolicies = List(AccessPolicy.public.set(true)(testPolicy))
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeEvents = changesFromPolicy(testPolicy, CloudExtensions.allUsersGroupName, AccessAdded)
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  it should "show changes for switch to private policy " in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    val beforePolicies = List(AccessPolicy.public.set(true)(testPolicy))
+    val afterPolicies = List(testPolicy)
+    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+    val expectedChangeEvents = changesFromPolicy(testPolicy, CloudExtensions.allUsersGroupName, AccessRemoved)
+    result should contain theSameElementsAs expectedChangeEvents
+  }
+
+  def noneIfEmpty[C <: Iterable[_]](it: C): Option[C] = if (it.isEmpty) None else Option(it)
+
+  def descendantRolesMap(descendantPermissions: Set[AccessPolicyDescendantPermissions]): Option[Map[ResourceTypeName, Iterable[ResourceRoleName]]] = {
+    val typesAndRoles = descendantPermissions.groupBy(_.resourceType).map { case (resourceType, perms) =>
+      (resourceType, perms.map(_.roles).reduce(_ ++ _))
+    }.filterNot(_._2.isEmpty)
+    noneIfEmpty(typesAndRoles)
+  }
+
+  def descendantActionsMap(descendantPermissions: Set[AccessPolicyDescendantPermissions]): Option[Map[ResourceTypeName, Iterable[ResourceAction]]] = {
+    val typesAndActions = descendantPermissions.groupBy(_.resourceType).map { case (resourceType, perms) =>
+      (resourceType, perms.map(_.actions).reduce(_ ++ _))
+    }.filterNot(_._2.isEmpty)
+    noneIfEmpty(typesAndActions)
+  }
+
+  private def changesFromPolicy(testPolicy: AccessPolicy, testSubject: WorkbenchSubject, eventType: AccessChangeEventType): Set[AccessChangeEvent] = {
+    val expectedChangeDetails = AccessChange(
+      testSubject,
+      noneIfEmpty(testPolicy.roles),
+      noneIfEmpty(testPolicy.actions),
+      descendantRolesMap(testPolicy.descendantPermissions),
+      descendantActionsMap(testPolicy.descendantPermissions))
+
+    if ((expectedChangeDetails.actions ++ expectedChangeDetails.roles ++ expectedChangeDetails.descendantActions ++ expectedChangeDetails.descendantRoles).isEmpty) {
+      Set.empty
+    } else {
+      Set(AccessChangeEvent(eventType, testPolicy.id.resource, Set(expectedChangeDetails)))
+    }
+  }
+
+  "AuditLogger" should "be called on deleteResource" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(IO.fromFuture(IO(service.deleteResource(resource.fullyQualifiedId, samRequestContext))), List(ResourceDeleted), tryTwice = false)
+  }
+
+  it should "be called on createResource" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+
+    runAuditLogTest(service.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext), List(ResourceCreated, AccessAdded), tryTwice = false)
+  }
+
+  it should "be called on setResourceParent" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val parent = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(parent, samRequestContext).unsafeRunSync()
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.setResourceParent(resource.fullyQualifiedId, parent.fullyQualifiedId, samRequestContext), List(ResourceParentUpdated), tryTwice = false)
+  }
+
+  it should "be called on deleteResourceParent" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val parent = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty, parent = Option(parent.fullyQualifiedId))
+    policyDAO.createResource(parent, samRequestContext).unsafeRunSync()
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.deleteResourceParent(resource.fullyQualifiedId, samRequestContext), List(ResourceParentRemoved))
+  }
+
+  it should "be called on removeSubjectFromPolicy" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+    val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set(dummyUser.id), genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.removeSubjectFromPolicy(policy.id, dummyUser.id, samRequestContext), List(AccessRemoved))
+  }
+
+  it should "be called on addSubjectToPolicy" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+    val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.addSubjectToPolicy(policy.id, dummyUser.id, samRequestContext), List(AccessAdded))
+  }
+
+  it should "be called on setPublic" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+    val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.setPublic(policy.id, true, samRequestContext), List(AccessAdded))
+  }
+
+  it should "be called on overwritePolicy" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.overwritePolicy(
+      defaultResourceType,
+      genAccessPolicyName.sample.get,
+      resource.fullyQualifiedId,
+      AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRoleName)),
+      samRequestContext), List(AccessAdded))
+  }
+
+  it should "be called on overwritePolicyMembers" in {
+    policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
+    policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
+    val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
+
+    runAuditLogTest(service.overwritePolicyMembers(policy.id, Set(dummyUser.email), samRequestContext), List(AccessAdded))
+  }
+
+  /**
+    * Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures
+    * that `events` were appended. If tryTwice` run `test` again to make sure
+    * subsequent calls to no log more messages. Ends by tearing down the log appender.
+    */
+  private def runAuditLogTest(test: IO[_], events: List[AuditEventType], tryTwice: Boolean = true) = {
+    val auditLogger: Logger = LoggerFactory.getLogger(AuditLogger.getClass.getName).asInstanceOf[Logger]
+    val testAppender = new ListAppender[ILoggingEvent]()
+    val startingLevel = auditLogger.getLevel
+    auditLogger.setLevel(Level.INFO)
+    testAppender.start()
+
+    auditLogger.addAppender(testAppender)
+
+    try {
+      testAppender.list.size() shouldBe 0
+      test.unsafeRunSync()
+      testAppender.list.asScala.map(_.getFormattedMessage) should contain theSameElementsInOrderAs events.map(_.toString)
+      if (tryTwice) {
+        test.unsafeRunSync()
+        testAppender.list.asScala.map(_.getFormattedMessage) should contain theSameElementsInOrderAs events.map(_.toString)
+      }
+    } finally {
+      auditLogger.detachAppender(testAppender)
+      auditLogger.setLevel(startingLevel)
+    }
   }
 }
