@@ -11,7 +11,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.yaml.snakeyaml.Yaml
 
-import scala.jdk.CollectionConverters._
+  import scala.jdk.CollectionConverters._
 
 /**
   * These tests verify that the apis published in swagger/api-docs.yaml call the correct SamUserDirectives.

@@ -110,13 +110,13 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
         case p: AccessPolicy =>
           when(mockAccessPolicyDAO.loadPolicy(p.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
       }
-      when(mockDirectoryDAO.loadGroup(ge.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(BasicWorkbenchGroup(ge.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
+      when(mockDirectoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.unit)
       when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.pure(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
       subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id, samRequestContext)).thenReturn(IO.pure(Option(g.email))) }
-      when(mockDirectoryDAO.loadSubjectEmail(ge.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(ge.allUsersGroupEmail)))
+      when(mockDirectoryDAO.loadSubjectEmail(CloudExtensions.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(ge.allUsersGroupEmail)))
 
       val added = Seq(inSamSubGroup.email, WorkbenchEmail(inSamUserProxyEmail)) ++ (target match {
         case _: BasicWorkbenchGroup => Seq.empty
@@ -578,7 +578,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
 
-    val allUsersGroup = BasicWorkbenchGroup(NoExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"TEST_ALL_USERS_GROUP@test.firecloud.org"))
+    val allUsersGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"TEST_ALL_USERS_GROUP@test.firecloud.org"))
     val allUsersGroupMatcher = new ArgumentMatcher[BasicWorkbenchGroup] {
       override def matches(group: BasicWorkbenchGroup): Boolean = group.id == allUsersGroup.id
     }

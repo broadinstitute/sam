@@ -1,6 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import io.opencensus.trace.Span
+import org.broadinstitute.dsde.workbench.sam.audit.AuditInfo
+import org.broadinstitute.dsde.workbench.sam.model.SamUser
+
+import java.net.InetAddress
 
 /**
   * Contains any additional data for the request.
@@ -13,4 +17,8 @@ import io.opencensus.trace.Span
   *                   parent span.
   *
  */
-case class SamRequestContext (parentSpan: Option[Span])
+case class SamRequestContext(parentSpan: Option[Span] = None,
+                             clientIp: Option[InetAddress] = None,
+                             samUser: Option[SamUser] = None) {
+  def createAuditInfo: AuditInfo = AuditInfo(samUser.map(_.id), clientIp)
+}

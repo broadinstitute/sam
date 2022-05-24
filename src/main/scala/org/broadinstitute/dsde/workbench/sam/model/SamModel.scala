@@ -56,7 +56,7 @@ object SamJsonSupport {
 
   implicit val UserResourcesResponseFormat = jsonFormat6(UserResourcesResponse.apply)
 
-  implicit val PolicyIdentityFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
+  implicit val FullyQualifiedPolicyIdFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
 
   implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
 

@@ -20,11 +20,10 @@ import scala.concurrent.{ExecutionContext, Future}
 
 object CloudExtensions {
   val resourceTypeName = ResourceTypeName("cloud-extension")
+  val allUsersGroupName = WorkbenchGroupName("All_Users")
 }
 
 trait CloudExtensions {
-  val allUsersGroupName = WorkbenchGroupName("All_Users")
-
   // this is temporary until we get the admin group rolled into a sam group
   def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean]
 
@@ -104,7 +103,7 @@ trait NoExtensions extends CloudExtensions {
   override val adminEmailDomain = "test.firecloud.org"
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
-    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
+    val allUsersGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"))
     for {
       createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup

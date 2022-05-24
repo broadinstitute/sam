@@ -192,7 +192,7 @@ class GoogleGroupSyncMonitorActor(
 
   private def parseMessage(message: PubSubMessage): WorkbenchGroupIdentity =
     (Try {
-      import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.PolicyIdentityFormat
+      import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.FullyQualifiedPolicyIdFormat
       message.contents.parseJson.convertTo[FullyQualifiedPolicyId]
     } recover {
       case _: DeserializationException =>

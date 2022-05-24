@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.time.Instant
-
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
@@ -15,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
+import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext, groupByFirstInPair}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
 
@@ -1017,10 +1016,10 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     */
   private def listPoliciesWithMembers[T](resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName], samRequestContext: SamRequestContext)
                                         (unmarshaller: (
-                                          Map[PolicyInfo, List[(RoleResult, ActionResult)]],
-                                          Map[AccessPolicyName, List[GroupRecord]],
-                                          Map[AccessPolicyName, List[UserRecord]],
-                                          Map[AccessPolicyName, List[PolicyIdentifiers]]) => LazyList[T]): IO[LazyList[T]] = {
+                                          Map[PolicyInfo, Iterable[(RoleResult, ActionResult)]],
+                                          Map[AccessPolicyName, Iterable[GroupRecord]],
+                                          Map[AccessPolicyName, Iterable[UserRecord]],
+                                          Map[AccessPolicyName, Iterable[PolicyIdentifiers]]) => LazyList[T]): IO[LazyList[T]] = {
     readOnlyTransaction("listPoliciesWithMembers", samRequestContext)({ implicit session =>
       // query to get policies and all associated roles and actions
       val policyInfos = groupByFirstInPair(policyInfoQuery(resource, limitOnePolicy).list().apply())
@@ -1033,17 +1032,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       // convert query results to desired output
       unmarshaller(policyInfos, memberGroupsByPolicy, memberUsersByPolicy, memberPoliciesByPolicy)
     })
-  }
-
-  /**
-    * Takes a list of pairs and returns a map grouped by the first element with values of lists of the second
-    * @param list pairs to group by first element
-    * @tparam X type of first element in pair
-    * @tparam Y type of second element in pair
-    * @return map grouped by first element
-    */
-  private def groupByFirstInPair[X, Y](list: List[(X, Y)]): Map[X, List[Y]] = {
-    list.groupBy(_._1).map { case (key, pairs) => key -> pairs.map(_._2) }
   }
 
   private def policyInfoQuery(resource: FullyQualifiedResourceId, limitOnePolicy: Option[AccessPolicyName]) = {
@@ -1115,7 +1103,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     }
   }
 
-  private def unmarshalPolicyPermissions(permissionsResults: List[(RoleResult, ActionResult)]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
+  private def unmarshalPolicyPermissions(permissionsResults: Iterable[(RoleResult, ActionResult)]): (Set[ResourceRoleName], Set[ResourceAction], Set[AccessPolicyDescendantPermissions]) = {
     val (roleResults, actionResults) = permissionsResults.unzip
     val (descendantRoleResults, topLevelRoleResults) = roleResults.partition(_.descendantsOnly.getOrElse(false))
     val (descendantActionResults, topLevelActionResults) = actionResults.partition(_.descendantsOnly.getOrElse(false))
@@ -1350,10 +1338,10 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     })
   }
 
-  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Unit] = {
+  override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Boolean] = {
     serializableWriteTransaction("setPolicyIsPublic", samRequestContext)({ implicit session =>
       val policyPK = loadPolicyPK(policyId)
-      setPolicyIsPublicInternal(policyPK, isPublic)
+      setPolicyIsPublicInternal(policyPK, isPublic) > 0
     })
   }
 
@@ -1528,7 +1516,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
     samsql"""update ${PolicyTable as p}
               set ${policyTableColumn.public} = ${isPublic}
-              where ${p.id} = ${policyPK}""".update().apply()
+              where ${p.id} = ${policyPK}
+              and ${p.public} != ${isPublic}""".update().apply()
   }
 
   /**

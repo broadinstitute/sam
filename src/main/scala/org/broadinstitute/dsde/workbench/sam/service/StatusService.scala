@@ -43,7 +43,7 @@ class StatusService(
     if (ldapRegistrationDAO.getConnectionType() != ConnectionType.LDAP) {
       HealthMonitor.failedStatus("Connection of RegistrationDAO is not to OpenDJ")
     } else {
-      if (ldapRegistrationDAO.checkStatus(SamRequestContext(None)))
+      if (ldapRegistrationDAO.checkStatus(SamRequestContext()))
         HealthMonitor.OkStatus
       else
         HealthMonitor.failedStatus(s"LDAP database connection invalid or timed out checking")
@@ -55,7 +55,7 @@ class StatusService(
     if (directoryDAO.getConnectionType() != ConnectionType.Postgres) {
       HealthMonitor.failedStatus("Connection of RegistrationDAO is not to Postgres")
     } else {
-      if (directoryDAO.checkStatus(SamRequestContext(None)))
+      if (directoryDAO.checkStatus(SamRequestContext()))
         HealthMonitor.OkStatus
       else
         HealthMonitor.failedStatus("Postgres database connection invalid or timed out checking")
