@@ -14,7 +14,7 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved, AuditEventType, AuditLogger, ParentRemoved, ParentUpdated, ResourceCreated, ResourceDeleted}
+import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved, AuditEventType, AuditLogger, ResourceParentRemoved, ResourceParentUpdated, ResourceCreated, ResourceDeleted}
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
@@ -1675,7 +1675,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createResource(parent, samRequestContext).unsafeRunSync()
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.setResourceParent(resource.fullyQualifiedId, parent.fullyQualifiedId, samRequestContext), List(ParentUpdated), tryTwice = false)
+    runAuditLogTest(service.setResourceParent(resource.fullyQualifiedId, parent.fullyQualifiedId, samRequestContext), List(ResourceParentUpdated), tryTwice = false)
   }
 
   it should "be called on deleteResourceParent" in {
@@ -1685,7 +1685,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createResource(parent, samRequestContext).unsafeRunSync()
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.deleteResourceParent(resource.fullyQualifiedId, samRequestContext), List(ParentRemoved))
+    runAuditLogTest(service.deleteResourceParent(resource.fullyQualifiedId, samRequestContext), List(ResourceParentRemoved))
   }
 
   it should "be called on removeSubjectFromPolicy" in {

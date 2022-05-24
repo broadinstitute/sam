@@ -19,8 +19,8 @@ final case class ResourceChange(parent: FullyQualifiedResourceId)
 
 sealed trait ResourceEventType extends AuditEventType
 case object ResourceCreated extends ResourceEventType
-case object ParentUpdated extends ResourceEventType
-case object ParentRemoved extends ResourceEventType
+case object ResourceParentUpdated extends ResourceEventType
+case object ResourceParentRemoved extends ResourceEventType
 case object ResourceDeleted extends ResourceEventType
 
 final case class ResourceEvent(eventType: ResourceEventType,
@@ -61,8 +61,8 @@ object SamAuditModelJsonSupport {
   implicit val ResourceEventTypeFormat = new RootJsonFormat[ResourceEventType] {
     def read(obj: JsValue): ResourceEventType = obj match {
       case JsString("ResourceCreated") => ResourceCreated
-      case JsString("ParentUpdated") => ParentUpdated
-      case JsString("ParentRemoved") => ParentRemoved
+      case JsString("ResourceParentUpdated") => ResourceParentUpdated
+      case JsString("ResourceParentRemoved") => ResourceParentRemoved
       case JsString("ResourceDeleted") => ResourceDeleted
       case _                           => throw new DeserializationException(s"could not deserialize ResourceEventType: $obj")
     }

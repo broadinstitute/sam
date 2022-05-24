@@ -9,7 +9,7 @@ import com.google.common.annotations.VisibleForTesting
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChangeEvent, AccessRemoved, AuditLogger, ParentRemoved, ParentUpdated, ResourceChange, ResourceCreated, ResourceDeleted, ResourceEvent}
+import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChangeEvent, AccessRemoved, AuditLogger, ResourceParentRemoved, ResourceParentUpdated, ResourceChange, ResourceCreated, ResourceDeleted, ResourceEvent}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -605,7 +605,7 @@ class ResourceService(
             _ <- accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
             _ <- AuditLogger.logAuditEventIO(
               samRequestContext,
-              ResourceEvent(ParentUpdated, childResource, Option(ResourceChange(parentResource))))
+              ResourceEvent(ResourceParentUpdated, childResource, Option(ResourceChange(parentResource))))
           } yield ()
         case LoadResourceAuthDomainResult.Constrained(_) => IO.raiseError(
           new WorkbenchExceptionWithErrorReport(
@@ -629,7 +629,7 @@ class ResourceService(
           _ <- accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
           _ <- AuditLogger.logAuditEventIO(
             samRequestContext,
-            ResourceEvent(ParentRemoved, resourceId, Option(ResourceChange(oldParent))))
+            ResourceEvent(ResourceParentRemoved, resourceId, Option(ResourceChange(oldParent))))
         } yield ()
       }
     } yield maybeOldParent.isDefined
