@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import java.net.URI
-import java.util.UUID
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
@@ -11,26 +9,27 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
 import org.mockito.{ArgumentMatchers, Mockito}
 import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
-
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.mockito.ArgumentMatchers._
-import org.mockito.Mockito._
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatestplus.mockito.MockitoSugar
 
+import java.net.URI
+import java.util.UUID
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 /**
   * Created by dvoet on 6/27/17.
@@ -651,18 +650,17 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   "overwriteAdminPolicy" should "succeed with a valid request" in {
     val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
     val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
-    val newAdminUserId = WorkbenchUserId("i am an admin")
-    val newAdminUserEmail = WorkbenchEmail("test_user@test.firecloud.org")
+    val newAdminUser = Generator.genWorkbenchUserGoogle.sample.get
 
     service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
-    runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUserInfo, samRequestContext))
-    dirDAO.createUser(WorkbenchUser(newAdminUserId, None, newAdminUserEmail, None), samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUser, samRequestContext))
+    dirDAO.createUser(newAdminUser, samRequestContext).unsafeRunSync()
 
-    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(newAdminUserId), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(newAdminUser.id), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
     val newPolicy = AccessPolicy(
       FullyQualifiedPolicyId(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, public = false)
 
-    runAndWait(service.overwriteAdminPolicy(resourceTypeAdmin, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set(newAdminUserEmail), Set(ResourceAction("non_owner_action")), Set.empty, None), samRequestContext))
+    runAndWait(service.overwriteAdminPolicy(resourceTypeAdmin, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set(newAdminUser.email), Set(ResourceAction("non_owner_action")), Set.empty, None), samRequestContext))
 
     val policies = policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
 
@@ -674,7 +672,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
 
     service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
-    runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUserInfo, samRequestContext))
+    runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUser, samRequestContext))
 
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
     val newPolicy = AccessPolicy(

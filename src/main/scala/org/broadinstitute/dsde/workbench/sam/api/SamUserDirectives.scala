@@ -70,9 +70,9 @@ trait SamUserDirectives {
     }
   }
 
-  def asSamSuperAdmin(userInfo: UserInfo): Directive0 =
+  def asSamSuperAdmin(user: SamUser): Directive0 =
     Directives.mapInnerRoute { r =>
-      onSuccess(cloudExtensions.isSamSuperAdmin(userInfo.userEmail)) { isAdmin =>
+      onSuccess(cloudExtensions.isSamSuperAdmin(user.email)) { isAdmin =>
         if (!isAdmin) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You must be a super admin.")))
         else r
       }

@@ -2,18 +2,18 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, UserInfo, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchSubject, WorkbenchUser, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.{TestSupport, model}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{genGoogleSubjectId, googleServicesConfig}
+import cats.implicits.toTraverseOps
+import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport, model}
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, when}
 import org.scalatest.AppendedClues
@@ -25,14 +25,19 @@ import spray.json.DefaultJsonProtocol._
 import scala.concurrent.Future
 
 
-class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
+class AdminResourceRoutesSpec
+  extends AnyFlatSpec
+    with Matchers
+    with TestSupport
+    with ScalatestRouteTest
+    with AppendedClues
+    with MockitoSugar {
+
   implicit val errorReportSource = ErrorReportSource("sam")
 
-  val defaultUserInfo = UserInfo(OAuth2BearerToken("accessToken"), WorkbenchUserId("user1"), WorkbenchEmail("user1@example.com"), 0)
-
-  private val defaultTestUser =  WorkbenchUser(WorkbenchUserId("testuser"), genGoogleSubjectId(), WorkbenchEmail("testuser@foo.com"), None)
-
-  private val defaultTestUserTwo =  WorkbenchUser(WorkbenchUserId("testuser2"), genGoogleSubjectId(), WorkbenchEmail("testuser2@foo.com"), None)
+  val defaultSamUser = Generator.genWorkbenchUserGoogle.sample.get
+  val defaultTestUser =  Generator.genWorkbenchUserGoogle.sample.get
+  val defaultTestUserTwo = Generator.genWorkbenchUserGoogle.sample.get
 
   val defaultResourceType = ResourceType(
     ResourceTypeName("rt"),
@@ -55,9 +60,9 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType] = Map(defaultResourceType.name -> defaultResourceType, resourceTypeAdmin.name -> resourceTypeAdmin),
                               isSamSuperAdmin: Boolean,
-                              userInfo: UserInfo = defaultUserInfo): SamRoutes = {
-    val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes)
+                              user: SamUser = defaultSamUser): SamRoutes = {
     val directoryDAO = new MockDirectoryDAO()
+    val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
     val registrationDAO = new MockRegistrationDAO()
     val emailDomain = "example.com"
 
@@ -69,13 +74,12 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
     val cloudExtensions = new SamSuperAdminExtensions(isSamSuperAdmin)
 
-    val mockUserService = new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val mockUserService = new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty,
+      new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    )
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, cloudExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
-
-    mockUserService.createUser(WorkbenchUser(defaultUserInfo.userId, genGoogleSubjectId(), defaultUserInfo.userEmail, None), samRequestContext)
-
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, userInfo, directoryDAO, cloudExtensions)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, cloudExtensions)
   }
 
   "GET /api/resourceTypeAdmin/v1/resources/{resourceType}/{resourceId}/policies/" should "200 when successful" in {
@@ -150,7 +154,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
     when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
 
-    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -161,7 +165,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     when(samRoutes.resourceService.overwriteAdminPolicy(mockitoEq(resourceTypeAdmin), mockitoEq(defaultAdminPolicyName), mockitoEq(defaultResourceId), mockitoEq(defaultAccessPolicyMembership), any[SamRequestContext])).thenReturn(IO(null))
     when(samRoutes.resourceService.listResourcePolicies(mockitoEq(defaultResourceId), any[SamRequestContext])).thenReturn(IO(LazyList(defaultAccessPolicyResponseEntry)))
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${defaultAdminPolicyName.value}", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
@@ -176,7 +180,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
   it should "403 if user isn't a Sam super admin" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${defaultAdminPolicyName.value}", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -186,7 +190,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     val fakeResourceTypeName = ResourceTypeName("does_not_exist")
     when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies/${defaultAdminPolicyName.value}", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -196,7 +200,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
     when(samRoutes.resourceService.deletePolicy(mockitoEq(FullyQualifiedPolicyId(defaultResourceId, defaultAdminPolicyName)), any[SamRequestContext])).thenReturn(IO.unit)
 
-    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${defaultAdminPolicyName.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -204,7 +208,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
   it should "403 if user isn't a Sam super admin" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
 
-    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${defaultAdminPolicyName.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -214,7 +218,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     val fakeResourceTypeName = ResourceTypeName("does_not_exist")
     when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
 
-    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName.value}/policies/${defaultAdminPolicyName.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -225,7 +229,7 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     when(samRoutes.resourceService.deletePolicy(mockitoEq(FullyQualifiedPolicyId(defaultResourceId, fakePolicyName)), any[SamRequestContext]))
       .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
 
-    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/${fakePolicyName.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$fakePolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -253,15 +257,16 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
-
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${samRoutes.userInfo.userEmail.value}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -287,16 +292,17 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${samRoutes.userInfo.userEmail.value}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -322,18 +328,19 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO {
+          (defaultTestUser, defaultTestUserTwo).traverse(samRoutes.userService.createUser(_, samRequestContext))
+        })
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUserTwo, samRequestContext))
-
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUserTwo.email.value}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -359,16 +366,17 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultSamUser, samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUserTwo.email.value}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -394,16 +402,17 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUser.email.value}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUser.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -415,28 +424,12 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-//    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
 
     val resourceId = ResourceId("foo")
 
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
-
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext))
 
     Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUser.email.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
@@ -464,18 +457,19 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), samRoutes.user.id.asInstanceOf[WorkbenchSubject], samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), samRoutes.userInfo.userId.asInstanceOf[WorkbenchSubject], samRequestContext))
-
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${samRoutes.userInfo.userEmail.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -501,20 +495,20 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO {
+          (defaultTestUser, defaultTestUserTwo).traverse(samRoutes.userService.createUser(_, samRequestContext))
+        })
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUserTwo, samRequestContext))
-
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext))
-
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUserTwo.email.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -540,20 +534,20 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO {
+          (defaultTestUser, defaultTestUserTwo).traverse(samRoutes.userService.createUser(_, samRequestContext))
+        })
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUserTwo, samRequestContext))
-
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext))
-
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUserTwo.email.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -579,20 +573,17 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+      } yield ()
+    }
 
-//    runAndWait(samRoutes.userService.createUser(defaultTestUserTwo, samRequestContext))
-
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-//    runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext))
-
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUserTwo.email.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -618,20 +609,19 @@ class AdminResourceRoutesSpec extends AnyFlatSpec with Matchers with TestSupport
     )
 
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
-    runAndWait(samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.userInfo.userId), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext))
-
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO {
+          (defaultTestUser, defaultTestUserTwo).traverse(samRoutes.userService.createUser(_, samRequestContext))
+        })
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+      } yield ()
+    }
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUserTwo, samRequestContext))
-
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, UserInfo(OAuth2BearerToken("accessToken"), defaultTestUser.id, defaultTestUser.email, 0), samRequestContext))
-
-    //    runAndWait(samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext))
-
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUserTwo.email.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }

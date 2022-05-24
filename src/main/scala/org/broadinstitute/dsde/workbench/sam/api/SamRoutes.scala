@@ -63,6 +63,7 @@ abstract class SamRoutes(
             withActiveUser(samRequestContext) { samUser =>
               resourceRoutes(samUser, samRequestContext) ~
                 adminUserRoutes(samUser, samRequestContext) ~
+                adminResourceRoutes(samUser, samRequestContext) ~
                 extensionRoutes(samUser, samRequestContext) ~
                 groupRoutes(samUser, samRequestContext) ~
                 apiUserRoutes(samUser, samRequestContext)
