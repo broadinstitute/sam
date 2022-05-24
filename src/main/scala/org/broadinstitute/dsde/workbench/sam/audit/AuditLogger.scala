@@ -14,7 +14,7 @@ object AuditLogger extends LazyLogging {
 
   def logAuditEvent[T <: AuditEvent : JsonWriter](auditEvent: T, samRequestContext: SamRequestContext): Unit = {
     logger.whenInfoEnabled {
-      logger.info("auditEvent",
+      logger.info(auditEvent.eventType.toString,
         StructuredArguments.raw("eventDetails", auditEvent.toJson.compactPrint),
         StructuredArguments.raw("auditInfo", samRequestContext.createAuditInfo.toJson.compactPrint))
     }

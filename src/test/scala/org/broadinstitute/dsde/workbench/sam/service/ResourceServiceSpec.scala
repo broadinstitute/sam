@@ -14,7 +14,7 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved, AuditLogger}
+import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved, AuditEventType, AuditLogger, ParentRemoved, ParentUpdated, ResourceCreated, ResourceDeleted}
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
@@ -36,6 +36,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
 
 /**
   * Created by dvoet on 6/27/17.
@@ -1643,14 +1644,14 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(IO.fromFuture(IO(service.deleteResource(resource.fullyQualifiedId, samRequestContext))), tryTwice = false)
+    runAuditLogTest(IO.fromFuture(IO(service.deleteResource(resource.fullyQualifiedId, samRequestContext))), List(ResourceDeleted), tryTwice = false)
   }
 
   it should "be called on createResource" in {
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
 
-    runAuditLogTest(service.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext), logEventsPerCall = 2, tryTwice = false)
+    runAuditLogTest(service.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext), List(ResourceCreated, AccessAdded), tryTwice = false)
   }
 
   it should "be called on setResourceParent" in {
@@ -1660,7 +1661,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createResource(parent, samRequestContext).unsafeRunSync()
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.setResourceParent(resource.fullyQualifiedId, parent.fullyQualifiedId, samRequestContext), tryTwice = false)
+    runAuditLogTest(service.setResourceParent(resource.fullyQualifiedId, parent.fullyQualifiedId, samRequestContext), List(ParentUpdated), tryTwice = false)
   }
 
   it should "be called on deleteResourceParent" in {
@@ -1670,7 +1671,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createResource(parent, samRequestContext).unsafeRunSync()
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.deleteResourceParent(resource.fullyQualifiedId, samRequestContext))
+    runAuditLogTest(service.deleteResourceParent(resource.fullyQualifiedId, samRequestContext), List(ParentRemoved))
   }
 
   it should "be called on removeSubjectFromPolicy" in {
@@ -1679,7 +1680,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
     val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set(dummyUser.id), genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.removeSubjectFromPolicy(policy.id, dummyUser.id, samRequestContext))
+    runAuditLogTest(service.removeSubjectFromPolicy(policy.id, dummyUser.id, samRequestContext), List(AccessRemoved))
   }
 
   it should "be called on addSubjectToPolicy" in {
@@ -1688,7 +1689,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
     val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.addSubjectToPolicy(policy.id, dummyUser.id, samRequestContext))
+    runAuditLogTest(service.addSubjectToPolicy(policy.id, dummyUser.id, samRequestContext), List(AccessAdded))
   }
 
   it should "be called on setPublic" in {
@@ -1697,7 +1698,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
     val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.setPublic(policy.id, true, samRequestContext))
+    runAuditLogTest(service.setPublic(policy.id, true, samRequestContext), List(AccessAdded))
   }
 
   it should "be called on overwritePolicy" in {
@@ -1710,7 +1711,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       genAccessPolicyName.sample.get,
       resource.fullyQualifiedId,
       AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRoleName)),
-      samRequestContext))
+      samRequestContext), List(AccessAdded))
   }
 
   it should "be called on overwritePolicyMembers" in {
@@ -1719,7 +1720,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
     val policy = policyDAO.createPolicy(AccessPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, genAccessPolicyName.sample.get), Set.empty, genNonPetEmail.sample.get, Set(ownerRoleName), Set.empty, Set.empty, false), samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.overwritePolicyMembers(policy.id, Set(dummyUser.email), samRequestContext))
+    runAuditLogTest(service.overwritePolicyMembers(policy.id, Set(dummyUser.email), samRequestContext), List(AccessAdded))
   }
 
   /**
@@ -1727,7 +1728,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     * that `logEventsPerCall` events were appended. If `tryTwice` run `test` again to make sure
     * subsequent calls to no log more messages. Ends by tearing down the log appender.
     */
-  private def runAuditLogTest(test: IO[_], logEventsPerCall: Int = 1, tryTwice: Boolean = true) = {
+  private def runAuditLogTest(test: IO[_], events: List[AuditEventType], tryTwice: Boolean = true) = {
     val auditLogger: Logger = LoggerFactory.getLogger(AuditLogger.getClass.getName).asInstanceOf[Logger]
     val testAppender = new ListAppender[ILoggingEvent]()
     val startingLevel = auditLogger.getLevel
@@ -1739,10 +1740,10 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     try {
       testAppender.list.size() shouldBe 0
       test.unsafeRunSync()
-      testAppender.list.size() shouldBe logEventsPerCall
+      testAppender.list.asScala.map(_.getFormattedMessage) should contain theSameElementsInOrderAs events.map(_.toString)
       if (tryTwice) {
         test.unsafeRunSync()
-        testAppender.list.size() shouldBe logEventsPerCall
+        testAppender.list.asScala.map(_.getFormattedMessage) should contain theSameElementsInOrderAs events.map(_.toString)
       }
     } finally {
       auditLogger.detachAppender(testAppender)

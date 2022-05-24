@@ -6,21 +6,26 @@ import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsSt
 
 import java.net.InetAddress
 
-sealed trait AuditEvent
+sealed trait AuditEventType
+sealed trait AuditEvent {
+  val eventType: AuditEventType
+
+  override def toString: String = getClass.getSimpleName.split("\\$")(0)
+}
 
 final case class AuditInfo(userId: Option[WorkbenchUserId], clientIp: Option[InetAddress])
 
-final case class ResourceChange(parent: Option[FullyQualifiedResourceId])
+final case class ResourceChange(parent: FullyQualifiedResourceId)
 
-sealed trait ResourceEventType
+sealed trait ResourceEventType extends AuditEventType
 case object ResourceCreated extends ResourceEventType
-case object ResourceUpdated extends ResourceEventType
+case object ParentUpdated extends ResourceEventType
+case object ParentRemoved extends ResourceEventType
 case object ResourceDeleted extends ResourceEventType
 
 final case class ResourceEvent(eventType: ResourceEventType,
                                resource: FullyQualifiedResourceId,
-                               added: Option[ResourceChange] = None,
-                               removed: Option[ResourceChange] = None) extends AuditEvent
+                               changeDetails: Option[ResourceChange] = None) extends AuditEvent
 
 case class AccessChange(member: WorkbenchSubject,
                         roles: Option[Iterable[ResourceRoleName]],
@@ -28,7 +33,7 @@ case class AccessChange(member: WorkbenchSubject,
                         descendantRoles: Option[Map[ResourceTypeName, Iterable[ResourceRoleName]]],
                         descendantActions: Option[Map[ResourceTypeName, Iterable[ResourceAction]]])
 
-sealed trait AccessChangeEventType
+sealed trait AccessChangeEventType extends AuditEventType
 case object AccessAdded extends AccessChangeEventType
 case object AccessRemoved extends AccessChangeEventType
 
@@ -56,15 +61,16 @@ object SamAuditModelJsonSupport {
   implicit val ResourceEventTypeFormat = new RootJsonFormat[ResourceEventType] {
     def read(obj: JsValue): ResourceEventType = obj match {
       case JsString("ResourceCreated") => ResourceCreated
-      case JsString("ResourceUpdated") => ResourceUpdated
+      case JsString("ParentUpdated") => ParentUpdated
+      case JsString("ParentRemoved") => ParentRemoved
       case JsString("ResourceDeleted") => ResourceDeleted
       case _                           => throw new DeserializationException(s"could not deserialize ResourceEventType: $obj")
     }
 
-    def write(obj: ResourceEventType): JsValue = JsString(obj.getClass.getSimpleName.split("\\$")(0))
+    def write(obj: ResourceEventType): JsValue = JsString(obj.toString)
   }
 
-  implicit val ResourceEventFormat = jsonFormat4(ResourceEvent)
+  implicit val ResourceEventFormat = jsonFormat3(ResourceEvent)
 
   implicit val WorkbenchSubjectFormat = new RootJsonFormat[WorkbenchSubject] {
     val MEMBER_TYPE_FIELD = "memberType"
@@ -113,7 +119,7 @@ object SamAuditModelJsonSupport {
       case _                         => throw new DeserializationException(s"could not deserialize AccessChangeEventType: $obj")
     }
 
-    def write(obj: AccessChangeEventType): JsValue = JsString(obj.getClass.getSimpleName.split("\\$")(0))
+    def write(obj: AccessChangeEventType): JsValue = JsString(obj.toString)
   }
 
   implicit val PolicyEventFormat = jsonFormat3(AccessChangeEvent)
