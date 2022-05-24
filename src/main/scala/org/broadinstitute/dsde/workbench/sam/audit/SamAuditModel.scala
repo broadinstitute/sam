@@ -9,8 +9,6 @@ import java.net.InetAddress
 sealed trait AuditEventType
 sealed trait AuditEvent {
   val eventType: AuditEventType
-
-  override def toString: String = getClass.getSimpleName.split("\\$")(0)
 }
 
 final case class AuditInfo(userId: Option[WorkbenchUserId], clientIp: Option[InetAddress])
