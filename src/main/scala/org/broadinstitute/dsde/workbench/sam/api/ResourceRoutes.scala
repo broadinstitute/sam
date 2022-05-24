@@ -36,6 +36,14 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
     }
 
+  def withResourceTypeButNotAdmin(name: ResourceTypeName): Directive1[ResourceType] = {
+    if (name == SamResourceTypes.resourceTypeAdminName) {
+      failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${name.value} only accessible via admin routes")))
+    } else {
+      withResourceType(name)
+    }
+  }
+
   def resourceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
       pathEndOrSingleSlash {
@@ -46,7 +54,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     } ~
     (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
       pathPrefix(Segment) { resourceTypeName =>
-        withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+        withResourceTypeButNotAdmin(ResourceTypeName(resourceTypeName)) { resourceType =>
           pathEndOrSingleSlash {
             getUserPoliciesForResourceType(resourceType, samUser, samRequestContext) ~
               postResource(resourceType, samUser, samRequestContext)
@@ -123,7 +131,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     } ~ pathPrefix("resources" / "v2") {
       pathPrefix(Segment) { resourceTypeName =>
-        withResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+        withResourceTypeButNotAdmin(ResourceTypeName(resourceTypeName)) { resourceType =>
           pathEndOrSingleSlash {
             getUserResourcesOfType(resourceType, samUser, samRequestContext) ~
             postResource(resourceType, samUser, samRequestContext)
