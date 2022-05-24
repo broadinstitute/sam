@@ -116,7 +116,8 @@ class ResourceService(
           _ <- AuditLogger.logAuditEventIO(
             samRequestContext,
             ResourceEvent(ResourceCreated,
-              FullyQualifiedResourceId(resourceType.name, resourceId)))
+              FullyQualifiedResourceId(resourceType.name, resourceId),
+              parentOpt.map(ResourceChange)))
 
           changeEvents = createAccessChangeEvents(FullyQualifiedResourceId(resourceType.name, resourceId),
             LazyList.empty, persisted.accessPolicies)
@@ -508,9 +509,9 @@ class ResourceService(
     } yield policyChanged
   }
 
-  private def onPolicyUpdateIfChanged(policyIdentity: FullyQualifiedPolicyId, orginalPolicies: Iterable[AccessPolicy], samRequestContext: SamRequestContext)(policyChanged: Boolean) = {
+  private def onPolicyUpdateIfChanged(policyIdentity: FullyQualifiedPolicyId, originalPolicies: Iterable[AccessPolicy], samRequestContext: SamRequestContext)(policyChanged: Boolean) = {
     val maybeFireNotification = if (policyChanged) {
-      onPolicyUpdate(policyIdentity, orginalPolicies, samRequestContext)
+      onPolicyUpdate(policyIdentity, originalPolicies, samRequestContext)
     } else {
       IO.unit
     }

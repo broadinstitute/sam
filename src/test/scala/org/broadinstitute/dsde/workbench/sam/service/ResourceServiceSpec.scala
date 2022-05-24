@@ -1433,7 +1433,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     )).unsafeRunSync().size shouldBe 4
   }
 
-  "createAccessChangeEvents" should "show not changes for empty beforePolicies and afterPolicies" in {
+  "createAccessChangeEvents" should "not show changes for empty beforePolicies and afterPolicies" in {
     val resource = genResource.sample.get
     val beforePolicies = List.empty
     val afterPolicies = List.empty
@@ -1441,7 +1441,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result shouldBe empty
   }
 
-  it should "not show not changes for the same beforePolicies and afterPolicies" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+  it should "not show changes for the same beforePolicies and afterPolicies" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
     val resource = genResource.sample.get
     val beforePolicies = List(testPolicy)
     val afterPolicies = beforePolicies
@@ -1487,36 +1487,48 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     result should contain theSameElementsAs expectedChangeEvents
   }
 
-  it should "show changes for member addition to a policy" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject) { (testPolicy, testSubject) =>
-    val beforePolicies = List(testPolicy)
-    val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
-    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
-    val expectedChangeEvents = changesFromPolicy(testPolicy, testSubject, AccessAdded)
-    result should contain theSameElementsAs expectedChangeEvents
+  it should "show changes for member addition to a policy" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
+      val beforePolicies = List(testPolicy)
+      val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      val expectedChangeEvents = changesFromPolicy(testPolicy, testSubject, AccessAdded)
+      result should contain theSameElementsAs expectedChangeEvents
+    }
   }
 
-  it should "show changes for member removal from a policy" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject) { (testPolicy, testSubject) =>
-    val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
-    val afterPolicies = List(testPolicy)
-    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
-    val expectedChangeEvents = changesFromPolicy(testPolicy, testSubject, AccessRemoved)
-    result should contain theSameElementsAs expectedChangeEvents
+  private def genWorkbenchSubjectNotInPolicy(testPolicy: AccessPolicy) = {
+    genWorkbenchSubject.suchThat(!testPolicy.members.contains(_))
   }
 
-  it should "not show changes for redundant permission addition for member" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject) { (testPolicy, testSubject) =>
-    val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
-    val beforePolicies = List(addTestSubject(testPolicy), testPolicy)
-    val afterPolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
-    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
-    result shouldBe empty
+  it should "show changes for member removal from a policy" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
+      val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject)(testPolicy))
+      val afterPolicies = List(testPolicy)
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      val expectedChangeEvents = changesFromPolicy(testPolicy, testSubject, AccessRemoved)
+      result should contain theSameElementsAs expectedChangeEvents
+    }
   }
 
-  it should "not show changes for redundant permission removal for member" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject) { (testPolicy, testSubject) =>
-    val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
-    val beforePolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
-    val afterPolicies = List(addTestSubject(testPolicy), testPolicy)
-    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
-    result shouldBe empty
+  it should "not show changes for redundant permission addition for member" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
+      val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
+      val beforePolicies = List(addTestSubject(testPolicy), testPolicy)
+      val afterPolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      result shouldBe empty
+    }
+  }
+
+  it should "not show changes for redundant permission removal for member" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
+      val addTestSubject = AccessPolicy.members.modify(_ + testSubject)
+      val beforePolicies = List(addTestSubject(testPolicy), addTestSubject(testPolicy))
+      val afterPolicies = List(addTestSubject(testPolicy), testPolicy)
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      result shouldBe empty
+    }
   }
 
   it should "show changes for permission removal from a policy " in forAll(genPolicyWithDescendantPermissions, genResourceTypeName) { (testPolicy, descendantType) =>
@@ -1579,16 +1591,18 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     }
   }
 
-  it should "detect additions and removals at the same time" in forAll(genPolicyWithDescendantPermissions, genWorkbenchSubject, genWorkbenchSubject) { (testPolicy, testSubject1, testSubject2) =>
-    val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject1)(testPolicy))
-    val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject2)(testPolicy))
-    val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
-    val expectedRemoveEvents = changesFromPolicy(testPolicy, testSubject1, AccessRemoved)
-    val expectedAddEvents = changesFromPolicy(testPolicy, testSubject2, AccessAdded)
-    if (testSubject1 == testSubject2) {
-      result shouldBe empty
-    } else {
-      result should contain theSameElementsAs expectedAddEvents ++ expectedRemoveEvents
+  it should "detect additions and removals at the same time" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
+    forAll(genWorkbenchSubjectNotInPolicy(testPolicy), genWorkbenchSubjectNotInPolicy(testPolicy)) { (testSubject1, testSubject2) =>
+      val beforePolicies = List(AccessPolicy.members.modify(_ + testSubject1)(testPolicy))
+      val afterPolicies = List(AccessPolicy.members.modify(_ + testSubject2)(testPolicy))
+      val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
+      val expectedRemoveEvents = changesFromPolicy(testPolicy, testSubject1, AccessRemoved)
+      val expectedAddEvents = changesFromPolicy(testPolicy, testSubject2, AccessAdded)
+      if (testSubject1 == testSubject2) {
+        result shouldBe empty
+      } else {
+        result should contain theSameElementsAs expectedAddEvents ++ expectedRemoveEvents
+      }
     }
   }
 
@@ -1725,7 +1739,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
   /**
     * Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures
-    * that `logEventsPerCall` events were appended. If `tryTwice` run `test` again to make sure
+    * that `events` were appended. If tryTwice` run `test` again to make sure
     * subsequent calls to no log more messages. Ends by tearing down the log appender.
     */
   private def runAuditLogTest(test: IO[_], events: List[AuditEventType], tryTwice: Boolean = true) = {
