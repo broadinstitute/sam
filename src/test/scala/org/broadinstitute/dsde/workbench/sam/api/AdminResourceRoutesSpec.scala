@@ -95,7 +95,7 @@ class AdminResourceRoutesSpec
     when(samRoutes.resourceService.getResourceType(resourceType.name)).thenReturn(IO(Some(resourceType)))
     when(samRoutes.resourceService.listResourcePolicies(any[FullyQualifiedResourceId], any[SamRequestContext])).thenReturn(IO(LazyList[AccessPolicyResponseEntry]()))
 
-    Get(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId}/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
   }
