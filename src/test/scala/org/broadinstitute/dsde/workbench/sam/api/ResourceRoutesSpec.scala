@@ -764,6 +764,23 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     }
   }
 
+  it should "404 when the policy does not exist" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))),
+      ResourceRoleName("owner"))
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+
+    Put(s"/api/resource/${resourceType.name}/foo/policies/does-not-exist/memberEmails/${defaultTestUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
   it should "400 adding unknown subject" in {
     // differs from happy case in that we don't create user
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
