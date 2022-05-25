@@ -21,7 +21,8 @@ import scala.concurrent.ExecutionContext
 trait AdminResourceRoutes
   extends SecurityDirectives
     with SamRequestContextDirectives
-    with ResourceRoutes {
+    with SamUserDirectives
+    with SamModelDirectives {
 
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService

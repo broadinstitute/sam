@@ -6,14 +6,17 @@ import akka.http.scaladsl.server.Directives.{onSuccess, _}
 import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.service.UserService
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName, SamResourceTypes}
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 
 /**
   * Created by gpolumbo on 3/26/2018
   */
 trait SamModelDirectives {
   val userService: UserService
+  val resourceService: ResourceService
 
   def withSubject(email: WorkbenchEmail, samRequestContext: SamRequestContext): Directive1[WorkbenchSubject] =
     onSuccess(userService.getSubjectFromEmail(email, samRequestContext)).map {
@@ -29,5 +32,19 @@ trait SamModelDirectives {
         entity(unmarshaller).flatMap(e => provide(Some(e)))
       }
     }
+
+  def withResourceType(name: ResourceTypeName): Directive1[ResourceType] =
+    onSuccess(resourceService.getResourceType(name)).map {
+      case Some(resourceType) => resourceType
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
+    }
+
+  def withNonAdminResourceType(name: ResourceTypeName): Directive1[ResourceType] = {
+    if (name == SamResourceTypes.resourceTypeAdminName) {
+      failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${name.value} only accessible via admin routes")))
+    } else {
+      withResourceType(name)
+    }
+  }
 
 }

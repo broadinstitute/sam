@@ -5,12 +5,10 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
-import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives._
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -30,20 +28,6 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   val resourceService: ResourceService
   val liquibaseConfig: LiquibaseConfig
 
-  def withResourceType(name: ResourceTypeName): Directive1[ResourceType] =
-    onSuccess(resourceService.getResourceType(name)).map {
-      case Some(resourceType) => resourceType
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
-    }
-
-  def withResourceTypeButNotAdmin(name: ResourceTypeName): Directive1[ResourceType] = {
-    if (name == SamResourceTypes.resourceTypeAdminName) {
-      failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${name.value} only accessible via admin routes")))
-    } else {
-      withResourceType(name)
-    }
-  }
-
   def resourceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
       pathEndOrSingleSlash {
@@ -54,7 +38,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     } ~
     (pathPrefix("resources" / "v1") | pathPrefix("resource")) {
       pathPrefix(Segment) { resourceTypeName =>
-        withResourceTypeButNotAdmin(ResourceTypeName(resourceTypeName)) { resourceType =>
+        withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
           pathEndOrSingleSlash {
             getUserPoliciesForResourceType(resourceType, samUser, samRequestContext) ~
               postResource(resourceType, samUser, samRequestContext)
@@ -131,7 +115,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     } ~ pathPrefix("resources" / "v2") {
       pathPrefix(Segment) { resourceTypeName =>
-        withResourceTypeButNotAdmin(ResourceTypeName(resourceTypeName)) { resourceType =>
+        withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
           pathEndOrSingleSlash {
             getUserResourcesOfType(resourceType, samUser, samRequestContext) ~
             postResource(resourceType, samUser, samRequestContext)
