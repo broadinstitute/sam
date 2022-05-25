@@ -7,13 +7,14 @@ import cats.effect.IO
 import cats.implicits.toTraverseOps
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
-import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
+import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.{SamResourceActionPatterns, resourceTypeAdmin}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport, model}
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, when}
 import org.scalatest.AppendedClues
@@ -35,21 +36,16 @@ class AdminResourceRoutesSpec
 
   implicit val errorReportSource = ErrorReportSource("sam")
 
-  val defaultSamUser = Generator.genWorkbenchUserGoogle.sample.get
-  val defaultTestUser =  Generator.genWorkbenchUserGoogle.sample.get
-  val defaultTestUserTwo = Generator.genWorkbenchUserGoogle.sample.get
+  val firecloudAdmin = Generator.genFirecloudUser.sample.get
+  val broadUser = Generator.genBroadInstituteUser.sample.get
+
+  val testUser1 =  Generator.genWorkbenchUserGoogle.sample.get
+  val testUser2 = Generator.genWorkbenchUserGoogle.sample.get
 
   val defaultResourceType = ResourceType(
     ResourceTypeName("rt"),
     Set.empty,
-    Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.getParent))),
-    ResourceRoleName("owner")
-  )
-
-  val resourceTypeAdmin = ResourceType(
-    ResourceTypeName("resource_type_admin"),
-    Set.empty,
-    Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies))),
+    Set(ResourceRole(ResourceRoleName("owner"), Set(getParent))),
     ResourceRoleName("owner")
   )
 
@@ -58,9 +54,12 @@ class AdminResourceRoutesSpec
   val defaultResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))
   val defaultAccessPolicyResponseEntry = AccessPolicyResponseEntry(defaultAdminPolicyName, defaultAccessPolicyMembership, WorkbenchEmail("policy_email@example.com"))
 
-  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType] = Map(defaultResourceType.name -> defaultResourceType, resourceTypeAdmin.name -> resourceTypeAdmin),
+  private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType] = Map(
+                                defaultResourceType.name -> defaultResourceType,
+                                resourceTypeAdmin.name -> resourceTypeAdmin
+                              ),
                               isSamSuperAdmin: Boolean,
-                              user: SamUser = defaultSamUser): SamRoutes = {
+                              user: SamUser = firecloudAdmin): SamRoutes = {
     val directoryDAO = new MockDirectoryDAO()
     val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
     val registrationDAO = new MockRegistrationDAO()
@@ -80,7 +79,7 @@ class AdminResourceRoutesSpec
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, cloudExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
-    mockUserService.createUser(user, samRequestContext)
+    runAndWait(mockUserService.createUser(user, samRequestContext))
 
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, cloudExtensions)
   }
@@ -90,8 +89,8 @@ class AdminResourceRoutesSpec
     val resourceId = ResourceId("foo")
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
-      Set(SamResourceActionPatterns.adminReadPolicies, ResourceActionPattern(SamResourceActions.adminReadPolicies.value, "", false)),
-      Set(ResourceRole(ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value), Set(SamResourceActions.alterPolicies, SamResourceActions.adminReadPolicies))),
+      Set(SamResourceActionPatterns.adminReadPolicies, ResourceActionPattern(adminReadPolicies.value, "", false)),
+      Set(ResourceRole(ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value), Set(alterPolicies, adminReadPolicies))),
       ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value))
 
     when(samRoutes.policyEvaluatorService.hasPermissionOneOf(any[FullyQualifiedResourceId], any[Iterable[ResourceAction]], any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(true))
@@ -118,8 +117,8 @@ class AdminResourceRoutesSpec
     val resourceId = ResourceId("foo")
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
-      Set(SamResourceActionPatterns.adminReadPolicies, ResourceActionPattern(SamResourceActions.adminReadPolicies.value, "", false)),
-      Set(ResourceRole(ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value), Set(SamResourceActions.alterPolicies, SamResourceActions.adminReadPolicies))),
+      Set(SamResourceActionPatterns.adminReadPolicies, ResourceActionPattern(adminReadPolicies.value, "", false)),
+      Set(ResourceRole(ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value), Set(alterPolicies, adminReadPolicies))),
       ResourceRoleName(SamResourceTypes.resourceTypeAdminName.value))
 
     when(samRoutes.policyEvaluatorService.hasPermissionOneOf(any[FullyQualifiedResourceId], any[Iterable[ResourceAction]], any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(true))
@@ -245,27 +244,14 @@ class AdminResourceRoutesSpec
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = firecloudAdmin)
 
     val resourceId = ResourceId("foo")
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
-        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
       } yield ()
     }
 
@@ -279,29 +265,17 @@ class AdminResourceRoutesSpec
       ResourceTypeName("rt"),
       Set(),
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
-      ResourceRoleName("owner"))
-
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
       ResourceRoleName("owner")
     )
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val resourceId = ResourceId("foo")
+    val samRoutes = TestSamRoutes(resourceTypes = Map(resourceType.name -> resourceType), user = firecloudAdmin)
 
+    val resourceId = ResourceId("foo")
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
-        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_remove_member")), Set(adminRemoveMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
       } yield ()
     }
 
@@ -315,35 +289,23 @@ class AdminResourceRoutesSpec
       ResourceTypeName("rt"),
       Set(),
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
-      ResourceRoleName("owner"))
-
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
       ResourceRoleName("owner")
     )
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = firecloudAdmin)
     val resourceId = ResourceId("foo")
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO {
-          (defaultTestUser, defaultTestUserTwo).traverse(samRoutes.userService.createUser(_, samRequestContext))
+          List(testUser1, testUser2).traverse(samRoutes.userService.createUser(_, samRequestContext))
         })
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -355,31 +317,18 @@ class AdminResourceRoutesSpec
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = firecloudAdmin)
     val resourceId = ResourceId("foo")
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
-        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultSamUser, samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -391,50 +340,41 @@ class AdminResourceRoutesSpec
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = firecloudAdmin)
     val resourceId = ResourceId("foo")
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
-        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUser.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${testUser1.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
 
-  it should "error if policy does not exist" in {
+  it should "404 if policy does not exist" in {
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(),
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = firecloudAdmin)
     val resourceId = ResourceId("foo")
 
-    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
-    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext))
+    runAndWait {
+      for {
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
+      } yield ()
+    }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/${resourceId.value}/policies/${resourceType.ownerRoleName.value}/memberEmails/${defaultTestUser.email.value}") ~> samRoutes.route ~> check {
+    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/does-not-exist/memberEmails/${testUser1.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -446,29 +386,15 @@ class AdminResourceRoutesSpec
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val resourceId = ResourceId("foo")
 
-
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
-        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
-        _ <- samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), samRoutes.user.id.asInstanceOf[WorkbenchSubject], samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminRemoveMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
+        _ <- samRoutes.resourceService.addSubjectToPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), samRoutes.user.id.asInstanceOf[WorkbenchSubject], samRequestContext)
       } yield ()
     }
 
@@ -484,34 +410,21 @@ class AdminResourceRoutesSpec
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = firecloudAdmin)
     val resourceId = ResourceId("foo")
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO {
-          (defaultTestUser, defaultTestUserTwo).traverse(samRoutes.userService.createUser(_, samRequestContext))
+          List(testUser1, testUser2).traverse(samRoutes.userService.createUser(_, samRequestContext))
         })
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
-        _ <- samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext)
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
+        _ <- samRoutes.resourceService.addSubjectToPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), testUser2.id.asInstanceOf[WorkbenchSubject], samRequestContext)
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -523,34 +436,21 @@ class AdminResourceRoutesSpec
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = firecloudAdmin)
     val resourceId = ResourceId("foo")
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminRemoveMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO {
-          (defaultTestUser, defaultTestUserTwo).traverse(samRoutes.userService.createUser(_, samRequestContext))
+          List(testUser1, testUser2).traverse(samRoutes.userService.createUser(_, samRequestContext))
         })
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
-        _ <- samRoutes.resourceService.addSubjectToPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), defaultTestUserTwo.id.asInstanceOf[WorkbenchSubject], samRequestContext)
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
+        _ <- samRoutes.resourceService.addSubjectToPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceId), AccessPolicyName("owner")), testUser2.id.asInstanceOf[WorkbenchSubject], samRequestContext)
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -562,69 +462,43 @@ class AdminResourceRoutesSpec
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = firecloudAdmin)
     val resourceId = ResourceId("foo")
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
-        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(defaultTestUser, samRequestContext)))
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminRemoveMember), Set(), samRequestContext)
+        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
 
-  it should "complete successfully if a user does not have permissions on the policy" in {
+  it should "complete successfully when removing a user who does not have permissions on the policy" in {
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(),
       Set(ResourceRole(ResourceRoleName("owner"), Set())),
       ResourceRoleName("owner"))
 
-    val resourceTypeAdmin = ResourceType(
-      ResourceTypeName("resource_type_admin"),
-      Set(),
-      Set(
-        ResourceRole(ResourceRoleName("owner"), Set()),
-        ResourceRole(
-          ResourceRoleName("resource_type_admin"),
-          Set(SamResourceActions.adminRemoveMember, SamResourceActions.adminAddMember, SamResourceActions.adminReadPolicies)
-        )
-      ),
-      ResourceRoleName("owner")
-    )
-
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     val resourceId = ResourceId("foo")
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(SamResourceActions.adminRemoveMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value)), AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminRemoveMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO {
-          (defaultTestUser, defaultTestUserTwo).traverse(samRoutes.userService.createUser(_, samRequestContext))
+          List(testUser1, testUser2).traverse(samRoutes.userService.createUser(_, samRequestContext))
         })
-        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, defaultTestUser, samRequestContext)
+        _ <- samRoutes.resourceService.createResource(resourceType, resourceId, testUser1, samRequestContext)
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${defaultTestUserTwo.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resourceTypeAdmin/v1/resources/${resourceType.name}/$resourceId/policies/${resourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
