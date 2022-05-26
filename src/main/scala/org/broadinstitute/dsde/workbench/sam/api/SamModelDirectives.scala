@@ -45,7 +45,7 @@ trait SamModelDirectives {
       withResourceType(name) else
       failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(
         StatusCodes.BadRequest,
-        """You must use routes prefixed "/api/resourceTypeAdmin/v1/resourceTypes" to access policies on "resource_type_admin" resources."""
+        "Please use the admin resourceTypes routes to view and make changes to admin resource policies."
       )))
 
 }
