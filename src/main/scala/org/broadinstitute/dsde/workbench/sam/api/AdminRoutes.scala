@@ -3,7 +3,7 @@ package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.model.StatusCodes.{Created, NoContent, OK}
+import akka.http.scaladsl.model.StatusCodes.{Created, NoContent, OK, NotFound}
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directive0
 import akka.http.scaladsl.server.Directives._
@@ -44,13 +44,9 @@ trait AdminRoutes
       asWorkbenchAdmin(samUser) {
         path("email" / Segment) { email =>
           complete {
-            userService.getUserStatusFromEmail(WorkbenchEmail(email), samRequestContext).map { statusOption =>
-              statusOption
-                .map { status =>
-                  StatusCodes.OK -> Option(status)
-                }
-                .getOrElse(StatusCodes.NotFound -> None)
-            }
+            userService
+              .getUserStatusFromEmail(WorkbenchEmail(email), samRequestContext)
+              .map(status => (if (status.isDefined) OK else NotFound) -> status)
           }
         } ~
           pathPrefix(Segment) { userId =>
@@ -62,13 +58,9 @@ trait AdminRoutes
               } ~
                 get {
                   complete {
-                    userService.getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext).map { statusOption =>
-                      statusOption
-                        .map { status =>
-                          StatusCodes.OK -> Option(status)
-                        }
-                        .getOrElse(StatusCodes.NotFound -> None)
-                    }
+                    userService
+                      .getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext)
+                      .map(status => (if (status.isDefined) OK else NotFound) -> status)
                   }
                 }
             } ~
@@ -76,13 +68,9 @@ trait AdminRoutes
                 pathEndOrSingleSlash {
                   put {
                     complete {
-                      userService.enableUser(WorkbenchUserId(userId), samRequestContext).map { statusOption =>
-                        statusOption
-                          .map { status =>
-                            StatusCodes.OK -> Option(status)
-                          }
-                          .getOrElse(StatusCodes.NotFound -> None)
-                      }
+                      userService
+                        .enableUser(WorkbenchUserId(userId), samRequestContext)
+                        .map(status => (if (status.isDefined) OK else NotFound) -> status)
                     }
                   }
                 }
@@ -91,13 +79,9 @@ trait AdminRoutes
                 pathEndOrSingleSlash {
                   put {
                     complete {
-                      userService.disableUser(WorkbenchUserId(userId), samRequestContext).map { statusOption =>
-                        statusOption
-                          .map { status =>
-                            StatusCodes.OK -> Option(status)
-                          }
-                          .getOrElse(StatusCodes.NotFound -> None)
-                      }
+                      userService
+                        .disableUser(WorkbenchUserId(userId), samRequestContext)
+                        .map(status => (if (status.isDefined) OK else NotFound) -> status)
                     }
                   }
                 }
