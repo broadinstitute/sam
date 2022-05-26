@@ -4,12 +4,14 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives.{onSuccess, _}
 import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
+import cats.Applicative
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName, SamResourceTypes}
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
+import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 
 /**
   * Created by gpolumbo on 3/26/2018
@@ -39,12 +41,12 @@ trait SamModelDirectives {
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
     }
 
-  def withNonAdminResourceType(name: ResourceTypeName): Directive1[ResourceType] = {
-    if (name == SamResourceTypes.resourceTypeAdminName) {
-      failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${name.value} only accessible via admin routes")))
-    } else {
-      withResourceType(name)
-    }
-  }
+  def withNonAdminResourceType(name: ResourceTypeName): Directive1[ResourceType] =
+    if (name != resourceTypeAdminName)
+      withResourceType(name) else
+      failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(
+        StatusCodes.BadRequest,
+        """You must use routes prefixed "/api/resourceTypeAdmin/v1/resourceTypes" to access policies on "resource_type_admin" resources."""
+      )))
 
 }
