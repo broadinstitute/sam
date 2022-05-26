@@ -76,7 +76,7 @@ object TestSamRoutes {
         Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, SamResourceActions.setPublic)
       ),
       ResourceRole(
-        ResourceRoleName("resource_type_admin"),
+        ResourceRoleName("admin"),
         Set(adminReadPolicies, adminAddMember, adminRemoveMember)
       )
     ),
