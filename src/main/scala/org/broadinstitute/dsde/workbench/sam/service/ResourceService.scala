@@ -519,6 +519,7 @@ class ResourceService(
       case _ =>
         for {
           originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
+          _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
           policyChanged <- directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext)
           _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
         } yield policyChanged
@@ -528,10 +529,19 @@ class ResourceService(
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     for {
       originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
+      _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
       policyChanged <- directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
       _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
     } yield policyChanged
   }
+
+  def failWhenPolicyNotExists(policies: Iterable[AccessPolicy], policyId: FullyQualifiedPolicyId): IO[Unit] =
+    IO.raiseUnless(policies.exists(_.id == policyId)) {
+      new WorkbenchExceptionWithErrorReport(ErrorReport(
+        StatusCodes.NotFound,
+        s"""No policy matching "${policyId.accessPolicyName}" found on resource "${policyId.resource}"."""
+      ))
+    }
 
   private def onPolicyUpdateIfChanged(policyIdentity: FullyQualifiedPolicyId, originalPolicies: Iterable[AccessPolicy], samRequestContext: SamRequestContext)(policyChanged: Boolean) = {
     val maybeFireNotification = if (policyChanged) {

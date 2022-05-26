@@ -137,7 +137,9 @@ object SamResourceTypes {
 
 @Lenses final case class ResourceTypeName(value: String) extends ValueObject
 
-@Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
+@Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId) {
+  override def toString: String = s"$resourceTypeName/$resourceId"
+}
 @Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[AccessPolicy] = Set.empty, parent: Option[FullyQualifiedResourceId] = None) {
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }
