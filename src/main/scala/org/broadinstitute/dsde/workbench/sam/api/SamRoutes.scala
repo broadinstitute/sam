@@ -64,7 +64,6 @@ abstract class SamRoutes(
               val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
               resourceRoutes(samUser, samRequestContextWithUser) ~
                 adminRoutes(samUser, samRequestContextWithUser) ~
-                adminUserRoutes(samUser, samRequestContextWithUser) ~
                 extensionRoutes(samUser, samRequestContextWithUser) ~
                 groupRoutes(samUser, samRequestContextWithUser) ~
                 apiUserRoutes(samUser, samRequestContextWithUser)

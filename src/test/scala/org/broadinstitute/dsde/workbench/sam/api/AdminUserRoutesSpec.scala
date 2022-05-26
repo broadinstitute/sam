@@ -21,58 +21,58 @@ import scala.concurrent.Future
 
 class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
 
-  "GET /admin/user/{userSubjectId}" should "get the user status of a user (as an admin)" in {
+  "GET /admin/v1/user/{userSubjectId}" should "get the user status of a user (as an admin)" in {
     val (user, getRoutes) = setUpAdminTest()
-    Get(s"/api/admin/user/${user.id}") ~> getRoutes.route ~> check {
+    Get(s"/api/admin/v1/user/${user.id}") ~> getRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }
 
   it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
-    Get(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/user/$defaultUserId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
-  "GET /admin/user/email/{email}" should "get the user status of a user by email (as an admin)" in {
+  "GET /admin/v1/user/email/{email}" should "get the user status of a user by email (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Get(s"/api/admin/user/email/${user.email}") ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/v1/user/email/${user.email}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     }
   }
 
   it should "return 404 for an unknown user by email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
-    Get(s"/api/admin/user/email/XXX${defaultUserEmail}XXX") ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/v1/user/email/XXX${defaultUserEmail}XXX") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "return 404 for an group's email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
-    Get(s"/api/admin/user/email/fc-admins@dev.test.firecloud.org") ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/v1/user/email/fc-admins@dev.test.firecloud.org") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
-    Get(s"/api/admin/user/email/$defaultUserEmail") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/user/email/$defaultUserEmail") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
-  "PUT /admin/user/{userSubjectId}/(re|dis)able" should "disable and then re-enable a user (as an admin)" in {
+  "PUT /admin/v1/user/{userSubjectId}/(re|dis)able" should "disable and then re-enable a user (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Put(s"/api/admin/user/${user.id}/disable") ~> adminRoutes.route ~> check {
+    Put(s"/api/admin/v1/user/${user.id}/disable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails({
         user.id
       }, user.email), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true))
     }
 
-    Put(s"/api/admin/user/${user.id}/enable") ~> adminRoutes.route ~> check {
+    Put(s"/api/admin/v1/user/${user.id}/enable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails({
         user.id
@@ -81,43 +81,43 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
   }
 
   it should "not allow a non-admin to enable or disable a user" in withAdminRoutes { (samRoutes, _) =>
-    Put(s"/api/admin/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
 
-    Put(s"/api/admin/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
-  "DELETE /admin/user/{userSubjectId}" should "delete a user (as an admin)" in {
+  "DELETE /admin/v1/user/{userSubjectId}" should "delete a user (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Delete(s"/api/admin/user/${user.id}") ~> adminRoutes.route ~> check {
+    Delete(s"/api/admin/v1/user/${user.id}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
 
-    Get(s"/api/admin/user/${user.id}") ~> adminRoutes.route ~> check {
+    Get(s"/api/admin/v1/user/${user.id}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "not allow a non-admin to delete a user" in withAdminRoutes { (samRoutes, _) =>
-    Delete(s"/api/admin/user/$defaultUserId") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/user/$defaultUserId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
-  "DELETE /admin/user/{userSubjectId}/petServiceAccount/{project}" should "delete a pet (as an admin)" in {
+  "DELETE /admin/v1/user/{userSubjectId}/petServiceAccount/{project}" should "delete a pet (as an admin)" in {
     val (user, adminRoutes) = setUpAdminTest()
 
-    Delete(s"/api/admin/user/${user.id}/petServiceAccount/myproject") ~> adminRoutes.route ~> check {
+    Delete(s"/api/admin/v1/user/${user.id}/petServiceAccount/myproject") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
 
   it should "not allow a non-admin to delete a pet" in withAdminRoutes { (samRoutes, _) =>
-    Delete(s"/api/admin/user/$defaultUserId/petServiceAccount/myproject") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/user/$defaultUserId/petServiceAccount/myproject") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }

@@ -120,8 +120,8 @@ trait AdminRoutes
 
   def adminResourceTypesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("resourceTypes" / Segment / "policies") { resourceTypeNameToAdminister =>
-      withNonAdminResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
-        asSamSuperAdmin(user) {
+      asSamSuperAdmin(user) {
+        withNonAdminResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
           val resource = FullyQualifiedResourceId(resourceTypeAdminName, ResourceId(resourceTypeToAdminister.name.value))
           pathEndOrSingleSlash {
             get {
