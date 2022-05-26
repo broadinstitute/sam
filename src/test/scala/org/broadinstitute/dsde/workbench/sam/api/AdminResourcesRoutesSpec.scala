@@ -90,7 +90,7 @@ class AdminResourcesRoutesSpec
     val resourceId = ResourceId("foo")
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
         _ <- samRoutes.resourceService.createResource(defaultResourceType, resourceId, testUser1, samRequestContext)
       } yield ()
@@ -107,7 +107,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_remove_member")), Set(adminRemoveMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_remove_member")), Set(adminRemoveMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
         _ <- samRoutes.resourceService.createResource(defaultResourceType, resourceId, testUser1, samRequestContext)
       } yield ()
@@ -124,7 +124,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO {
           List(testUser1, testUser2).traverse(samRoutes.userService.createUser(_, samRequestContext))
         })
@@ -142,7 +142,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
       } yield ()
     }
@@ -158,7 +158,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
         _ <- samRoutes.resourceService.createResource(defaultResourceType, resourceId, testUser1, samRequestContext)
       } yield ()
@@ -175,7 +175,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
         _ <- samRoutes.resourceService.createResource(defaultResourceType, resourceId, testUser1, samRequestContext)
       } yield ()
@@ -192,7 +192,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
         _ <- samRoutes.resourceService.createResource(defaultResourceType, resourceId, testUser1, samRequestContext)
       } yield ()
@@ -209,7 +209,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminRemoveMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin")), Set(adminRemoveMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
         _ <- samRoutes.resourceService.createResource(defaultResourceType, resourceId, testUser1, samRequestContext)
         _ <- samRoutes.resourceService.addSubjectToPolicy(FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, resourceId), AccessPolicyName("owner")), samRoutes.user.id.asInstanceOf[WorkbenchSubject], samRequestContext)
@@ -227,7 +227,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin_add_member")), Set(adminAddMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO {
           List(testUser1, testUser2).traverse(samRoutes.userService.createUser(_, samRequestContext))
         })
@@ -247,7 +247,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminRemoveMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin")), Set(adminRemoveMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO {
           List(testUser1, testUser2).traverse(samRoutes.userService.createUser(_, samRequestContext))
         })
@@ -267,7 +267,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminRemoveMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin")), Set(adminRemoveMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
         _ <- samRoutes.resourceService.createResource(defaultResourceType, resourceId, testUser1, samRequestContext)
       } yield ()
@@ -284,7 +284,7 @@ class AdminResourcesRoutesSpec
 
     runAndWait {
       for {
-        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("resource_type_admin")), Set(samRoutes.user.id), Set(ResourceRoleName("resource_type_admin")), Set(adminRemoveMember), Set(), samRequestContext)
+        _ <- samRoutes.resourceService.createPolicy(FullyQualifiedPolicyId(defaultAdminResourceId, AccessPolicyName("admin")), Set(samRoutes.user.id), Set(ResourceRoleName("admin")), Set(adminRemoveMember), Set(), samRequestContext)
         _ <- IO.fromFuture(IO {
           List(testUser1, testUser2).traverse(samRoutes.userService.createUser(_, samRequestContext))
         })
