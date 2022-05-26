@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, Go
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
@@ -177,7 +178,9 @@ object Boot extends IOApp with LazyLogging {
             resourceTypeMap,
             lock,
             newGoogleStorage,
-            googleKmsInterpreter)
+            googleKmsInterpreter,
+            appConfig.adminConfig
+          )
           val googleGroupSynchronizer =
             new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(
               backgroundLdapExecutionContext)
@@ -217,7 +220,8 @@ object Boot extends IOApp with LazyLogging {
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
       distributedLock: DistributedLock[IO],
       googleStorageNew: GoogleStorageService[IO],
-      googleKms: GoogleKmsService[IO])(implicit actorSystem: ActorSystem): GoogleExtensions = {
+      googleKms: GoogleKmsService[IO],
+      adminConfig: AdminConfig)(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
     val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
       case None =>
@@ -300,7 +304,8 @@ object Boot extends IOApp with LazyLogging {
       googleKms,
       config.googleServicesConfig,
       config.petServiceAccountConfig,
-      resourceTypeMap
+      resourceTypeMap,
+      adminConfig.superAdminsGroup
     )
   }
 

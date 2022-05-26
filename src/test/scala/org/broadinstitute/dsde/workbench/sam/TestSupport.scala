@@ -74,7 +74,7 @@ object TestSupport extends TestSupport {
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val directoryConfig = config.as[DirectoryConfig]("directory")
   val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
-  val adminEmailDomains = config.as[AdminConfig]("admin").adminEmailDomains
+  val adminConfig = config.as[AdminConfig]("admin")
 
   val dirURI = new URI(directoryConfig.directoryUrl)
 
@@ -123,7 +123,9 @@ object TestSupport extends TestSupport {
       FakeGoogleKmsInterpreter,
       googleServicesConfig,
       petServiceAccountConfig,
-      resourceTypes))
+      resourceTypes,
+      adminConfig.superAdminsGroup
+    ))
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
     val mockResourceService = resourceServiceOpt.getOrElse(new ResourceService(
       resourceTypes,
@@ -132,7 +134,7 @@ object TestSupport extends TestSupport {
       directoryDAO,
       googleExt,
       emailDomain = "example.com",
-      adminEmailDomains
+      adminConfig.adminEmailDomains
     ))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))

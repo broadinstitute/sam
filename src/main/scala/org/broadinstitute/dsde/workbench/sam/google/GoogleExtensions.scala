@@ -61,7 +61,8 @@ class GoogleExtensions(
     val googleKms: GoogleKmsService[IO],
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
-    val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
+    val resourceTypes: Map[ResourceTypeName, ResourceType],
+    val superAdminsGroup: WorkbenchEmail)(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
     extends LazyLogging
     with FutureSupport
     with CloudExtensions
@@ -101,7 +102,7 @@ class GoogleExtensions(
     }
 
   override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
-    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"sam-super-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith {
+    googleDirectoryDAO.isGroupMember(superAdminsGroup, memberEmail) recoverWith {
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
