@@ -4,14 +4,13 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives.{onSuccess, _}
 import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
-import cats.Applicative
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName, SamResourceTypes}
+import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
-import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 
 /**
   * Created by gpolumbo on 3/26/2018

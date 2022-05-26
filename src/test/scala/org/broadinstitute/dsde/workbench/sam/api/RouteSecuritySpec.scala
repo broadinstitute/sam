@@ -61,7 +61,7 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
 
       createRequest(path, method) ~> samRoutes.route ~> check {
         withClue(s"$method $path did not call withWorkbenchAdmin") {
-          Mockito.verify(samRoutes, new AtLeast(1)).withWorkbenchAdmin(any[SamUser])
+          Mockito.verify(samRoutes, new AtLeast(1)).asWorkbenchAdmin(any[SamUser])
         }
       }
     }

@@ -47,7 +47,7 @@ trait SamUserDirectives {
 
   def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
-  def withWorkbenchAdmin(samUser: SamUser): Directive0 =
+  def asWorkbenchAdmin(samUser: SamUser): Directive0 =
     Directives.mapInnerRoute { r =>
       onSuccess(cloudExtensions.isWorkbenchAdmin(samUser.email)) { isAdmin =>
         if (!isAdmin) Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You must be an admin.")))
