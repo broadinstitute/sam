@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.Applicative
+import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.implicits._
@@ -9,11 +10,11 @@ import com.google.common.annotations.VisibleForTesting
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChangeEvent, AccessRemoved, AuditLogger, ResourceParentRemoved, ResourceParentUpdated, ResourceChange, ResourceCreated, ResourceDeleted, ResourceEvent}
+import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
@@ -27,7 +28,8 @@ class ResourceService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
-    val emailDomain: String)(implicit val executionContext: ExecutionContext)
+    val emailDomain: String,
+    private val adminEmailDomains: Set[String])(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
 
   private[service] case class ValidatableAccessPolicy(
@@ -315,34 +317,27 @@ class ResourceService(
 
   /**
     * Overwrites an existing admin policy, saves a new one if it doesn't exist yet.  */
-  def overwriteAdminPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
-    for {
-      _ <- validateAdminPolicyMembership(policyMembership).map {
-        case Some(errorReport) =>
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
-        case None =>
-      }
-      overwrittenPolicy <- overwritePolicy(resourceType, policyName, resource, policyMembership, samRequestContext)
-    } yield {
-      overwrittenPolicy
-    }
-  }
+  def overwriteAdminPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] =
+    failUnlessAllAdminEmailDomainsWhitelisted(policyMembership) *>
+      overwritePolicy(resourceType, policyName, resource, policyMembership, samRequestContext)
 
- /** Performs additional verification that members are only users in the correct email domain */
-  def validateAdminPolicyMembership(membership: AccessPolicyMembership): IO[Option[ErrorReport]] = IO {
-    val invalidEmails = membership.memberEmails.filterNot { email =>
-      email.value.endsWith(s"@${cloudExtensions.adminEmailDomain}")
-    }
-    if (invalidEmails.nonEmpty) {
-      val emailCauses = invalidEmails.map { workbenchEmail =>
-        ErrorReport(s"Invalid admin member email: ${workbenchEmail}")
-      }
-      Some(ErrorReport(s"You have specified at least one invalid admin member email", emailCauses.toSeq))
-    } else None
-  }
+  /** Performs additional verification that members are only users in the correct email domain */
+  def failUnlessAllAdminEmailDomainsWhitelisted(membership: AccessPolicyMembership): IO[Unit] =
+    NonEmptyList
+      .fromList(membership.memberEmails.toList.filterNot { email =>
+        adminEmailDomains contains email.value.split("@").last
+      })
+      .traverse_(invalidEmails => IO.raiseError {
+        new WorkbenchExceptionWithErrorReport(ErrorReport(
+          StatusCodes.BadRequest,
+          s"You have specified at least one invalid admin member email",
+          invalidEmails.toList.map(email => ErrorReport(s"Invalid admin member email: $email"))
+        ))
+      })
 
   /**
     * Overwrites an existing policy's membership (keyed by resourceType/resourceId/policyName) if it exists
+    *
     * @param policyId
     * @param membersList
     * @return

@@ -1,8 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import java.net.URI
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.{Date, GregorianCalendar, UUID}
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
@@ -20,8 +17,8 @@ import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
-import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, _}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
@@ -37,6 +34,9 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
 import org.scalatestplus.mockito.MockitoSugar
 
+import java.net.URI
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.{Date, GregorianCalendar, UUID}
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -76,16 +76,16 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val inBothSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set.empty, WorkbenchEmail("inBothSubGroup@example.com"))
 
     val inSamUserId = WorkbenchUserId("inSamUser")
-    val inSamUserProxyEmail = s"PROXY_inSamUser@${googleServicesConfig.appsSubdomain}"
+    val inSamUserProxyEmail = s"PROXY_inSamUser@${googleServicesConfig.appsDomain}"
 
     val inGoogleUserId = WorkbenchUserId("inGoogleUser")
-    val inGoogleUserProxyEmail = s"PROXY_inGoogleUser@${googleServicesConfig.appsSubdomain}"
+    val inGoogleUserProxyEmail = s"PROXY_inGoogleUser@${googleServicesConfig.appsDomain}"
 
     val inBothUserId = WorkbenchUserId("inBothUser")
-    val inBothUserProxyEmail = s"PROXY_inBothUser@${googleServicesConfig.appsSubdomain}"
+    val inBothUserProxyEmail = s"PROXY_inBothUser@${googleServicesConfig.appsDomain}"
 
     val addError = WorkbenchUserId("addError")
-    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsSubdomain}"
+    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsDomain}"
 
     val removeError = "removeError@foo.bar"
 
@@ -155,30 +155,30 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   it should "sync the intersection group if the policy is constrainable" in {
     // In both the policy and the auth domain, will be added to Google Group
     val intersectionSamUserId = WorkbenchUserId("intersectionSamUser")
-    val intersectionSamUserProxyEmail = s"PROXY_intersectionSamUser@${googleServicesConfig.appsSubdomain}"
+    val intersectionSamUserProxyEmail = s"PROXY_intersectionSamUser@${googleServicesConfig.appsDomain}"
 
     // In only the policy, not the auth domain, will not be synced
     val policyOnlySamUserId = WorkbenchUserId("policyOnlySamUser")
 
     // Currently synced with Google, but in neither the policy nor the auth domain, so will be removed from Google Group
-    val unauthorizedGoogleUserProxyEmail = s"PROXY_unauthorizedGoogleUser@${googleServicesConfig.appsSubdomain}"
+    val unauthorizedGoogleUserProxyEmail = s"PROXY_unauthorizedGoogleUser@${googleServicesConfig.appsDomain}"
 
     // Currently synced with Google and in policy and auth domain, will remain in Google Group
     val authorizedGoogleUserId = WorkbenchUserId("authorizedGoogleUser")
-    val authorizedGoogleUserProxyEmail = s"PROXY_authorizedGoogleUser@${googleServicesConfig.appsSubdomain}"
+    val authorizedGoogleUserProxyEmail = s"PROXY_authorizedGoogleUser@${googleServicesConfig.appsDomain}"
 
     val addError = WorkbenchUserId("addError")
-    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsSubdomain}"
+    val addErrorProxyEmail = s"PROXY_addError@${googleServicesConfig.appsDomain}"
 
     val removeError = "removeError@foo.bar"
 
     val subPolicyOnlySamGroupUserId = WorkbenchUserId("policySamSubUser")
 
     val subIntersectionSamGroupUserId = WorkbenchUserId("intersectionSamSubUser")
-    val subIntersectionSamGroupUserProxyEmail = s"PROXY_intersectionSamSubUser@${googleServicesConfig.appsSubdomain}"
+    val subIntersectionSamGroupUserProxyEmail = s"PROXY_intersectionSamSubUser@${googleServicesConfig.appsDomain}"
 
     val subAuthorizedGoogleGroupUserId = WorkbenchUserId("authorizedGoogleSubUser")
-    val subAuthorizedGoogleGroupUserProxyEmail = s"PROXY_authorizedGoogleSubUser@${googleServicesConfig.appsSubdomain}"
+    val subAuthorizedGoogleGroupUserProxyEmail = s"PROXY_authorizedGoogleSubUser@${googleServicesConfig.appsDomain}"
 
     val policyOnlySamSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inSamSubGroup"), Set(subPolicyOnlySamGroupUserId), WorkbenchEmail("inSamSubGroup@example.com"))
     val intersectionSamSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inGoogleSubGroup"), Set(subIntersectionSamGroupUserId), WorkbenchEmail("inGoogleSubGroup@example.com"))
@@ -527,7 +527,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val ge = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mockRegistrationDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGoogleNotificationPubSubDAO, mockGoogleGroupSyncPubSubDAO, mockGoogleDisableUsersPubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, FakeGoogleKmsInterpreter, googleServicesConfig, petServiceAccountConfig, configResourceTypes)
 
-    val app = SamApplication(new UserService(mockDirectoryDAO, ge, mockRegistrationDAO, Seq.empty, new TosService(mockDirectoryDAO, mockRegistrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com"), null,
+    val app = SamApplication(new UserService(mockDirectoryDAO, ge, mockRegistrationDAO, Seq.empty, new TosService(mockDirectoryDAO, mockRegistrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com", Set.empty), null,
       new TosService(mockDirectoryDAO, mockRegistrationDAO, "example.com", TestSupport.tosConfig))
     val resourceAndPolicyName = FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
 
@@ -552,7 +552,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   it should "include username, subject ID, and apps domain in proxy group email" in {
     val appsDomain = "test.cloudfire.org"
 
-    val config = googleServicesConfig.copy(appsSubdomain = appsDomain)
+    val config = googleServicesConfig.copy(appsDomain = appsDomain)
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, null, null, null, null, null, null, null, null, null, null, null, null, null, config, null, configResourceTypes)
 
     val userId = UserService.genWorkbenchUserId(System.currentTimeMillis())
@@ -561,7 +561,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   }
 
   it should "truncate username if proxy group email would otherwise be too long" in {
-    val config = googleServicesConfig.copy(appsSubdomain = "test.cloudfire.org")
+    val config = googleServicesConfig.copy(appsDomain = "test.cloudfire.org")
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, null, null, null, null, null, null, null, null, null, null, null, null, null, config, null, configResourceTypes)
 
     val userId = UserService.genWorkbenchUserId(System.currentTimeMillis())
@@ -849,7 +849,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val registrationDAO = newRegistrationDAO()
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, dirDAO, registrationDAO, policyDAO, null, null, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, constrainableResourceTypes)
     val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
-    val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
     val managedGroupService = new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
 
     constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()

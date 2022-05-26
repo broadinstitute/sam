@@ -1,23 +1,23 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import java.net.URI
-import java.util.UUID
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import cats.implicits._
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest._
-
-import scala.concurrent.ExecutionContext.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import java.net.URI
+import java.util.UUID
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
   val dirURI = new URI(directoryConfig.directoryUrl)
@@ -99,7 +99,8 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
     policyDAO,
     dirDAO,
     NoExtensions,
-    emailDomain
+    emailDomain,
+    Set.empty
   )
 
   private val constrainableResourceTypes = Map(
@@ -112,7 +113,9 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
     policyDAO,
     dirDAO,
     NoExtensions,
-    emailDomain)
+    emailDomain,
+    Set.empty
+  )
 
   val managedGroupService = new ManagedGroupService(
     constrainableService,

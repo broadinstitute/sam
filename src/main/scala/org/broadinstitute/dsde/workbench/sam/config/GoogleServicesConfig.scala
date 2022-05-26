@@ -1,13 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import com.typesafe.config.ConfigRenderOptions
+import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
+import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject}
-import net.ceedubs.ficus.Ficus._
-import AppConfig.nonEmptyListReader
-import com.typesafe.config.ConfigRenderOptions
-import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.nonEmptyListReader
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -15,26 +15,25 @@ import scala.concurrent.duration.FiniteDuration
   * Created by mbemis on 8/17/17.
   */
 final case class GoogleServicesConfig(
-                                       appName: String,
-                                       appsDomain: String,
-                                       appsSubdomain: String,
-                                       environment: String,
-                                       pemFile: String,
-                                       serviceAccountCredentialJson: ServiceAccountCredentialJson,
-                                       serviceAccountClientId: String,
-                                       serviceAccountClientEmail: WorkbenchEmail,
-                                       serviceAccountClientProject: GoogleProject,
-                                       subEmail: WorkbenchEmail,
-                                       projectServiceAccount: WorkbenchEmail,
-                                       groupSyncPubSubConfig: GooglePubSubConfig,
-                                       disableUsersPubSubConfig: GooglePubSubConfig,
-                                       notificationPubSubProject: String,
-                                       notificationTopic: String,
-                                       googleKeyCacheConfig: GoogleKeyCacheConfig,
-                                       resourceNamePrefix: Option[String],
-                                       adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
-                                       googleKms: GoogleKmsConfig,
-                                       terraGoogleOrgNumber: String
+    appName: String,
+    appsDomain: String,
+    environment: String,
+    pemFile: String,
+    serviceAccountCredentialJson: ServiceAccountCredentialJson,
+    serviceAccountClientId: String,
+    serviceAccountClientEmail: WorkbenchEmail,
+    serviceAccountClientProject: GoogleProject,
+    subEmail: WorkbenchEmail,
+    projectServiceAccount: WorkbenchEmail,
+    groupSyncPubSubConfig: GooglePubSubConfig,
+    disableUsersPubSubConfig: GooglePubSubConfig,
+    notificationPubSubProject: String,
+    notificationTopic: String,
+    googleKeyCacheConfig: GoogleKeyCacheConfig,
+    resourceNamePrefix: Option[String],
+    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
+    googleKms: GoogleKmsConfig,
+    terraGoogleOrgNumber: String
 )
 
 object GoogleServicesConfig {
@@ -80,7 +79,6 @@ object GoogleServicesConfig {
     GoogleServicesConfig(
       config.getString("appName"),
       config.getString("appsDomain"),
-      config.getString("appsSubdomain"),
       config.getString("environment"),
       config.getString("pathToPem"),
       jsonCredentials,

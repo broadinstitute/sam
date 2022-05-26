@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import java.io.ByteArrayInputStream
-import java.util.Date
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
@@ -35,9 +33,11 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemSt
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
 
-import scala.jdk.CollectionConverters._
+import java.io.ByteArrayInputStream
+import java.util.Date
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.jdk.CollectionConverters._
 
 object GoogleExtensions {
   val resourceId = ResourceId("google")
@@ -70,11 +70,9 @@ class GoogleExtensions(
   private val maxGroupEmailLength = 64
 
   private[google] def toProxyFromUser(userId: WorkbenchUserId): WorkbenchEmail =
-    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsSubdomain}")
+    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsDomain}")
 
-  override val emailDomain = googleServicesConfig.appsSubdomain
-
-  override val adminEmailDomain = googleServicesConfig.appsDomain
+  override val emailDomain = googleServicesConfig.appsDomain
 
   private[google] val allUsersGroupEmail = WorkbenchEmail(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain")
@@ -98,12 +96,12 @@ class GoogleExtensions(
   }
 
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
-    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsSubdomain}"), memberEmail) recoverWith {
+    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith {
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
   override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
-    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"sam-super-admins@${googleServicesConfig.appsSubdomain}"), memberEmail) recoverWith {
+    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"sam-super-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith {
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 

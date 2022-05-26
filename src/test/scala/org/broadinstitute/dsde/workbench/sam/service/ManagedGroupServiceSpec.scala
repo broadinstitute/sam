@@ -1,26 +1,26 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import java.net.URI
-import java.util.UUID
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.{global => globalEc}
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatestplus.mockito.MockitoSugar
-
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.mockito.MockitoSugar
+
+import java.net.URI
+import java.util.UUID
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 /**
   * Created by gpolumbo on 2/21/2018
@@ -48,7 +48,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
   private val testDomain = "example.com"
 
   private val policyEvaluatorService = PolicyEvaluatorService(testDomain, resourceTypeMap, policyDAO, dirDAO)
-  private val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
+  private val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain, Set.empty)
   private val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
 
   val dummyUser = Generator.genWorkbenchUserBoth.sample.get
@@ -322,7 +322,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     makeResourceType(newResourceType)
     val resTypes = resourceTypeMap + (newResourceType.name -> newResourceType)
 
-    val resService = new ResourceService(resTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain)
+    val resService = new ResourceService(resTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain, Set.empty)
     val mgService = new ManagedGroupService(resService, policyEvaluatorService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
 
     val user1 = Generator.genWorkbenchUserBoth.sample.get

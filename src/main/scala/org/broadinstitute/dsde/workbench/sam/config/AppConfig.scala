@@ -1,15 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
+import org.broadinstitute.dsde.workbench.google2.util.DistributedLockConfig
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
+import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig.googleServicesConfigReader
 import org.broadinstitute.dsde.workbench.sam.model._
-import GoogleServicesConfig.googleServicesConfigReader
-import com.google.api.client.json.gson.GsonFactory
-import org.broadinstitute.dsde.workbench.google2.util.DistributedLockConfig
 
 import scala.concurrent.duration.Duration
 
@@ -26,7 +27,9 @@ final case class AppConfig(
                             liquibaseConfig: LiquibaseConfig,
                             blockedEmailDomains: Seq[String],
                             termsOfServiceConfig: TermsOfServiceConfig,
-                            oidcConfig: OidcConfig)
+                            oidcConfig: OidcConfig,
+                            adminConfig: AdminConfig
+                          )
 
 object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
@@ -148,25 +151,37 @@ object AppConfig {
     LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
   }
 
+  final case class AdminConfig(superAdminsGroup: WorkbenchEmail, adminEmailDomains: Set[String])
+
+  implicit val adminConfigReader: ValueReader[AdminConfig] = ValueReader.relative { config =>
+    AdminConfig(
+      superAdminsGroup = WorkbenchEmail(config.getString("superAdminsGroup")),
+      adminEmailDomains = config.as[Set[String]]("emailDomains")
+    )
+  }
+
   def readConfig(config: Config): AppConfig = {
-    val directoryConfig = config.as[DirectoryConfig]("directory")
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
     } yield GoogleConfig(googleServices, config.as[PetServiceAccountConfig]("petServiceAccount"))
 
-    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
-    val distributedLockConfig = config.as[DistributedLockConfig]("distributedLock")
-    val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
     // fall back to getting the "googleServices.appsDomain"
     val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
-    val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
-    val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
 
-    val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
-    val oidcConfig = config.as[OidcConfig]("oidc")
-
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, googleConfigOption, resourceTypes, liquibaseConfig, blockedEmailDomains, termsOfServiceConfig, oidcConfig)
+    AppConfig(
+      emailDomain,
+      directoryConfig = config.as[DirectoryConfig]("directory"),
+      schemaLockConfig = config.as[SchemaLockConfig]("schemaLock"),
+      distributedLockConfig = config.as[DistributedLockConfig]("distributedLock"),
+      googleConfigOption,
+      resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet,
+      liquibaseConfig = config.as[LiquibaseConfig]("liquibase"),
+      blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty),
+      termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
+      oidcConfig = config.as[OidcConfig]("oidc"),
+      adminConfig = config.as[AdminConfig]("admin")
+    )
   }
 }
