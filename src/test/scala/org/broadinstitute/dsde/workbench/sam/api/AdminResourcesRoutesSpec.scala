@@ -43,7 +43,7 @@ class AdminResourcesRoutesSpec
   val defaultAdminResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))
   val defaultAccessPolicyResponseEntry = AccessPolicyResponseEntry(defaultAdminPolicyName, defaultAccessPolicyMembership, WorkbenchEmail("policy_email@example.com"))
 
-  "GET /api/resourceTypeAdmin/v1/resources/{resourceType}/{resourceId}/policies" should "200 when user has `admin_read_policies`" in {
+  "GET /api/admin/v1/resources/{resourceType}/{resourceId}/policies" should "200 when user has `admin_read_policies`" in {
     val samRoutes = TestSamRoutes(Map(defaultResourceType.name -> defaultResourceType), user = firecloudAdmin)
 
     val resourceId = ResourceId("foo")
@@ -55,7 +55,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Get(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
   }
@@ -72,19 +72,19 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Get(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
   it should "404 when the resource type does not exist" in {
     val samRoutes = TestSamRoutes(resourceTypes = Map.empty, user = firecloudAdmin)
-    Get(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/invalid/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/resources/${defaultResourceType.name}/invalid/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
-  "PUT /api/resourceTypeAdmin/v1/resources/{resourceType}/{resourceId}/policies/{policyName}/memberEmails/{userEmail}" should "allow resource admins to add themselves to a resource" in {
+  "PUT /api/admin/v1/resources/{resourceType}/{resourceId}/policies/{policyName}/memberEmails/{userEmail}" should "allow resource admins to add themselves to a resource" in {
     val samRoutes = TestSamRoutes(Map(defaultResourceType.name -> defaultResourceType), user = firecloudAdmin)
 
     val resourceId = ResourceId("foo")
@@ -96,7 +96,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -113,7 +113,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -132,7 +132,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -147,7 +147,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${resourceTypeAdmin.name}/${defaultResourceType.name}/policies/${resourceTypeAdmin.ownerRoleName}/memberEmails/${testUser1.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resources/${resourceTypeAdmin.name}/${defaultResourceType.name}/policies/${resourceTypeAdmin.ownerRoleName}/memberEmails/${testUser1.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -164,7 +164,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -181,7 +181,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser1.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser1.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -198,12 +198,12 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/does-not-exist/memberEmails/${testUser1.email}") ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/does-not-exist/memberEmails/${testUser1.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
-  "DELETE /api/resourceTypeAdmin/v1/resources/{resourceType}/{resourceId}/policies/{policyName}/memberEmails/{userEmail}" should "allow resource admins to remove themselves from a resource" in {
+  "DELETE /api/admin/v1/resources/{resourceType}/{resourceId}/policies/{policyName}/memberEmails/{userEmail}" should "allow resource admins to remove themselves from a resource" in {
     val samRoutes = TestSamRoutes(Map(defaultResourceType.name -> defaultResourceType))
     val resourceId = ResourceId("foo")
 
@@ -216,7 +216,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${samRoutes.user.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -236,7 +236,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -256,7 +256,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -273,7 +273,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
@@ -292,7 +292,7 @@ class AdminResourcesRoutesSpec
       } yield ()
     }
 
-    Delete(s"/api/resourceTypeAdmin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resources/${defaultResourceType.name}/$resourceId/policies/${defaultResourceType.ownerRoleName}/memberEmails/${testUser2.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }

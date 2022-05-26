@@ -84,12 +84,12 @@ class AdminResourceTypesRoutesSpec
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, cloudExtensions)
   }
 
-  "GET /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/" should "200 when successful" in {
+  "GET /api/admin/v1/resourceTypes/{resourceType}/policies/" should "200 when successful" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
 
     when(samRoutes.resourceService.listResourcePolicies(mockitoEq(defaultAdminResourceId), any[SamRequestContext])).thenReturn(IO(LazyList(defaultAccessPolicyResponseEntry)))
 
-    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[Set[AccessPolicyResponseEntry]]
       response.map(_.policyName).contains(defaultAdminPolicyName) shouldBe true
@@ -100,7 +100,7 @@ class AdminResourceTypesRoutesSpec
   it should "403 if user isn't a Sam super admin" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
 
-    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -111,22 +111,22 @@ class AdminResourceTypesRoutesSpec
 
     when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
 
-    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName}/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/resourceTypes/${fakeResourceTypeName}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
-  "PUT /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/{policyName}" should "201 when successful" in {
+  "PUT /api/admin/v1/resourceTypes/{resourceType}/policies/{policyName}" should "201 when successful" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
 
     when(samRoutes.resourceService.overwriteAdminPolicy(mockitoEq(resourceTypeAdmin), mockitoEq(defaultAdminPolicyName), mockitoEq(defaultAdminResourceId), mockitoEq(defaultAccessPolicyMembership), any[SamRequestContext])).thenReturn(IO(null))
     when(samRoutes.resourceService.listResourcePolicies(mockitoEq(defaultAdminResourceId), any[SamRequestContext])).thenReturn(IO(LazyList(defaultAccessPolicyResponseEntry)))
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
-    Get(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[Set[AccessPolicyResponseEntry]]
       response.map(_.policyName).contains(defaultAdminPolicyName) shouldBe true
@@ -139,7 +139,7 @@ class AdminResourceTypesRoutesSpec
       cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin = false).some
     )
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -149,7 +149,7 @@ class AdminResourceTypesRoutesSpec
       cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin = true).some
     )
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -167,17 +167,17 @@ class AdminResourceTypesRoutesSpec
       } yield ()
     }
 
-    Put(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName", defaultAccessPolicyMembership) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
 
-  "DELETE /api/resourceTypeAdmin/v1/resourceTypes/{resourceType}/policies/{policyName}" should "204 when successful" in {
+  "DELETE /api/admin/v1/resourceTypes/{resourceType}/policies/{policyName}" should "204 when successful" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = true)
 
     when(samRoutes.resourceService.deletePolicy(mockitoEq(FullyQualifiedPolicyId(defaultAdminResourceId, defaultAdminPolicyName)), any[SamRequestContext])).thenReturn(IO.unit)
 
-    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
@@ -185,7 +185,7 @@ class AdminResourceTypesRoutesSpec
   it should "403 if user isn't a Sam super admin" in {
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
 
-    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -195,7 +195,7 @@ class AdminResourceTypesRoutesSpec
     val fakeResourceTypeName = ResourceTypeName("does_not_exist")
     when(samRoutes.resourceService.getResourceType(fakeResourceTypeName)).thenReturn(IO(None))
 
-    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${fakeResourceTypeName}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resourceTypes/${fakeResourceTypeName}/policies/$defaultAdminPolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
@@ -206,7 +206,7 @@ class AdminResourceTypesRoutesSpec
     when(samRoutes.resourceService.deletePolicy(mockitoEq(FullyQualifiedPolicyId(defaultAdminResourceId, fakePolicyName)), any[SamRequestContext]))
       .thenThrow(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
 
-    Delete(s"/api/resourceTypeAdmin/v1/resourceTypes/${defaultResourceType.name}/policies/$fakePolicyName") ~> samRoutes.route ~> check {
+    Delete(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$fakePolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }

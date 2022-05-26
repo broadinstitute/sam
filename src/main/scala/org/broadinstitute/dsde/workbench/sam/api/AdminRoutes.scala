@@ -34,8 +34,8 @@ trait AdminRoutes
     pathPrefix("admin") {
       adminUserRoutes(user, requestContext) ~ pathPrefix("v1") {
         adminUserRoutes(user, requestContext) ~
-          adminResourceTypesRoutes(user, requestContext) ~
-          adminResourcesRoutes(user, requestContext)
+          adminResourcesRoutes(user, requestContext) ~
+          adminResourceTypesRoutes(user, requestContext)
       }
     }
 
@@ -117,44 +117,6 @@ trait AdminRoutes
       }
     }
 
-
-  def adminResourceTypesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("resourceTypes" / Segment / "policies") { resourceTypeNameToAdminister =>
-      asSamSuperAdmin(user) {
-        withNonAdminResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
-          val resource = FullyQualifiedResourceId(resourceTypeAdminName, ResourceId(resourceTypeToAdminister.name.value))
-          pathEndOrSingleSlash {
-            get {
-              complete {
-                resourceService
-                  .listResourcePolicies(resource, samRequestContext)
-                  .map(response => OK -> response.toSet)
-              }
-            }
-          } ~
-            pathPrefix(Segment) { policyName =>
-              val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
-              pathEndOrSingleSlash {
-                put {
-                  entity(as[AccessPolicyMembership]) { membershipUpdate =>
-                    withResourceType(resourceTypeAdminName) { resourceTypeAdmin =>
-                      complete {
-                        resourceService
-                          .overwriteAdminPolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext)
-                          .as(Created)
-                      }
-                    }
-                  }
-                } ~
-                  delete {
-                    complete(resourceService.deletePolicy(policyId, samRequestContext).as(NoContent))
-                  }
-              }
-            }
-        }
-      }
-    }
-
   def adminResourcesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("resources" / Segment / Segment / "policies") { case (resourceTypeName, resourceId) =>
       withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
@@ -195,6 +157,43 @@ trait AdminRoutes
               }
             }
           }
+      }
+    }
+
+  def adminResourceTypesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
+    pathPrefix("resourceTypes" / Segment / "policies") { resourceTypeNameToAdminister =>
+      asSamSuperAdmin(user) {
+        withNonAdminResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
+          val resource = FullyQualifiedResourceId(resourceTypeAdminName, ResourceId(resourceTypeToAdminister.name.value))
+          pathEndOrSingleSlash {
+            get {
+              complete {
+                resourceService
+                  .listResourcePolicies(resource, samRequestContext)
+                  .map(response => OK -> response.toSet)
+              }
+            }
+          } ~
+            pathPrefix(Segment) { policyName =>
+              val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+              pathEndOrSingleSlash {
+                put {
+                  entity(as[AccessPolicyMembership]) { membershipUpdate =>
+                    withResourceType(resourceTypeAdminName) { resourceTypeAdmin =>
+                      complete {
+                        resourceService
+                          .overwriteAdminPolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext)
+                          .as(Created)
+                      }
+                    }
+                  }
+                } ~
+                  delete {
+                    complete(resourceService.deletePolicy(policyId, samRequestContext).as(NoContent))
+                  }
+              }
+            }
+        }
       }
     }
 
