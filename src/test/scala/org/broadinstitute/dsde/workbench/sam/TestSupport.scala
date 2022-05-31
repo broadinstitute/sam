@@ -134,7 +134,7 @@ object TestSupport extends TestSupport {
       directoryDAO,
       googleExt,
       emailDomain = "example.com",
-      adminConfig.adminEmailDomains
+      adminConfig.allowedEmailDomains
     ))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))

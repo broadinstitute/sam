@@ -151,12 +151,12 @@ object AppConfig {
     LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
   }
 
-  final case class AdminConfig(superAdminsGroup: WorkbenchEmail, adminEmailDomains: Set[String])
+  final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String])
 
   implicit val adminConfigReader: ValueReader[AdminConfig] = ValueReader.relative { config =>
     AdminConfig(
       superAdminsGroup = WorkbenchEmail(config.getString("superAdminsGroup")),
-      adminEmailDomains = config.as[Set[String]]("emailDomains")
+      allowedEmailDomains = config.as[Set[String]]("allowedAdminEmailDomains")
     )
   }
 

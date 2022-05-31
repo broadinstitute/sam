@@ -29,7 +29,7 @@ class ResourceService(
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
     val emailDomain: String,
-    private val adminEmailDomains: Set[String])(implicit val executionContext: ExecutionContext)
+    private val allowedAdminEmailDomains: Set[String])(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
 
   private[service] case class ValidatableAccessPolicy(
@@ -325,7 +325,7 @@ class ResourceService(
   def failUnlessAllAdminEmailDomainsWhitelisted(membership: AccessPolicyMembership): IO[Unit] =
     NonEmptyList
       .fromList(membership.memberEmails.toList.filterNot { email =>
-        adminEmailDomains contains email.value.split("@").last
+        allowedAdminEmailDomains contains email.value.split("@").last
       })
       .traverse_(invalidEmails => IO.raiseError {
         new WorkbenchExceptionWithErrorReport(ErrorReport(
