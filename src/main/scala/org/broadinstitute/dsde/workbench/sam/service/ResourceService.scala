@@ -318,11 +318,11 @@ class ResourceService(
   /**
     * Overwrites an existing admin policy, saves a new one if it doesn't exist yet.  */
   def overwriteAdminPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] =
-    failUnlessAllAdminEmailDomainsWhitelisted(policyMembership) *>
+    failUnlessAllAdminEmailDomainsAllowed(policyMembership) *>
       overwritePolicy(resourceType, policyName, resource, policyMembership, samRequestContext)
 
-  /** Performs additional verification that members are only users in the correct email domain */
-  def failUnlessAllAdminEmailDomainsWhitelisted(membership: AccessPolicyMembership): IO[Unit] =
+
+  def failUnlessAllAdminEmailDomainsAllowed(membership: AccessPolicyMembership): IO[Unit] =
     NonEmptyList
       .fromList(membership.memberEmails.toList.filterNot { email =>
         allowedAdminEmailDomains contains email.value.split("@").last
