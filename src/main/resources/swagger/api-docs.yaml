@@ -2,7 +2,7 @@ openapi: 3.0.1
 info:
   title: Sam
   description: |
-    Workbench identity and access management.
+    An example PR demonstrating how to deploy to BEEs
   termsOfService: https://github.com/broadinstitute/sam
   license:
     name: BSD
