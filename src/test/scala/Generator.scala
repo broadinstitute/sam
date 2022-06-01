@@ -11,6 +11,8 @@ import org.broadinstitute.dsde.workbench.sam.service.UserService
 
 object Generator {
   val genNonPetEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@gmail.com"))
+  val genFirecloudEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@test.firecloud.org"))
+  val genBroadInstituteEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@broadinstitute.org"))
   val genServiceAccountEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@test.iam.gserviceaccount.com"))
   val genGoogleSubjectId: Gen[GoogleSubjectId] = Gen.stringOfN(20, Gen.numChar).map(id => GoogleSubjectId("1" + id))
   val genAzureB2CId: Gen[AzureB2CId] = Gen.uuid.map(uuid => AzureB2CId(uuid.toString))
@@ -33,11 +35,21 @@ object Generator {
     RawHeader(accessTokenHeader, accessToken.value)
   )
 
-  val genWorkbenchUserGoogle = for{
+  val genWorkbenchUserGoogle = for {
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId
     userId <- genWorkbenchUserId
-  }yield SamUser(userId, Option(googleSubjectId), email, None, false, None)
+  } yield SamUser(userId, Some(googleSubjectId), email, None, false, None)
+
+  val genFirecloudUser = for {
+    email <- genFirecloudEmail
+    user <- genWorkbenchUserGoogle
+  } yield user.copy(email = email)
+
+  val genBroadInstituteUser = for {
+    email <- genBroadInstituteEmail
+    user <- genWorkbenchUserGoogle
+  } yield user.copy(email = email)
 
   val genWorkbenchUserServiceAccount = for{
     email <- genServiceAccountEmail

@@ -49,7 +49,7 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
-    val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
+    val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain, Set.empty)
     val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
@@ -200,6 +200,15 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     Get(s"/api/resource/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[JsValue] shouldEqual JsBoolean(true)
+    }
+  }
+
+  it should "400 for resourceTypeAdmin" in {
+    val samRoutes = TestSamRoutes(Map.empty)
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set.empty)), Set.empty)
+    Post(s"/api/resource/${SamResourceTypes.resourceTypeAdminName}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
     }
   }
 
@@ -755,6 +764,24 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     }
   }
 
+  it should "404 when the policy does not exist" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))),
+      ResourceRoleName("owner"))
+
+    val resourceId = ResourceId("foo")
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+
+    Put(s"/api/resource/${resourceType.name}/$resourceId/policies/does-not-exist/memberEmails/${defaultTestUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
   it should "400 adding unknown subject" in {
     // differs from happy case in that we don't create user
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))), ResourceRoleName("owner"))
@@ -873,6 +900,24 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
         FullyQualifiedResourceId(resourceType.name,  ResourceId("foo")), AccessPolicyName(resourceType.ownerRoleName.value)), testUser.id, samRequestContext))
 
     Delete(s"/api/resource/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberEmails/${testUser.email}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "404 when the policy does not exist" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))),
+      ResourceRoleName("owner"))
+
+    val resourceId = ResourceId("foo")
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+
+    Delete(s"/api/resource/${resourceType.name}/$resourceId/policies/does-not-exist/memberEmails/${defaultTestUser.email}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }

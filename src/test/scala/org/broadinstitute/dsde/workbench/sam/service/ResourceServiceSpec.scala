@@ -1,41 +1,40 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import java.net.URI
-import java.util.UUID
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
-import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
 import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChange, AccessChangeEvent, AccessChangeEventType, AccessRemoved, AuditEventType, AuditLogger, ResourceParentRemoved, ResourceParentUpdated, ResourceCreated, ResourceDeleted}
-import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
 import org.mockito.{ArgumentMatchers, Mockito}
 import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
-
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.mockito.ArgumentMatchers._
-import org.mockito.Mockito._
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatestplus.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 
+import java.net.URI
+import java.util.UUID
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 
 /**
@@ -89,10 +88,10 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   private val emailDomain = "example.com"
   private val resourceTypes = Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType, managedGroupResourceType.name -> managedGroupResourceType, otherParentResourceType.name -> otherParentResourceType)
   private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, dirDAO)
-  private val service = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+  private val service = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set("test.firecloud.org"))
   private val constrainableResourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
   private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
-  private val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+  private val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
 
   val managedGroupService = new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
 
@@ -608,7 +607,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
-      "")
+      "",
+      Set.empty
+    )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val member = WorkbenchUserId("testU")
@@ -636,7 +637,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
-      "")
+      "",
+      Set.empty
+    )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
@@ -652,6 +655,44 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     runAndWait(resourceService.overwritePolicy(defaultResourceType, policyId.accessPolicyName, policyId.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty), samRequestContext))
 
     verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
+
+  "overwriteAdminPolicy" should "succeed with a valid request" in {
+    val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
+    val newAdminUser = Generator.genFirecloudUser.sample.get
+
+    service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUser, samRequestContext))
+    dirDAO.createUser(newAdminUser, samRequestContext).unsafeRunSync()
+
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(newAdminUser.id), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy(
+      FullyQualifiedPolicyId(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, public = false)
+
+    runAndWait(service.overwriteAdminPolicy(resourceTypeAdmin, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set(newAdminUser.email), Set(ResourceAction("non_owner_action")), Set.empty, None), samRequestContext))
+
+    val policies = policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email=WorkbenchEmail("policy-randomuuid@example.com")))
+
+    assert(policies.contains(newPolicy))
+  }
+
+  it should "fail if any members are not test.firecloud.org accounts" in {
+    val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
+
+    service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUser, samRequestContext))
+
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
+    val newPolicy = AccessPolicy(
+      FullyQualifiedPolicyId(resource, AccessPolicyName("foo")), group.members, group.email, Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, public = false)
+
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.overwriteAdminPolicy(resourceTypeAdmin, newPolicy.id.accessPolicyName, newPolicy.id.resource, AccessPolicyMembership(Set(WorkbenchEmail("not_an_admin@gmail.com")), Set(ResourceAction("non_owner_action")), Set.empty, None), samRequestContext))
+    }
+
+    assert(exception.getMessage.contains("invalid admin member email"))
   }
 
   "overwritePolicyMembers" should "succeed with a valid request" in {
@@ -682,7 +723,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
-      "")
+      "",
+      Set.empty
+    )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val member = WorkbenchUserId("testU")
@@ -709,7 +752,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
-      "")
+      "",
+      Set.empty
+    )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
 
@@ -873,7 +918,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   it should "allow a new resource to be created with the same name as the deleted resource if 'reuseIds' is true for the Resource Type" in {
     val reusableResourceType = defaultResourceType.copy(reuseIds = true)
     reusableResourceType.reuseIds shouldEqual true
-    val localService = new ResourceService(Map(reusableResourceType.name -> reusableResourceType), null, policyDAO, dirDAO, NoExtensions, "example.com")
+    val localService = new ResourceService(Map(reusableResourceType.name -> reusableResourceType), null, policyDAO, dirDAO, NoExtensions, "example.com", Set.empty)
 
     localService.createResourceType(reusableResourceType, samRequestContext).unsafeRunSync()
 
@@ -1031,7 +1076,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
-      "")
+      "",
+      Set.empty
+    )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val member = WorkbenchUserId("testU")
@@ -1054,7 +1101,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
-      "")
+      "",
+      Set.empty
+    )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val member = WorkbenchUserId("testU")
@@ -1077,7 +1126,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
-      "")
+      "",
+      Set.empty
+    )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val member = WorkbenchUserId("testU")
@@ -1100,7 +1151,9 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       mockAccessPolicyDAO,
       mockDirectoryDAO,
       mockCloudExtensions,
-      "")
+      "",
+      Set.empty
+    )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val member = WorkbenchUserId("testU")
@@ -1120,7 +1173,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       Set(ResourceRole(ownerRoleName, Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
       ownerRoleName)
 
-    val service = new ResourceService(Map(adminResType.name -> adminResType, defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val service = new ResourceService(Map(adminResType.name -> adminResType, defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
 
     val init = service.initResourceTypes().unsafeRunSync()
     init should contain theSameElementsAs(Set(adminResType, defaultResourceType))
@@ -1148,7 +1201,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
   }
 
   it should "fail if resourceTypeAdmin not defined" in {
-    val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val service = new ResourceService(Map(defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
 
     intercept[WorkbenchException] {
       service.initResourceTypes().unsafeRunSync()
@@ -1165,7 +1218,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val parentOwnerPolicy = FullyQualifiedPolicyId(parentResourceId, AccessPolicyName("owner"))
     val childResourceId = FullyQualifiedResourceId(childResourceType.name, ResourceId(UUID.randomUUID().toString))
 
-    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
 
     val init = service.initResourceTypes().unsafeRunSync()
     init should contain theSameElementsAs(Set(adminResType, parentResourceType, childResourceType))
@@ -1186,7 +1239,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       parentResourceTypeOwnerRole.copy(descendantRoles = Map.empty),
       parentResourceTypeOtherRole
     ))
-    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
     val newInit = newService.initResourceTypes().unsafeRunSync()
     newInit should contain theSameElementsAs(Set(adminResType, overriddenParentResourceType, childResourceType))
 
@@ -1208,7 +1261,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       parentResourceTypeOwnerRole.copy(descendantRoles = Map.empty),
       parentResourceTypeOtherRole
     ))
-    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
     val newInit = newService.initResourceTypes().unsafeRunSync()
     newInit should contain theSameElementsAs(Set(adminResType, overriddenParentResourceType, childResourceType))
 
@@ -1224,7 +1277,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
     runAndWait(policyEvaluatorService.hasPermission(childResource.fullyQualifiedId, ResourceAction("view"), user1.id, samRequestContext)) shouldBe false
 
-    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
 
     val init = service.initResourceTypes().unsafeRunSync()
     init should contain theSameElementsAs(Set(adminResType, parentResourceType, childResourceType))
@@ -1244,7 +1297,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val childResourceId = FullyQualifiedResourceId(childResourceType.name, ResourceId(UUID.randomUUID().toString))
     val otherChildResourceId = FullyQualifiedResourceId(childResourceType.name, ResourceId(UUID.randomUUID().toString))
 
-    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType, otherParentResourceType.name -> otherParentResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val service = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> parentResourceType, childResourceType.name -> childResourceType, otherParentResourceType.name -> otherParentResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
 
     val init = service.initResourceTypes().unsafeRunSync()
     init should contain theSameElementsAs(Set(adminResType, parentResourceType, childResourceType, otherParentResourceType))
@@ -1269,7 +1322,7 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
       parentResourceTypeOwnerRole.copy(descendantRoles = Map.empty),
       parentResourceTypeOtherRole
     ))
-    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType, otherParentResourceType.name -> otherParentResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val newService = new ResourceService(Map(adminResType.name -> adminResType, parentResourceType.name -> overriddenParentResourceType, childResourceType.name -> childResourceType, otherParentResourceType.name -> otherParentResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
     val newInit = newService.initResourceTypes().unsafeRunSync()
     newInit should contain theSameElementsAs(Set(adminResType, overriddenParentResourceType, childResourceType, otherParentResourceType))
 

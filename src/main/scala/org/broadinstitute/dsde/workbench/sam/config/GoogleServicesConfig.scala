@@ -1,13 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import com.typesafe.config.ConfigRenderOptions
+import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
+import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject}
-import net.ceedubs.ficus.Ficus._
-import AppConfig.nonEmptyListReader
-import com.typesafe.config.ConfigRenderOptions
-import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.nonEmptyListReader
 
 import scala.concurrent.duration.FiniteDuration
 

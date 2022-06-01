@@ -7,13 +7,14 @@ import akka.stream.Materializer
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{googleServicesConfig, samRequestContext}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
+import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.ExecutionContext
@@ -43,6 +44,10 @@ object TestSamRoutes {
     val alterPolicies = ResourceActionPattern("alter_policies", "", false)
     val delete = ResourceActionPattern("delete", "", false)
 
+    val adminReadPolicies = ResourceActionPattern("admin_read_policies", "", false)
+    val adminAddMember = ResourceActionPattern("admin_add_member", "", false)
+    val adminRemoveMember = ResourceActionPattern("admin_remove_member", "", false)
+
     val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
     val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
 
@@ -68,11 +73,23 @@ object TestSamRoutes {
     Set(
       ResourceRole(
         ResourceRoleName("owner"),
-        Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, SamResourceActions.setPublic))),
+        Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies, SamResourceActions.setPublic)
+      ),
+      ResourceRole(
+        ResourceRoleName("admin"),
+        Set(adminReadPolicies, adminAddMember, adminRemoveMember)
+      )
+    ),
     ResourceRoleName("owner")
   )
 
-  def apply(resourceTypes: Map[ResourceTypeName, ResourceType], user: SamUser = defaultUserInfo, policyAccessDAO: Option[AccessPolicyDAO] = None, maybeDirectoryDAO: Option[MockDirectoryDAO] = None)(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
+  def apply(resourceTypes: Map[ResourceTypeName, ResourceType],
+            user: SamUser = defaultUserInfo,
+            policyAccessDAO: Option[AccessPolicyDAO] = None,
+            maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
+            cloudExtensions: Option[CloudExtensions] = None,
+            adminEmailDomains: Option[Set[String]] = None
+           )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
@@ -83,17 +100,25 @@ object TestSamRoutes {
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)
-    val mockResourceService = new ResourceService(resourceTypesWithAdmin, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val cloudXtns = cloudExtensions.getOrElse(NoExtensions)
+    val mockResourceService = new ResourceService(
+      resourceTypesWithAdmin,
+      policyEvaluatorService,
+      policyDAO,
+      directoryDAO,
+      cloudXtns,
+      emailDomain,
+      allowedAdminEmailDomains = adminEmailDomains.getOrElse(Set.empty)
+    )
+    val mockUserService = new UserService(directoryDAO, cloudXtns, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val mockTosService = new TosService(directoryDAO,registrationDAO, emailDomain, TestSupport.tosConfig)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, NoExtensions, emailDomain)
+    val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, cloudXtns, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(user, samRequestContext))
-    val allUsersGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
+    val allUsersGroup = TestSupport.runAndWait(cloudXtns.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
-    val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, dbRef)
-
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, tosService = mockTosService)
+    val mockStatusService = new StatusService(directoryDAO, registrationDAO, cloudXtns, dbRef)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, tosService = mockTosService, cloudExtensions = cloudXtns)
   }
 }

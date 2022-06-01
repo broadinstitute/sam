@@ -178,6 +178,15 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
     }
   }
 
+  it should "400 for resourceTypeAdmin" in {
+    val samRoutes = TestSamRoutes(Map.empty)
+
+    val createResourceRequest = CreateResourceRequest(ResourceId("foo"), Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set.empty)), Set.empty)
+    Post(s"/api/resources/v1/${SamResourceTypes.resourceTypeAdminName}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
   "POST /api/resources/v1/{resourceType} with createResource = true" should "201 create resource with content" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))

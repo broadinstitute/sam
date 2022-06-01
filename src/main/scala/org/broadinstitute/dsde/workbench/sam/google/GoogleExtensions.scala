@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import java.io.ByteArrayInputStream
-import java.util.Date
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
@@ -35,9 +33,11 @@ import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemSt
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
 
-import scala.jdk.CollectionConverters._
+import java.io.ByteArrayInputStream
+import java.util.Date
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.jdk.CollectionConverters._
 
 object GoogleExtensions {
   val resourceId = ResourceId("google")
@@ -61,7 +61,8 @@ class GoogleExtensions(
     val googleKms: GoogleKmsService[IO],
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
-    val resourceTypes: Map[ResourceTypeName, ResourceType])(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
+    val resourceTypes: Map[ResourceTypeName, ResourceType],
+    val superAdminsGroup: WorkbenchEmail)(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
     extends LazyLogging
     with FutureSupport
     with CloudExtensions
@@ -73,6 +74,7 @@ class GoogleExtensions(
     WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsDomain}")
 
   override val emailDomain = googleServicesConfig.appsDomain
+
   private[google] val allUsersGroupEmail = WorkbenchEmail(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain")
 
@@ -99,6 +101,10 @@ class GoogleExtensions(
       case t => throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
+  override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
+    googleDirectoryDAO.isGroupMember(superAdminsGroup, memberEmail) recoverWith {
+      case t => throw new WorkbenchException("Unable to query for admin status.", t)
+    }
 
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
     val samRequestContext = SamRequestContext() // `SamRequestContext()` is used so that we don't trace 1-off boot/init methods

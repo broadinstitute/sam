@@ -1,8 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam
 
-import java.net.URI
-import java.time.Instant
-import java.util.concurrent.Executors
 import akka.actor.ActorSystem
 import akka.stream.Materializer
 import cats.effect.IO
@@ -12,11 +9,11 @@ import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
-import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.google.mock._
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document, GoogleFirestoreService}
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
@@ -24,24 +21,27 @@ import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
-import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
+import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
 import org.scalatest.time.{Seconds, Span}
-import scalikejdbc.withSQL
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import scalikejdbc.QueryDSL.delete
+import scalikejdbc.withSQL
 
-import scala.concurrent.duration.Duration
+import java.net.URI
+import java.time.Instant
+import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
+import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
-import org.scalatest.matchers.should.Matchers
 
 
 /**
@@ -74,6 +74,8 @@ object TestSupport extends TestSupport {
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val directoryConfig = config.as[DirectoryConfig]("directory")
   val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
+  val adminConfig = config.as[AdminConfig]("admin")
+
   val dirURI = new URI(directoryConfig.directoryUrl)
 
   val fakeDistributedLock = DistributedLock[IO]("", appConfig.distributedLockConfig, FakeGoogleFirestore)
@@ -81,7 +83,16 @@ object TestSupport extends TestSupport {
   def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
 
-  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty, googIamDAO: Option[GoogleIamDAO] = None, googleServicesConfig: GoogleServicesConfig = googleServicesConfig, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, policyAccessDAO: Option[AccessPolicyDAO] = None, policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None, resourceServiceOpt: Option[ResourceService] = None, tosEnabled: Boolean = false)(implicit system: ActorSystem) = {
+  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty,
+                         googIamDAO: Option[GoogleIamDAO] = None,
+                         googleServicesConfig: GoogleServicesConfig = googleServicesConfig,
+                         cloudExtensions: Option[CloudExtensions] = None,
+                         googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
+                         policyAccessDAO: Option[AccessPolicyDAO] = None,
+                         policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
+                         resourceServiceOpt: Option[ResourceService] = None,
+                         tosEnabled: Boolean = false)
+                        (implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
@@ -112,13 +123,22 @@ object TestSupport extends TestSupport {
       FakeGoogleKmsInterpreter,
       googleServicesConfig,
       petServiceAccountConfig,
-      resourceTypes))
+      resourceTypes,
+      adminConfig.superAdminsGroup
+    ))
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
-    val mockResourceService = resourceServiceOpt.getOrElse(new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, googleExt, "example.com"))
+    val mockResourceService = resourceServiceOpt.getOrElse(new ResourceService(
+      resourceTypes,
+      policyEvaluatorService,
+      policyDAO,
+      directoryDAO,
+      googleExt,
+      emailDomain = "example.com",
+      adminConfig.allowedEmailDomains
+    ))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
     SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration)
-
   }
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")

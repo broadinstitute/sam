@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.Applicative
+import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.implicits._
@@ -9,11 +10,11 @@ import com.google.common.annotations.VisibleForTesting
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.audit.{AccessAdded, AccessChangeEvent, AccessRemoved, AuditLogger, ResourceParentRemoved, ResourceParentUpdated, ResourceChange, ResourceCreated, ResourceDeleted, ResourceEvent}
+import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
@@ -27,7 +28,8 @@ class ResourceService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
-    val emailDomain: String)(implicit val executionContext: ExecutionContext)
+    val emailDomain: String,
+    private val allowedAdminEmailDomains: Set[String])(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
 
   private[service] case class ValidatableAccessPolicy(
@@ -221,7 +223,7 @@ class ResourceService(
     })
 
   @VisibleForTesting
-  private[service] def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
+  def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
     createPolicy(policyIdentity, members, generateGroupEmail(), roles, actions, descendantPermissions, samRequestContext)
 
   private def createPolicy(policyIdentity: FullyQualifiedPolicyId, members: Set[WorkbenchSubject], email: WorkbenchEmail, roles: Set[ResourceRoleName], actions: Set[ResourceAction], descendantPermissions: Set[AccessPolicyDescendantPermissions], samRequestContext: SamRequestContext): IO[AccessPolicy] =
@@ -257,6 +259,7 @@ class ResourceService(
 
   // TODO: CA-993 Once we can check if a policy applies to any children, we need to update this to throw if we try
   // to delete any policies that apply to children
+  @throws(classOf[WorkbenchExceptionWithErrorReport])
   def deletePolicy(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit] = {
     for {
       policyEmailOpt <- directoryDAO.loadSubjectEmail(policyId, samRequestContext)
@@ -313,7 +316,28 @@ class ResourceService(
   }
 
   /**
+    * Overwrites an existing admin policy, saves a new one if it doesn't exist yet.  */
+  def overwriteAdminPolicy(resourceType: ResourceType, policyName: AccessPolicyName, resource: FullyQualifiedResourceId, policyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[AccessPolicy] =
+    failUnlessAllAdminEmailDomainsAllowed(policyMembership) *>
+      overwritePolicy(resourceType, policyName, resource, policyMembership, samRequestContext)
+
+
+  def failUnlessAllAdminEmailDomainsAllowed(membership: AccessPolicyMembership): IO[Unit] =
+    NonEmptyList
+      .fromList(membership.memberEmails.toList.filterNot { email =>
+        allowedAdminEmailDomains contains email.value.split("@").last
+      })
+      .traverse_(invalidEmails => IO.raiseError {
+        new WorkbenchExceptionWithErrorReport(ErrorReport(
+          StatusCodes.BadRequest,
+          s"You have specified at least one invalid admin member email",
+          invalidEmails.toList.map(email => ErrorReport(s"Invalid admin member email: $email"))
+        ))
+      })
+
+  /**
     * Overwrites an existing policy's membership (keyed by resourceType/resourceId/policyName) if it exists
+    *
     * @param policyId
     * @param membersList
     * @return
@@ -495,6 +519,7 @@ class ResourceService(
       case _ =>
         for {
           originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
+          _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
           policyChanged <- directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext)
           _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
         } yield policyChanged
@@ -504,10 +529,19 @@ class ResourceService(
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     for {
       originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
+      _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
       policyChanged <- directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
       _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
     } yield policyChanged
   }
+
+  def failWhenPolicyNotExists(policies: Iterable[AccessPolicy], policyId: FullyQualifiedPolicyId): IO[Unit] =
+    IO.raiseUnless(policies.exists(_.id == policyId)) {
+      new WorkbenchExceptionWithErrorReport(ErrorReport(
+        StatusCodes.NotFound,
+        s"""No policy matching "${policyId.accessPolicyName}" found on resource "${policyId.resource}"."""
+      ))
+    }
 
   private def onPolicyUpdateIfChanged(policyIdentity: FullyQualifiedPolicyId, originalPolicies: Iterable[AccessPolicy], samRequestContext: SamRequestContext)(policyChanged: Boolean) = {
     val maybeFireNotification = if (policyChanged) {

@@ -47,7 +47,8 @@ abstract class SamRoutes(
     with StatusRoutes
     with TermsOfServiceRoutes
     with ExtensionRoutes
-    with ManagedGroupRoutes {
+    with ManagedGroupRoutes
+    with AdminRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
@@ -62,7 +63,7 @@ abstract class SamRoutes(
             withActiveUser(samRequestContext) { samUser =>
               val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
               resourceRoutes(samUser, samRequestContextWithUser) ~
-                adminUserRoutes(samUser, samRequestContextWithUser) ~
+                adminRoutes(samUser, samRequestContextWithUser) ~
                 extensionRoutes(samUser, samRequestContextWithUser) ~
                 groupRoutes(samUser, samRequestContextWithUser) ~
                 apiUserRoutes(samUser, samRequestContextWithUser)

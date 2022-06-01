@@ -94,6 +94,9 @@ object SamResourceActions {
   val removeChild = ResourceAction("remove_child")
   val listChildren = ResourceAction("list_children")
   val createPet = ResourceAction("create-pet")
+  val adminReadPolicies = ResourceAction("admin_read_policies")
+  val adminAddMember = ResourceAction("admin_add_member")
+  val adminRemoveMember = ResourceAction("admin_remove_member")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
@@ -134,7 +137,9 @@ object SamResourceTypes {
 
 @Lenses final case class ResourceTypeName(value: String) extends ValueObject
 
-@Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId)
+@Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId) {
+  override def toString: String = s"$resourceTypeName/$resourceId"
+}
 @Lenses final case class Resource(resourceTypeName: ResourceTypeName, resourceId: ResourceId, authDomain: Set[WorkbenchGroupName], accessPolicies: Set[AccessPolicy] = Set.empty, parent: Option[FullyQualifiedResourceId] = None) {
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }

@@ -11,7 +11,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.yaml.snakeyaml.Yaml
 
-  import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters._
 
 /**
   * These tests verify that the apis published in swagger/api-docs.yaml call the correct SamUserDirectives.
@@ -55,13 +55,25 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
     }
   }
 
-  for(PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin")) {
+  for(PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/user") || path.startsWith("/api/admin/v1/user")) {
     s"$method $path" should "call withWorkbenchAdmin" in {
       val samRoutes = Mockito.spy(TestSamRoutes(Map.empty))
 
       createRequest(path, method) ~> samRoutes.route ~> check {
         withClue(s"$method $path did not call withWorkbenchAdmin") {
-          Mockito.verify(samRoutes, new AtLeast(1)).withWorkbenchAdmin(any[SamUser])
+          Mockito.verify(samRoutes, new AtLeast(1)).asWorkbenchAdmin(any[SamUser])
+        }
+      }
+    }
+  }
+
+  for(PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/v1/resourceTypes")) {
+    s"$method $path" should "call asSamSuperAdmin" in {
+      val samRoutes = Mockito.spy(TestSamRoutes(Map.empty))
+
+      createRequest(path, method) ~> samRoutes.route ~> check {
+        withClue(s"$method $path did not call withWorkbenchAdmin") {
+          Mockito.verify(samRoutes, new AtLeast(1)).asSamSuperAdmin(any[SamUser])
         }
       }
     }
