@@ -77,21 +77,23 @@ class GoogleExtensions(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain")
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
-    val allUsersGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersGroupEmail)
+    val allUsersGroupStub = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersGroupEmail)
     for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
-        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
+      existingGroup <- directoryDAO.loadGroup(allUsersGroupStub.id, samRequestContext = samRequestContext).unsafeToFuture()
+      allUsersGroup <- existingGroup match {
+        case None => directoryDAO.createGroup(allUsersGroupStub, samRequestContext = samRequestContext).unsafeToFuture()
+        case Some(group) => Future(group)
       }
-      existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(createdGroup.email)
+      existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)
       _ <- existingGoogleGroup match {
         case None =>
-          googleDirectoryDAO.createGroup(createdGroup.id.toString, createdGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
+          googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
             case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
           }
         case Some(_) => Future.successful(())
       }
 
-    } yield createdGroup
+    } yield allUsersGroup
   }
 
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
