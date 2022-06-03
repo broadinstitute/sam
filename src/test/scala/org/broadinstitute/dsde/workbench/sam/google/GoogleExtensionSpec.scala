@@ -579,10 +579,14 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val googleExtensions = new GoogleExtensions(TestSupport.fakeDistributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes)
 
     val allUsersGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"TEST_ALL_USERS_GROUP@test.firecloud.org"))
-    val allUsersGroupMatcher = new ArgumentMatcher[BasicWorkbenchGroup] {
-      override def matches(group: BasicWorkbenchGroup): Boolean = group.id == allUsersGroup.id
+//    val allUsersGroupMatcher = new ArgumentMatcher[BasicWorkbenchGroup] {
+//      override def matches(group: BasicWorkbenchGroup): Boolean = group.id == allUsersGroup.id
+//    }
+    val allUsersGroupNameMatcher = new ArgumentMatcher[WorkbenchGroupName] {
+      override def matches(name: WorkbenchGroupName): Boolean = name == allUsersGroup.id
     }
-    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), any[Option[String]], any[SamRequestContext])).thenReturn(IO.pure(allUsersGroup))
+//    when(mockDirectoryDAO.createGroup(argThat(allUsersGroupMatcher), any[Option[String]], any[SamRequestContext])).thenReturn(IO.pure(allUsersGroup))
+    when(mockDirectoryDAO.loadGroup(argThat(allUsersGroupNameMatcher), any[SamRequestContext])).thenReturn(IO.pure(Some(allUsersGroup)))
 
     when(mockGoogleDirectoryDAO.getGoogleGroup(any[WorkbenchEmail])).thenReturn(Future.successful(None))
     when(mockGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[Groups]])).thenReturn(Future.successful(()))
