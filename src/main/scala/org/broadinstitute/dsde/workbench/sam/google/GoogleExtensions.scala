@@ -82,7 +82,7 @@ class GoogleExtensions(
       existingGroup <- directoryDAO.loadGroup(allUsersGroupStub.id, samRequestContext = samRequestContext).unsafeToFuture()
       allUsersGroup <- existingGroup match {
         case None => directoryDAO.createGroup(allUsersGroupStub, samRequestContext = samRequestContext).unsafeToFuture()
-        case Some(group) => Future(group)
+        case Some(group) => Future.successful(group)
       }
       existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)
       _ <- existingGoogleGroup match {
