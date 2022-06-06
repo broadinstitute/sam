@@ -1,10 +1,11 @@
 <configuration>
 
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <fieldNames>
-                <level>severity</level>
-            </fieldNames>
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="org.springframework.cloud.gcp.logging.StackdriverJsonLayout">
+                <includeTraceId>true</includeTraceId>
+                <includeSpanId>true</includeSpanId>
+            </layout>
         </encoder>
     </appender>
 

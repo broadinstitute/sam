@@ -37,6 +37,7 @@ object Dependencies {
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.5.2"
+  val stackdriverLogging: ModuleID = "org.springframework.cloud" % "spring-cloud-gcp-logging" % "1.2.8.RELEASE"
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
   val akkaSlf4j: ModuleID =         "com.typesafe.akka"   %%  "akka-slf4j"           % akkaV
@@ -114,6 +115,7 @@ object Dependencies {
     ravenLogback,
     scalaLogging,
     ficus,
+    stackdriverLogging,
 
     akkaActor,
     akkaSlf4j,
