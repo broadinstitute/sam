@@ -41,6 +41,29 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper {
     }
   }
 
+  "POST /register/user/v1/" should "register invited user" in withDefaultRoutes { samRoutes =>
+    val inviteeEmail = genNonPetEmail.sample.get
+
+    val (user, _, routes) = createTestUser() //create a valid user that can invite someone
+    Post(s"/api/users/v1/invite/${inviteeEmail}") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      val res = responseAs[UserStatusDetails]
+      res.userEmail shouldBe inviteeEmail
+    }
+    Post("/register/user/v1/") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      val res = responseAs[UserStatus]
+      res.userInfo.userSubjectId.value.length shouldBe 21
+      res.userInfo.userEmail shouldBe defaultUserEmail
+      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    }
+
+    Post("/register/user/v1/") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Conflict
+    }
+  }
+
+
   it should "create a user and accept the tos when the user specifies the ToS body correctly" in {
     val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = false)
     val tos = TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")
