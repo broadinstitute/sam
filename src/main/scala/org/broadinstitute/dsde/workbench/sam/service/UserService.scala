@@ -73,7 +73,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       }
     } yield updated
 
-  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId) = {
+  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId): IO[SamUser] = {
     for {
       groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
       _ <- user.googleSubjectId.traverse { googleSubjectId =>
@@ -86,7 +86,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
       }
       _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
-    } yield user
+      updatedUser <- directoryDAO.loadUser(uid, samRequestContext)
+    } yield updatedUser.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, s"$user could not be accepted from invite because user could not be loaded from the db")))
   }
 
   private def validateNewWorkbenchUser(newWorkbenchUser: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
@@ -104,7 +105,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } yield ()
   }
 
-  private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext) = {
+  private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
     for {
       createdUser <- directoryDAO.createUser(user, samRequestContext)
       _ <- registrationDAO.createUser(user, samRequestContext)
