@@ -241,6 +241,10 @@ LOCAL_OPENDJ=true LOCAL_POSTGRES=true sh config/docker-rsync-local-sam.sh
 ```
 NOTE: OpenDJ has some heavy memory requirements.  If you see the OpenDJ container silently dying when running this command, try opening your Docker Desktop preferenes and increasing the Memory resources, 4GB seems to be sufficient, but more may be needed as well as increasing the Swap space maybe.
 
+##### Human-Readable Logging
+To make Sam output human-readable log messages instead of Stackdriver-compatible messages, 
+add `SAM_LOG_APPENDER=Console-Standard` to your environment variables.
+
 #### Verify that local Sam is running
 [Status endpoint:
 https://local.broadinstitute.org:50443/status](https://local.broadinstitute.org:50443/status)
