@@ -341,23 +341,25 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
 
     // Lookup the invited user and their ID
-    val userId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
-    val invitedUser = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
+    val invitedUserId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+    val invitedUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
+    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false, None)
 
-    val invitedUserStatusInfo = service.getUserStatusInfo(userId, samRequestContext).unsafeRunSync()
-    val invitedUserStatus     = runAndWait(service.getUserStatus(userId, false, samRequestContext))
+//    val invitedUserStatusInfo = service.getUserStatusInfo(invitedUserId, samRequestContext).unsafeRunSync()
+//    val invitedUserStatus     = runAndWait(service.getUserStatus(invitedUserId, false, samRequestContext))
 
     // Give them a fake GoogleSubjectId and use that to register them
     val googleSubjectId = Option(GoogleSubjectId("123456789"))
-    val registeringUser = invitedUser.copy(googleSubjectId = googleSubjectId)
+    val newRegisteringUserId = WorkbenchUserId("11111111111111111")
+    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false, None)
     service.createUser(registeringUser, samRequestContext).futureValue
 
     // Reload the registered user to check their status
-    val registeredUser = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to find registered user after completing registration"))
-    registeredUser shouldBe SamUser(userId, googleSubjectId, emailToInvite, None, true, None)
+    val registeredUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to find registered user after completing registration"))
+    registeredUser shouldBe SamUser(invitedUserId, googleSubjectId, emailToInvite, None, true, None)
 
-    val registeredUserStatusInfo = service.getUserStatusInfo(userId, samRequestContext).unsafeRunSync()
-    val registeredUserStatus     = runAndWait(service.getUserStatus(userId, false, samRequestContext))
+//    val registeredUserStatusInfo = service.getUserStatusInfo(invitedUserId, samRequestContext).unsafeRunSync()
+//    val registeredUserStatus     = runAndWait(service.getUserStatus(invitedUserId, false, samRequestContext))
 
     // TODO: PROD-677 - Should service.createUser be idempotent?  Or should it throw a 409?
     intercept[WorkbenchExceptionWithErrorReport] {

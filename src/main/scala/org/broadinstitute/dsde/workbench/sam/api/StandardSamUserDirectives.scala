@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
-import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
@@ -51,20 +50,6 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   }
 
   def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildSamUser)
-
-  private def buildSamUser(oidcHeaders: OIDCHeaders): SamUser = {
-    // google id can either be in the external id or google id from azure headers, favor the externalo id as the source
-    val googleSubjectId = (oidcHeaders.externalId.left.toOption ++ oidcHeaders.googleSubjectIdFromAzure).headOption
-    val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
-
-    SamUser(
-      genWorkbenchUserId(System.currentTimeMillis()),
-      googleSubjectId,
-      oidcHeaders.email,
-      azureB2CId,
-      false,
-      None)
-  }
 
   /**
     * Utility function that knows how to convert all the various headers into OIDCHeaders
