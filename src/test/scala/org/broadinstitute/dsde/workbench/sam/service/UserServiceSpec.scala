@@ -310,6 +310,27 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
   }
 
+  it should "ignore the newly-created WorkbenchUserId for a previously-invited user" in {
+    // Invite a new user
+    val emailToInvite = genNonPetEmail.sample.get
+    service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
+
+    // Lookup the invited user and their ID
+    val invitedUserId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+    val invitedUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
+    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false, None)
+
+    // Give them a fake GoogleSubjectId and a new WorkbenchUserId and use that to register them.
+    // The real code in org/broadinstitute/dsde/workbench/sam/api/UserRoutes.scala calls
+    // org.broadinstitute.dsde.workbench.sam.api.SamUserDirectives.withNewUser which will generate a new
+    // WorkbenchUserId for the SamUser on the request.
+    val googleSubjectId = Option(GoogleSubjectId("123456789"))
+    val newRegisteringUserId = WorkbenchUserId("11111111111111111")
+    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false, None)
+    val registeredUser = service.registerUser(registeringUser, samRequestContext).unsafeRunSync()
+    registeredUser.id shouldBe invitedUser.id
+  }
+
   "UserService inviteUser" should "create a new user" in {
     val userEmail = genNonPetEmail.sample.get
     service.inviteUser(userEmail, samRequestContext).unsafeRunSync()
@@ -333,38 +354,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
       service.inviteUser(user.email, samRequestContext).unsafeRunSync()
     }
     res.errorReport.statusCode shouldBe Option(StatusCodes.Conflict)
-  }
-
-  it should "allow a user to register after being invited" in {
-    // Invite a new user
-    val emailToInvite = genNonPetEmail.sample.get
-    service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
-
-    // Lookup the invited user and their ID
-    val invitedUserId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
-    val invitedUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
-    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false, None)
-
-//    val invitedUserStatusInfo = service.getUserStatusInfo(invitedUserId, samRequestContext).unsafeRunSync()
-//    val invitedUserStatus     = runAndWait(service.getUserStatus(invitedUserId, false, samRequestContext))
-
-    // Give them a fake GoogleSubjectId and use that to register them
-    val googleSubjectId = Option(GoogleSubjectId("123456789"))
-    val newRegisteringUserId = WorkbenchUserId("11111111111111111")
-    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false, None)
-    service.createUser(registeringUser, samRequestContext).futureValue
-
-    // Reload the registered user to check their status
-    val registeredUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to find registered user after completing registration"))
-    registeredUser shouldBe SamUser(invitedUserId, googleSubjectId, emailToInvite, None, true, None)
-
-//    val registeredUserStatusInfo = service.getUserStatusInfo(invitedUserId, samRequestContext).unsafeRunSync()
-//    val registeredUserStatus     = runAndWait(service.getUserStatus(invitedUserId, false, samRequestContext))
-
-    // TODO: PROD-677 - Should service.createUser be idempotent?  Or should it throw a 409?
-    intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createUser(registeringUser, samRequestContext))
-    }.errorReport.statusCode shouldBe Some(StatusCodes.Conflict)
   }
 
   "GetStatus for an invited user" should "return a user status that is disabled" in {
