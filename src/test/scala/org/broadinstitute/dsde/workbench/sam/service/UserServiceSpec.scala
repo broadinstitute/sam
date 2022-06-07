@@ -310,7 +310,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
   }
 
-  "UserService inviteUser" should "create a new user" in{
+  "UserService inviteUser" should "create a new user" in {
     val userEmail = genNonPetEmail.sample.get
     service.inviteUser(userEmail, samRequestContext).unsafeRunSync()
     val userId = dirDAO.loadSubjectFromEmail(userEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
@@ -335,25 +335,65 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     res.errorReport.statusCode shouldBe Option(StatusCodes.Conflict)
   }
 
+  it should "allow a user to register after being invited" in {
+    // Invite a new user
+    val emailToInvite = genNonPetEmail.sample.get
+    service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
+
+    // Lookup the invited user and their ID
+    val userId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+    val invitedUser = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
+
+    val invitedUserStatusInfo = service.getUserStatusInfo(userId, samRequestContext).unsafeRunSync()
+    val invitedUserStatus     = runAndWait(service.getUserStatus(userId, false, samRequestContext))
+
+    // Give them a fake GoogleSubjectId and use that to register them
+    val googleSubjectId = Option(GoogleSubjectId("123456789"))
+    val registeringUser = invitedUser.copy(googleSubjectId = googleSubjectId)
+    service.createUser(registeringUser, samRequestContext).futureValue
+
+    // Reload the registered user to check their status
+    val registeredUser = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to find registered user after completing registration"))
+    registeredUser shouldBe SamUser(userId, googleSubjectId, emailToInvite, None, true, None)
+
+    val registeredUserStatusInfo = service.getUserStatusInfo(userId, samRequestContext).unsafeRunSync()
+    val registeredUserStatus     = runAndWait(service.getUserStatus(userId, false, samRequestContext))
+
+    // TODO: PROD-677 - Should service.createUser be idempotent?  Or should it throw a 409?
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createUser(registeringUser, samRequestContext))
+    }.errorReport.statusCode shouldBe Some(StatusCodes.Conflict)
+  }
+
+  "GetStatus for an invited user" should "return a user status that is disabled" in {
+    val emailToInvite = genNonPetEmail.sample.get
+    val invitedUserDetails = service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
+    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).futureValue
+    invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, Map("ldap" -> false, "allUsersGroup" -> false, "google" -> true))
+  }
+
   "invite user and then create user with same email" should "update googleSubjectId for this user" in {
     val inviteeEmail = genNonPetEmail.sample.get
     service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
-    val userId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+    val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
 
-    val user = genWorkbenchUserGoogle.sample.get.copy(id = userId, email = inviteeEmail)
-    val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    val registrationRes = registrationDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    res shouldBe Some(user.copy(googleSubjectId = None))
-    registrationRes shouldEqual res
+    val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    val userInLDAP = registrationDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    userInPostgres.value should {
+      equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None)) and
+      equal(userInLDAP.value)
+    }
 
-    service.createUser(user, samRequestContext).futureValue
-    val updated = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    val updatedRegistrationRes = registrationDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    updated shouldBe Some(user.copy(enabled = true))
-    updatedRegistrationRes shouldEqual Some(user) // ldap does not know about enabled attribute of user
+    val registeringUser = genWorkbenchUserGoogle.sample.get.copy(id = invitedUserId, email = inviteeEmail)
+    runAndWait(service.createUser(registeringUser, samRequestContext))
+
+    val updatedUserInPostgres = dirDAO.loadUser(registeringUser.id, samRequestContext).unsafeRunSync()
+    val updatedUserInLDAP = registrationDAO.loadUser(registeringUser.id, samRequestContext).unsafeRunSync()
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true, None)
+    updatedUserInLDAP.value shouldBe updatedUserInPostgres.value.copy(enabled = false) // ldap does not store enabled attribute of user
   }
 
-  it  should "update azureB2CId for this user" in {
+  it should "update azureB2CId for this user" in {
     val inviteeEmail = genNonPetEmail.sample.get
     service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
     val userId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
