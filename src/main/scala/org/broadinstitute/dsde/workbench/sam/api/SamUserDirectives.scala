@@ -12,7 +12,6 @@ import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAcceptance}
-import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 
@@ -79,17 +78,4 @@ trait SamUserDirectives {
       }
     }
 
-  def buildSamUser(oidcHeaders: OIDCHeaders): SamUser = {
-    // google id can either be in the external id or google id from azure headers, favor the external id as the source
-    val googleSubjectId = (oidcHeaders.externalId.left.toOption ++ oidcHeaders.googleSubjectIdFromAzure).headOption
-    val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
-
-    SamUser(
-      genWorkbenchUserId(System.currentTimeMillis()),
-      googleSubjectId,
-      oidcHeaders.email,
-      azureB2CId,
-      false,
-      None)
-  }
 }

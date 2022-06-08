@@ -51,8 +51,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   /**
     * First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists
     * throw a conflict error. If the user does not exist look them up by email. If the user email exists
-    * then this is an invited user, update their googleSubjectId and/or azureB2CId. If the email does not exist,
-    * this is a new user, create them.
+    * then this is an invited user, update their googleSubjectId and/or azureB2CId and return the updated user record.
+    * If the email does not exist, this is a new user, create them.
+    * It is critical that this method returns the updated/created SamUser record FROM THE DATABASE and not the SamUser
+    * passed in as the first parameter.
     */
   protected[service] def registerUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     for {

@@ -310,7 +310,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
   }
 
-  it should "ignore the newly-created WorkbenchUserId for a previously-invited user" in {
+  // Test arose out of: https://broadworkbench.atlassian.net/browse/PROD-677
+  "Register User" should "ignore the newly-created WorkbenchUserId on the request and use the previously created WorkbenchUserId for a previously-invited user" in {
     // Invite a new user
     val emailToInvite = genNonPetEmail.sample.get
     service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
@@ -328,7 +329,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val newRegisteringUserId = WorkbenchUserId("11111111111111111")
     val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false, None)
     val registeredUser = service.registerUser(registeringUser, samRequestContext).unsafeRunSync()
-    registeredUser.id shouldBe invitedUser.id
+    registeredUser.id should {
+      equal(invitedUser.id) and
+      not equal(newRegisteringUserId)
+    }
   }
 
   "UserService inviteUser" should "create a new user" in {

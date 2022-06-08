@@ -253,11 +253,6 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     }
   }
 
-  it should "not give an invited user a new user id" in {
-    val standardSamUserDirectives = directives()
-//    standardSamUserDirectives.buildSamUser(OIDCHeaders())
-  }
-
   private def createRequiredHeaders(externalId: Either[GoogleSubjectId, AzureB2CId], email: WorkbenchEmail, accessToken: OAuth2BearerToken, googleIdFromAzure: Option[GoogleSubjectId] = None) = {
     List(
       RawHeader(emailHeader, email.value),
