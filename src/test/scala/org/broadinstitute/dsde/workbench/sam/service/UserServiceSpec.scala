@@ -361,10 +361,29 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   "GetStatus for an invited user" should "return a user status that is disabled" in {
+    // Invite an email
     val emailToInvite = genNonPetEmail.sample.get
     val invitedUserDetails = service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
+
+    // Check the status of the invited user
     val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).futureValue
-    invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, Map("ldap" -> false, "allUsersGroup" -> false, "google" -> true))
+    val disabledUserStatus = Map("ldap" -> false, "allUsersGroup" -> false, "google" -> true)
+    invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, disabledUserStatus)
+  }
+
+  it should "return a status that is enabled after the invited user registers" in {
+    // Invite an email
+    val emailToInvite = genNonPetEmail.sample.get
+    val invitedUserDetails = service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
+
+    // Register a user with that email
+    val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = emailToInvite)
+    runAndWait(service.createUser(registeringUser, samRequestContext))
+
+    // Check the status of the invited user
+    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).futureValue
+    val enabledUserStatus = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, enabledUserStatus)
   }
 
   "invite user and then create user with same email" should "update googleSubjectId for this user" in {
