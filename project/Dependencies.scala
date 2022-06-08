@@ -27,6 +27,7 @@ object Dependencies {
   val excludeWorkbenchModel =   ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
+  val excludeSpringJcl =   ExclusionRule(organization = "org.springframework", name = "spring-jcl")
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -37,6 +38,8 @@ object Dependencies {
   val ravenLogback: ModuleID =   "com.getsentry.raven"        %  "raven-logback"   % "7.8.6"
   val scalaLogging: ModuleID =   "com.typesafe.scala-logging" %% "scala-logging"   % scalaLoggingV
   val ficus: ModuleID =          "com.iheart"                 %% "ficus"           % "1.5.2"
+  val stackdriverLogging: ModuleID = "org.springframework.cloud" % "spring-cloud-gcp-logging" % "1.2.8.RELEASE" excludeAll(excludeSpringJcl)
+  val janino: ModuleID =          "org.codehaus.janino"       %  "janino"          % "3.1.7" // For if-else logic in logging config
 
   val akkaActor: ModuleID =         "com.typesafe.akka"   %%  "akka-actor"           % akkaV
   val akkaSlf4j: ModuleID =         "com.typesafe.akka"   %%  "akka-slf4j"           % akkaV
@@ -114,6 +117,8 @@ object Dependencies {
     ravenLogback,
     scalaLogging,
     ficus,
+    stackdriverLogging,
+    janino,
 
     akkaActor,
     akkaSlf4j,
