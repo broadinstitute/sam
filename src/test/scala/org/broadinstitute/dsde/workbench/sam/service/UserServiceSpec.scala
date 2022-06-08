@@ -379,11 +379,11 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
       equal(userInLDAP.value)
     }
 
-    val registeringUser = genWorkbenchUserGoogle.sample.get.copy(id = invitedUserId, email = inviteeEmail)
+    val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
-    val updatedUserInPostgres = dirDAO.loadUser(registeringUser.id, samRequestContext).unsafeRunSync()
-    val updatedUserInLDAP = registrationDAO.loadUser(registeringUser.id, samRequestContext).unsafeRunSync()
+    val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    val updatedUserInLDAP = registrationDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
     updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true, None)
     updatedUserInLDAP.value shouldBe updatedUserInPostgres.value.copy(enabled = false) // ldap does not store enabled attribute of user
   }
@@ -391,15 +391,23 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   it should "update azureB2CId for this user" in {
     val inviteeEmail = genNonPetEmail.sample.get
     service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
-    val userId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+    val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
 
-    val user = genWorkbenchUserAzure.sample.get.copy(id = userId, email = inviteeEmail)
-    val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    res shouldBe Some(user.copy(azureB2CId = None))
+    val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    val userInLDAP = registrationDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    userInPostgres.value should {
+      equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None)) and
+      equal(userInLDAP.value)
+    }
 
-    service.createUser(user, samRequestContext).futureValue
-    val updated = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    updated shouldBe Some(user.copy(enabled = true))
+    val registeringUser = genWorkbenchUserAzure.sample.get.copy(email = inviteeEmail)
+    runAndWait(service.createUser(registeringUser, samRequestContext))
+
+    val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    val updatedUserInLDAP = registrationDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, None, inviteeEmail, registeringUser.azureB2CId, true, None)
+    // LDAP does not store the AzureB2CId OR the "enabled" status
+    updatedUserInLDAP.value shouldBe SamUser(invitedUserId, None, inviteeEmail, None, false, None)
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {

@@ -77,5 +77,4 @@ trait SamUserDirectives {
         else r
       }
     }
-
 }

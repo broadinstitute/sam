@@ -81,11 +81,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       _ <- user.googleSubjectId.traverse { googleSubjectId =>
         for {
           _ <- directoryDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
+          // Note: we need to store the user's Google Subject Id in LDAP
           _ <- registrationDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
         } yield ()
       }
       _ <- user.azureB2CId.traverse { azureB2CId =>
         directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
+        // Note: we do not store the user's AzureB2CId in LDAP, only in the database
       }
       _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
       updatedUser <- directoryDAO.loadUser(uid, samRequestContext)
