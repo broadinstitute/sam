@@ -51,8 +51,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   /**
     * First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists
     * throw a conflict error. If the user does not exist look them up by email. If the user email exists
-    * then this is an invited user, update their googleSubjectId and/or azureB2CId. If the email does not exist,
-    * this is a new user, create them.
+    * then this is an invited user, update their googleSubjectId and/or azureB2CId and return the updated user record.
+    * If the email does not exist, this is a new user, create them.
+    * It is critical that this method returns the updated/created SamUser record FROM THE DATABASE and not the SamUser
+    * passed in as the first parameter.
     */
   protected[service] def registerUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
@@ -73,20 +75,23 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       }
     } yield updated
 
-  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId) = {
+  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId): IO[SamUser] = {
     for {
       groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
       _ <- user.googleSubjectId.traverse { googleSubjectId =>
         for {
           _ <- directoryDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
+          // Note: we need to store the user's Google Subject Id in LDAP
           _ <- registrationDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
         } yield ()
       }
       _ <- user.azureB2CId.traverse { azureB2CId =>
         directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
+        // Note: we do not store the user's AzureB2CId in LDAP, only in the database
       }
       _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
-    } yield user
+      updatedUser <- directoryDAO.loadUser(uid, samRequestContext)
+    } yield updatedUser.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, s"$user could not be accepted from invite because user could not be loaded from the db")))
   }
 
   private def validateNewWorkbenchUser(newWorkbenchUser: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
@@ -104,7 +109,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } yield ()
   }
 
-  private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext) = {
+  private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
     for {
       createdUser <- directoryDAO.createUser(user, samRequestContext)
       _ <- registrationDAO.createUser(user, samRequestContext)
