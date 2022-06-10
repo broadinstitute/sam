@@ -65,7 +65,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
   def makeOtherUser(samRoutes: SamRoutes, samUser: SamUser = defaultNewUser) = new {
     runAndWait(samRoutes.userService.createUser(samUser, samRequestContext))
     val email = samUser.email
-    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, samUser, samRoutes.directoryDAO, samRoutes.registrationDAO)
+    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, samUser, samRoutes.directoryDAO, samRoutes.registrationDAO, tosService = samRoutes.tosService)
   }
 
   def setGroupMembers(samRoutes: SamRoutes, members: Set[WorkbenchEmail], expectedStatus: StatusCode): Unit = {
@@ -78,9 +78,9 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     assertCreateGroup(defaultRoutes)
     assertGetGroup(defaultRoutes)
 
-    val theDude = Generator.genWorkbenchUserGoogle.sample.get
+    val theDude = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
     defaultRoutes.directoryDAO.createUser(theDude, samRequestContext).unsafeRunSync()
-    val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.policyEvaluatorService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.directoryDAO, defaultRoutes.registrationDAO)
+    val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.policyEvaluatorService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.directoryDAO, defaultRoutes.registrationDAO, tosService = defaultRoutes.tosService)
     body(dudesRoutes)
   }
 
@@ -94,7 +94,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
   it should "respond with 200 if the requesting user is in the member policy for the group" in {
     val samRoutes = createSamRoutesWithResource(resourceTypes, Resource(ManagedGroupService.managedGroupTypeName, Generator.genResourceId.sample.get, Set.empty))
     val newGuy = Generator.genWorkbenchUserGoogle.sample.get
-    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.directoryDAO, samRoutes.registrationDAO)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.directoryDAO, samRoutes.registrationDAO, tosService = samRoutes.tosService)
 
     assertCreateGroup(samRoutes = samRoutes)
     assertGetGroup(samRoutes = samRoutes)
@@ -117,10 +117,9 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
 
     assertCreateGroup(samRoutes)
 
-    val newGuyEmail = WorkbenchEmail("newGuy@organization.org")
-    val newGuy = Generator.genWorkbenchUserGoogle.sample.get
+    val newGuy = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
     samRoutes.directoryDAO.createUser(newGuy, samRequestContext).unsafeRunSync()
-    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao, tosService = samRoutes.tosService)
 
 
     Get(s"/api/groups/v1/$groupId") ~> newGuyRoutes.route ~> check {

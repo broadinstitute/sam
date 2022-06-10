@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.service.TosService
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -26,27 +27,13 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      val requireActiveUserIO = for {
-        user <- getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext)
-      } yield {
-        // service account users do not need to accept ToS
-        val tosStatusAcceptable = tosService.isTermsOfServiceStatusAcceptable(user) || SAdomain.matches(user.email.value)
-        if (!tosStatusAcceptable) {
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User has not accepted the terms of service."))
-        }
-        if (!user.enabled) {
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
-        }
-
-        user
-      }
-      requireActiveUserIO.unsafeToFuture()
+      getActiveSamUser(oidcHeaders, directoryDAO, registrationDAO, tosService, samRequestContext).unsafeToFuture()
     }
   }
 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeToFuture()
+      getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeToFuture()
     }
   }
 
@@ -91,7 +78,7 @@ object StandardSamUserDirectives {
   val userIdHeader = "OIDC_CLAIM_user_id"
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
 
-  def getSamUser(directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, oidcHeaders: OIDCHeaders, samRequestContext: SamRequestContext): IO[SamUser] = {
+  def getSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, samRequestContext: SamRequestContext): IO[SamUser] = {
     oidcHeaders match {
       case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _) =>
         // If it's a PET account, we treat it as its owner
@@ -105,6 +92,23 @@ object StandardSamUserDirectives {
 
       case OIDCHeaders(_, Right(azureB2CId), _, _) =>
         loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, registrationDAO, samRequestContext)
+    }
+  }
+
+  def getActiveSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] = {
+    for {
+      user <- getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext)
+    } yield {
+      // service account users do not need to accept ToS
+      val tosStatusAcceptable = tosService.isTermsOfServiceStatusAcceptable(user) || SAdomain.matches(user.email.value)
+      if (!tosStatusAcceptable) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User has not accepted the terms of service."))
+      }
+      if (!user.enabled) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
+      }
+
+      user
     }
   }
 

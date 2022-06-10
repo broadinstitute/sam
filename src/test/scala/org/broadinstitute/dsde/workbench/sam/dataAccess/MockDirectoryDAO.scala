@@ -21,7 +21,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
-  private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
 
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
   private val usersWithGoogleSubjectIds: mutable.Map[GoogleSubjectId, WorkbenchSubject] = new TrieMap()
@@ -145,18 +144,34 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO.pure(enabledUsers += ((subject, ())))
-
-  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO {
-    enabledUsers -= subject
+  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
+    subject match {
+      case id: WorkbenchUserId => users.get(id) match {
+        case Some(user) => IO.pure(users += id -> user.copy(enabled = true))
+        case None => IO.unit
+      }
+      case _ => IO.unit
+    }
   }
 
-  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = IO {
-    enabledUsers --= enabledUsers.keys
+  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO {
+    subject match {
+      case id: WorkbenchUserId => users.get(id) match {
+        case Some(user) => IO.pure(users += id -> user.copy(enabled = false))
+        case None => IO.unit
+      }
+      case _ => IO.unit
+    }
   }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
-    enabledUsers.contains(subject)
+    subject match {
+      case id: WorkbenchUserId => users.get(id) match {
+        case Some(user) => user.enabled
+        case None => false
+      }
+      case _ => false
+    }
   }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = loadGroup(groupName, samRequestContext).map(_.map(_.email))

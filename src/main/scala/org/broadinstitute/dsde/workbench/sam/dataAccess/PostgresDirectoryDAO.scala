@@ -561,10 +561,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = {
-    IO.unit //no-op for now. throw exception maybe?
-  }
-
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     readOnlyTransaction("isEnabled", samRequestContext)({ implicit session =>
       val userIdOpt = subject match {

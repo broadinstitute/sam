@@ -53,13 +53,14 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     resourceTypes.map { case (resourceTypeName, resourceType) =>
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
     mockUserService.createUser(samUser, samRequestContext)
 
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, registrationDAO)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, registrationDAO, tosService = tosService)
   }
 
   private val managedGroupResourceType = configResourceTypes.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))

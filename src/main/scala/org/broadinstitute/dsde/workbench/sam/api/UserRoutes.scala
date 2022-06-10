@@ -126,13 +126,7 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
               path("info") {
                 get {
                   complete {
-                    userService.getUserStatusInfo(user.id, samRequestContext).map { statusOption =>
-                      statusOption
-                        .map { status =>
-                          StatusCodes.OK -> Option(status)
-                        }
-                        .getOrElse(StatusCodes.NotFound -> None)
-                    }
+                    userService.getUserStatusInfo(user, samRequestContext)
                   }
                 }
               } ~

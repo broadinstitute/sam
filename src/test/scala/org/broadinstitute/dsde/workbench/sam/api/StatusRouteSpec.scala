@@ -55,11 +55,12 @@ class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
     val emailDomain = "example.com"
     val mockResourceService = new ResourceService(Map.empty, null, policyDAO, directoryDAO, NoExtensions, emailDomain, Set.empty)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, null, Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map.empty, policyDAO, directoryDAO)
-    val samRoutes = new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, Generator.genWorkbenchUserGoogle.sample.get, directoryDAO, registrationDAO)
+    val samRoutes = new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, Generator.genWorkbenchUserGoogle.sample.get, directoryDAO, registrationDAO, tosService = tosService)
 
     Get("/status") ~> samRoutes.route ~> check {
       responseAs[StatusCheckResponse].ok shouldEqual false

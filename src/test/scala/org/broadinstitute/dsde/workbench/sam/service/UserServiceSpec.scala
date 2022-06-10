@@ -128,16 +128,15 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   }
 
   it should "get user status info" in {
-    // user doesn't exist yet
-    service.getUserStatusInfo(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
-
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
+    val savedUser = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().value
+
     // get user status info (id, email, ldap)
-    val info = service.getUserStatusInfo(defaultUser.id, samRequestContext).unsafeRunSync()
-    info shouldBe Some(UserStatusInfo(defaultUser.id.value, defaultUser.email.value, true, true))
+    val info = service.getUserStatusInfo(savedUser, samRequestContext).unsafeRunSync()
+    info shouldBe UserStatusInfo(savedUser.id.value, savedUser.email.value, true, true)
   }
 
   it should "get user status diagnostics" in {

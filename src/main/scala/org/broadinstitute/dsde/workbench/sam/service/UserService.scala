@@ -158,17 +158,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } yield status
   }
 
-  def getUserStatusInfo(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusInfo]] =
-    directoryDAO.loadUser(userId, samRequestContext).flatMap {
-      case Some(user) =>
-        for {
-          adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
-        } yield {
-          val tosStatus = tosService.isTermsOfServiceStatusAcceptable(user)
-          Some(UserStatusInfo(user.id.value, user.email.value, tosStatus && adminEnabled, adminEnabled))
-        }
-      case None => IO.pure(None)
-    }
+  def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] = {
+    val tosStatus = tosService.isTermsOfServiceStatusAcceptable(user)
+    IO.pure(UserStatusInfo(user.id.value, user.email.value, tosStatus && user.enabled, user.enabled))
+  }
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatusDiagnostics]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
