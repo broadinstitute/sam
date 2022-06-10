@@ -85,6 +85,17 @@ trait AdminRoutes
                   }
                 }
               } ~
+              // This will get removed once ID-87 is resolved
+              pathPrefix("repairAllUsersGroup") {
+                pathEndOrSingleSlash {
+                  put {
+                    complete {
+                      userService
+                        .addToAllUsersGroup(WorkbenchUserId(userId), samRequestContext).map(_ => OK)
+                    }
+                  }
+                }
+              } ~
               pathPrefix("petServiceAccount") {
                 path(Segment) { project =>
                   delete {
