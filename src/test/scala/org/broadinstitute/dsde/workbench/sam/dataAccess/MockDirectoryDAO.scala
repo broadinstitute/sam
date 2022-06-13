@@ -144,20 +144,16 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
-    subject match {
-      case id: WorkbenchUserId => users.get(id) match {
-        case Some(user) => IO.pure(users += id -> user.copy(enabled = true))
-        case None => IO.unit
-      }
-      case _ => IO.unit
-    }
-  }
+  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
+    updateUserEnabled(subject, true)
 
-  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO {
+  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
+    updateUserEnabled(subject, false)
+
+  private def updateUserEnabled(subject: WorkbenchSubject, enabled: Boolean): IO[Unit] = {
     subject match {
       case id: WorkbenchUserId => users.get(id) match {
-        case Some(user) => IO.pure(users += id -> user.copy(enabled = false))
+        case Some(user) => IO.pure(users += id -> user.copy(enabled = enabled))
         case None => IO.unit
       }
       case _ => IO.unit
