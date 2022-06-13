@@ -23,7 +23,10 @@ class AzureRoutes(azureService: AzureService,
         entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
           requireCreatePetAction(request, samUser, samRequestContext) {
             complete {
-              azureService.getOrCreateUserPetManagedIdentity(samUser, request, samRequestContext)
+              azureService.getOrCreateUserPetManagedIdentity(samUser, request, samRequestContext).map { case (pet, created) =>
+                val status = if (created) StatusCodes.Created else StatusCodes.OK
+                status -> pet.objectId.value
+              }
             }
           }
         }

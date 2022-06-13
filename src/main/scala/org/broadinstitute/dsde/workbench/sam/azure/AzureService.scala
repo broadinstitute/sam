@@ -27,13 +27,13 @@ class AzureService(azureServicesConfig: AzureServicesConfig,
 
   def getOrCreateUserPetManagedIdentity(user: SamUser,
                                         request: GetOrCreatePetManagedIdentityRequest,
-                                        samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {
+                                        samRequestContext: SamRequestContext): IO[(PetManagedIdentity, Boolean)] = {
     val id = PetManagedIdentityId(user.id, request.tenantId, request.subscriptionId, request.managedResourceGroupName)
     for {
       existingPetOpt <- directoryDAO.loadPetManagedIdentity(id, samRequestContext)
       pet <- existingPetOpt match {
         // pet exists in Sam DB - return it
-        case Some(p) => IO.pure(p)
+        case Some(p) => IO.pure((p, false))
         // pet does not exist in Sam DB - create it
         case None =>
           for {
@@ -48,7 +48,7 @@ class AzureService(azureServicesConfig: AzureServicesConfig,
             petToCreate = PetManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()))
             createdPet <- directoryDAO.createPetManagedIdentity(petToCreate, samRequestContext)
             // TODO write to LDAP
-          } yield createdPet
+          } yield (createdPet, true)
       }
     } yield pet
   }

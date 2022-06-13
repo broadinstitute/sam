@@ -50,7 +50,8 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
 
     // create pet for user
     val request = GetOrCreatePetManagedIdentityRequest(tenantId, subscriptionId, managedResourceGroupName)
-    val res = azureService.getOrCreateUserPetManagedIdentity(defaultUser, request, samRequestContext).unsafeRunSync()
+    val (res, created) = azureService.getOrCreateUserPetManagedIdentity(defaultUser, request, samRequestContext).unsafeRunSync()
+    created shouldBe true
     res.id shouldBe petManagedIdentityId
     res.displayName shouldBe ManagedIdentityDisplayName(s"pet-${defaultUser.id.value}")
 
@@ -66,7 +67,8 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     azureRes.name() shouldBe res.displayName.value
 
     // call getOrCreate again
-    val res2 = azureService.getOrCreateUserPetManagedIdentity(defaultUser, request, samRequestContext).unsafeRunSync()
+    val (res2, created2) = azureService.getOrCreateUserPetManagedIdentity(defaultUser, request, samRequestContext).unsafeRunSync()
+    created2 shouldBe false
     res2 shouldBe res
 
     // pet should still exist in postgres and azure
