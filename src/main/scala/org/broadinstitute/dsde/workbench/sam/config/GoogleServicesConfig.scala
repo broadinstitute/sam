@@ -102,6 +102,7 @@ object GoogleServicesConfig {
   }
 }
 
+//TODO: Once ID-91 is merged and deployed, we cann remove ServiceAccountConfig and the adminServiceAccounts variable
 final case class ServiceAccountConfig(json: String) extends AnyVal
 final case class FirestoreServiceAccountJsonPath(asString: String) extends AnyVal
 final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
