@@ -42,7 +42,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
         val user = Generator.genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = externalId.left.toOption, azureB2CId = externalId.toOption)
         val oidcHeaders = OIDCHeaders(token, externalId, email, None)
         directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
-        val res = getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        val res = getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeRunSync()
         res should be (user)
     }
   }
@@ -56,7 +56,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
         directoryDAO.createUser(user, samRequestContext).unsafeRunSync()
         directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, GoogleProject("")), ServiceAccount(serviceSubjectId, email, ServiceAccountDisplayName(""))), samRequestContext).unsafeRunSync()
         val oidcHeaders = OIDCHeaders(token, Left(GoogleSubjectId(serviceSubjectId.value)), email, None)
-        val res = getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        val res = getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeRunSync()
         res should be (user)
     }
   }
@@ -68,7 +68,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
         val registrationDAO = new MockRegistrationDAO()
         val oidcHeaders = OIDCHeaders(token, Left(serviceAccountUser.googleSubjectId.get), serviceAccountUser.email, None)
         directoryDAO.createUser(serviceAccountUser, samRequestContext).unsafeRunSync()
-        val res = getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        val res = getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeRunSync()
         res should be (serviceAccountUser)
     }
   }
@@ -80,7 +80,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
         val registrationDAO = new MockRegistrationDAO()
         val oidcHeaders = OIDCHeaders(token, externalId, email, None)
         val res = intercept[WorkbenchExceptionWithErrorReport] {
-          getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+          getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeRunSync()
         }
         res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
@@ -93,7 +93,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
         val registrationDAO = new MockRegistrationDAO()
         val oidcHeaders = OIDCHeaders(token, Left(googleSubjectId), email, None)
         val res = intercept[WorkbenchExceptionWithErrorReport] {
-          getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+          getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeRunSync()
         }
         res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
@@ -107,7 +107,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
         val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), email, Option(otherGoogleSubjectId))
         directoryDAO.createUser(googleUser, samRequestContext).unsafeRunSync()
         val res = intercept[WorkbenchExceptionWithErrorReport] {
-          getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+          getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeRunSync()
         }
         res.errorReport.statusCode shouldBe Option(StatusCodes.Forbidden)
     }
@@ -120,7 +120,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
         val registrationDAO = new MockRegistrationDAO()
         val oidcHeaders = OIDCHeaders(token, Right(azureB2CId), email, workbenchUser.googleSubjectId)
         directoryDAO.createUser(workbenchUser, samRequestContext).unsafeRunSync()
-        val res = getSamUser(directoryDAO, registrationDAO, oidcHeaders, samRequestContext).unsafeRunSync()
+        val res = getSamUser(oidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeRunSync()
         val expectedUser = workbenchUser.copy(azureB2CId = Option(azureB2CId))
         res should be (expectedUser)
         directoryDAO.loadUser(workbenchUser.id, samRequestContext).unsafeRunSync() shouldBe Option(expectedUser)

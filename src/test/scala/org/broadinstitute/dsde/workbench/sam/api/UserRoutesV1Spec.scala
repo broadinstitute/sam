@@ -22,8 +22,9 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper {
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO, NoExtensions)
-    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, petSAUser, directoryDAO, registrationDAO, NoExtensions)
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO, NoExtensions, tosService = tosService)
+    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, petSAUser, directoryDAO, registrationDAO, NoExtensions, tosService = tosService)
     testCode(samRoutes, SARoutes)
   }
 

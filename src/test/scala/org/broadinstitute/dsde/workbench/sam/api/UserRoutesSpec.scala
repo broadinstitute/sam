@@ -84,8 +84,9 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val directoryDAO = new MockDirectoryDAO()
     val registrationDAO = new MockRegistrationDAO()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO,
-      newSamUser = Option(defaultUser))
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO,
+      newSamUser = Option(defaultUser), tosService = tosService)
 
     testCode(samRoutes)
   }

@@ -50,13 +50,14 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain, Set.empty)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
     mockUserService.createUser(defaultUserInfo, samRequestContext)
 
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, registrationDAO)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, registrationDAO, tosService = tosService)
   }
 
   "GET /api/resource/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {

@@ -49,10 +49,6 @@ class MockRegistrationDAO extends RegistrationDAO {
     enabledUsers -= subject
   }
 
-  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = IO {
-    enabledUsers --= enabledUsers.keys
-  }
-
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
     enabledUsers.contains(subject)
   }

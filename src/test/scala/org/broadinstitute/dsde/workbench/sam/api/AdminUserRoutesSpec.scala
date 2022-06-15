@@ -128,7 +128,7 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
   val defaultUserId = defaultUser.id
   val defaultUserEmail = defaultUser.email
 
-  val adminUser = Generator.genWorkbenchUserGoogle.sample.get
+  val adminUser = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
 
   val petSAUser = Generator.genWorkbenchUserServiceAccount.sample.get
   val petSAUserId = petSAUser.id
@@ -195,8 +195,9 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
 
     directoryDAO.createUser(adminUser, samRequestContext).unsafeRunSync()
 
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO, cloudExtensions)
-    val adminRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, adminUser, directoryDAO, registrationDAO, cloudExtensions)
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO, cloudExtensions, tosService = tosService)
+    val adminRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, adminUser, directoryDAO, registrationDAO, cloudExtensions, tosService = tosService)
     testCode(samRoutes, adminRoutes)
   }
 }

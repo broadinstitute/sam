@@ -73,15 +73,14 @@ class AdminResourceTypesRoutesSpec
 
     val cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin)
 
-    val mockUserService = new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty,
-      new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    )
+    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, cloudExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
     runAndWait(mockUserService.createUser(user, samRequestContext))
 
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, cloudExtensions)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, cloudExtensions, tosService = tosService)
   }
 
   "GET /api/admin/v1/resourceTypes/{resourceType}/policies/" should "200 when successful" in {
