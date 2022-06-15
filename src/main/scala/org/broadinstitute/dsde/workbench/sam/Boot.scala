@@ -33,11 +33,13 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import java.io.File
 import java.net.URI
+import java.nio.file.{Files, Paths}
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
@@ -231,7 +233,7 @@ object Boot extends IOApp with LazyLogging {
             new File(config.googleServicesConfig.pemFile),
             Option(config.googleServicesConfig.subEmail)
           ))
-      case Some(accounts) => accounts.map(account => Json(account.json, Option(config.googleServicesConfig.subEmail)))
+      case Some(accounts) => accounts.map(account => Json(Files.readAllLines(Paths.get(account)).asScala.mkString, Option(config.googleServicesConfig.subEmail)))
     }).map { credentials =>
       new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName)
     }
