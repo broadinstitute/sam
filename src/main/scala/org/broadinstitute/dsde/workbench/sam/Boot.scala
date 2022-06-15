@@ -225,7 +225,11 @@ object Boot extends IOApp with LazyLogging {
       googleKms: GoogleKmsService[IO],
       adminConfig: AdminConfig)(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
-    val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
+    val googleDirDaos = config.googleServicesConfig.adminSdkServiceAccountPaths.map(
+      _.map(path =>
+        Json(Files.readAllLines(Paths.get(path)).asScala.mkString,
+          Option(config.googleServicesConfig.subEmail))
+      )).getOrElse(config.googleServicesConfig.adminSdkServiceAccounts match {
       case None =>
         NonEmptyList.one(
           Pem(
@@ -233,7 +237,7 @@ object Boot extends IOApp with LazyLogging {
             new File(config.googleServicesConfig.pemFile),
             Option(config.googleServicesConfig.subEmail)
           ))
-      case Some(accounts) => accounts.map(account => Json(Files.readAllLines(Paths.get(account)).asScala.mkString, Option(config.googleServicesConfig.subEmail)))
+      case Some(accounts) => accounts.map(account => Json(account.json, Option(config.googleServicesConfig.subEmail)))
     }).map { credentials =>
       new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName)
     }

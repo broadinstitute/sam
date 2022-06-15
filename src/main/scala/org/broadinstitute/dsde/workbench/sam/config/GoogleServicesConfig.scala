@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import com.typesafe.config.ConfigRenderOptions
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
@@ -30,7 +31,8 @@ final case class GoogleServicesConfig(
     notificationTopic: String,
     googleKeyCacheConfig: GoogleKeyCacheConfig,
     resourceNamePrefix: Option[String],
-    adminSdkServiceAccounts: Option[NonEmptyList[String]],
+    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
+    adminSdkServiceAccountPaths: Option[NonEmptyList[String]],
     googleKms: GoogleKmsConfig,
     terraGoogleOrgNumber: String
 )
@@ -65,6 +67,10 @@ object GoogleServicesConfig {
     )
   }
 
+  implicit val serviceAccountConfigReader: ValueReader[ServiceAccountConfig] = ValueReader.relative { config =>
+    ServiceAccountConfig(config.root().render(ConfigRenderOptions.concise))
+  }
+
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
     val jsonCredentials = ServiceAccountCredentialJson(
       FirestoreServiceAccountJsonPath(config.getString("pathToFirestoreCredentialJson")),
@@ -88,13 +94,15 @@ object GoogleServicesConfig {
       config.getString("notifications.topicName"),
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix"),
-      config.as[Option[NonEmptyList[String]]]("adminSdkServiceAccounts"),
+      config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts"),
+      config.as[Option[NonEmptyList[String]]]("adminSdkServiceAccountPaths"),
       config.as[GoogleKmsConfig]("kms"),
       config.getString("terraGoogleOrgNumber")
     )
   }
 }
 
+final case class ServiceAccountConfig(json: String) extends AnyVal
 final case class FirestoreServiceAccountJsonPath(asString: String) extends AnyVal
 final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
 final case class ServiceAccountCredentialJson(
