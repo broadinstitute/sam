@@ -33,11 +33,13 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import java.io.File
 import java.net.URI
+import java.nio.file.{Files, Paths}
 import javax.net.SocketFactory
 import javax.net.ssl.SSLContext
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
@@ -223,19 +225,7 @@ object Boot extends IOApp with LazyLogging {
       googleKms: GoogleKmsService[IO],
       adminConfig: AdminConfig)(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
-    val googleDirDaos = (config.googleServicesConfig.adminSdkServiceAccounts match {
-      case None =>
-        NonEmptyList.one(
-          Pem(
-            WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
-            new File(config.googleServicesConfig.pemFile),
-            Option(config.googleServicesConfig.subEmail)
-          ))
-      case Some(accounts) => accounts.map(account => Json(account.json, Option(config.googleServicesConfig.subEmail)))
-    }).map { credentials =>
-      new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName)
-    }
-
+    val googleDirDaos = createGoogleDirDaos(config, workspaceMetricBaseName)
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
     val googleIamDAO = new HttpGoogleIamDAO(
       config.googleServicesConfig.appName,
@@ -307,6 +297,27 @@ object Boot extends IOApp with LazyLogging {
       resourceTypeMap,
       adminConfig.superAdminsGroup
     )
+  }
+
+  private def createGoogleDirDaos(config: GoogleConfig, workspaceMetricBaseName: String)
+                                 (implicit actorSystem: ActorSystem): NonEmptyList[HttpGoogleDirectoryDAO] = {
+    val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(
+      _.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
+      .orElse(config.googleServicesConfig.adminSdkServiceAccounts.map(_.map(_.json)))
+
+    val googleCredentials = serviceAccountJsons match {
+      case None =>
+        NonEmptyList.one(
+          Pem(
+            WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
+            new File(config.googleServicesConfig.pemFile),
+            Option(config.googleServicesConfig.subEmail)
+          ))
+      case Some(accounts) => accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
+    }
+
+    googleCredentials.map(credentials =>
+      new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName))
   }
 
   private[sam] def createAppDepenciesWithSamRoutes(
