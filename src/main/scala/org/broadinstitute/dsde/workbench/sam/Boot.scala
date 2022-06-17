@@ -337,8 +337,8 @@ object Boot extends IOApp with LazyLogging {
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
     val azureRoutes = config.azureServicesConfig.map { config =>
-      val crlSerivce = new CrlService(config)
-      val azureService = new AzureService(crlSerivce, directoryDAO)
+      val crlService = new CrlService(config)
+      val azureService = new AzureService(crlService, directoryDAO)
       new AzureRoutes(azureService, policyEvaluatorService, resourceService)
     }
     cloudExtensionsInitializer match {
