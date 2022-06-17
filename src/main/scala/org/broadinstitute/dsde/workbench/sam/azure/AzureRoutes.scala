@@ -33,12 +33,12 @@ class AzureRoutes(azureService: AzureService,
       }
     }
 
-  // Given a GetOrCreatePetManagedIdentityRequest, looks up the billing profile resource and
-  // validates the user has 'link' permission.
+  // Given a GetOrCreatePetManagedIdentityRequest, looks up the billing profile resource
+  // and  validates the user has 'link' permission.
   private def requireCreatePetAction(request: GetOrCreatePetManagedIdentityRequest, samUser: SamUser, samRequestContext: SamRequestContext): Directive0 =
     onSuccess(azureService.getBillingProfileId(request)).flatMap {
       case Some(resourceId) =>
-        requireAction(FullyQualifiedResourceId(SamResourceTypes.spendProfile, resourceId), ResourceAction("link"), samUser.id, samRequestContext)
+        requireAction(FullyQualifiedResourceId(SamResourceTypes.spendProfile, resourceId), SamResourceActions.link, samUser.id, samRequestContext)
       case None =>
         Directives.failWith(
           new WorkbenchExceptionWithErrorReport(

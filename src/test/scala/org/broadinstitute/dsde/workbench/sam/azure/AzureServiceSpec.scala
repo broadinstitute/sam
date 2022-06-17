@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.azure
 
 import cats.effect.IO
+import org.broadinstitute.dsde.workbench.sam.ConnectedTest
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockRegistrationDAO, PostgresDirectoryDAO}
@@ -16,16 +17,19 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
   implicit val ec = scala.concurrent.ExecutionContext.global
   implicit val ioRuntime = cats.effect.unsafe.IORuntime.global
 
-  "AzureService" should "create a pet managed identity" in {
+  "AzureService" should "create a pet managed identity" taggedAs ConnectedTest in {
+    val azureServicesConfig = appConfig.azureServicesConfig
+
     assume(azureServicesConfig.isDefined, "-- skipping Azure test")
 
     // create dependencies
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
+    val crlService = new CrlService(azureServicesConfig.get)
     val registrationDAO = new MockRegistrationDAO
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
-    val azureService = new AzureService(azureServicesConfig.get, clientConfig, directoryDAO)
+    val azureService = new AzureService(crlService, directoryDAO)
 
     // create user
     val defaultUser = genWorkbenchUserAzure.sample.get
@@ -43,7 +47,7 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     directoryDAO.loadPetManagedIdentity(petManagedIdentityId, samRequestContext).unsafeRunSync() shouldBe None
 
     // managed identity should not exist in Azure
-    val msiManager = azureService.getMsiManager(tenantId, subscriptionId).unsafeRunSync()
+    val msiManager = crlService.buildMsiManager(tenantId, subscriptionId).unsafeRunSync()
     msiManager.identities().listByResourceGroup(managedResourceGroupName.value).asScala.toList.exists { i =>
       i.name() === s"pet-${defaultUser.id.value}"
     } shouldBe false
@@ -85,13 +89,17 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     msiManager.identities().deleteById(azureRes.id())
   }
 
-  it should "get the billing profile id from the managed resource group" in {
+  // TODO fails, need to add tag on mrg-terra-integration-test-20211118
+  it should "get the billing profile id from the managed resource group" taggedAs ConnectedTest in {
+    val azureServicesConfig = appConfig.azureServicesConfig
+
     assume(azureServicesConfig.isDefined, "-- skipping Azure test")
 
     // create dependencies
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
     val azureTestConfig = config.getConfig("testStuff.azure")
-    val azureService = new AzureService(azureServicesConfig.get, clientConfig, directoryDAO)
+    val crlService = new CrlService(azureServicesConfig.get)
+    val azureService = new AzureService(crlService, directoryDAO)
 
     // build request
     val tenantId = TenantId(azureTestConfig.getString("tenantId"))

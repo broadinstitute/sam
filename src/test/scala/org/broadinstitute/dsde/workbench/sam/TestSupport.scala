@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam
 
 import akka.actor.ActorSystem
 import akka.stream.Materializer
-import bio.terra.cloudres.common.ClientConfig
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
@@ -19,7 +18,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.api._
-import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
+import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
@@ -30,6 +29,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.scalatest.Tag
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
@@ -42,7 +42,7 @@ import java.net.URI
 import java.time.Instant
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
 
 
@@ -79,8 +79,6 @@ object TestSupport extends TestSupport {
   val adminConfig = config.as[AdminConfig]("admin")
 
   val dirURI = new URI(directoryConfig.directoryUrl)
-  val azureServicesConfig = appConfig.azureServicesConfig
-  val clientConfig = ClientConfig.Builder.newBuilder().setClient("sam-unit-test").build() // TODO specify a cleanupConfig to integrate with Janitor
 
   val fakeDistributedLock = DistributedLock[IO]("", appConfig.distributedLockConfig, FakeGoogleFirestore)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
@@ -142,11 +140,9 @@ object TestSupport extends TestSupport {
     ))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
-    val azureRoutes = appConfig.azureServicesConfig.map { config =>
-      val azureService = new AzureService(config, clientConfig, directoryDAO)
-      new AzureRoutes(azureService, policyEvaluatorService, mockResourceService)
-    }
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration, azureRoutes)
+    val azureService = new AzureService(MockCrlService(), directoryDAO)
+    val azureRoutes = new AzureRoutes(azureService, policyEvaluatorService, mockResourceService)
+    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration, Some(azureRoutes))
   }
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
@@ -227,3 +223,5 @@ object FakeGoogleFirestore extends GoogleFirestoreService[IO]{
       ops: (Firestore, Transaction) => IO[A])
     : IO[A] = IO.unit.map(_.asInstanceOf[A]) //create a transaction always finishes so that retrieving lock alway succeeds
 }
+
+object ConnectedTest extends Tag("connected test")

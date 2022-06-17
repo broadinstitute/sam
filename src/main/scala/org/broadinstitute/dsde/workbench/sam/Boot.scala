@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, Go
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
+import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
@@ -336,7 +337,8 @@ object Boot extends IOApp with LazyLogging {
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
     val azureRoutes = config.azureServicesConfig.map { config =>
-      val azureService = new AzureService(config, ClientConfig.Builder.newBuilder().setClient("sam").build(), directoryDAO)
+      val crlSerivce = new CrlService(config)
+      val azureService = new AzureService(crlSerivce, directoryDAO)
       new AzureRoutes(azureService, policyEvaluatorService, resourceService)
     }
     cloudExtensionsInitializer match {
