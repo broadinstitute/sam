@@ -8,7 +8,7 @@ import com.azure.resourcemanager.msi.models.{Identities, Identity}
 import com.azure.resourcemanager.msi.models.Identity.DefinitionStages
 import com.azure.resourcemanager.resources.ResourceManager
 import com.azure.resourcemanager.resources.fluent.models.ResourceGroupInner
-import com.azure.resourcemanager.resources.models.{ResourceGroup, ResourceGroups}
+import com.azure.resourcemanager.resources.models.{GenericResource, GenericResources, Plan, ResourceGroup, ResourceGroups}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, SamResourceTypes}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
@@ -20,6 +20,7 @@ import scala.jdk.CollectionConverters._
 object MockCrlService extends MockitoSugar {
   val mockMrgName = ManagedResourceGroupName("test-mrg")
   val mockSamSpendProfileResource = FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId("test-spend-profile"))
+  val mockPlanName = "mock-plan"
 
   def apply() = {
     val mockCrlService = mock[CrlService]
@@ -31,10 +32,14 @@ object MockCrlService extends MockitoSugar {
     when(mockCrlService.buildMsiManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockMsi))
 
+    when(mockCrlService.getManagedAppPlanId)
+      .thenReturn(mockPlanName)
+
     mockCrlService
   }
 
   private def mockResourceManager: ResourceManager = {
+    // Mock get resource group
     val mockResourceGroupInner = mock[ResourceGroupInner]
     when(mockResourceGroupInner.managedBy())
       .thenReturn("terra")
@@ -51,14 +56,31 @@ object MockCrlService extends MockitoSugar {
     when(mockResourceGroups.getByName(ArgumentMatchers.eq(mockMrgName.value)))
       .thenReturn(mockResourceGroup)
 
+    // Mock get managed app
+    val mockPlan = mock[Plan]
+    when(mockPlan.name())
+      .thenReturn(mockPlanName)
+
+    val mockGenericResource = mock[GenericResource]
+    when(mockGenericResource.plan())
+      .thenReturn(mockPlan)
+
+    val mockGenericResources = mock[GenericResources]
+    when(mockGenericResources.getById(anyString))
+      .thenReturn(mockGenericResource)
+
+    // Mock resource manager
     val mockResourceManager = mock[ResourceManager]
     when(mockResourceManager.resourceGroups())
       .thenReturn(mockResourceGroups)
+    when(mockResourceManager.genericResources())
+      .thenReturn(mockGenericResources)
 
     mockResourceManager
   }
 
   private def mockMsiManager: MsiManager = {
+    // Mock create identity
     val mockIdentity = mock[Identity]
     when(mockIdentity.name())
       .thenReturn("mock-uami")
@@ -83,6 +105,7 @@ object MockCrlService extends MockitoSugar {
     when(mockIdentities.define(anyString))
       .thenReturn(createIdentityStage1)
 
+    // Mock MsiManager
     val mockMsiManager = mock[MsiManager]
     when(mockMsiManager.identities())
       .thenReturn(mockIdentities)

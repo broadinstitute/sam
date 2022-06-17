@@ -22,6 +22,7 @@ cat > ${AZURE_PROPERTIES_OUTPUT_FILE_PATH} <<EOF
 azureServices.managedAppClientId=${AZURE_MANAGED_APP_CLIENT_ID}
 azureServices.managedAppClientSecret=${AZURE_MANAGED_APP_CLIENT_SECRET}
 azureServices.managedAppTenantId=${AZURE_MANAGED_APP_TENANT_ID}
+azureServices.managedAppPlanId=terra-workspace-dev-plan
 EOF
 
 rm $AZURE_MANAGED_APP_CLIENT_OUTPUT_FILE_PATH

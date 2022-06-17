@@ -1,10 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam.azure
 
+import akka.http.scaladsl.model.StatusCodes
 import bio.terra.cloudres.azure.resourcemanager.common.Defaults
 import bio.terra.cloudres.azure.resourcemanager.msi.data.CreateUserAssignedManagedIdentityRequestData
 import cats.effect.IO
 import com.azure.core.management.Region
 import com.azure.core.util.Context
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -62,15 +65,36 @@ class AzureService(crlService: CrlService,
   }
 
   /**
-    * Resolves a managed resource group in Azure and validates it belongs to a Terra managed app.
+    * Validates a managed resource group. Algorithm:
+    * 1. Resolve the MRG as the publisher
+    * 2. Get the managed app id from the MRG
+    * 3. Resolve the managed app as the publisher
+    * 4. Get the managed app "plan" id
+    * 4. Validate the plan id matches the configured value
     */
   private def validateManagedResourceGroup(request: GetOrCreatePetManagedIdentityRequest): IO[Unit] = {
     for {
       resourceManager <- crlService.buildResourceManager(request.tenantId, request.subscriptionId)
-      mrg <- IO(resourceManager.resourceGroups().getByName(request.managedResourceGroupName.value))
-      // TODO this gives the name of the managed app; can we query that?
-      managedBy = mrg.innerModel().managedBy()
-      _ = println("managed by: " + managedBy)
+      resolvedMrg <- IO(resourceManager.resourceGroups().getByName(request.managedResourceGroupName.value)).attempt
+      managedByOpt = for {
+        mrg <- resolvedMrg.toOption
+        im <- Option(mrg.innerModel())
+        mb <- Option(im.managedBy())
+      } yield mb
+      managedBy <- IO.fromOption(managedByOpt)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Validation failed: could not retrieve managed app for managed resource group ${request.managedResourceGroupName.value}"))
+      )
+      resolvedManagedApp <- IO(resourceManager.genericResources().getById(managedBy)).attempt
+      planIdOpt = for {
+        ma <- resolvedManagedApp.toOption
+        p <- Option(ma.plan())
+      } yield p.name()
+      planId <- IO.fromOption(planIdOpt)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "Validation failed: could not retrieve plan for managed app"))
+      )
+      _ <- IO.raiseUnless(planId == crlService.getManagedAppPlanId)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "Validation failed: wrong managed app plan"))
+      )
     } yield ()
   }
 

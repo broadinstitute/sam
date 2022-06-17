@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{googleServicesConfig, samRequestContext}
-import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService, MockCrlService}
+import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
@@ -89,7 +89,8 @@ object TestSamRoutes {
             policyAccessDAO: Option[AccessPolicyDAO] = None,
             maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
             cloudExtensions: Option[CloudExtensions] = None,
-            adminEmailDomains: Option[Set[String]] = None
+            adminEmailDomains: Option[Set[String]] = None,
+            crlService: Option[CrlService] = None
            )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
@@ -120,7 +121,7 @@ object TestSamRoutes {
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, registrationDAO, cloudXtns, dbRef)
-    val azureService = new AzureService(MockCrlService(), directoryDAO)
+    val azureService = new AzureService(crlService.getOrElse(MockCrlService()), directoryDAO)
     val azureRoutes = new AzureRoutes(azureService, policyEvaluatorService, mockResourceService)
     new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, tosService = mockTosService, cloudExtensions = cloudXtns, azureRoutes = Some(azureRoutes))
   }

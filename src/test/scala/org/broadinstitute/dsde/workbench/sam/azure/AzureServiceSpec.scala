@@ -89,7 +89,6 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     msiManager.identities().deleteById(azureRes.id())
   }
 
-  // TODO fails, need to add tag on mrg-terra-integration-test-20211118
   it should "get the billing profile id from the managed resource group" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
 
@@ -112,6 +111,6 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
 
     // should return a billing profile id
     res shouldBe defined
-    res.get shouldBe ResourceId("demo-spend-profile")
+    res.get shouldBe ResourceId("wm-default-spend-profile-id")
   }
 }

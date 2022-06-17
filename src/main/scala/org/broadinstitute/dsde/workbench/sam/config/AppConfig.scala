@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
-import cats.syntax.all._
 import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
@@ -162,11 +161,13 @@ object AppConfig {
     )
   }
 
-  implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
-    (config.getAs[String]("managedAppClientId"),
-      config.getAs[String]("managedAppClientSecret"),
-      config.getAs[String]("managedAppTenantId")
-      ).mapN(AzureServicesConfig.apply)
+  implicit val azureServicesConfigReader: ValueReader[AzureServicesConfig] = ValueReader.relative { config =>
+    AzureServicesConfig(
+      config.getString("managedAppClientId"),
+      config.getString("managedAppClientSecret"),
+      config.getString("managedAppTenantId"),
+      config.getString("managedAppPlanId")
+    )
   }
 
 
