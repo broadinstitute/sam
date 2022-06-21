@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{PolicyEvaluatorService, ResourceService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import spray.json.JsString
 
 class AzureRoutes(azureService: AzureService,
                   val policyEvaluatorService: PolicyEvaluatorService,
@@ -25,7 +26,7 @@ class AzureRoutes(azureService: AzureService,
             complete {
               azureService.getOrCreateUserPetManagedIdentity(samUser, request, samRequestContext).map { case (pet, created) =>
                 val status = if (created) StatusCodes.Created else StatusCodes.OK
-                status -> pet.objectId.value
+                status -> JsString(pet.objectId.value)
               }
             }
           }
