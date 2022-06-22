@@ -9,8 +9,8 @@ import akka.http.scaladsl.server.directives.OnSuccessMagnet._
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
@@ -75,6 +75,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
 object StandardSamUserDirectives {
   val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com$)".r
+  val UAMIPattern: Regex = "(^/subscriptions/\\S+/resourcegroups/\\S+/providers/Microsoft\\.ManagedIdentity/userAssignedIdentities/\\S+$)".r
   val accessTokenHeader = "OIDC_access_token"
   val emailHeader = "OIDC_CLAIM_email"
   val userIdHeader = "OIDC_CLAIM_user_id"
@@ -93,7 +94,7 @@ object StandardSamUserDirectives {
       case OIDCHeaders(_, Left(googleSubjectId), _, _, _) =>
         lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext)
 
-      case OIDCHeaders(_, Right(azureB2CId), _, _, Some(objectId)) =>
+      case OIDCHeaders(_, Right(azureB2CId), _, _, Some(objectId@ManagedIdentityObjectId(UAMIPattern(_)))) =>
         // If it's a managed identity, treat it as its owner
         directoryDAO.getUserFromPetManagedIdentity(objectId, samRequestContext).flatMap {
           case Some(petsOwner) => IO.pure(petsOwner)
