@@ -141,7 +141,7 @@ object Boot extends IOApp with LazyLogging {
           extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
           extraAuthParams = Some("prompt=login"))
       )
-    } yield createAppDepenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, oauth2Config)
+    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, oauth2Config)
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -303,7 +303,6 @@ object Boot extends IOApp with LazyLogging {
                                  (implicit actorSystem: ActorSystem): NonEmptyList[HttpGoogleDirectoryDAO] = {
     val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(
       _.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
-      .orElse(config.googleServicesConfig.adminSdkServiceAccounts.map(_.map(_.json)))
 
     val googleCredentials = serviceAccountJsons match {
       case None =>
@@ -320,7 +319,7 @@ object Boot extends IOApp with LazyLogging {
       new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName))
   }
 
-  private[sam] def createAppDepenciesWithSamRoutes(
+  private[sam] def createAppDependenciesWithSamRoutes(
       config: AppConfig,
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
