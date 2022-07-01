@@ -1666,6 +1666,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully added a user to the policy
