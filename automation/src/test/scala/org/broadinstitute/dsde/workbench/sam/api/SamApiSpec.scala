@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleI
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
-import org.broadinstitute.dsde.workbench.sam.SamConfig
+import org.broadinstitute.dsde.workbench.sam.{ConvertToUnitTest, E2ETest, IntegrationTest, OrchestrationTest, SamConfig}
 import org.broadinstitute.dsde.workbench.service.SamModel._
 import org.broadinstitute.dsde.workbench.service._
 import org.broadinstitute.dsde.workbench.service.test.CleanUp
@@ -45,6 +45,10 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       pi = "Albus Dumbledore",
       nonProfitStatus = "true"
     )
+    // IRWG - Red flag.  Here we are in Sam integration tests and we need to call an upstream service.  Any test in this
+    // suite that is calling this method should either be an Orch test or an E2E/CUJ test.  We will probably find lots
+    // of test suites across all of the services' integration tests that rely on calls to Orch and we'll need to figure
+    // out the right thing to do with each one.
     Orchestration.profile.registerUser(newUserProfile)
   }
 
@@ -53,11 +57,22 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     if (Sam.admin.doesUserExist(subjectId).getOrElse(false)) {
       Sam.admin.deleteUser(subjectId)
     }
+    // IRWG - Sam does not care about Thurloe.  Sam does not know that Thurloe exists.  If registering/deleting users in
+    // Sam needs to care about Thurloe, it should be coded into production code.  I believe that currently, it is Orch
+    // that manages the key-value pairs in Thurloe for a User, so if we need a test that ensures that the KVPs are
+    // deleted, then the test should live in Orch's integration tests, not Sam's.
     Thurloe.keyValuePairs.deleteAll(subjectId)
   }
 
   "Sam test utilities" - {
-    "should be idempotent for removal of user's registration" in {
+    // IRWG - This test seems to not need to be an Integration test.  Looks to me like it could just be a Unit Test, so
+    // I have tagged it as such.  Idempotency of this endpoint should not require actually running against Google.  We
+    // should instead write unit tests that mock the different responses from Google and how our code handles them to
+    // ensure that "removeUser" is idempotent.
+    // IRWG - If we want to test whether creating/deleting a user correctly performs those actions and is doing all the
+    // right stuff in Thurloe, I believe that means this should be an Orchestration test or an E2E/CUJ test.  This test
+    // registers a new user, checks their status, and then deletes their account.  It is doing a lot.
+    "should be idempotent for removal of user's registration" taggedAs(ConvertToUnitTest, OrchestrationTest) in {
 
       // use a temp user because they should not be registered.  Remove them after!
 
@@ -92,7 +107,10 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
   }
 
   "Sam" - {
-    "should return terms of services with auth token" in {
+    // IRWG - Why do we need an auth token in order to get ToS text?  Seems like the sort of thing that would be
+    // required to be available without an auth token.  In any case, it also seems like something that can be easily
+    // mocked in a unit test.
+    "should return terms of services with auth token" taggedAs(ConvertToUnitTest) in {
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
 
@@ -105,7 +123,8 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       }
     }
 
-    "should return terms of services with no auth token" in {
+    // IRWG - See comment for test above
+    "should return terms of services with no auth token" taggedAs(ConvertToUnitTest) in {
       val req = HttpRequest(GET, Sam.url + s"tos/text")
       val response = Sam.sendRequest(req)
 
@@ -117,7 +136,14 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       }
     }
 
-    "should give pets the same access as their owners" in {
+    // IRWG - Red Flag - `withCleanBillingProject` claims a gpalloc projects and makes calls to Rawls and Sam to set up
+    // a Billing Project for use in the test and this flexes all sorts of details in Rawls and Sam that could fail
+    // this test during setup OR teardown.
+    // IRWG - also note that this test is not testing what it says it is testing.  It is not doing any checking of the
+    // access the pet has, it is just checking the email address of the pet.
+    // IRWG - Testing whether Sam can actually create a Service Account with the right name might be an integration
+    // test we need to have for Sam, but we should have a test that very precisely only tests that
+    "should give pets the same access as their owners" taggedAs(E2ETest, ConvertToUnitTest, IntegrationTest) in {
       val anyUser: Credentials = UserPool.chooseAnyUser
       val userAuthToken: AuthToken = anyUser.makeAuthToken()
       val owner: Credentials = UserPool.chooseProjectOwner
@@ -140,7 +166,10 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       }
     }
 
-    "should not treat non-pet service accounts as pets" in {
+    // IRWG - This should just be a unit test that verifies that we can register plain old SA's as Sam Users and if we
+    // call sam with a Pet SA, Sam knows it's a pet and not a "plain" user.  In other words, all Pets are SAs, but not
+    // all SAs are Pets.
+    "should not treat non-pet service accounts as pets" taggedAs(ConvertToUnitTest) in {
       val saEmail = WorkbenchEmail(gcsConfig.qaEmail)
 
       implicit val saAuthToken = ServiceAccountAuthTokenFromPem(gcsConfig.qaEmail, gcsConfig.pathToQAPem)
@@ -149,7 +178,8 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       Sam.user.status()(saAuthToken).map(_.userInfo.userEmail) shouldBe Some(saEmail.value)
     }
 
-    "should retrieve a user's proxy group as any user" in {
+    // IRWG - seems like this does not need to be an integration test.  Seems like things we can mock out in Unit tests
+    "should retrieve a user's proxy group as any user" taggedAs(ConvertToUnitTest) in {
       val Seq(user1: Credentials, user2: Credentials) = UserPool.chooseStudents(2)
       val authToken1: AuthToken = user1.makeAuthToken()
       val authToken2: AuthToken = user2.makeAuthToken()
