@@ -73,6 +73,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         200:
           description: status of specified user
@@ -93,6 +98,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         200:
           description: status of specified user
@@ -230,6 +240,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully added a user to the policy
@@ -499,6 +514,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         201:
           description: Group created
@@ -551,6 +571,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Request sent
@@ -610,6 +635,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully set access instructions
@@ -730,6 +760,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Email successfully added
@@ -1089,6 +1124,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         200:
           description: Successfully synchronized membership
@@ -1238,6 +1278,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully created resource
@@ -2160,6 +2205,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         201:
           description: user successfully created
@@ -2911,13 +2961,16 @@ components:
       properties:
         tenantId:
           type: string
-          description: the Azure tenant id
+          description: the Azure tenant id (UUID)
+          example: 0cb7a640-45a2-4ed6-be9f-63519f86e04b
         subscriptionId:
           type: string
-          description: the Azure subscription id
+          description: the Azure subscription id (UUID)
+          example: 3efc5bdf-be0e-44e7-b1d7-c08931e3c16c
         managedResourceGroupName:
           type: string
           description: the name of the Azure managed resource group
+          example: my-managed-resource-group
       description: specifies a request for a pet managed identity
   securitySchemes:
     googleoauth:

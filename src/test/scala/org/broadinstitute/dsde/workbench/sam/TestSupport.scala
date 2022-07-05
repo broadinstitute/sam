@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.api._
-import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService, MockCrlService}
+import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
@@ -141,13 +141,12 @@ object TestSupport extends TestSupport {
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
     val azureService = new AzureService(MockCrlService(), directoryDAO)
-    val azureRoutes = new AzureRoutes(azureService, policyEvaluatorService, mockResourceService)
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration, Some(azureRoutes))
+    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration, azureService)
   }
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config, samDependencies.azureRoutes)
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config, Some(samDependencies.azureService))
     with MockSamUserDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
@@ -207,7 +206,7 @@ object TestSupport extends TestSupport {
   }
 }
 
-final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, registrationDAO: MockRegistrationDAO, policyDao: AccessPolicyDAO, cloudExtensions: CloudExtensions, oauth2Config: OpenIDConnectConfiguration, azureRoutes: Option[AzureRoutes])
+final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, registrationDAO: MockRegistrationDAO, policyDao: AccessPolicyDAO, cloudExtensions: CloudExtensions, oauth2Config: OpenIDConnectConfiguration, azureService: AzureService)
 
 object FakeGoogleFirestore extends GoogleFirestoreService[IO]{
   override def set(

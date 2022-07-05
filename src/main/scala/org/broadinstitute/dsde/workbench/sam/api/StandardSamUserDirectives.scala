@@ -75,7 +75,8 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
 object StandardSamUserDirectives {
   val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com$)".r
-  val UAMIPattern: Regex = "(^/subscriptions/\\S+/resourcegroups/\\S+/providers/Microsoft\\.ManagedIdentity/userAssignedIdentities/\\S+$)".r
+  // UAMI == "User Assigned Managed Identity" in Azure
+  val UamiPattern: Regex = "(^/subscriptions/\\S+/resourcegroups/\\S+/providers/Microsoft\\.ManagedIdentity/userAssignedIdentities/\\S+$)".r
   val accessTokenHeader = "OIDC_access_token"
   val emailHeader = "OIDC_CLAIM_email"
   val userIdHeader = "OIDC_CLAIM_user_id"
@@ -94,7 +95,7 @@ object StandardSamUserDirectives {
       case OIDCHeaders(_, Left(googleSubjectId), _, _, _) =>
         lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext)
 
-      case OIDCHeaders(_, Right(azureB2CId), _, _, Some(objectId@ManagedIdentityObjectId(UAMIPattern(_)))) =>
+      case OIDCHeaders(_, Right(azureB2CId), _, _, Some(objectId@ManagedIdentityObjectId(UamiPattern(_)))) =>
         // If it's a managed identity, treat it as its owner
         directoryDAO.getUserFromPetManagedIdentity(objectId, samRequestContext).flatMap {
           case Some(petsOwner) => IO.pure(petsOwner)

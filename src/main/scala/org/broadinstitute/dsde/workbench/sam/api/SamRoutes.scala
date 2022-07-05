@@ -17,7 +17,7 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionW
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
-import org.broadinstitute.dsde.workbench.sam.azure.AzureRoutes
+import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -39,7 +39,7 @@ abstract class SamRoutes(
     val tosService: TosService,
     val liquibaseConfig: LiquibaseConfig,
     val oidcConfig: OpenIDConnectConfiguration,
-    val azureRoutes: Option[AzureRoutes])(
+    val azureService: Option[AzureService])(
     implicit val system: ActorSystem,
     val materializer: Materializer,
     val executionContext: ExecutionContext)
@@ -50,7 +50,8 @@ abstract class SamRoutes(
     with TermsOfServiceRoutes
     with ExtensionRoutes
     with ManagedGroupRoutes
-    with AdminRoutes {
+    with AdminRoutes
+    with AzureRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
@@ -69,7 +70,7 @@ abstract class SamRoutes(
                 extensionRoutes(samUser, samRequestContextWithUser) ~
                 groupRoutes(samUser, samRequestContextWithUser) ~
                 apiUserRoutes(samUser, samRequestContextWithUser) ~
-                azureRoutes.map(_.routes(samUser, samRequestContext)).getOrElse(reject)
+                azureRoutes(samUser, samRequestContext)
             }
           }
         }
