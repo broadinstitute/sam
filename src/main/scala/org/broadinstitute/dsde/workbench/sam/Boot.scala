@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, Go
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
+import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
@@ -335,10 +336,12 @@ object Boot extends IOApp with LazyLogging {
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
-
+    val azureService = config.azureServicesConfig.map { config =>
+      new AzureService(new CrlService(config), directoryDAO)
+    }
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config, azureService)
         with StandardSamUserDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
@@ -346,7 +349,7 @@ object Boot extends IOApp with LazyLogging {
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config)
+        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config, azureService)
         with StandardSamUserDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }

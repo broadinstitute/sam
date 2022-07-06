@@ -18,6 +18,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.api._
+import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
@@ -28,6 +29,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.scalatest.Tag
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
@@ -40,7 +42,7 @@ import java.net.URI
 import java.time.Instant
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
 
 
@@ -138,12 +140,13 @@ object TestSupport extends TestSupport {
     ))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration)
+    val azureService = new AzureService(MockCrlService(), directoryDAO)
+    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration, azureService)
   }
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config)
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config, Some(samDependencies.azureService))
     with MockSamUserDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
@@ -191,6 +194,7 @@ object TestSupport extends TestSupport {
         GroupMemberTable,
         GroupMemberFlatTable,
         PetServiceAccountTable,
+        PetManagedIdentityTable,
         UserTable,
         AccessInstructionsTable,
         GroupTable)
@@ -202,7 +206,7 @@ object TestSupport extends TestSupport {
   }
 }
 
-final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, registrationDAO: MockRegistrationDAO, policyDao: AccessPolicyDAO, cloudExtensions: CloudExtensions, oauth2Config: OpenIDConnectConfiguration)
+final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, registrationDAO: MockRegistrationDAO, policyDao: AccessPolicyDAO, cloudExtensions: CloudExtensions, oauth2Config: OpenIDConnectConfiguration, azureService: AzureService)
 
 object FakeGoogleFirestore extends GoogleFirestoreService[IO]{
   override def set(
@@ -218,3 +222,5 @@ object FakeGoogleFirestore extends GoogleFirestoreService[IO]{
       ops: (Firestore, Transaction) => IO[A])
     : IO[A] = IO.unit.map(_.asInstanceOf[A]) //create a transaction always finishes so that retrieving lock alway succeeds
 }
+
+object ConnectedTest extends Tag("connected test")

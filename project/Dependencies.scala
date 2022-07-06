@@ -19,6 +19,7 @@ object Dependencies {
   val workbenchNotificationsV = "0.3-d74ff96"
   val workbenchOauth2V = "0.2-20f9225"
   val monocleVersion = "2.0.5"
+  val crlVersion = "1.2.0-SNAPSHOT"
 
   val excludeAkkaActor =        ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 =   ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
@@ -28,6 +29,9 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle =  ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
   val excludeSpringJcl =   ExclusionRule(organization = "org.springframework", name = "spring-jcl")
+  val excludeGoogleCloudResourceManager = ExclusionRule(organization = "com.google.apis", name = "google-api-services-cloudresourcemanager")
+  val excludeJerseyCore =       ExclusionRule(organization = "org.glassfish.jersey.core", name = "*")
+  val excludeJerseyMedia =      ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID =    "com.fasterxml.jackson.core" % "jackson-databind"    % jacksonV
@@ -105,6 +109,8 @@ object Dependencies {
     opencensusLoggingExporter
   )
 
+  val cloudResourceLib: ModuleID = "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll(excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia)
+
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
 
@@ -160,6 +166,8 @@ object Dependencies {
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
-    postgres
+    postgres,
+
+    cloudResourceLib
   ) ++ openCensusDependencies
 }
