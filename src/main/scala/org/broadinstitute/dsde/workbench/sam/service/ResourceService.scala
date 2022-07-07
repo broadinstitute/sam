@@ -37,7 +37,8 @@ class ResourceService(
                                               emailsToSubjects: Map[WorkbenchEmail, Option[WorkbenchSubject]],
                                               roles: Set[ResourceRoleName],
                                               actions: Set[ResourceAction],
-                                              descendantPermissions: Set[AccessPolicyDescendantPermissions])
+                                              descendantPermissions: Set[AccessPolicyDescendantPermissions],
+                                              memberPolicies: Option[Set[PolicyIdentifiers]]=Option.empty)
 
   def getResourceTypes(): IO[Map[ResourceTypeName, ResourceType]] =
     IO.pure(resourceTypes)
@@ -373,7 +374,10 @@ class ResourceService(
     * @return
     */
   private def createOrUpdatePolicy(policyIdentity: FullyQualifiedPolicyId, policy: ValidatableAccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] = {
-    val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet
+    val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet ++
+      policy.memberPolicies.getOrElse(Set.empty).map(p =>
+        FullyQualifiedPolicyId(FullyQualifiedResourceId(p.resourceTypeName, p.resourceId), p.policyName)
+      )
     accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext).flatMap { originalPolicies =>
       originalPolicies.find(_.id == policyIdentity) match {
         case None =>
@@ -569,7 +573,7 @@ class ResourceService(
 
   private def makeCreatablePolicy(accessPolicyName: AccessPolicyName, accessPolicyMembership: AccessPolicyMembership, samRequestContext: SamRequestContext): IO[ValidatableAccessPolicy] =
     mapEmailsToSubjects(accessPolicyMembership.memberEmails, samRequestContext).map { emailsToSubjects =>
-      ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions, accessPolicyMembership.getDescendantPermissions)
+      ValidatableAccessPolicy(accessPolicyName, emailsToSubjects, accessPolicyMembership.roles, accessPolicyMembership.actions, accessPolicyMembership.getDescendantPermissions, accessPolicyMembership.memberPolicies)
     }
 
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
