@@ -1598,7 +1598,7 @@ paths:
     put:
       tags:
         - Resources
-      summary: Add a user to a policy by policy email
+      summary: Add a user to a policy by user email
       operationId: addUserToPolicyV2
       parameters:
         - name: resourceTypeName
@@ -1699,8 +1699,8 @@ paths:
     put:
       tags:
         - Resources
-      summary: Add a user to a policy by role on another resource
-      operationId: addUserToPolicyByRoleV2
+      summary: Add a member policy to a parent policy
+      operationId: addMemberPolicyV2
       parameters:
         - name: resourceTypeName
           in: path
@@ -1742,9 +1742,6 @@ paths:
         204:
           description: Successfully added a user to the policy
           content: { }
-        400:
-          description: email is not found
-          content: { }
         403:
           description: You do not have permission to alter this policy
           content: { }
@@ -1761,8 +1758,8 @@ paths:
     delete:
       tags:
         - Resources
-      summary: Remove a user from a policy by role on another resource
-      operationId: removeUserFromPolicyByRoleV2
+      summary: Remove a member policy from a parent policy
+      operationId: removeMemberPolicyV2
       parameters:
         - name: resourceTypeName
           in: path
@@ -1803,9 +1800,6 @@ paths:
       responses:
         204:
           description: Successfully removed a user from the policy
-          content: { }
-        400:
-          description: email is not found
           content: { }
         403:
           description: You do not have permission to alter this policy
