@@ -616,7 +616,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies),
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
       ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
@@ -627,12 +627,28 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "403 adding without permission" in {
+  it should "403 adding without alter_policies permission" in {
     // differs from happy case in that owner role does not have alter_policies
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.sharePolicy),
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.sharePolicy(AccessPolicyName("splat"))))),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies, SamResourceActions.sharePolicy(AccessPolicyName("splat"))))),
+      ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
+
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("bar"), defaultUserInfo, samRequestContext))
+    Put(s"/api/resources/v2/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberPolicies/${resourceType.name}/bar/reader") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "403 adding without read_policies permission" in {
+    // differs from happy case in that owner role does not have read_policies
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.sharePolicy),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(AccessPolicyName("splat"))))),
       ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
@@ -669,7 +685,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies),
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies, SamResourceActions.readPolicies))),
       ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
@@ -686,12 +702,36 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "403 removing without permission" in {
+  it should "403 removing without alter_policies permission" in {
     // differs from happy case in that owner role does not have alter_policies
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.sharePolicy),
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.sharePolicy(AccessPolicyName("splat"))))),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies, SamResourceActions.sharePolicy(AccessPolicyName("splat"))))),
+      ResourceRoleName("owner"))
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("bar"), defaultUserInfo, samRequestContext))
+
+    runAndWait(samRoutes.resourceService.addSubjectToPolicy(
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, ResourceId("foo")),
+        AccessPolicyName(resourceType.ownerRoleName.value)),
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, ResourceId("bar")),
+        AccessPolicyName("reader")),
+      samRequestContext
+    ))
+
+    Delete(s"/api/resources/v2/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberPolicies/${resourceType.name}/bar/reader") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "403 removing without read_policies permission" in {
+    // differs from happy case in that owner role does not have read_policies on the memberPolicy
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.sharePolicy),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readPolicies, SamResourceActions.sharePolicy(AccessPolicyName("splat"))))),
       ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
