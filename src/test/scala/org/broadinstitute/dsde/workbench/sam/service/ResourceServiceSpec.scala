@@ -598,6 +598,37 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     assert(policies.contains(newPolicy))
   }
 
+  it should "call CloudExtensions.onGroupUpdate when members are added via memberPolicy list" in {
+    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val resourceService = new ResourceService(Map.empty,
+      mock[PolicyEvaluatorService](RETURNS_SMART_NULLS),
+      mockAccessPolicyDAO,
+      mockDirectoryDAO,
+      mockCloudExtensions,
+      "",
+      Set.empty
+    )
+
+    val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
+    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
+
+    // setup existing policy with no members
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(accessPolicy)))
+
+    // function calls that should pass but what they return does not matter
+    when(mockAccessPolicyDAO.overwritePolicy(any[AccessPolicy], any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+
+    // overwrite policy with members in memberPolicy
+    val memberPolicy = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testMemberR")), AccessPolicyName("testB"))
+    val memberPolicyIdSet = Set(PolicyIdentifiers(memberPolicy.accessPolicyName, WorkbenchEmail(""), memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId))
+    runAndWait(resourceService.overwritePolicy(defaultResourceType, policyId.accessPolicyName, policyId.resource, AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None, Some(memberPolicyIdSet)), samRequestContext))
+
+    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+  }
+
   it should "call CloudExtensions.onGroupUpdate when members change" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
