@@ -1740,14 +1740,14 @@ paths:
             type: string
       responses:
         204:
-          description: Successfully added a user to the policy
+          description: Successfully added a member policy to the parent policy
           content: { }
         403:
           description: You do not have permission to alter this policy
           content: { }
         404:
           description: Resource type does not exist, you are not a member of any policy
-            on the resource, or user was not found
+            on the resource, or member policy was not found
           content: { }
         500:
           description: Internal Server Error
@@ -1799,14 +1799,14 @@ paths:
             type: string
       responses:
         204:
-          description: Successfully removed a user from the policy
+          description: Successfully removed a member policy from the parent policy
           content: { }
         403:
           description: You do not have permission to alter this policy
           content: { }
         404:
           description: Resource type does not exist, you are not a member of any policy
-            on the resource, or user was not found
+            on the resource, or member policy was not found
           content: { }
         500:
           description: Internal Server Error
