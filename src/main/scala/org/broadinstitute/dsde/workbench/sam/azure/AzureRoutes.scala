@@ -19,7 +19,7 @@ trait AzureRoutes extends SecurityDirectives {
 
   def azureRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
     azureService.map { service =>
-      path("azure" / "v1") {
+      pathPrefix("azure" / "v1") {
         path("user" / "petManagedIdentity") {
           post {
             entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
