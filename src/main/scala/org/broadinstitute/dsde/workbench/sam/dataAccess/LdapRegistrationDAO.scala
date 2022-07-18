@@ -98,6 +98,7 @@ class LdapRegistrationDAO(
     }
   }
 
+  @deprecated
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
     IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, s"LdapRegistrationDAO is deprecated")))
 
