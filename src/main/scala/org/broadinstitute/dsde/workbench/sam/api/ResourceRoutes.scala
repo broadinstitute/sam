@@ -205,11 +205,9 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                       val memberResource = FullyQualifiedResourceId(ResourceTypeName(memberResourceType),
                         ResourceId(memberResourceId))
                       val subject = FullyQualifiedPolicyId(memberResource, AccessPolicyName(memberPolicyName))
-                      requireOneOfAction(memberResource, Set(ResourceAction("read")), samUser.id, samRequestContext) {
-                        pathEndOrSingleSlash {
-                          putUserInPolicy(policyId, subject, samRequestContext) ~
-                          deleteUserFromPolicy(policyId, subject, samRequestContext)
-                        }
+                      pathEndOrSingleSlash {
+                        putUserInPolicy(policyId, subject, samRequestContext) ~
+                        deleteUserFromPolicy(policyId, subject, samRequestContext)
                       }
                     }
                   }
