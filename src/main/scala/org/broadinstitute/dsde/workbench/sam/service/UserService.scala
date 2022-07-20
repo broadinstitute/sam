@@ -186,7 +186,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           tosAccepted <- tosAcceptedStatus
           google <- googleStatus
           adminEnabled <- adminEnabledStatus
-        } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted, adminEnabled))
+        } yield {
+          samRequestContext.parentSpan.foreach(span =>
+            logger.error(s"test log user ${user.email}", Map("logging.googleapis.com/trace" -> s"projects/broad-dsde-qa/traces/${span.getContext.getTraceId}"))
+          )
+
+          Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted, adminEnabled))
+        }
       }
       case None => Future.successful(None)
     }
