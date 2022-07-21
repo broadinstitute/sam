@@ -3,7 +3,7 @@
 
     <if condition='!isDefined("SAM_LOG_APPENDER")'>
         <then>
-            <variable name="SAM_LOG_APPENDER" value="Console-Stackdriver" />
+            <variable name="SAM_LOG_APPENDER" value="console" />
         </then>
     </if>
 

@@ -1,12 +1,14 @@
 package org.broadinstitute.dsde.workbench.sam
 package service
 
+import scala.jdk.CollectionConverters._
 import java.security.SecureRandom
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+import net.logstash.logback.argument.StructuredArguments
 
 import javax.naming.NameNotFoundException
 import org.apache.commons.codec.binary.Hex
@@ -188,7 +190,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           adminEnabled <- adminEnabledStatus
         } yield {
           samRequestContext.parentSpan.foreach(span =>
-            logger.error(s"test log user ${user.email}", Map("logging.googleapis.com/trace" -> s"projects/broad-dsde-qa/traces/${span.getContext.getTraceId}"))
+            logger.error(s"test log user ${user.email}", StructuredArguments.entries(Map("logging.googleapis.com/trace" -> s"projects/broad-dsde-qa/traces/${span.getContext.getTraceId.toLowerBase16}").asJava))
           )
 
           Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted, adminEnabled))
