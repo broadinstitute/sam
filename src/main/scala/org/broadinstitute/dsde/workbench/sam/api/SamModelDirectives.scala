@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, FullyQualifiedPolicyId, ResourceType, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -23,6 +23,12 @@ trait SamModelDirectives {
     onSuccess(userService.getSubjectFromEmail(email, samRequestContext)).map {
       case Some(subject) => subject
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"${email} not found"))
+    }
+
+  def withPolicy(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): Directive1[AccessPolicy] =
+    onSuccess(resourceService.loadPolicy(policyId, samRequestContext)).map {
+      case Some(policy) => policy
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"policy $policyId not found"))
     }
 
   def withOptionalEntity[T](unmarshaller: FromRequestUnmarshaller[T]): Directive1[Option[T]] =

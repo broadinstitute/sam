@@ -199,6 +199,21 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                     }
                   }
                 } ~
+                pathPrefix("memberPolicies") {
+                  requireActionsForSharePolicy(policyId, samUser, samRequestContext) {
+                    path(Segment / Segment / Segment) { (memberResourceType, memberResourceId, memberPolicyName) =>
+                      val memberResource = FullyQualifiedResourceId(ResourceTypeName(memberResourceType),
+                        ResourceId(memberResourceId))
+                      val policySubject = FullyQualifiedPolicyId(memberResource, AccessPolicyName(memberPolicyName))
+                      withPolicy(policySubject, samRequestContext) { memberPolicy =>
+                        pathEndOrSingleSlash {
+                          putUserInPolicy(policyId, memberPolicy.id, samRequestContext) ~
+                          deleteUserFromPolicy(policyId, memberPolicy.id, samRequestContext)
+                        }
+                      }
+                    }
+                  }
+                } ~
                 pathPrefix("public") {
                   pathEndOrSingleSlash {
                     getPublicFlag(policyId, samUser, samRequestContext) ~
