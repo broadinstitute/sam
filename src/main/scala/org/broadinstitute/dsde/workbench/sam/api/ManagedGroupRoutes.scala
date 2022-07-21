@@ -116,7 +116,8 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
       samRequestContext: SamRequestContext): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), samUser.id, samRequestContext) {
       withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
-        complete(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext).map(_ => StatusCodes.NoContent))
+        complete(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext)
+          .map(if (_) StatusCodes.NoContent else StatusCodes.NotFound))
       }
     }
 
