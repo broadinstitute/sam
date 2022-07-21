@@ -22,6 +22,8 @@ docker/stand-alone/server.crt
 docker/stand-alone/server.key
 docker/stand-alone/ca-bundle.crt
 sam-assembly-*-SNAPSHOT.jar
+src/test/resources/application.conf
+src/test/resources/azure_managed_app_client.json
 
 # Scala-IDE specific
 .scala_dependencies

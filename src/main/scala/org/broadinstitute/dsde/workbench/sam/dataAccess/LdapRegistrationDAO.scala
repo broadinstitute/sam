@@ -98,16 +98,9 @@ class LdapRegistrationDAO(
     }
   }
 
+  @deprecated
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
-    for {
-      entry <- executeLdap(IO(ldapConnectionPool.getEntry(directoryConfig.enabledUsersGroupDn, Attr.member)), "isEnabled", samRequestContext)
-    } yield {
-      val result = for {
-        e <- Option(entry)
-        members <- Option(e.getAttributeValues(Attr.member))
-      } yield members.contains(subjectDn(subject))
-      result.getOrElse(false)
-    }
+    IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, s"LdapRegistrationDAO is deprecated")))
 
   override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = {
     val objectClassAttr = new Attribute("objectclass", Seq("top", "groupofnames").asJava)

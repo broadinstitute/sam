@@ -94,7 +94,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
     registrationDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(azureB2CId = None)) // ldap does not know about azure or enabled
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
-    registrationDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
       Some(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultUser.id), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
   }
@@ -163,7 +162,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // it should be enabled
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
-    registrationDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
 
     // disable the user
     val response = service.disableUser(defaultUser.id, samRequestContext).futureValue
@@ -171,7 +169,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // check ldap
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
-    registrationDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
   }
 
   it should "delete a user" in {

@@ -6,6 +6,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
+import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityDisplayName, ManagedIdentityObjectId, ManagedResourceGroupName, PetManagedIdentity, PetManagedIdentityId, SubscriptionId, TenantId}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.freespec.AnyFreeSpec
@@ -22,6 +23,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
   val defaultUser = Generator.genWorkbenchUserBoth.sample.get
   val defaultPetSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
+  val defaultPetMI = PetManagedIdentity(PetManagedIdentityId(defaultUser.id, TenantId("testTenant"), SubscriptionId("testSubscription"), ManagedResourceGroupName("testMrg")), ManagedIdentityObjectId("testObjectId"), ManagedIdentityDisplayName("Managed Identity"))
 
   val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false),
     ResourceActionPattern("read", "description of pattern2", false))
@@ -1136,6 +1138,26 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         assertThrows[WorkbenchException] {
           dao.setUserAzureB2CId(defaultUser.id, newAzureB2cId, samRequestContext).unsafeRunSync()
         }
+      }
+    }
+
+    "createPetManagedIdentity" - {
+      "create pet managed identity" in {
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.createPetManagedIdentity(defaultPetMI, samRequestContext).unsafeRunSync() shouldBe defaultPetMI
+      }
+    }
+
+    "loadPetManagedIdentity" - {
+      "load pet managed identity" in {
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.createPetManagedIdentity(defaultPetMI, samRequestContext).unsafeRunSync()
+
+        dao.loadPetManagedIdentity(defaultPetMI.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultPetMI)
+      }
+
+      "return None for nonexistent pet managed identities" in {
+        dao.loadPetManagedIdentity(defaultPetMI.id, samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 

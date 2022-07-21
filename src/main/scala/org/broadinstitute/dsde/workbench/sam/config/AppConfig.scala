@@ -28,7 +28,8 @@ final case class AppConfig(
                             blockedEmailDomains: Seq[String],
                             termsOfServiceConfig: TermsOfServiceConfig,
                             oidcConfig: OidcConfig,
-                            adminConfig: AdminConfig
+                            adminConfig: AdminConfig,
+                            azureServicesConfig: Option[AzureServicesConfig]
                           )
 
 object AppConfig {
@@ -160,6 +161,16 @@ object AppConfig {
     )
   }
 
+  implicit val azureServicesConfigReader: ValueReader[AzureServicesConfig] = ValueReader.relative { config =>
+    AzureServicesConfig(
+      config.getString("managedAppClientId"),
+      config.getString("managedAppClientSecret"),
+      config.getString("managedAppTenantId"),
+      config.getString("managedAppPlanId")
+    )
+  }
+
+
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
@@ -181,7 +192,8 @@ object AppConfig {
       blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty),
       termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
       oidcConfig = config.as[OidcConfig]("oidc"),
-      adminConfig = config.as[AdminConfig]("admin")
+      adminConfig = config.as[AdminConfig]("admin"),
+      azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices")
     )
   }
 }

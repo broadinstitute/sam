@@ -134,7 +134,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
             allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
             tosAcceptedStatus <- tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
-            ldapStatus <- registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
+            ldapStatus <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture() // calling postgres instead of opendj here as a temporary measure as we work toward eliminating opendj
             adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
             val enabledMap = Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
@@ -172,7 +172,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) => {
         // pulled out of for comprehension to allow concurrent execution
-        val ldapStatus = registrationDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
+        val ldapStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture() // calling postgres instead of opendj here as a temporary measure as we work toward eliminating opendj
         val tosAcceptedStatus = tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
         val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>

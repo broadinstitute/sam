@@ -73,6 +73,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         200:
           description: status of specified user
@@ -93,6 +98,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         200:
           description: status of specified user
@@ -230,6 +240,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully added a user to the policy
@@ -499,6 +514,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         201:
           description: Group created
@@ -551,6 +571,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Request sent
@@ -610,6 +635,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully set access instructions
@@ -730,6 +760,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Email successfully added
@@ -1089,6 +1124,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         200:
           description: Successfully synchronized membership
@@ -1096,6 +1136,47 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SyncReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/azure/v1/user/petManagedIdentity:
+    post:
+      tags:
+        - Azure
+      summary: gets or creates a pet managed identity for the specified user
+      operationId: getPetManagedIdentity
+      requestBody:
+        description: The details of the managed resource group in which to create the pet
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/GetOrCreatePetManagedIdentityRequest'
+        required: true
+      responses:
+        200:
+          description: Successfully retrieved resource without creating it
+          content:
+            application/json:
+              schema:
+                type: string
+        201:
+          description: Successfully created resource
+          content:
+            application/json:
+              schema:
+                type: string
+        400:
+          description: Invalid or incomplete request body
+          content: { }
+        403:
+          description: Caller does not have permission to create a pet managed identity in the given managed resource group
+          content: { }
+        404:
+          description: Managed resource group does not exist
+          content: { }
         500:
           description: Internal Server Error
           content:
@@ -1197,6 +1278,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully created resource
@@ -1625,6 +1711,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully added a user to the policy
@@ -2233,6 +2324,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         201:
           description: user successfully created
@@ -2975,6 +3071,26 @@ components:
           type: boolean
           description: true if the user is in their proxy group
       description: ""
+    GetOrCreatePetManagedIdentityRequest:
+      required:
+        - tenantId
+        - subscriptionId
+        - managedResourceGroupName
+      type: object
+      properties:
+        tenantId:
+          type: string
+          description: the Azure tenant id (UUID)
+          example: 0cb7a640-45a2-4ed6-be9f-63519f86e04b
+        subscriptionId:
+          type: string
+          description: the Azure subscription id (UUID)
+          example: 3efc5bdf-be0e-44e7-b1d7-c08931e3c16c
+        managedResourceGroupName:
+          type: string
+          description: the name of the Azure managed resource group
+          example: my-managed-resource-group
+      description: specifies a request for a pet managed identity
   securitySchemes:
     googleoauth:
       type: oauth2

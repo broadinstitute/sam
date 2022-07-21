@@ -114,19 +114,12 @@ class LdapRegistrationDAOSpec extends AnyFlatSpec with Matchers with TestSupport
 
     dao.enableIdentity(user.id, samRequestContext).unsafeRunSync()
 
-    assertResult(true) {
-      dao.isEnabled(user.id, samRequestContext).unsafeRunSync()
-    }
-
     dao.deleteUser(user.id, samRequestContext).unsafeRunSync()
 
     assertResult(None) {
       dao.loadUser(user.id, samRequestContext).unsafeRunSync()
     }
 
-    assertResult(false) {
-      dao.isEnabled(user.id, samRequestContext).unsafeRunSync()
-    }
   }
 
   it should "throw an exception when trying to overwrite an existing googleSubjectId" in {

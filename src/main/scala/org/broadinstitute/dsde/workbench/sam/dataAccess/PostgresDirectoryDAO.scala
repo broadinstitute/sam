@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import java.time.Instant
 import java.util.Date
-
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
@@ -21,6 +20,7 @@ import scalikejdbc._
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
 import cats.effect.Temporal
+import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 
 class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit timer: Temporal[IO]) extends DirectoryDAO with DatabaseSupport with PostgresGroupDAO {
 
@@ -737,5 +737,48 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     writeDbRef.inLocalTransaction { session =>
       session.connection.isValid((2 seconds).toSeconds.intValue())
     }
+  }
+
+  override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {
+    serializableWriteTransaction("createPetManagedIdentity", samRequestContext)({ implicit session =>
+      val petManagedIdentityColumn = PetManagedIdentityTable.column
+
+      samsql"""insert into ${PetManagedIdentityTable.table} (${petManagedIdentityColumn.userId}, ${petManagedIdentityColumn.tenantId}, ${petManagedIdentityColumn.subscriptionId}, ${petManagedIdentityColumn.managedResourceGroupName}, ${petManagedIdentityColumn.objectId}, ${petManagedIdentityColumn.displayName})
+           values (${petManagedIdentity.id.user}, ${petManagedIdentity.id.tenantId}, ${petManagedIdentity.id.subscriptionId}, ${petManagedIdentity.id.managedResourceGroupName}, ${petManagedIdentity.objectId}, ${petManagedIdentity.displayName})"""
+        .update().apply()
+      petManagedIdentity
+    })
+  }
+
+  override def loadPetManagedIdentity(petManagedIdentityId: PetManagedIdentityId, samRequestContext: SamRequestContext): IO[Option[PetManagedIdentity]] = {
+    readOnlyTransaction("loadPetManagedIdentity", samRequestContext)({ implicit session =>
+      val petManagedIdentityTable = PetManagedIdentityTable.syntax
+
+      val loadPetQuery = samsql"""select ${petManagedIdentityTable.resultAll}
+       from ${PetManagedIdentityTable as petManagedIdentityTable}
+       where ${petManagedIdentityTable.userId} = ${petManagedIdentityId.user} and ${petManagedIdentityTable.tenantId} = ${petManagedIdentityId.tenantId} and ${petManagedIdentityTable.subscriptionId} = ${petManagedIdentityId.subscriptionId} and ${petManagedIdentityTable.managedResourceGroupName} = ${petManagedIdentityId.managedResourceGroupName}"""
+
+      val petRecordOpt = loadPetQuery.map(PetManagedIdentityTable(petManagedIdentityTable)).single().apply()
+      petRecordOpt.map(unmarshalPetManagedIdentityRecord)
+    })
+  }
+
+  private def unmarshalPetManagedIdentityRecord(petRecord: PetManagedIdentityRecord): PetManagedIdentity = {
+    PetManagedIdentity(PetManagedIdentityId(petRecord.userId, petRecord.tenantId, petRecord.subscriptionId, petRecord.managedResourceGroupName), petRecord.objectId, petRecord.displayName)
+  }
+
+  override def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
+    readOnlyTransaction("getUserFromPetManagedIdentity", samRequestContext)({ implicit session =>
+      val petManagedIdentityTable = PetManagedIdentityTable.syntax
+      val userTable = UserTable.syntax
+
+      val loadUserQuery = samsql"""select ${userTable.resultAll}
+                from ${UserTable as userTable}
+                join ${PetManagedIdentityTable as petManagedIdentityTable} on ${petManagedIdentityTable.userId} = ${userTable.id}
+                where ${petManagedIdentityTable.objectId} = ${petManagedIdentityObjectId}"""
+
+      val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
+      userRecordOpt.map(UserTable.unmarshalUserRecord)
+    })
   }
 }
