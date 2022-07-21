@@ -622,6 +622,11 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
 
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("bar"), defaultUserInfo, samRequestContext))
+
+    val memberResource = FullyQualifiedResourceId(resourceType.name, ResourceId("bar"))
+    val memberPolicy = FullyQualifiedPolicyId(memberResource, AccessPolicyName("reader"))
+    runAndWait(samRoutes.resourceService.createPolicy(memberPolicy, Set(), Set(), Set(), Set(), samRequestContext))
+
     Put(s"/api/resources/v2/${resourceType.name}/foo/policies/${resourceType.ownerRoleName}/memberPolicies/${resourceType.name}/bar/reader") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
@@ -674,6 +679,10 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("foo"), defaultUserInfo, samRequestContext))
     runAndWait(samRoutes.resourceService.createResource(resourceType, ResourceId("bar"), defaultUserInfo, samRequestContext))
+
+    val memberResource = FullyQualifiedResourceId(resourceType.name, ResourceId("bar"))
+    val memberPolicy = FullyQualifiedPolicyId(memberResource, AccessPolicyName("reader"))
+    runAndWait(samRoutes.resourceService.createPolicy(memberPolicy, Set(), Set(), Set(), Set(), samRequestContext))
 
     val parentPolicyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, ResourceId("foo")),
       AccessPolicyName(resourceType.ownerRoleName.value))
