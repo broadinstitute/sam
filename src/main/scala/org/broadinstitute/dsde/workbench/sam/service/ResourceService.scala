@@ -563,6 +563,9 @@ class ResourceService(
       }
     }
 
+  def loadPolicy(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
+    accessPolicyDAO.loadPolicy(policyId, samRequestContext)
+
   def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
     accessPolicyDAO.loadPolicyMembership(policyIdentity, samRequestContext)
 
