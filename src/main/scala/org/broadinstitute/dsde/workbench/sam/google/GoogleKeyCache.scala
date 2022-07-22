@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import java.nio.charset.Charset
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
@@ -10,14 +9,14 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.storage.{BucketInfo, StorageException}
 import com.google.cloud.storage.BucketInfo.LifecycleRule
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document, GcsBlobName, GoogleStorageService}
+import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 import fs2.Stream
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{LockAccessor, PostgresDistributedLockDAO}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -26,7 +25,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
-                      val distributedLock: DistributedLock[IO],
+                      val distributedLock: PostgresDistributedLockDAO[IO],
                       val googleIamDAO: GoogleIamDAO,
                       val googleStorageDAO: GoogleStorageDAO, //this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
                       val googleStorageAlg: GoogleStorageService[IO],
@@ -85,7 +84,7 @@ class GoogleKeyCache(
       } yield key
     }
 
-    val lockPath = LockPath(CollectionName(s"${pet.id.project.value}-getKey"), Document(pet.serviceAccount.subjectId.value), 20 seconds)
+    val lockPath = LockAccessor(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
     maybeCreateKey((_, _) =>
       distributedLock.withLock(lockPath).use { _ => maybeCreateKey(cleanupAndCreateKey)
     })
