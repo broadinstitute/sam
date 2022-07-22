@@ -26,7 +26,7 @@ class PostgresDistributedLockDAO[F[_]](
     case _                   => false
   }
 
-  def withLock(lock: Lock): Resource[F, Unit] = {
+  def withLock(lock: LockAccessor): Resource[F, Unit] = {
       Resource.make {
         Stream
           .retry[F, Unit](acquireLock(lock), config.retryInterval, identity, config.maxRetry, retryable)
@@ -36,7 +36,7 @@ class PostgresDistributedLockDAO[F[_]](
       }(_ => releaseLock(lock))
   }
 
-  private[dsde] def acquireLock(lock: Lock): F[Unit] = {
+  private[dsde] def acquireLock(lock: LockAccessor): F[Unit] = {
     for {
       lockStatus <- getLockStatus(lock)
       _ <- lockStatus match {
@@ -47,14 +47,15 @@ class PostgresDistributedLockDAO[F[_]](
     } yield ()
   }
 
-  private[dsde] def getLockStatus(lock: Lock): F[LockStatus] = {
+  private[dsde] def getLockStatus(lock: LockAccessor): F[LockStatus] = {
     val res = for {
       lockRecord <- OptionT(F.delay(retrieveLock(lock)))
       expiresAt <- OptionT.fromOption[F](Option(lockRecord.expiresAt))
       statusF = F.realTimeInstant.map[LockStatus] { currentTime =>
-        if (expiresAt.isAfter(currentTime))
+        if (currentTime.isAfter(expiresAt)) {
+          deleteLock(lock)
           Available
-        else
+        } else
           Locked
       }
       status <- OptionT.liftF[F, LockStatus](statusF)
@@ -62,7 +63,7 @@ class PostgresDistributedLockDAO[F[_]](
     res.fold[LockStatus](Available)(identity)
   }
 
-  private[dsde] def setLock(lock: Lock): F[Unit] = {
+  private[dsde] def setLock(lock: LockAccessor): F[Unit] = {
     for {
       currentTime <- F.realTimeInstant
       expiration = currentTime.plus(lock.expiresIn.toMillis, ChronoUnit.MILLIS)
@@ -70,23 +71,24 @@ class PostgresDistributedLockDAO[F[_]](
     } yield ()
   }
 
-  private[dsde] def releaseLock(lock: Lock): F[Unit] = {
+  private[dsde] def releaseLock(lock: LockAccessor): F[Unit] = {
     F.delay(deleteLock(lock))
   }
 
-  private[dsde] def retrieveLock(lock: Lock): Option[DistributedLockRecord] = {
+  private[dsde] def retrieveLock(lock: LockAccessor): Option[DistributedLockRecord] = {
     readDbRef.inLocalTransaction(implicit session => {
       val dl = DistributedLockTable.syntax("dl")
+      val column = DistributedLockTable.column
       samsql"""select ${dl.resultAll}
         from ${DistributedLockTable as dl}
-        where ${dl.lockName} = ${lock.lockName} and ${dl.lockValue} = ${lock.lockValue}"""
+        where ${column.lockName} = ${lock.lockName} and ${column.lockValue} = ${lock.lockValue}"""
         .map(DistributedLockTable(dl)).single().apply()
     })
   }
 
-  private[dsde] def createLock(lock: Lock, expiresAt: Instant): Int = {
+  private[dsde] def createLock(lock: LockAccessor, expiresAt: Instant): Int = {
     writeDbRef.inLocalTransaction(implicit session => {
-      val dl = DistributedLockTable.syntax("dl")
+      val dl = DistributedLockTable.column
       val insertLockQuery =
         samsql"""insert into ${DistributedLockTable.table}
                  (${dl.lockName}, ${dl.lockValue}, ${dl.expiresAt})
@@ -95,9 +97,9 @@ class PostgresDistributedLockDAO[F[_]](
     })
   }
 
-  private[dsde] def deleteLock(lock: Lock): Unit = {
+  private[dsde] def deleteLock(lock: LockAccessor): Unit = {
     writeDbRef.inLocalTransaction(implicit session => {
-      val dl = DistributedLockTable.syntax("dl")
+      val dl = DistributedLockTable.column
       samsql"""delete from ${DistributedLockTable.table}
       where ${dl.lockName} = ${lock.lockName} and ${dl.lockValue} = ${lock.lockValue}"""
         .update().apply()
@@ -105,8 +107,17 @@ class PostgresDistributedLockDAO[F[_]](
   }
 }
 
+object PostgresDistributedLockDAO {
+  def apply[F[_]: Async](
+      writeDbRef: DbReference,
+      readDbRef: DbReference,
+      config: DistributedLockConfig): PostgresDistributedLockDAO[F] =
+    new PostgresDistributedLockDAO[F](writeDbRef, readDbRef, config)
+}
+
+
 final case class DistributedLockConfig(retryInterval: FiniteDuration, maxRetry: Int)
-final case class FailToObtainLock(lock: Lock) extends RuntimeException {
+final case class FailToObtainLock(lock: LockAccessor) extends RuntimeException {
   override def getMessage: String = s"can't get lock: $lock"
 }
 
@@ -114,4 +125,4 @@ sealed trait LockStatus extends Serializable with Product
 final case object Available extends LockStatus
 final case object Locked extends LockStatus
 
-final case class Lock(lockName: String, lockValue: String, expiresIn: FiniteDuration)
+final case class LockAccessor(lockName: String, lockValue: String, expiresIn: FiniteDuration)
