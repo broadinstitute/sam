@@ -7,7 +7,7 @@ import cats.effect.IO
 import com.azure.core.management.Region
 import com.azure.core.util.Context
 import com.azure.resourcemanager.resources.models.{GenericResource, ResourceGroup}
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -45,20 +45,6 @@ class AzureService(crlService: CrlService,
     } yield pet
   }
 
-  def getOrCreateUserPetManagedIdentityByEmail(email: WorkbenchEmail,
-                                               request: GetOrCreatePetManagedIdentityRequest,
-                                               samRequestContext: SamRequestContext): IO[(PetManagedIdentity, Boolean)] = {
-    for {
-      subjectOpt <- directoryDAO.loadSubjectFromEmail(email, samRequestContext)
-      samUserOpt <- subjectOpt match {
-        case Some(userId: WorkbenchUserId) => directoryDAO.loadUser(userId, samRequestContext)
-        case _ => IO.pure(None)
-      }
-      samUser <- IO.fromOption(samUserOpt)(new WorkbenchException(s"Unknown user: ${email.value}"))
-      res <- getOrCreateUserPetManagedIdentity(samUser, request, samRequestContext)
-    } yield res
-  }
-
   /**
     * Creates a pet managed identity in Azure and the Sam database.
     */
@@ -80,6 +66,18 @@ class AzureService(crlService: CrlService,
       createdPet <- directoryDAO.createPetManagedIdentity(petToCreate, samRequestContext)
     } yield (createdPet, true)
   }
+
+  /**
+    * Loads a SamUser from the database by email.
+    */
+  def getSamUser(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    for {
+      subjectOpt <- directoryDAO.loadSubjectFromEmail(email, samRequestContext)
+      samUserOpt <- subjectOpt match {
+        case Some(userId: WorkbenchUserId) => directoryDAO.loadUser(userId, samRequestContext)
+        case _ => IO.pure(None)
+      }
+    } yield samUserOpt
 
   /**
     * Resolves a managed resource group in Azure and returns the terra.billingProfileId tag value.
