@@ -67,7 +67,6 @@ object GoogleServicesConfig {
 
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
     val jsonCredentials = ServiceAccountCredentialJson(
-      FirestoreServiceAccountJsonPath(config.getString("pathToFirestoreCredentialJson")),
       DefaultServiceAccountJsonPath(config.getString("pathToDefaultCredentialJson"))
     )
 
@@ -98,6 +97,5 @@ object GoogleServicesConfig {
 final case class FirestoreServiceAccountJsonPath(asString: String) extends AnyVal
 final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
 final case class ServiceAccountCredentialJson(
-    firestoreServiceAccountJsonPath: FirestoreServiceAccountJsonPath,
     defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)
 final case class GoogleConfig(googleServicesConfig: GoogleServicesConfig, petServiceAccountConfig: PetServiceAccountConfig)

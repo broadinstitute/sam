@@ -21,7 +21,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LockAccessor, PostgresDistributedLockDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LockDetails, PostgresDistributedLockDAO, RegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -344,7 +344,7 @@ class GoogleExtensions(
       }
     } yield pet
 
-    val lock = LockAccessor(s"${project.value}-createPet", user.id.value, 30 seconds)
+    val lock = LockDetails(s"${project.value}-createPet", user.id.value, 30 seconds)
 
     for {
       (pet, sa) <- retrievePetAndSA(user.id, petSaName, project, samRequestContext) //I'm loving better-monadic-for

@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProj
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 import fs2.Stream
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{LockAccessor, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{LockDetails, PostgresDistributedLockDAO}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -84,9 +84,9 @@ class GoogleKeyCache(
       } yield key
     }
 
-    val lockPath = LockAccessor(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
+    val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
     maybeCreateKey((_, _) =>
-      distributedLock.withLock(lockPath).use { _ => maybeCreateKey(cleanupAndCreateKey)
+      distributedLock.withLock(lockDetails).use { _ => maybeCreateKey(cleanupAndCreateKey)
     })
   }
 

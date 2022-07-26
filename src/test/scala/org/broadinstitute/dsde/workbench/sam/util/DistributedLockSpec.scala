@@ -24,33 +24,33 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   )
 
   "acquireLock" should "succeed if a lock can be retrieved" in {
-    val lockAccessor = genLock.sample.get
-    val res = lockResource.use { lock => lock.acquireLock(lockAccessor)}
+    val lockDetails = genLock.sample.get
+    val res = lockResource.use { lock => lock.acquireLock(lockDetails)}
 
     res.attempt.map(r => r.isRight shouldBe true).unsafeToFuture()
   }
 
   it should "fail if there's same lock has already been set within 30 seconds" in {
-    val lockAccessor = genLock.sample.get
+    val lockDetails = genLock.sample.get
     val res = lockResource.use { lock =>
       for {
-        _ <- lock.acquireLock(lockAccessor)
+        _ <- lock.acquireLock(lockDetails)
         _ <- IO.sleep(2 seconds)
-        failed <- lock.acquireLock(lockAccessor).attempt
+        failed <- lock.acquireLock(lockDetails).attempt
       } yield {
-        failed.swap.toOption.get.asInstanceOf[FailToObtainLock].getMessage shouldBe(s"can't get lock: $lockAccessor")
+        failed.swap.toOption.get.asInstanceOf[FailToObtainLock].getMessage shouldBe(s"can't get lock: $lockDetails")
       }
     }
     res.unsafeToFuture()
   }
 
-  "releaseLock" should "remove lockPath" in {
-    val lockAccessor = genLock.sample.get
+  "releaseLock" should "remove lockDetails" in {
+    val lockDetails = genLock.sample.get
     val res = lockResource.use { dl =>
       for {
-        _ <- dl.acquireLock(lockAccessor)
-        _ <- dl.releaseLock(lockAccessor)
-        released <- dl.getLockStatus(lockAccessor)
+        _ <- dl.acquireLock(lockDetails)
+        _ <- dl.releaseLock(lockDetails)
+        released <- dl.getLockStatus(lockDetails)
       } yield {
         released shouldBe Available
       }
@@ -60,17 +60,17 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   }
 
   "withLock" should "eventually get a lock with max retry" in {
-    val lockAccessor = genLock.sample.get.copy(expiresIn = 7 seconds)
+    val lockDetails = genLock.sample.get.copy(expiresIn = 7 seconds)
     val res = lockResource.use { lock =>
       for {
         current <- Clock[IO].realTime.map(_.toMillis)
-        _ <- lock.acquireLock(lockAccessor)
+        _ <- lock.acquireLock(lockDetails)
         _ <- IO.sleep(2 seconds)
-        acquireTime <- lock.withLock(lockAccessor).use { _ =>
+        acquireTime <- lock.withLock(lockDetails).use { _ =>
           Clock[IO].realTime.map(_.toMillis)
         }
       } yield {
-        acquireTime - current should be > lockAccessor.expiresIn.toMillis
+        acquireTime - current should be > lockDetails.expiresIn.toMillis
       }
     }
 
@@ -78,18 +78,18 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   }
 
   it should "release the lock after it's used" in {
-    val lockAccessor = genLock.sample.get.copy(expiresIn = 5 seconds)
+    val lockDetails = genLock.sample.get.copy(expiresIn = 5 seconds)
 
     val res = lockResource.use { lock =>
       for {
         currentTime <- Clock[IO].realTime.map(_.toMillis)
-        lockData <- lock.withLock(lockAccessor).use {
-          _ => IO.pure(lock.retrieveLock(lockAccessor))
+        lockData <- lock.withLock(lockDetails).use {
+          _ => IO.pure(lock.retrieveLock(lockDetails))
         }
-        released <- IO.pure(lock.retrieveLock(lockAccessor))
+        released <- IO.pure(lock.retrieveLock(lockDetails))
       } yield {
-        // validate we actually set and release the same lockPath
-        lockData.get.expiresAt.toEpochMilli should be >= (currentTime + lockAccessor.expiresIn.toMillis)
+        // validate we actually set and release the same lockDetails
+        lockData.get.expiresAt.toEpochMilli should be >= (currentTime + lockDetails.expiresIn.toMillis)
         released should be(None)
       }
     }
@@ -98,7 +98,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   }
 
   it should "fail to get a lock if max retry is reached" in {
-    val lockAccessor = genLock.sample.get
+    val lockDetails = genLock.sample.get
 
     val config = DistributedLockConfig(1 seconds, 3)
     val lockResource: cats.effect.Resource[IO, PostgresDistributedLockDAO[IO]] = cats.effect.Resource.eval(
@@ -110,9 +110,9 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
     val res = lockResource.use { lock =>
       for {
         current <- Clock[IO].realTime.map(_.toMillis)
-        _ <- lock.acquireLock(lockAccessor)
+        _ <- lock.acquireLock(lockDetails)
         failed <- lock
-          .withLock(lockAccessor)
+          .withLock(lockDetails)
           .use(_ => IO.unit)
           .attempt //this will fail to acquire lock
         endTime <- Clock[IO].realTime.map(_.toMillis)

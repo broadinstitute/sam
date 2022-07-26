@@ -26,7 +26,7 @@ class PostgresDistributedLockDAO[F[_]](
     case _                   => false
   }
 
-  def withLock(lock: LockAccessor): Resource[F, Unit] = {
+  def withLock(lock: LockDetails): Resource[F, Unit] = {
       Resource.make {
         Stream
           .retry[F, Unit](acquireLock(lock), config.retryInterval, identity, config.maxRetry, retryable)
@@ -36,7 +36,7 @@ class PostgresDistributedLockDAO[F[_]](
       }(_ => releaseLock(lock))
   }
 
-  private[dsde] def acquireLock(lock: LockAccessor): F[Unit] = {
+  private[dsde] def acquireLock(lock: LockDetails): F[Unit] = {
     for {
       lockStatus <- getLockStatus(lock)
       _ <- lockStatus match {
@@ -47,7 +47,7 @@ class PostgresDistributedLockDAO[F[_]](
     } yield ()
   }
 
-  private[dsde] def getLockStatus(lock: LockAccessor): F[LockStatus] = {
+  private[dsde] def getLockStatus(lock: LockDetails): F[LockStatus] = {
     val res = for {
       lockRecord <- OptionT(F.delay(retrieveLock(lock)))
       expiresAt <- OptionT.fromOption[F](Option(lockRecord.expiresAt))
@@ -63,7 +63,7 @@ class PostgresDistributedLockDAO[F[_]](
     res.fold[LockStatus](Available)(identity)
   }
 
-  private[dsde] def setLock(lock: LockAccessor): F[Unit] = {
+  private[dsde] def setLock(lock: LockDetails): F[Unit] = {
     for {
       currentTime <- F.realTimeInstant
       expiration = currentTime.plus(lock.expiresIn.toMillis, ChronoUnit.MILLIS)
@@ -71,11 +71,11 @@ class PostgresDistributedLockDAO[F[_]](
     } yield ()
   }
 
-  private[dsde] def releaseLock(lock: LockAccessor): F[Unit] = {
+  private[dsde] def releaseLock(lock: LockDetails): F[Unit] = {
     F.delay(deleteLock(lock))
   }
 
-  private[dsde] def retrieveLock(lock: LockAccessor): Option[DistributedLockRecord] = {
+  private[dsde] def retrieveLock(lock: LockDetails): Option[DistributedLockRecord] = {
     readDbRef.inLocalTransaction(implicit session => {
       val dl = DistributedLockTable.syntax("dl")
       val column = DistributedLockTable.column
@@ -86,7 +86,7 @@ class PostgresDistributedLockDAO[F[_]](
     })
   }
 
-  private[dsde] def createLock(lock: LockAccessor, expiresAt: Instant): Int = {
+  private[dsde] def createLock(lock: LockDetails, expiresAt: Instant): Int = {
     writeDbRef.inLocalTransaction(implicit session => {
       val dl = DistributedLockTable.column
       val insertLockQuery =
@@ -97,7 +97,7 @@ class PostgresDistributedLockDAO[F[_]](
     })
   }
 
-  private[dsde] def deleteLock(lock: LockAccessor): Unit = {
+  private[dsde] def deleteLock(lock: LockDetails): Unit = {
     writeDbRef.inLocalTransaction(implicit session => {
       val dl = DistributedLockTable.column
       samsql"""delete from ${DistributedLockTable.table}
@@ -117,7 +117,7 @@ object PostgresDistributedLockDAO {
 
 
 final case class DistributedLockConfig(retryInterval: FiniteDuration, maxRetry: Int)
-final case class FailToObtainLock(lock: LockAccessor) extends RuntimeException {
+final case class FailToObtainLock(lock: LockDetails) extends RuntimeException {
   override def getMessage: String = s"can't get lock: $lock"
 }
 
@@ -125,4 +125,4 @@ sealed trait LockStatus extends Serializable with Product
 final case object Available extends LockStatus
 final case object Locked extends LockStatus
 
-final case class LockAccessor(lockName: String, lockValue: String, expiresIn: FiniteDuration)
+final case class LockDetails(lockName: String, lockValue: String, expiresIn: FiniteDuration)

@@ -7,7 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalacheck._
 import SamResourceActions._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.LockAccessor
+import org.broadinstitute.dsde.workbench.sam.dataAccess.LockDetails
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import scala.concurrent.duration._
 
@@ -134,10 +134,10 @@ object Generator {
     descendantPermissions <- Gen.listOf(genAccessPolicyDescendantPermissions).map(_.toSet)
   } yield AccessPolicy(id, members, email, roles, actions, descendantPermissions, public = false)
 
-  val genLock: Gen[LockAccessor] = for {
+  val genLock: Gen[LockDetails] = for {
     lockName <- Gen.alphaStr.map(x => s"test$x")
     lockValue <- Gen.alphaStr.map(x => s"test$x")
-  } yield LockAccessor(lockName, lockValue, 5 seconds)
+  } yield LockDetails(lockName, lockValue, 5 seconds)
 
   implicit val arbNonPetEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genNonPetEmail)
   implicit val arbOAuth2BearerToken: Arbitrary[OAuth2BearerToken] = Arbitrary(genOAuth2BearerToken)

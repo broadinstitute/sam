@@ -12,7 +12,7 @@ import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
+import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
@@ -157,8 +157,6 @@ object Boot extends IOApp with LazyLogging {
     appConfig.googleConfig match {
       case Some(config) =>
         for {
-          googleFire <- GoogleFirestoreInterpreter.firestore[IO](
-            config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
           googleStorage <- GoogleStorageInterpreter.storage[IO](
             config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString
           )
@@ -166,7 +164,6 @@ object Boot extends IOApp with LazyLogging {
         } yield {
           implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
-          val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
           // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
           // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
           val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockerBound = None)
