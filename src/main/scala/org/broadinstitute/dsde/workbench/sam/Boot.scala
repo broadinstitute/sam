@@ -131,8 +131,7 @@ object Boot extends IOApp with LazyLogging {
         backgroundDirectoryDAO,
         backgroundAccessPolicyDAO,
         postgresDistributedLockDAO,
-        backgroundLdapExecutionContext,
-        blockingEc)
+        backgroundLdapExecutionContext)
 
       oauth2Config <- cats.effect.Resource.eval(
         OpenIDConnectConfiguration[IO](
