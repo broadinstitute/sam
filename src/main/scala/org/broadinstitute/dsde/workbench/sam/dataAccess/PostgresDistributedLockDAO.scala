@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.util.lock.DistributedLockAlgebra
 import org.broadinstitute.dsde.workbench.sam.util.DatabaseSupport
+import scalikejdbc.{NoExtractor, SQL}
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -49,17 +50,8 @@ class PostgresDistributedLockDAO[F[_]](
 
   private[dsde] def getLockStatus(lock: LockDetails): F[LockStatus] = {
     val res = for {
-      lockRecord <- OptionT(F.delay(retrieveLock(lock)))
-      expiresAt <- OptionT.fromOption[F](Option(lockRecord.expiresAt))
-      statusF = F.realTimeInstant.map[LockStatus] { currentTime =>
-        if (currentTime.isAfter(expiresAt)) {
-          deleteLock(lock)
-          Available
-        } else
-          Locked
-      }
-      status <- OptionT.liftF[F, LockStatus](statusF)
-    } yield status
+      _ <- OptionT(F.delay(retrieveLock(lock)))
+    } yield Locked
     res.fold[LockStatus](Available)(identity)
   }
 
@@ -76,13 +68,21 @@ class PostgresDistributedLockDAO[F[_]](
   }
 
   private[dsde] def retrieveLock(lock: LockDetails): Option[DistributedLockRecord] = {
-    readDbRef.inLocalTransaction(implicit session => {
+    writeDbRef.inLocalTransaction(implicit session => {
       val dl = DistributedLockTable.syntax("dl")
       val column = DistributedLockTable.column
       samsql"""select ${dl.resultAll}
-        from ${DistributedLockTable as dl}
-        where ${column.lockName} = ${lock.lockName} and ${column.lockValue} = ${lock.lockValue}"""
+               from ${DistributedLockTable as dl}
+               where ${column.lockName} = ${lock.lockName} and ${column.lockValue} = ${lock.lockValue}"""
         .map(DistributedLockTable(dl)).single().apply()
+        .flatMap(record => {
+          if (Instant.now().isAfter(record.expiresAt)) {
+            deleteLockSamSql(lock).update().apply()
+            None
+          } else {
+            Some(record)
+          }
+        })
     })
   }
 
@@ -97,12 +97,15 @@ class PostgresDistributedLockDAO[F[_]](
     })
   }
 
+  private def deleteLockSamSql(lock: LockDetails): SQL[Nothing, NoExtractor] = {
+    val dl = DistributedLockTable.column
+    samsql"""delete from ${DistributedLockTable.table}
+            where ${dl.lockName} = ${lock.lockName} and ${dl.lockValue} = ${lock.lockValue}"""
+  }
+
   private[dsde] def deleteLock(lock: LockDetails): Unit = {
     writeDbRef.inLocalTransaction(implicit session => {
-      val dl = DistributedLockTable.column
-      samsql"""delete from ${DistributedLockTable.table}
-      where ${dl.lockName} = ${lock.lockName} and ${dl.lockValue} = ${lock.lockValue}"""
-        .update().apply()
+      deleteLockSamSql(lock).update().apply()
     })
   }
 }
