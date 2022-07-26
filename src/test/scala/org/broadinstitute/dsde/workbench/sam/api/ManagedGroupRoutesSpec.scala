@@ -500,6 +500,18 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
     }
   }
 
+  it should "respond with a 404 when the user does not have access to modify the group" in {
+    val samRoutes = TestSamRoutes(resourceTypes)
+    withUserNotInGroup(samRoutes){ nonMemberRoutes =>
+      Put(s"/api/group/$groupId/admin/${samRoutes.user.email}") ~> nonMemberRoutes.route ~> check {
+        status shouldEqual StatusCodes.NotFound
+      }
+      Delete(s"/api/group/$groupId/admin/${samRoutes.user.email}") ~> nonMemberRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+      }
+    }
+  }
+
   // TODO:  I think this should just work and give back a 204
   // TODO: well i changed something and now it returns a 204 so maybe this TODO above is complete? Must investigate...
   it should "respond with 404 when the email address was already not present in the group and policy" in {
