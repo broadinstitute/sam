@@ -94,7 +94,6 @@ object GoogleServicesConfig {
   }
 }
 
-final case class FirestoreServiceAccountJsonPath(asString: String) extends AnyVal
 final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
 final case class ServiceAccountCredentialJson(
     defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)

@@ -152,8 +152,7 @@ object Boot extends IOApp with LazyLogging {
       backgroundDirectoryDAO: DirectoryDAO,
       backgroundAccessPolicyDAO: AccessPolicyDAO,
       postgresDistributedLockDAO: PostgresDistributedLockDAO[IO],
-      backgroundLdapExecutionContext: ExecutionContext,
-      blockingEc: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+      backgroundLdapExecutionContext: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
         for {
@@ -165,7 +164,7 @@ object Boot extends IOApp with LazyLogging {
           implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
           // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
-          // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
+          // Use resourceNamePrefix to avoid collision between different fiab environments
           val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockerBound = None)
           val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient)
           val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
