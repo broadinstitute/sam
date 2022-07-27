@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
-import cats.data.OptionT
 import cats.effect.{Async, Resource}
 import cats.syntax.all._
 import fs2.Stream
@@ -49,10 +48,7 @@ class PostgresDistributedLockDAO[F[_]](
   }
 
   private[dsde] def getLockStatus(lock: LockDetails): F[LockStatus] = {
-    val res = for {
-      _ <- OptionT(F.delay(retrieveLock(lock)))
-    } yield Locked
-    res.fold[LockStatus](Available)(identity)
+    F.delay(retrieveLock(lock).fold[LockStatus](Available)(_ => Locked))
   }
 
   private[dsde] def setLock(lock: LockDetails): F[Unit] = {
