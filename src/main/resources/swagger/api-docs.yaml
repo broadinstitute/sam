@@ -1187,7 +1187,8 @@ paths:
     post:
       tags:
         - Azure
-      summary: administratively gets or creates a pet managed identity for the specified user
+      summary: gets or creates a pet managed identity for the specified user, get_pet_managed_identity
+        action on cloud-extension/azure required
       operationId: getPetManagedIdentityForUser
       parameters:
         - name: userEmail
@@ -1221,9 +1222,10 @@ paths:
           content: { }
         403:
           description: Caller does not have permission to create a pet managed identity in the given managed resource group
+            or caller does not have get_pet_managed_identity permission on cloud-extension/azure
           content: { }
         404:
-          description: Managed resource group does not exist
+          description: User or managed resource group does not exist
           content: { }
         500:
           description: Internal Server Error

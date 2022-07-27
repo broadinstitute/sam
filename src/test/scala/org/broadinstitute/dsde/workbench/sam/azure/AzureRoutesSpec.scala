@@ -172,6 +172,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
   private def createSecondUser(samRoutes: TestSamRoutes, addToSpendProfile: Boolean = true): SamUser = {
     val newUser = Generator.genWorkbenchUserGoogle.sample.get
+    // wait for Future to complete by converting to IO
     IO.fromFuture(IO(samRoutes.userService.createUser(newUser, samRequestContext))).unsafeRunSync()
     if (addToSpendProfile) {
       Put(s"/api/resources/v2/${SamResourceTypes.spendProfile.value}/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/policies/owner/memberEmails/${newUser.email.value}") ~> samRoutes.route ~> check {

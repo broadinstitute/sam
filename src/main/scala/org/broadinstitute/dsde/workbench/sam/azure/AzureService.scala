@@ -75,7 +75,7 @@ class AzureService(crlService: CrlService,
       subjectOpt <- directoryDAO.loadSubjectFromEmail(email, samRequestContext)
       samUserOpt <- subjectOpt match {
         case Some(userId: WorkbenchUserId) => directoryDAO.loadUser(userId, samRequestContext)
-        case _ => IO.pure(None)
+        case _ => IO.none
       }
     } yield samUserOpt
 
