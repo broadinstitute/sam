@@ -1146,7 +1146,7 @@ paths:
     post:
       tags:
         - Azure
-      summary: gets or creates a pet managed identity for the specified user
+      summary: gets or creates a pet managed identity for the calling user
       operationId: getPetManagedIdentity
       requestBody:
         description: The details of the managed resource group in which to create the pet
@@ -1176,6 +1176,56 @@ paths:
           content: { }
         404:
           description: Managed resource group does not exist
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/azure/v1/petManagedIdentity/{userEmail}:
+    post:
+      tags:
+        - Azure
+      summary: gets or creates a pet managed identity for the specified user, get_pet_managed_identity
+        action on cloud-extension/azure required
+      operationId: getPetManagedIdentityForUser
+      parameters:
+        - name: userEmail
+          in: path
+          description: User's email address
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: The details of the managed resource group in which to create the pet
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/GetOrCreatePetManagedIdentityRequest'
+        required: true
+      responses:
+        200:
+          description: Successfully retrieved resource without creating it
+          content:
+            application/json:
+              schema:
+                type: string
+        201:
+          description: Successfully created resource
+          content:
+            application/json:
+              schema:
+                type: string
+        400:
+          description: Invalid or incomplete request body
+          content: { }
+        403:
+          description: Caller does not have permission to create a pet managed identity in the given managed resource group
+            or caller does not have get_pet_managed_identity permission on cloud-extension/azure
+          content: { }
+        404:
+          description: User or managed resource group does not exist
           content: { }
         500:
           description: Internal Server Error

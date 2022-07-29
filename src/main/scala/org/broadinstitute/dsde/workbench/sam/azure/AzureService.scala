@@ -7,7 +7,7 @@ import cats.effect.IO
 import com.azure.core.management.Region
 import com.azure.core.util.Context
 import com.azure.resourcemanager.resources.models.{GenericResource, ResourceGroup}
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -66,6 +66,18 @@ class AzureService(crlService: CrlService,
       createdPet <- directoryDAO.createPetManagedIdentity(petToCreate, samRequestContext)
     } yield (createdPet, true)
   }
+
+  /**
+    * Loads a SamUser from the database by email.
+    */
+  def getSamUser(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    for {
+      subjectOpt <- directoryDAO.loadSubjectFromEmail(email, samRequestContext)
+      samUserOpt <- subjectOpt match {
+        case Some(userId: WorkbenchUserId) => directoryDAO.loadUser(userId, samRequestContext)
+        case _ => IO.none
+      }
+    } yield samUserOpt
 
   /**
     * Resolves a managed resource group in Azure and returns the terra.billingProfileId tag value.

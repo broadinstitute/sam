@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.azure
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceAction, ResourceId}
 import spray.json.DefaultJsonProtocol._
 
 object AzureJsonSupport {
@@ -40,3 +41,8 @@ final case class PetManagedIdentityId(user: WorkbenchUserId,
 final case class PetManagedIdentity(id: PetManagedIdentityId,
                                     objectId: ManagedIdentityObjectId,
                                     displayName: ManagedIdentityDisplayName)
+
+object AzureExtensions {
+  val resourceId = ResourceId("azure")
+  val getPetManagedIdentityAction = ResourceAction("get_pet_managed_identity")
+}
