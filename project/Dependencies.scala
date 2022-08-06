@@ -87,7 +87,7 @@ object Dependencies {
   val workbenchGoogle2Tests: ModuleID =    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll(excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.123.28" % "test" //needed for mocking google cloud storage
 
-  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
+  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.15.0"
 
   val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.1"
 
