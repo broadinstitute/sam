@@ -6,9 +6,9 @@ import akka.http.scaladsl.model.{HttpRequest, StatusCodes}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.testkit.TestKitBase
 import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
-import org.broadinstitute.dsde.workbench.config.{Credentials, UserPool}
+import org.broadinstitute.dsde.workbench.config.{Credentials, ServiceTestConfig, UserPool}
 import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleIamDAO}
-import org.broadinstitute.dsde.workbench.fixture.BillingFixtures
+import org.broadinstitute.dsde.workbench.fixture.BillingFixtures.withTemporaryBillingProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountName}
 import org.broadinstitute.dsde.workbench.sam.SamConfig
@@ -25,8 +25,9 @@ import java.util.UUID
 import scala.concurrent.Await
 import scala.concurrent.duration.{Duration, _}
 
-class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
+class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanUp with Eventually with TestKitBase {
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(5, Seconds)))
+  val billingAccountId: String = ServiceTestConfig.Projects.billingAccountId
   implicit lazy val system = ActorSystem()
 
   val gcsConfig = SamConfig.GCS
@@ -125,7 +126,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       // set auth tokens explicitly to control which credentials are used
       val userStatus = Sam.user.status()(userAuthToken).get
 
-      withCleanBillingProject(owner, userEmails = List(anyUser.email)) { projectName =>
+      withTemporaryBillingProject(billingAccountId, users = Option(List(anyUser.email))) { projectName =>
         val petAccountEmail = Sam.user.petServiceAccountEmail(projectName)(userAuthToken)
         petAccountEmail.value should not be userStatus.userInfo.userEmail
         googleIamDAO.findServiceAccount(GoogleProject(projectName), petAccountEmail).futureValue.map(_.email) shouldBe Some(petAccountEmail)
@@ -137,7 +138,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         // who is my pet -> who is my user's pet -> it's me
         Sam.user.petServiceAccountEmail(projectName)(petAuthToken) shouldBe petAccountEmail
-      }
+      }(owner.makeAuthToken())
     }
 
     "should not treat non-pet service accounts as pets" in {
@@ -184,7 +185,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
       val authToken1: AuthToken = user1.makeAuthToken()
       val authToken2: AuthToken = user2.makeAuthToken()
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user1.email, user2.email)) { project =>
+      withTemporaryBillingProject(billingAccountId, users = Option(List(user1.email, user2.email))) { project =>
         val email = WorkbenchEmail(Sam.user.status()(authToken1).get.userInfo.userEmail)
         val username = email.value.split("@").head
         val userId = Sam.user.status()(authToken1).get.userInfo.userSubjectId
@@ -198,13 +199,13 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         proxyGroup_1.value should endWith(expectedProxyEmail)
         proxyGroup_2.value should endWith(expectedProxyEmail)
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     "should furnish a new service account key and cache it for further retrievals" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+      withTemporaryBillingProject(billingAccountId, users = Option(List(user.email))) { project =>
         withCleanUp {
           val key1 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken())
           val key2 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken())
@@ -213,13 +214,13 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
           register cleanUp Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken())
         }
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     "should furnish a new service account key after deleting a cached key" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+      withTemporaryBillingProject(billingAccountId, users = Option(List(user.email))) { project =>
         withCleanUp {
 
           val key1 = Sam.user.petServiceAccountKey(project)(user.makeAuthToken())
@@ -230,7 +231,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
           key1 shouldNot be(key2)
         }
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     //this is ignored because there is a permission error with GPAlloc that needs to be looked into.
@@ -241,7 +242,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
       //this must use a GPAlloc'd project to avoid deleting the pet for a shared project, which
       //may have unexpected side effects
-      withCleanBillingProject(user) { projectName =>
+      withTemporaryBillingProject(billingAccountId) { projectName =>
         withCleanUp {
           val petSaKeyOriginal = Sam.user.petServiceAccountKey(projectName)(user.makeAuthToken())
           val petSaEmailOriginal = getFieldFromJson(petSaKeyOriginal, "client_email")
@@ -262,13 +263,13 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
           petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
           petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
         }
-      }
+      }(user.makeAuthToken())
     }
 
     "should get an access token for a user's own pet service account" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+      withTemporaryBillingProject(billingAccountId, users = Option(List(user.email))) { project =>
         // get my pet's email
         val petEmail1 = Sam.user.petServiceAccountEmail(project)(user.makeAuthToken())
 
@@ -289,15 +290,15 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         // result should be the same
         petEmail2 shouldBe petEmail1
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     "should arbitrarily choose a project to return a pet key for when the user has existing pets" in {
       val user = UserPool.chooseStudent
       val userToken = user.makeAuthToken()
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project1 =>
-        withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project2 =>
+      withTemporaryBillingProject(billingAccountId, users = Option(List(user.email))) { project1 =>
+        withTemporaryBillingProject(billingAccountId, users = Option(List(user.email))) { project2 =>
           // get my pet's email thru the arbitrary key endpoint
           val petEmailArbitrary = getFieldFromJson(Sam.user.arbitraryPetServiceAccountKey()(userToken), "client_email")
 
@@ -306,8 +307,8 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
           // result should be a pet associated with the user
           assert(petEmailArbitrary.contains(userSubjectId))
-        }
-      }
+        }(UserPool.chooseProjectOwner.makeAuthToken())
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     "should arbitrarily choose a project to return a pet key for when the user has no existing pets" in {
@@ -325,7 +326,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
     "should arbitrarily choose a project to return a pet token for when the user has existing pets" in {
       val user = UserPool.chooseStudent
 
-      withCleanBillingProject(UserPool.chooseProjectOwner, List(user.email)) { project =>
+      withTemporaryBillingProject(billingAccountId, users = Option(List(user.email))) { project =>
         // get my pet's email
         val petEmail1 = Sam.user.petServiceAccountEmail(project)(user.makeAuthToken())
 
@@ -346,7 +347,7 @@ class SamApiSpec extends AnyFreeSpec with BillingFixtures with Matchers with Sca
 
         // result should be the same
         petEmail2 shouldBe petEmail1
-      }
+      }(UserPool.chooseProjectOwner.makeAuthToken())
     }
 
     "should arbitrarily choose a project to return a pet token for when the user has no existing pets" in {
