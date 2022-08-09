@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.HttpMethods.GET
 import akka.http.scaladsl.model.{HttpRequest, StatusCodes}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.testkit.TestKitBase
-import org.broadinstitute.dsde.workbench.auth.{AuthToken, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
+import org.broadinstitute.dsde.workbench.auth.{AuthToken, AuthTokenScopes, ServiceAccountAuthTokenFromJson, ServiceAccountAuthTokenFromPem}
 import org.broadinstitute.dsde.workbench.config.{Credentials, ServiceTestConfig, UserPool}
 import org.broadinstitute.dsde.workbench.dao.Google.{googleDirectoryDAO, googleIamDAO}
 import org.broadinstitute.dsde.workbench.fixture.BillingFixtures.withTemporaryBillingProject
@@ -138,7 +138,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
 
         // who is my pet -> who is my user's pet -> it's me
         Sam.user.petServiceAccountEmail(projectName)(petAuthToken) shouldBe petAccountEmail
-      }(owner.makeAuthToken())
+      }(owner.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     "should not treat non-pet service accounts as pets" in {
@@ -199,7 +199,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
 
         proxyGroup_1.value should endWith(expectedProxyEmail)
         proxyGroup_2.value should endWith(expectedProxyEmail)
-      }(UserPool.chooseProjectOwner.makeAuthToken())
+      }(UserPool.chooseProjectOwner.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     "should furnish a new service account key and cache it for further retrievals" in {
@@ -214,7 +214,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
 
           register cleanUp Sam.user.deletePetServiceAccountKey(project, getFieldFromJson(key1, "private_key_id"))(user.makeAuthToken())
         }
-      }(UserPool.chooseProjectOwner.makeAuthToken())
+      }(UserPool.chooseProjectOwner.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     "should furnish a new service account key after deleting a cached key" in {
@@ -231,7 +231,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
 
           key1 shouldNot be(key2)
         }
-      }(UserPool.chooseProjectOwner.makeAuthToken())
+      }(UserPool.chooseProjectOwner.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     //this is ignored because there is a permission error with GPAlloc that needs to be looked into.
@@ -263,7 +263,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
           petSaEmailOriginal should equal(petSaEmailNew) //sanity check to make sure the SA is the same
           petSaKeyIdOriginal should not equal petSaKeyIdNew //make sure we were able to generate a new key and that a new one was returned
         }
-      }(user.makeAuthToken())
+      }(user.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     "should get an access token for a user's own pet service account" in {
@@ -290,7 +290,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
 
         // result should be the same
         petEmail2 shouldBe petEmail1
-      }(UserPool.chooseProjectOwner.makeAuthToken())
+      }(UserPool.chooseProjectOwner.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     "should arbitrarily choose a project to return a pet key for when the user has existing pets" in {
@@ -307,8 +307,8 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
 
           // result should be a pet associated with the user
           assert(petEmailArbitrary.contains(userSubjectId))
-        }(UserPool.chooseProjectOwner.makeAuthToken())
-      }(UserPool.chooseProjectOwner.makeAuthToken())
+        }(UserPool.chooseProjectOwner.makeAuthToken(AuthTokenScopes.billingScopes))
+      }(UserPool.chooseProjectOwner.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     "should arbitrarily choose a project to return a pet key for when the user has no existing pets" in {
@@ -347,7 +347,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
 
         // result should be the same
         petEmail2 shouldBe petEmail1
-      }(UserPool.chooseProjectOwner.makeAuthToken())
+      }(UserPool.chooseProjectOwner.makeAuthToken(AuthTokenScopes.billingScopes))
     }
 
     "should arbitrarily choose a project to return a pet token for when the user has no existing pets" in {
