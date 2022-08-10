@@ -186,7 +186,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       proxyGroup_2.value should endWith(expectedProxyEmail)
     }
 
-    "should arbitrarily choose a project to return a pet token for when the user has no existing pets" in {
+    "should generate a valid pet service account access token" in {
       val user = UserPool.chooseStudent
 
       val scopes = Set("https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile")
