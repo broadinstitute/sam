@@ -5,12 +5,15 @@ import akka.stream.Materializer
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
+import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
+import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
+import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document, GoogleFirestoreService}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
@@ -18,7 +21,7 @@ import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -36,6 +39,7 @@ import scalikejdbc.QueryDSL.delete
 import scalikejdbc.withSQL
 
 import java.net.URI
+import java.time.Instant
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.duration._
@@ -76,7 +80,7 @@ object TestSupport extends TestSupport {
 
   val dirURI = new URI(directoryConfig.directoryUrl)
 
-  val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
+  val fakeDistributedLock = DistributedLock[IO]("", appConfig.distributedLockConfig, FakeGoogleFirestore)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
@@ -103,9 +107,9 @@ object TestSupport extends TestSupport {
     val googleStorageDAO = new MockGoogleStorageDAO()
     val googleProjectDAO = new MockGoogleProjectDAO()
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
-    val cloudKeyCache = new GoogleKeyCache(distributedLock, googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, googleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(fakeDistributedLock, googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, googleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
-      distributedLock,
+      fakeDistributedLock,
       directoryDAO,
       registrationDAO,
       policyDAO,
@@ -203,5 +207,20 @@ object TestSupport extends TestSupport {
 }
 
 final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, registrationDAO: MockRegistrationDAO, policyDao: AccessPolicyDAO, cloudExtensions: CloudExtensions, oauth2Config: OpenIDConnectConfiguration, azureService: AzureService)
+
+object FakeGoogleFirestore extends GoogleFirestoreService[IO]{
+  override def set(
+      collectionName: CollectionName,
+      document: Document,
+      dataMap: Map[String, Any])
+    : IO[Instant] = ???
+  override def get(
+      collectionName: CollectionName,
+      document: Document)
+    : IO[DocumentSnapshot] = ???
+  override def transaction[A](
+      ops: (Firestore, Transaction) => IO[A])
+    : IO[A] = IO.unit.map(_.asInstanceOf[A]) //create a transaction always finishes so that retrieving lock alway succeeds
+}
 
 object ConnectedTest extends Tag("connected test")

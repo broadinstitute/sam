@@ -12,7 +12,8 @@ import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
+import org.broadinstitute.dsde.workbench.google2.util.DistributedLock
+import org.broadinstitute.dsde.workbench.google2.{GoogleFirestoreInterpreter, GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
@@ -115,11 +116,11 @@ object Boot extends IOApp with LazyLogging {
   private[sam] def createAppDependencies(
       appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
     for {
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO, postgresDistributedLockDAO) <- createDAOs(appConfig, DatabaseNames.Write, DatabaseNames.Read, appConfig.directoryConfig.connectionPoolSize, "foreground")
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO) <- createDAOs(appConfig, DatabaseNames.Write, DatabaseNames.Read, appConfig.directoryConfig.connectionPoolSize, "foreground")
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext, _, _) <- createDAOs(appConfig, DatabaseNames.Background, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext, _) <- createDAOs(appConfig, DatabaseNames.Background, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
 
@@ -130,8 +131,8 @@ object Boot extends IOApp with LazyLogging {
         registrationDAO,
         backgroundDirectoryDAO,
         backgroundAccessPolicyDAO,
-        postgresDistributedLockDAO,
-        backgroundLdapExecutionContext)
+        backgroundLdapExecutionContext,
+        blockingEc)
 
       oauth2Config <- cats.effect.Resource.eval(
         OpenIDConnectConfiguration[IO](
@@ -150,11 +151,13 @@ object Boot extends IOApp with LazyLogging {
       registrationDAO: RegistrationDAO,
       backgroundDirectoryDAO: DirectoryDAO,
       backgroundAccessPolicyDAO: AccessPolicyDAO,
-      postgresDistributedLockDAO: PostgresDistributedLockDAO[IO],
-      backgroundLdapExecutionContext: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+      backgroundLdapExecutionContext: ExecutionContext,
+      blockingEc: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
         for {
+          googleFire <- GoogleFirestoreInterpreter.firestore[IO](
+            config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
           googleStorage <- GoogleStorageInterpreter.storage[IO](
             config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString
           )
@@ -162,8 +165,11 @@ object Boot extends IOApp with LazyLogging {
         } yield {
           implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
+          val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
           // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
-          // Use resourceNamePrefix to avoid collision between different fiab environments
+          // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
+          val lock =
+            DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
           val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockerBound = None)
           val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient)
           val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
@@ -173,7 +179,7 @@ object Boot extends IOApp with LazyLogging {
             registrationDAO,
             config,
             resourceTypeMap,
-            postgresDistributedLockDAO,
+            lock,
             newGoogleStorage,
             googleKmsInterpreter,
             appConfig.adminConfig
@@ -190,7 +196,7 @@ object Boot extends IOApp with LazyLogging {
                          writeDbName: DatabaseName,
                          readDbName: DatabaseName,
                          ldapConnectionPoolSize: Int,
-                         ldapConnectionPoolName: String): cats.effect.Resource[IO, (DirectoryDAO, AccessPolicyDAO, ExecutionContext, RegistrationDAO, PostgresDistributedLockDAO[IO])] = {
+                         ldapConnectionPoolName: String): cats.effect.Resource[IO, (DirectoryDAO, AccessPolicyDAO, ExecutionContext, RegistrationDAO)] = {
     for {
       writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbName)
       readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbName)
@@ -200,8 +206,7 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
       accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)
       registrationDAO = createRegistrationDAO(appConfig, ldapExecutionContext, ldapConnectionPool)
-      postgresDistributedLockDAO = new PostgresDistributedLockDAO[IO](writeDbRef, readDbRef, appConfig.distributedLockConfig)
-    } yield (directoryDAO, accessPolicyDAO, ldapExecutionContext, registrationDAO, postgresDistributedLockDAO)
+    } yield (directoryDAO, accessPolicyDAO, ldapExecutionContext, registrationDAO)
   }
 
   private def createRegistrationDAO(appConfig: AppConfig,
@@ -216,7 +221,7 @@ object Boot extends IOApp with LazyLogging {
       registrationDAO: RegistrationDAO,
       config: GoogleConfig,
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
-      distributedLock: PostgresDistributedLockDAO[IO],
+      distributedLock: DistributedLock[IO],
       googleStorageNew: GoogleStorageService[IO],
       googleKms: GoogleKmsService[IO],
       adminConfig: AdminConfig)(implicit actorSystem: ActorSystem): GoogleExtensions = {
