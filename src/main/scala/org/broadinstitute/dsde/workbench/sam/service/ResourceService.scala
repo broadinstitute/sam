@@ -412,6 +412,35 @@ class ResourceService(
     eventualSubjects.toList.sequence.map(_.toMap)
   }
 
+  //Disallow orphaning, leaving when it's via a group, or leaving when the resource is public
+  def leaveResource(resourceType: ResourceType, resourceId: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext) = {
+    for {
+      policiesForResource <- accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext)
+    } yield {
+
+      //Make sure that there are no public policies for this resource. Leaving a public resource is not supported.
+      if(policiesForResource.forall(!_.public)) {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You may not leave a public resource.")))
+      }
+
+      //Get all of the policies that contain the requesting user
+      val policiesForUser = policiesForResource.filter(_.members.contains(samUser.id))
+
+      //Gather the owner policies so we can test for whether or not they will be orphaned
+      val ownerPolicies = policiesForUser.filter(_.roles.contains(resourceType.ownerRoleName))
+      val willRemovalOrphanPolicy = ownerPolicies.map(_.members.size <= 1)
+
+      if(willRemovalOrphanPolicy.contains(true)) {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You may not leave a resource if you are the only owner. Please add another owner before leaving.")))
+      }
+
+      //Any cases that we want to protect against are handled above, so it should be safe to proceed with removals
+      policiesForUser.parTraverse { policy =>
+        removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
+      }
+    }
+  }
+
   /**
     * Validates a policy in the context of a ResourceType.  When validating the policy, we want to collect each entity
     * that was problematic and report that back using ErrorReports
