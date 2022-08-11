@@ -395,13 +395,14 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
   private def upsertResourceTypes(resourceTypes: Iterable[ResourceType])(implicit session: DBSession): Int = {
     val resourceTypeTableColumn = ResourceTypeTable.column
-    val resourceTypeValues = resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds})""")
-    samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}, ${resourceTypeTableColumn.ownerRoleName}, ${resourceTypeTableColumn.reuseIds})
+    val resourceTypeValues = resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds}, ${rt.allowLeaving})""")
+    samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}, ${resourceTypeTableColumn.ownerRoleName}, ${resourceTypeTableColumn.reuseIds}, ${resourceTypeTableColumn.allowLeaving})
                values $resourceTypeValues
              on conflict (${ResourceTypeTable.column.name})
                do update
                  set ${resourceTypeTableColumn.ownerRoleName} = EXCLUDED.${resourceTypeTableColumn.ownerRoleName},
-                 ${resourceTypeTableColumn.reuseIds} = EXCLUDED.${resourceTypeTableColumn.reuseIds}""".update().apply()
+                 ${resourceTypeTableColumn.reuseIds} = EXCLUDED.${resourceTypeTableColumn.reuseIds},
+                 ${resourceTypeTableColumn.allowLeaving} = EXCLUDED.${resourceTypeTableColumn.allowLeaving}""".update().apply()
   }
 
   /**
