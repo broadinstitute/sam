@@ -50,6 +50,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /register/user/v1/termsofservice:
+    post:
+      tags:
+        - Users
+      summary: create current user in the system using login credentials
+      operationId: createUserV2
+      requestBody:
+        description: The link to the Terra Terms of Service, to signify acceptance
+        content:
+          'application/json':
+            schema:
+              type: string
+      responses:
+        201:
+          description: user successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatus'
+        409:
+          description: user already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
 
 
 components:

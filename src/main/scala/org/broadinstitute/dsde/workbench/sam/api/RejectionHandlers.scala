@@ -12,7 +12,9 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 object RejectionHandlers {
 
   def termsOfServiceRejectionHandler(tosUrl: String) = RejectionHandler.newBuilder().handle {
-    case RequestEntityExpectedRejection | MalformedRequestContentRejection(_, _) =>
+    case RequestEntityExpectedRejection =>
+      complete(StatusCodes.Forbidden, ErrorReport(StatusCodes.Forbidden, s"You must accept the Terms of Service in order to register. See $tosUrl"))
+    case MalformedRequestContentRejection(y, x) =>
       complete(StatusCodes.Forbidden, ErrorReport(StatusCodes.Forbidden, s"You must accept the Terms of Service in order to register. See $tosUrl"))
     case MethodDisabled(message) =>
       complete(StatusCodes.Forbidden, ErrorReport(StatusCodes.Forbidden, message))

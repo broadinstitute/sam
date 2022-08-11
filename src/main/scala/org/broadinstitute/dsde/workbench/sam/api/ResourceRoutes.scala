@@ -127,6 +127,11 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
               deleteResource(resource, samUser, samRequestContext) ~
               postDefaultResource(resourceType, resource, samUser, samRequestContext)
             } ~
+            pathPrefix("leave") {
+              pathEndOrSingleSlash {
+                leaveResource(resource, samUser, samRequestContext)
+              }
+            } ~
             pathPrefix("action") {
               pathPrefix(Segment) { action =>
                 pathEndOrSingleSlash {
@@ -277,6 +282,12 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   def postDefaultResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     post {
       complete(resourceService.createResource(resourceType, resource.resourceId, samUser, samRequestContext).map(_ => StatusCodes.NoContent))
+    }
+
+  def leaveResource(resourceType: ResourceType, resource: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+    delete {
+      if(resourceType.allowLeaving) IO.pure()
+      else
     }
 
   def getActionPermissionForUser(resource: FullyQualifiedResourceId, samUser: SamUser, action: String, samRequestContext: SamRequestContext): server.Route =
