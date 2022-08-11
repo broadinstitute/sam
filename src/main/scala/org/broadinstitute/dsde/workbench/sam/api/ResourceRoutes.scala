@@ -296,8 +296,8 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     delete {
       //TODO!: make sure user can actually view the resource
       println(resourceType)
-      if (resourceType.allowLeaving) complete(resourceService.leaveResource(resource, samUser, samRequestContext).map(_ => StatusCodes.NoContent))
-      else complete(StatusCodes.Forbidden)
+      if (resourceType.allowLeaving) complete(resourceService.leaveResource(resourceType, resource, samUser, samRequestContext).map(_ => StatusCodes.NoContent))
+      else complete(StatusCodes.Forbidden -> s"Leaving a resource of type ${resourceType.name.value} is not supported")
     }
 
   def getActionPermissionForUser(resource: FullyQualifiedResourceId, samUser: SamUser, action: String, samRequestContext: SamRequestContext): server.Route =
