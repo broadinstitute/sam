@@ -284,6 +284,75 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
 
   }
 
+  "DELETE /api/resources/v2/{resourceType}/{resourceId}/leave" should "204 when a user tries to leave a resource with allowLeaving enabled" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true, None)
+    runAndWait(samRoutes.userService.createUser(secondUser, samRequestContext))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.email, secondUser.email), Set.empty, Set(ResourceRoleName("owner"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
+
+    //Verify that user does actually have access to the resource that they created
+    Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/actions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] should equal(Set("run"))
+    }
+
+    //Leave the resource
+    Delete(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/leave") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    //Verify that the user no longer has any actions on the resource
+    Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/actions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] should equal(Set.empty)
+    }
+  }
+
+  it should "403 when a user tries to leave a resource with allowLeaving disabled" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = false)
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    Post(s"/api/resources/v2/${resourceType.name}/foo") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Delete(s"/api/resources/v2/${resourceType.name}/foo/leave") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+      responseAs[String] should equal(s"Leaving a resource of type ${resourceType.name.value} is not supported")
+    }
+  }
+
+  it should "400 when a user tries to leave a resource with allowLeaving enabled but has indirect access" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
+    val managedGroupResourceType = initManagedGroupResourceType()
+
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
+
+    val managedGroupId = ResourceId("my-group")
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(managedGroupId, defaultUserInfo, samRequestContext = samRequestContext))
+    val managedGroupEmail = runAndWait(samRoutes.managedGroupService.loadManagedGroup(managedGroupId, samRequestContext)).get
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(managedGroupEmail), Set.empty, Set(ResourceRoleName("owner"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
+
+    Delete(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/leave") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+      responseAs[ErrorReport].message should equal("You can only leave a resource that you have direct access to.")
+    }
+  }
+
+
+
+  it should "400 when a user tries to leave a resource with allowLeaving enabled but the resource would become orphaned"
+  it should "400 when a user tries to leave a resource with allowLeaving enabled but the resource is public"
+  it should "a resource type should default to allowLeaving = false"
+
   "GET /api/resources/v2/{resourceType}/{resourceId}/roles" should "200 on list resource roles" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))

@@ -60,10 +60,6 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                   }
                 }
               }
-            } ~ pathPrefix("leave") {
-              pathEndOrSingleSlash {
-                leaveResource(resourceType, resource, samUser, samRequestContext)
-              }
             } ~ pathPrefix("authDomain") {
               pathEndOrSingleSlash {
                 getResourceAuthDomain(resource, samUser, samRequestContext)
@@ -143,6 +139,11 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                     }
                   }
                 }
+              }
+            } ~
+            pathPrefix("leave") {
+              pathEndOrSingleSlash {
+                leaveResource(resourceType, resource, samUser, samRequestContext)
               }
             } ~
             pathPrefix("authDomain") {

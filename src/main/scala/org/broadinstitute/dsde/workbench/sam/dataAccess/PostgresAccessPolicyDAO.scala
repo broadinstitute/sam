@@ -1213,6 +1213,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   }
 
   override def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] = {
+    println("ok")
     listPolicies(resource, samRequestContext = samRequestContext)
   }
 

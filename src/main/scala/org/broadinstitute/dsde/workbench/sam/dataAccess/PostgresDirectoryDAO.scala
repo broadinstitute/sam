@@ -151,6 +151,10 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     */
   override def removeGroupMember(groupId: WorkbenchGroupIdentity, removeMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
     serializableWriteTransaction("removeGroupMember", samRequestContext)({ implicit session =>
+      println("groupId")
+      println(groupId)
+      println("removeMember")
+      println(removeMember)
       val removed = removeGroupMember(groupId, removeMember)
 
       if (removed) {

@@ -414,30 +414,49 @@ class ResourceService(
 
   //Disallow orphaning, leaving when it's via a group, or leaving when the resource is public
   def leaveResource(resourceType: ResourceType, resourceId: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext) = {
-    for {
-      policiesForResource <- accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext)
-    } yield {
-
+    accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext) flatMap { policiesForResource =>
       //Make sure that there are no public policies for this resource. Leaving a public resource is not supported.
       if(policiesForResource.forall(!_.public)) {
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You may not leave a public resource.")))
       }
 
       //Get all of the policies that contain the requesting user
-      val policiesForUser = policiesForResource.filter(_.members.contains(samUser.id))
+      val policiesForUser = policiesForResource.filter(_.members.contains(samUser.id)).toList
+      println("policiesForUser")
+      println(policiesForUser)
+
+      if(policiesForUser.isEmpty) {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You can only leave a resource that you have direct access to.")))
+      }
 
       //Gather the owner policies so we can test for whether or not they will be orphaned
       val ownerPolicies = policiesForUser.filter(_.roles.contains(resourceType.ownerRoleName))
+      println("ownerPolicies")
+      println(ownerPolicies)
       val willRemovalOrphanPolicy = ownerPolicies.map(_.members.size <= 1)
 
-      if(willRemovalOrphanPolicy.contains(true)) {
+      println(willRemovalOrphanPolicy.contains(true))
+
+      if(policiesForUser.isEmpty) {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You can only leave a resource that you have direct access to.")))
+      } else if(willRemovalOrphanPolicy.contains(true)) {
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You may not leave a resource if you are the only owner. Please add another owner before leaving.")))
+      } else {
+        policiesForUser.parTraverse { policy =>
+          println(policy)
+          println("sjkskjs")
+          removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
+        }
       }
 
       //Any cases that we want to protect against are handled above, so it should be safe to proceed with removals
-      policiesForUser.parTraverse { policy =>
-        removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
-      }
+//      policiesForUser.parTraverse { policy =>
+//        println(policy)
+//        println("sjkskjs")
+//        removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
+//      }
+
+//      removeSubjectFromPolicy(policiesForUser.head.id, samUser.id, samRequestContext)
     }
   }
 
@@ -560,21 +579,28 @@ class ResourceService(
   }
 
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
+    println(s"removing ${subject} from ${policyIdentity}")
     for {
       originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
       _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
       policyChanged <- directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
       _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
-    } yield policyChanged
+    } yield {
+      val x = policyChanged
+      println(x)
+      x
+    }
   }
 
-  def failWhenPolicyNotExists(policies: Iterable[AccessPolicy], policyId: FullyQualifiedPolicyId): IO[Unit] =
+  def failWhenPolicyNotExists(policies: Iterable[AccessPolicy], policyId: FullyQualifiedPolicyId): IO[Unit] = {
+    println("wooo!!!!")
     IO.raiseUnless(policies.exists(_.id == policyId)) {
       new WorkbenchExceptionWithErrorReport(ErrorReport(
         StatusCodes.NotFound,
         s"""No policy matching "${policyId.accessPolicyName}" found on resource "${policyId.resource}"."""
       ))
     }
+  }
 
   private def onPolicyUpdateIfChanged(policyIdentity: FullyQualifiedPolicyId, originalPolicies: Iterable[AccessPolicy], samRequestContext: SamRequestContext)(policyChanged: Boolean) = {
     val maybeFireNotification = if (policyChanged) {
