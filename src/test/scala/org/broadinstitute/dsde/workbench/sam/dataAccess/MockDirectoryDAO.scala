@@ -71,7 +71,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   }
 
   override def removeGroupMember(groupName: WorkbenchGroupIdentity, removeMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
-    println(s"removing ${removeMember} from ${groupName} !!!")
     val group = groups(groupName)
     val updatedGroup = group match {
       case g: BasicWorkbenchGroup => g.copy(members = group.members - removeMember)
