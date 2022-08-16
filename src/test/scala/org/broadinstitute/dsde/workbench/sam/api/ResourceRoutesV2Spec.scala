@@ -327,7 +327,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "400 when a user tries to leave a resource with allowLeaving enabled but has indirect access" in {
+  it should "403 when a user tries to leave a resource with allowLeaving enabled but has indirect access" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
     val managedGroupResourceType = initManagedGroupResourceType()
 
@@ -347,7 +347,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "400 when a user tries to leave a resource with allowLeaving enabled but the resource would become orphaned" in {
+  it should "403 when a user tries to leave a resource with allowLeaving enabled but the resource would become orphaned" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -370,7 +370,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
       responseAs[Set[String]] should equal(Set("run"))
     }
   }
-  it should "400 when a user tries to leave a resource with allowLeaving enabled but the resource is public" in {
+  it should "403 when a user tries to leave a resource with allowLeaving enabled but the resource is public" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -399,7 +399,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "should 403 when leaving an existing resource type due to defaulting to allowLeaving = false" in {
+  it should "403 when leaving a resource type that has not explicitly set allowLeaving to true" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"))
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -421,7 +421,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "not allow you to leave a resource that you do not have access to" in {
+  it should "403 when a user attempts to leave a resource that they do not have access to" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
@@ -445,7 +445,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "not allow you to leave a resource that doesn't exist" in {
+  it should "403 when a user attempts to leave a resource that does not exist" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
