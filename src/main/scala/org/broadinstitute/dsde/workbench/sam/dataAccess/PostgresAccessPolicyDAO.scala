@@ -53,6 +53,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         val existingResourceTypes = loadResourceTypesInSession(resourceTypes.map(_.name))
 
         val changedResourceTypes = resourceTypes -- existingResourceTypes
+
         val changedResourceTypeNames = changedResourceTypes.map(_.name)
         if (changedResourceTypes.isEmpty) {
           logger.info("upsertResourceTypes: no changes, not updating")
@@ -161,7 +162,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         resourceTypeToActionPatterns.getOrElse(resourceTypeRecord.id, Set.empty),
         resourceTypeToRoles.getOrElse(resourceTypeRecord.id, Set.empty),
         resourceTypeRecord.ownerRoleName,
-        resourceTypeRecord.reuseIds
+        resourceTypeRecord.reuseIds,
+        resourceTypeRecord.allowLeaving
       )
     }
   }
