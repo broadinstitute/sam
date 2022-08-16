@@ -342,7 +342,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
 
     Delete(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/leave") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.BadRequest
+      status shouldEqual StatusCodes.Forbidden
       responseAs[ErrorReport].message should equal("You can only leave a resource that you have direct access to.")
     }
   }
@@ -360,7 +360,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
 
     //Leave the resource
     Delete(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/leave") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.BadRequest
+      status shouldEqual StatusCodes.Forbidden
       responseAs[ErrorReport].message should equal("You may not leave a resource if you are the only owner. Please add another owner before leaving.")
     }
 
@@ -388,7 +388,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
 
     //Leave the resource
     Delete(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/leave") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.BadRequest
+      status shouldEqual StatusCodes.Forbidden
       responseAs[ErrorReport].message should equal("You may not leave a public resource.")
     }
 
@@ -418,6 +418,47 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/actions") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[Set[String]] should equal(Set("run"))
+    }
+  }
+
+  it should "not allow you to leave a resource that you do not have access to" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true, None)
+    runAndWait(samRoutes.userService.createUser(secondUser, samRequestContext))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(secondUser.email), Set.empty, Set(ResourceRoleName("owner"))))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
+
+    //Verify that user does actually have access to the resource that they created
+    Get(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/actions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] should equal(Set.empty)
+    }
+
+    //Leave the resource
+    Delete(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/leave") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+      responseAs[ErrorReport].message should equal("You can only leave a resource that you have direct access to.")
+    }
+  }
+
+  it should "not allow you to leave a resource that doesn't exist" in {
+    val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    //Verify that user does actually have access to the resource that they created
+    Get(s"/api/resources/v2/${resourceType.name}/doesnt-exist/actions") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] should equal(Set.empty)
+    }
+
+    //Leave the resource
+    Delete(s"/api/resources/v2/${resourceType.name}/doesnt-exist/leave") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+      responseAs[ErrorReport].message should equal("You can only leave a resource that you have direct access to.")
     }
   }
 

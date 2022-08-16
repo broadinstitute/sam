@@ -413,53 +413,30 @@ class ResourceService(
   }
 
   //Disallow orphaning, leaving when it's via a group, or leaving when the resource is public
-  def leaveResource(resourceType: ResourceType, resourceId: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext) = {
+  def leaveResource(resourceType: ResourceType, resourceId: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[List[Boolean]] = {
     accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext) flatMap { policiesForResource =>
       //Make sure that there are no public policies for this resource. Leaving a public resource is not supported.
-//      if(policiesForResource.forall(!_.public)) {
-//        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You may not leave a public resource.")))
-//      }
 
       //Get all of the policies that contain the requesting user
       val policiesForUser = policiesForResource.filter(_.members.contains(samUser.id)).toList
-      println("policiesForUser")
-      println(policiesForUser)
-
-//      if(policiesForUser.isEmpty) {
-//        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You can only leave a resource that you have direct access to.")))
-//      }
 
       //Gather the owner policies so we can test for whether or not they will be orphaned
       val ownerPolicies = policiesForUser.filter(_.roles.contains(resourceType.ownerRoleName))
-      println("ownerPolicies")
-      println(ownerPolicies)
+
       val willRemovalOrphanPolicy = ownerPolicies.map(_.members.size <= 1)
 
-      println(willRemovalOrphanPolicy.contains(true))
-      println(policiesForResource.map(_.public).mkString(","))
-
-      if(policiesForResource.map(_.public).contains(true)) {
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You may not leave a public resource.")))
+      if(policiesForResource.exists(_.public)) {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You may not leave a public resource.")))
       } else if(policiesForUser.isEmpty) {
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You can only leave a resource that you have direct access to.")))
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You can only leave a resource that you have direct access to.")))
       } else if(willRemovalOrphanPolicy.contains(true)) {
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You may not leave a resource if you are the only owner. Please add another owner before leaving.")))
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You may not leave a resource if you are the only owner. Please add another owner before leaving.")))
       } else {
+        //Any cases that we want to protect against are handled above, so it should be safe to proceed with removals
         policiesForUser.parTraverse { policy =>
-          println(policy)
-          println("sjkskjs")
           removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
         }
       }
-
-      //Any cases that we want to protect against are handled above, so it should be safe to proceed with removals
-//      policiesForUser.parTraverse { policy =>
-//        println(policy)
-//        println("sjkskjs")
-//        removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
-//      }
-
-//      removeSubjectFromPolicy(policiesForUser.head.id, samUser.id, samRequestContext)
     }
   }
 
