@@ -53,7 +53,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         val existingResourceTypes = loadResourceTypesInSession(resourceTypes.map(_.name))
 
         val changedResourceTypes = resourceTypes -- existingResourceTypes
-
         val changedResourceTypeNames = changedResourceTypes.map(_.name)
         if (changedResourceTypes.isEmpty) {
           logger.info("upsertResourceTypes: no changes, not updating")
