@@ -432,6 +432,7 @@ class ResourceService(
 
       //Any cases that we want to protect against are handled above, so it should be safe to proceed with removals
       policiesForUser.parTraverse { policy =>
+        logger.info(s"Removing user ${samUser.id} from policy ${policy.id}")
         removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
       }
     }
