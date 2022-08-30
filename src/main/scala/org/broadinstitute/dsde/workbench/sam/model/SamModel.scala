@@ -22,7 +22,7 @@ object SamJsonSupport {
 
   implicit val ResourceRoleFormat = jsonFormat4(ResourceRole.apply)
 
-  implicit val ResourceTypeFormat = jsonFormat5(ResourceType.apply)
+  implicit val ResourceTypeFormat = jsonFormat6(ResourceType.apply)
 
   implicit val UserStatusDetailsFormat = jsonFormat2(UserStatusDetails.apply)
 
@@ -152,7 +152,8 @@ object SamResourceTypes {
     actionPatterns: Set[ResourceActionPattern],
     roles: Set[ResourceRole],
     ownerRoleName: ResourceRoleName,
-    reuseIds: Boolean = false) {
+    reuseIds: Boolean = false,
+    allowLeaving: Boolean = false) {
   // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
   // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
   def isAuthDomainConstrainable: Boolean = actionPatterns.exists(_.authDomainConstrainable)

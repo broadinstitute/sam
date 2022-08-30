@@ -79,7 +79,8 @@ object AppConfig {
         config.as[Map[String, ResourceActionPattern]](s"$uqPath.actionPatterns").values.toSet,
         config.as[Map[String, ResourceRole]](s"$uqPath.roles").values.toSet,
         ResourceRoleName(config.getString(s"$uqPath.ownerRoleName")),
-        config.getBoolean(s"$uqPath.reuseIds")
+        config.getBoolean(s"$uqPath.reuseIds"),
+        config.as[Option[Boolean]](s"$uqPath.allowLeaving").getOrElse(false)
       )
     }
   }

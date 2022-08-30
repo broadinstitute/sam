@@ -141,6 +141,11 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                 }
               }
             } ~
+            pathPrefix("leave") {
+              pathEndOrSingleSlash {
+                leaveResource(resourceType, resource, samUser, samRequestContext)
+              }
+            } ~
             pathPrefix("authDomain") {
               pathEndOrSingleSlash {
                 getResourceAuthDomain(resource, samUser, samRequestContext)
@@ -277,6 +282,12 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   def postDefaultResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     post {
       complete(resourceService.createResource(resourceType, resource.resourceId, samUser, samRequestContext).map(_ => StatusCodes.NoContent))
+    }
+
+  def leaveResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+    delete {
+      if (resourceType.allowLeaving) complete(resourceService.leaveResource(resourceType, resource, samUser, samRequestContext).map(_ => StatusCodes.NoContent))
+      else complete(StatusCodes.Forbidden -> s"Leaving a resource of type ${resourceType.name.value} is not supported")
     }
 
   def getActionPermissionForUser(resource: FullyQualifiedResourceId, samUser: SamUser, action: String, samRequestContext: SamRequestContext): server.Route =

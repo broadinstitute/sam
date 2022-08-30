@@ -1502,6 +1502,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2/{resourceTypeName}/{resourceId}/leave:
+    delete:
+      tags:
+        - Resources
+      summary: Leave the resource
+      operationId: leaveResourceV2
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Successfully left resource
+          content: { }
+        403:
+          description: You do not have permission to leave the resource
+          content: { }
+        404:
+          description: Resource does not exist or you are not a member of the resource
+            policy on the resource
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/resources/v2/{resourceTypeName}/{resourceId}/policies:
     get:
       tags:
