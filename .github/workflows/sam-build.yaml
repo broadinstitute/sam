@@ -12,7 +12,7 @@ name: Bump, Tag, and Publish
 # The workflow relies on github secrets:
 # - BROADBOT_TOKEN - the broadbot token, so we can avoid two reviewer rule on GHA operations
 on:
-  push:
+  pull_request:
     branches:
       - QA-2001
     paths-ignore:
