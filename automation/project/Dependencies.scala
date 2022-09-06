@@ -4,7 +4,7 @@ object Dependencies {
   val scalaV = "2.13"
 
   val jacksonV = "2.12.0"
-  val akkaV = "2.6.19"
+  val akkaV = "2.6.20"
   val akkaHttpV = "10.2.2"
 
   val workbenchGoogleV = "0.21-ae11b9f"
