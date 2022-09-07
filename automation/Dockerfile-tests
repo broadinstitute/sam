@@ -1,4 +1,4 @@
-FROM hseeberger/scala-sbt:eclipse-temurin-17.0.2_1.6.2_2.13.8
+FROM broadinstitute/scala-baseimage:jdk11-2.13.5-1.4.7
 
 COPY src /app/src
 COPY test.sh /app
