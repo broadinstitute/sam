@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -32,7 +33,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
       userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
-      res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
+      res <- userStatus
+        .toRight(new WorkbenchException("getUserStatus returned None after user was created"))
+        .fold(Future.failed, Future.successful)
+        .withInfoLogMessage(s"New user ${createdUser.toUserIdInfo} was successfully created")
     } yield res
 
   def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
@@ -40,7 +44,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext).unsafeToFuture()
-    } yield ()
+    } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
 
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
@@ -65,9 +69,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       updated <- subjectWithEmail match {
         case Some(uid: WorkbenchUserId) =>
           acceptInvitedUser(user, samRequestContext, uid)
+            .withInfoLogMessage(s"Accepted invited user ${user.email} with uid ${uid.value}")
 
         case None =>
           createUserInternal(user, samRequestContext)
+            .withComputedInfoLogMessage(u => s"Created user ${u.email} with uid ${u.id}")
 
         case Some(_) =>
           // We don't support inviting a group account or pet service account
@@ -226,7 +232,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user, samRequestContext)
-    } yield ()
+    } yield logger.info(s"Enabled new user ${user.toUserIdInfo}")
 
   val serviceAccountDomain = "\\S+@\\S+\\.gserviceaccount\\.com".r
 
@@ -247,10 +253,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-      _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId, samRequestContext).unsafeToFuture()
+      _ <- directoryDAO
+        .removeGroupMember(allUsersGroup.id, userId, samRequestContext)
+        .unsafeToFuture()
+        .withInfoLogMessage(s"Removed $userId from the All Users group")
       _ <- cloudExtensions.onUserDelete(userId, samRequestContext)
-      deleteResult <- directoryDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
-    } yield deleteResult
+      _ <- directoryDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
+    } yield logger.info(s"Deleted user $userId")
 }
 
 object UserService {
