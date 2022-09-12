@@ -6,6 +6,11 @@ on:
       - QA-2001
     paths-ignore:
       - 'README.md'
+  push:
+    branches:
+      - QA-2001
+    paths-ignore:
+      - 'README.md'
 
 env:
   GOOGLE_PROJECT: dsp-artifact-registry
