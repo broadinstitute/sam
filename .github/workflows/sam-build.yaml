@@ -14,7 +14,7 @@ name: Bump, Tag, and Publish
 on:
   pull_request:
     branches:
-      - QA-2001
+      - develop
     paths-ignore:
       - 'README.md'
 
