@@ -22,7 +22,7 @@ env:
   GOOGLE_DOCKER_REPOSITORY: us-central1-docker.pkg.dev
   GCR_REGISTRY: io/broad-dsp-gcr-public/sam
   DOCKERHUB_REGISTRY: broadinstitute/sam
-  VAULT_TOKEN: sss
+  VAULT_TOKEN: s.JYUldLQ4wU1U9orQGz3Y4p5c
 jobs:
   sam-pr-test-job:
     runs-on: ubuntu-latest
@@ -53,7 +53,7 @@ jobs:
           echo $HASH_TAG
           SVCACCT_FILE="dspci-wb-gcr-service-account.json"
           GCR_SVCACCT_VAULT="secret/dsde/dsp-techops/common/$SVCACCT_FILE"
-          VAULT_TOKEN=${{ env.VAULT_TOKEN )}
+          VAULT_TOKEN=${{ env.VAULT_TOKEN }}
 
           docker run --rm  -e VAULT_TOKEN=$VAULT_TOKEN \
              broadinstitute/dsde-toolbox:latest vault read --format=json ${GCR_SVCACCT_VAULT} \
