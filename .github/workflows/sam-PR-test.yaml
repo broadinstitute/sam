@@ -3,12 +3,12 @@ name: Sam PR tests
 on:
   pull_request:
     branches:
-      - QA-2001
+      - develop
     paths-ignore:
       - 'README.md'
   push:
     branches:
-      - QA-2001
+      - develop
     paths-ignore:
       - 'README.md'
 
@@ -22,7 +22,7 @@ env:
   GOOGLE_DOCKER_REPOSITORY: us-central1-docker.pkg.dev
   GCR_REGISTRY: gcr.io/broad-dsp-gcr-public/sam
   DOCKERHUB_REGISTRY: broadinstitute/sam
-  VAULT_TOKEN: s.JYUldLQ4wU1U9orQGz3Y4p5c
+  VAULT_TOKEN: s...
 jobs:
   tag-publish-job:
     runs-on: ubuntu-latest
