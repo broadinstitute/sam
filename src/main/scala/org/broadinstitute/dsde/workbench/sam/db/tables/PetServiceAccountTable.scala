@@ -5,11 +5,13 @@ import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 import scalikejdbc._
 
-final case class PetServiceAccountRecord(userId: WorkbenchUserId,
-                                         project: GoogleProject,
-                                         googleSubjectId: ServiceAccountSubjectId,
-                                         email: WorkbenchEmail,
-                                         displayName: ServiceAccountDisplayName)
+final case class PetServiceAccountRecord(
+    userId: WorkbenchUserId,
+    project: GoogleProject,
+    googleSubjectId: ServiceAccountSubjectId,
+    email: WorkbenchEmail,
+    displayName: ServiceAccountDisplayName
+)
 
 object PetServiceAccountTable extends SQLSyntaxSupportWithDefaultSamDB[PetServiceAccountRecord] {
   override def tableName: String = "SAM_PET_SERVICE_ACCOUNT"

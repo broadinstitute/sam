@@ -21,23 +21,22 @@ case object ResourceParentUpdated extends ResourceEventType
 case object ResourceParentRemoved extends ResourceEventType
 case object ResourceDeleted extends ResourceEventType
 
-final case class ResourceEvent(eventType: ResourceEventType,
-                               resource: FullyQualifiedResourceId,
-                               changeDetails: Option[ResourceChange] = None) extends AuditEvent
+final case class ResourceEvent(eventType: ResourceEventType, resource: FullyQualifiedResourceId, changeDetails: Option[ResourceChange] = None)
+    extends AuditEvent
 
-case class AccessChange(member: WorkbenchSubject,
-                        roles: Option[Iterable[ResourceRoleName]],
-                        actions: Option[Iterable[ResourceAction]],
-                        descendantRoles: Option[Map[ResourceTypeName, Iterable[ResourceRoleName]]],
-                        descendantActions: Option[Map[ResourceTypeName, Iterable[ResourceAction]]])
+case class AccessChange(
+    member: WorkbenchSubject,
+    roles: Option[Iterable[ResourceRoleName]],
+    actions: Option[Iterable[ResourceAction]],
+    descendantRoles: Option[Map[ResourceTypeName, Iterable[ResourceRoleName]]],
+    descendantActions: Option[Map[ResourceTypeName, Iterable[ResourceAction]]]
+)
 
 sealed trait AccessChangeEventType extends AuditEventType
 case object AccessAdded extends AccessChangeEventType
 case object AccessRemoved extends AccessChangeEventType
 
-final case class AccessChangeEvent(eventType: AccessChangeEventType,
-                                   resource: FullyQualifiedResourceId,
-                                   changeDetails: Set[AccessChange]) extends AuditEvent
+final case class AccessChangeEvent(eventType: AccessChangeEventType, resource: FullyQualifiedResourceId, changeDetails: Set[AccessChange]) extends AuditEvent
 
 object SamAuditModelJsonSupport {
   import DefaultJsonProtocol._
@@ -49,7 +48,7 @@ object SamAuditModelJsonSupport {
 
     def read(value: JsValue): InetAddress = value match {
       case JsString(str) => InetAddress.getByAddress(str.getBytes)
-      case _             => throw new WorkbenchException(s"Unable to unmarshal InetAddress from $value")
+      case _ => throw new WorkbenchException(s"Unable to unmarshal InetAddress from $value")
     }
   }
 
@@ -62,7 +61,7 @@ object SamAuditModelJsonSupport {
       case JsString("ResourceParentUpdated") => ResourceParentUpdated
       case JsString("ResourceParentRemoved") => ResourceParentRemoved
       case JsString("ResourceDeleted") => ResourceDeleted
-      case _                           => throw new DeserializationException(s"could not deserialize ResourceEventType: $obj")
+      case _ => throw new DeserializationException(s"could not deserialize ResourceEventType: $obj")
     }
 
     def write(obj: ResourceEventType): JsValue = JsString(obj.toString)
@@ -79,7 +78,7 @@ object SamAuditModelJsonSupport {
     val GROUP_NAME_FIELD = "groupName"
     val POLICY_ID_FIELD = "policyId"
 
-    override def read(json: JsValue): WorkbenchSubject = {
+    override def read(json: JsValue): WorkbenchSubject =
       json match {
         case JsObject(fields) =>
           val maybeSubject: Option[WorkbenchSubject] = fields.get(MEMBER_TYPE_FIELD) match {
@@ -93,9 +92,8 @@ object SamAuditModelJsonSupport {
         case _ =>
           throw new DeserializationException(s"could not deserialize WorkbenchSubject: $json")
       }
-    }
 
-    override def write(obj: WorkbenchSubject): JsValue = {
+    override def write(obj: WorkbenchSubject): JsValue =
       obj match {
         case user: WorkbenchUserId =>
           JsObject(Map(MEMBER_TYPE_FIELD -> JsString(USER_TYPE), USER_ID_FIELD -> WorkbenchUserIdFormat.write(user)))
@@ -106,7 +104,6 @@ object SamAuditModelJsonSupport {
 
         case _ => throw new SerializationException(s"could not serialize WorkbenchSubject: $obj")
       }
-    }
   }
 
   implicit val AccessChangeFormat = jsonFormat5(AccessChange)
@@ -114,7 +111,7 @@ object SamAuditModelJsonSupport {
     def read(obj: JsValue): AccessChangeEventType = obj match {
       case JsString("AccessAdded") => AccessAdded
       case JsString("AccessRemoved") => AccessRemoved
-      case _                         => throw new DeserializationException(s"could not deserialize AccessChangeEventType: $obj")
+      case _ => throw new DeserializationException(s"could not deserialize AccessChangeEventType: $obj")
     }
 
     def write(obj: AccessChangeEventType): JsValue = JsString(obj.toString)

@@ -10,8 +10,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import scala.util.matching.Regex
 
-/**
-  * Created by dvoet on 6/6/17.
+/** Created by dvoet on 6/6/17.
   */
 trait DirectorySubjectNameSupport {
   protected val directoryConfig: DirectoryConfig
@@ -42,14 +41,16 @@ trait DirectorySubjectNameSupport {
     case _ => throw new WorkbenchException(s"unexpected subject [$subject]")
   }
 
-  /**
-    * Constructs a regular expression to extract the leading attribute values of a dn. Example: to extract
-    * policy namd an resource id from the dn policy=foo,resourceId=bar,resourceType=splat,ou=resources,dc=x,dc=u,dc=com
-    * matchAttributeNames would be Seq("policy", "resourceId") and baseDn would be "resourceType=splat,ou=resources,dc=x,dc=u,dc=com".
+  /** Constructs a regular expression to extract the leading attribute values of a dn. Example: to extract policy namd an resource id from the dn
+    * policy=foo,resourceId=bar,resourceType=splat,ou=resources,dc=x,dc=u,dc=com matchAttributeNames would be Seq("policy", "resourceId") and baseDn would be
+    * "resourceType=splat,ou=resources,dc=x,dc=u,dc=com".
     *
-    * @param matchAttributeNames names of attributes in the leading part of the dn that should match and extract values
-    * @param baseDn the trailing part of the dn that should match but we don't care to extract values
-    * @return pattern with capture groups for each member of matchAttributeNames
+    * @param matchAttributeNames
+    *   names of attributes in the leading part of the dn that should match and extract values
+    * @param baseDn
+    *   the trailing part of the dn that should match but we don't care to extract values
+    * @return
+    *   pattern with capture groups for each member of matchAttributeNames
     */
   protected def dnMatcher(matchAttributeNames: Seq[String], baseDn: String): Regex = {
     val partStrings = matchAttributeNames.map { attrName =>

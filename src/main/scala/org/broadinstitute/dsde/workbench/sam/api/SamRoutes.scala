@@ -24,8 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.service._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-/**
-  * Created by dvoet on 5/17/17.
+/** Created by dvoet on 5/17/17.
   */
 abstract class SamRoutes(
     val resourceService: ResourceService,
@@ -39,10 +38,8 @@ abstract class SamRoutes(
     val tosService: TosService,
     val liquibaseConfig: LiquibaseConfig,
     val oidcConfig: OpenIDConnectConfiguration,
-    val azureService: Option[AzureService])(
-    implicit val system: ActorSystem,
-    val materializer: Materializer,
-    val executionContext: ExecutionContext)
+    val azureService: Option[AzureService]
+)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
     extends LazyLogging
     with ResourceRoutes
     with UserRoutes
@@ -60,19 +57,19 @@ abstract class SamRoutes(
       termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
-          pathPrefix("register") { userRoutes(samRequestContext) } ~
-          pathPrefix("api") {
-            // IMPORTANT - all routes under /api must have an active user
-            withActiveUser(samRequestContext) { samUser =>
-              val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-              resourceRoutes(samUser, samRequestContextWithUser) ~
-                adminRoutes(samUser, samRequestContextWithUser) ~
-                extensionRoutes(samUser, samRequestContextWithUser) ~
-                groupRoutes(samUser, samRequestContextWithUser) ~
-                apiUserRoutes(samUser, samRequestContextWithUser) ~
-                azureRoutes(samUser, samRequestContext)
+          pathPrefix("register")(userRoutes(samRequestContext)) ~
+            pathPrefix("api") {
+              // IMPORTANT - all routes under /api must have an active user
+              withActiveUser(samRequestContext) { samUser =>
+                val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+                resourceRoutes(samUser, samRequestContextWithUser) ~
+                  adminRoutes(samUser, samRequestContextWithUser) ~
+                  extensionRoutes(samUser, samRequestContextWithUser) ~
+                  groupRoutes(samUser, samRequestContextWithUser) ~
+                  apiUserRoutes(samUser, samRequestContextWithUser) ~
+                  azureRoutes(samUser, samRequestContext)
+              }
             }
-          }
         }
       }
   }

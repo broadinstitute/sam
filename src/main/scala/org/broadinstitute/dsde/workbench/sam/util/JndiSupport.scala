@@ -27,21 +27,25 @@ trait JndiSupport {
     new InitialDirContext(env)
   }
 
-  /**
-    * Given a possibly large collection of inputs, splits input into batches and calls op on each batch.
+  /** Given a possibly large collection of inputs, splits input into batches and calls op on each batch.
     * @param url
     * @param user
     * @param password
     * @param input
-    * @param op function of type (Seq[T])(InitialDirContext) => Seq[R], a function that takes a batch which produces a
-    *           function that takes an InitialDirContext that produces the results
+    * @param op
+    *   function of type (Seq[T])(InitialDirContext) => Seq[R], a function that takes a batch which produces a function that takes an InitialDirContext that
+    *   produces the results
     * @param executionContext
-    * @tparam T type of inputs
-    * @tparam R type of results
-    * @return aggregated results of calling op for each batch
+    * @tparam T
+    *   type of inputs
+    * @tparam R
+    *   type of results
+    * @return
+    *   aggregated results of calling op for each batch
     */
-  def batchedLoad[T, R](url: String, user: String, password: String)(input: Seq[T])(op: (Seq[T]) => (InitialDirContext) => Seq[R])(
-      implicit executionContext: ExecutionContext): Future[Seq[R]] =
+  def batchedLoad[T, R](url: String, user: String, password: String)(
+      input: Seq[T]
+  )(op: (Seq[T]) => (InitialDirContext) => Seq[R])(implicit executionContext: ExecutionContext): Future[Seq[R]] =
     if (input.isEmpty) {
       Future.successful(Seq.empty)
     } else {
@@ -52,40 +56,39 @@ trait JndiSupport {
         .map(_.flatten.toSeq)
     }
 
-  protected def withContext[T](url: String, user: String, password: String)(op: InitialDirContext => T)(
-      implicit executionContext: ExecutionContext): Future[T] = Future {
+  protected def withContext[T](url: String, user: String, password: String)(
+      op: InitialDirContext => T
+  )(implicit executionContext: ExecutionContext): Future[T] = Future {
     val ctx = getContext(url, user, password)
     val t = Try(op(ctx))
     ctx.close()
     t.get
   }
 
-  /**
-    * Use this implicit conversion class and following call to extractResultsAndClose
-    * instead of JavaConverters and call to asScala
-    * because it makes sure the NamingEnumeration is closed and connections are not leaked.
-    * @param results results from a search, etc.
-    * @return object that can be used to safely handle and close NamingEnumeration
+  /** Use this implicit conversion class and following call to extractResultsAndClose instead of JavaConverters and call to asScala because it makes sure the
+    * NamingEnumeration is closed and connections are not leaked.
+    * @param results
+    *   results from a search, etc.
+    * @return
+    *   object that can be used to safely handle and close NamingEnumeration
     */
   protected implicit class NamingEnumCloser[T](results: NamingEnumeration[T]) {
 
-    /**
-      * copy results enum into a Seq then close the enum
-      * @return results
+    /** copy results enum into a Seq then close the enum
+      * @return
+      *   results
       */
     def extractResultsAndClose: Seq[T] = {
       import scala.jdk.CollectionConverters._
-      try {
+      try
         Seq(results.asScala.toSeq: _*)
-      } finally {
+      finally
         results.close()
-      }
     }
   }
 }
 
-/**
-  * this does nothing but throw new OperationNotSupportedException but makes extending classes nice
+/** this does nothing but throw new OperationNotSupportedException but makes extending classes nice
   */
 trait BaseDirContext extends DirContext {
   override def getAttributes(name: Name): Attributes = throw new OperationNotSupportedException

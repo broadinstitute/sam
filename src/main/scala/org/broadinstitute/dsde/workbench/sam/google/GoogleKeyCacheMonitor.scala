@@ -15,8 +15,7 @@ import spray.json._
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
 
-/**
-  * Created by mbemis on 1/19/18.
+/** Created by mbemis on 1/19/18.
   */
 object GoogleKeyCacheMonitorSupervisor {
   sealed trait GoogleKeyCacheMonitorSupervisorMessage
@@ -24,15 +23,16 @@ object GoogleKeyCacheMonitorSupervisor {
   case object Start extends GoogleKeyCacheMonitorSupervisorMessage
 
   def props(
-             pollInterval: FiniteDuration,
-             pollIntervalJitter: FiniteDuration,
-             googleKeyCachePubSubDao: GooglePubSubDAO,
-             googleIamDAO: GoogleIamDAO,
-             pubSubTopicName: String,
-             pubSubSubscriptionName: String,
-             projectServiceAccount: WorkbenchEmail,
-             workerCount: Int,
-             googleKeyCache: GoogleKeyCache): Props =
+      pollInterval: FiniteDuration,
+      pollIntervalJitter: FiniteDuration,
+      googleKeyCachePubSubDao: GooglePubSubDAO,
+      googleIamDAO: GoogleIamDAO,
+      pubSubTopicName: String,
+      pubSubSubscriptionName: String,
+      projectServiceAccount: WorkbenchEmail,
+      workerCount: Int,
+      googleKeyCache: GoogleKeyCache
+  ): Props =
     Props(
       new GoogleKeyCacheMonitorSupervisor(
         pollInterval,
@@ -43,7 +43,9 @@ object GoogleKeyCacheMonitorSupervisor {
         pubSubSubscriptionName,
         projectServiceAccount,
         workerCount,
-        googleKeyCache))
+        googleKeyCache
+      )
+    )
 }
 
 class GoogleKeyCacheMonitorSupervisor(
@@ -55,8 +57,8 @@ class GoogleKeyCacheMonitorSupervisor(
     pubSubSubscriptionName: String,
     projectServiceAccount: WorkbenchEmail,
     workerCount: Int,
-    googleKeyCache: GoogleKeyCache)
-    extends Actor
+    googleKeyCache: GoogleKeyCache
+) extends Actor
     with LazyLogging {
   import GoogleKeyCacheMonitorSupervisor._
   import context._
@@ -79,7 +81,8 @@ class GoogleKeyCacheMonitorSupervisor(
       _ <- googleKeyCache.googleStorageDAO.setObjectChangePubSubTrigger(
         googleKeyCache.googleServicesConfig.googleKeyCacheConfig.bucketName,
         topicToFullPath(pubSubTopicName),
-        List("OBJECT_DELETE"))
+        List("OBJECT_DELETE")
+      )
     } yield Start
 
   def startOne(): Unit = {
@@ -88,13 +91,11 @@ class GoogleKeyCacheMonitorSupervisor(
   }
 
   override val supervisorStrategy =
-    OneForOneStrategy() {
-      case e => {
-        logger.error("unexpected error in google key cache monitor", e)
-        // start one to replace the error, stop the errored child so that we also drop its mailbox (i.e. restart not good enough)
-        startOne()
-        Stop
-      }
+    OneForOneStrategy() { case e =>
+      logger.error("unexpected error in google key cache monitor", e)
+      // start one to replace the error, stop the errored child so that we also drop its mailbox (i.e. restart not good enough)
+      startOne()
+      Stop
     }
 
 }
@@ -108,7 +109,8 @@ object GoogleKeyCacheMonitor {
       pubSubDao: GooglePubSubDAO,
       googleIamDAO: GoogleIamDAO,
       pubSubSubscriptionName: String,
-      googleKeyCache: GoogleKeyCache): Props =
+      googleKeyCache: GoogleKeyCache
+  ): Props =
     Props(new GoogleKeyCacheMonitorActor(pollInterval, pollIntervalJitter, pubSubDao, googleIamDAO, pubSubSubscriptionName, googleKeyCache))
 }
 
@@ -118,8 +120,8 @@ class GoogleKeyCacheMonitorActor(
     pubSubDao: GooglePubSubDAO,
     googleIamDAO: GoogleIamDAO,
     pubSubSubscriptionName: String,
-    googleKeyCache: GoogleKeyCache)
-    extends Actor
+    googleKeyCache: GoogleKeyCache
+) extends Actor
     with LazyLogging
     with FutureSupport {
   import GoogleKeyCacheMonitor._
@@ -192,9 +194,7 @@ class GoogleKeyCacheMonitorActor(
   }
 
   override val supervisorStrategy =
-    OneForOneStrategy() {
-      case e => {
-        Escalate
-      }
+    OneForOneStrategy() { case e =>
+      Escalate
     }
 }
