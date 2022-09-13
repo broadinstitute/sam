@@ -59,6 +59,11 @@ jobs:
              broadinstitute/dsde-toolbox:latest vault read --format=json ${GCR_SVCACCT_VAULT} \
              | jq .data > ${SVCACCT_FILE}
 
+          ls -l
+
+          TMP_DIR=$(mktemp -d tmp-XXXXXX)
+          export CLOUDSDK_CONFIG=$(pwd)/${TMP_DIR}
+          gcloud auth activate-service-account --key-file="${SVCACCT_FILE}
           docker build -t ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG} --pull .
           docker push ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG}
           docker tag ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG} ${{ env.DOCKERHUB_REGISTRY }}:${DOCKERTAG_SAFE_NAME}
