@@ -40,7 +40,7 @@ jobs:
         run: |
           ./docker/build_jar.sh
 
-      # Publish jar
+      # Publish jar to GCR
       - name: Publish Sam jar
         run: |
           BRANCH=$(git rev-parse --abbrev-ref HEAD) # current branch
