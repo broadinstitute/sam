@@ -65,7 +65,7 @@ jobs:
           docker build -t ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG} --pull .
           docker tag ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG} ${{ env.GCR_REGISTRY }}:${HASH_TAG}
           gcloud docker -- push ${{ env.GCR_REGISTRY }}:${HASH_TAG}
-          echo ${{ github.event.pull_request.head.ref }}
+          echo ${{ github.event.push.head.ref }}
 
   create-bee-workflow:
     runs-on: ubuntu-latest
@@ -79,7 +79,7 @@ jobs:
         with:
           workflow: bee-create
           repo: broadinstitute/terra-github-workflows
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.push.head.ref }}
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}" }'
@@ -96,7 +96,7 @@ jobs:
         with:
           workflow: sam-tests
           repo: broadinstitute/terra-github-workflows
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.push.head.ref }}
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}", "ENV": "qa" }'
@@ -114,7 +114,7 @@ jobs:
         with:
           workflow: bee-destroy
           repo: broadinstitute/terra-github-workflows
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.push.head.ref }}
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}" }'
