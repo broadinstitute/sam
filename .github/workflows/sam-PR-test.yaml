@@ -20,7 +20,7 @@ env:
   JAR_IMAGE_NAME: jar
   # Region-specific Google Docker repository where GOOGLE_PROJECT/REPOSITORY_NAME can be found
   GOOGLE_DOCKER_REPOSITORY: us-central1-docker.pkg.dev
-  GCR_REGISTRY: io/broad-dsp-gcr-public/sam
+  GCR_REGISTRY: gcr.io/broad-dsp-gcr-public/sam
   DOCKERHUB_REGISTRY: broadinstitute/sam
   VAULT_TOKEN: s.JYUldLQ4wU1U9orQGz3Y4p5c
 jobs:
@@ -65,8 +65,8 @@ jobs:
           export CLOUDSDK_CONFIG=$(pwd)/${TMP_DIR}
           gcloud auth activate-service-account --key-file="${SVCACCT_FILE}"
           docker build -t ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG} --pull .
-          docker push ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG}
-          docker tag ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG} ${{ env.DOCKERHUB_REGISTRY }}:${DOCKERTAG_SAFE_NAME}
-          docker push ${{ env.DOCKERHUB_REGISTRY }}:${DOCKERTAG_SAFE_NAME}
+          # docker push ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG}
+          # docker tag ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG} ${{ env.DOCKERHUB_REGISTRY }}:${DOCKERTAG_SAFE_NAME}
+          # docker push ${{ env.DOCKERHUB_REGISTRY }}:${DOCKERTAG_SAFE_NAME}
           docker tag ${{ env.DOCKERHUB_REGISTRY }}:${HASH_TAG} ${{ env.GCR_REGISTRY }}:${HASH_TAG}
           gcloud docker -- push ${{ env.GCR_REGISTRY }}:${HASH_TAG}
