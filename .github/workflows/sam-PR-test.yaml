@@ -79,7 +79,7 @@ jobs:
         with:
           workflow: bee-create
           repo: broadinstitute/terra-github-workflows
-          ref: ${{ github.event.push.head.ref }}
+          ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}" }'
@@ -96,7 +96,7 @@ jobs:
         with:
           workflow: sam-tests
           repo: broadinstitute/terra-github-workflows
-          ref: ${{ github.event.push.head.ref }}
+          ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}", "ENV": "qa" }'
@@ -114,7 +114,7 @@ jobs:
         with:
           workflow: bee-destroy
           repo: broadinstitute/terra-github-workflows
-          ref: ${{ github.event.push.head.ref }}
+          ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}" }'
