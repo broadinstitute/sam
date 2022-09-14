@@ -1,11 +1,6 @@
 name: Sam PR tests
 
 on:
-  pull_request:
-    branches:
-      - develop
-    paths-ignore:
-      - 'README.md'
   push:
     branches:
       - develop
@@ -40,7 +35,7 @@ jobs:
         run: |
           ./docker/build_jar.sh
 
-      # Publish jar to GCR
+      # Publish jar to GCR (will be refactored into private repo)
       - name: Publish Sam jar
         run: |
           BRANCH=$(git rev-parse --abbrev-ref HEAD) # current branch
