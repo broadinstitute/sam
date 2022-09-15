@@ -1,19 +1,15 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.unsafe.implicits.global
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
-import org.broadinstitute.dsde.workbench.sam.config.DirectoryConfig
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
-import java.net.URI
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.language.reflectiveCalls
 
@@ -21,20 +17,14 @@ import scala.language.reflectiveCalls
   * Created by dvoet on 6/26/17.
   */
 class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
-  val directoryConfig: DirectoryConfig = TestSupport.appConfig.directoryConfig
-  val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
-  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
   private val dummyUser = Generator.genWorkbenchUserGoogle.sample.get
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    runAndWait(schemaDao.init())
   }
 
   before {
     TestSupport.truncateAll
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.createOrgUnits())
   }
 
   def sharedFixtures = new {
@@ -53,16 +43,13 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
 
   def realServicesFixture = new {
     val shared = sharedFixtures
-    val dirURI = new URI(directoryConfig.directoryUrl)
-    val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
     val ldapPolicyDao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
     val ldapDirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
-    val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao, samRequestContext))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao, ldapDirDao)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain, Set.empty)
-    val userService = new UserService(ldapDirDao, NoExtensions, registrationDAO, Seq.empty, new TosService(ldapDirDao, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val userService = new UserService(ldapDirDao, NoExtensions, Seq.empty, new TosService(ldapDirDao, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     shared.resourceTypes foreach {case (_, resourceType) => resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync() }
   }
@@ -70,13 +57,12 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
   def mockServicesFixture = new {
     val shared = sharedFixtures
     val mockDirectoryDAO = new MockDirectoryDAO()
-    val mockRegistrationDAO = new MockDirectoryDAO()
     val mockPolicyDAO = new MockAccessPolicyDAO(shared.resourceTypes, mockDirectoryDAO)
     val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirectoryDAO, samRequestContext))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO)
     val resourceService = new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain, Set.empty)
-    val userService = new UserService(mockDirectoryDAO, NoExtensions, mockRegistrationDAO, Seq.empty, new TosService(mockDirectoryDAO, mockRegistrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val userService = new UserService(mockDirectoryDAO, NoExtensions,  Seq.empty, new TosService(mockDirectoryDAO,  googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val managedGroupService = new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain)
   }
 

@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -35,7 +35,6 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import scalikejdbc.QueryDSL.delete
 import scalikejdbc.withSQL
 
-import java.net.URI
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.duration._
@@ -70,11 +69,7 @@ object TestSupport extends TestSupport {
   val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
   val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
-  val directoryConfig = config.as[DirectoryConfig]("directory")
-  val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
   val adminConfig = config.as[AdminConfig]("admin")
-
-  val dirURI = new URI(directoryConfig.directoryUrl)
 
   val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
@@ -93,7 +88,6 @@ object TestSupport extends TestSupport {
                         (implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockRegistrationDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(resourceTypes, directoryDAO))
     val notificationPubSubDAO = new MockGooglePubSubDAO()
@@ -107,7 +101,6 @@ object TestSupport extends TestSupport {
     val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
       distributedLock,
       directoryDAO,
-      registrationDAO,
       policyDAO,
       googleDirectoryDAO,
       notificationPubSubDAO,
@@ -135,14 +128,14 @@ object TestSupport extends TestSupport {
       adminConfig.allowedEmailDomains
     ))
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
     val azureService = new AzureService(MockCrlService(), directoryDAO)
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration, azureService)
+    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, Seq.empty, tosService), new StatusService(directoryDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration, azureService)
   }
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config, Some(samDependencies.azureService))
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config, Some(samDependencies.azureService))
     with MockSamUserDirectives
     with GoogleExtensionRoutes {
       override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
@@ -202,6 +195,6 @@ object TestSupport extends TestSupport {
   }
 }
 
-final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, registrationDAO: MockRegistrationDAO, policyDao: AccessPolicyDAO, cloudExtensions: CloudExtensions, oauth2Config: OpenIDConnectConfiguration, azureService: AzureService)
+final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, policyDao: AccessPolicyDAO, cloudExtensions: CloudExtensions, oauth2Config: OpenIDConnectConfiguration, azureService: AzureService)
 
 object ConnectedTest extends Tag("connected test")

@@ -5,8 +5,6 @@ services:
     volumes:
       - ./sam.conf:/etc/sam.conf
       - ./fiab-startup.sh:/etc/fiab-startup.sh
-    links:
-      - sam-opendj:opendj
     environment:
       JAVA_OPTS: -Dconfig.file=/etc/sam.conf -Dcom.sun.jndi.ldap.connect.pool.protocol=plain -Dcom.sun.jndi.ldap.connect.pool.maxsize=100
       SLEEP: 130
@@ -21,18 +19,3 @@ services:
       service: sam-proxy
     links:
       - sam-app:app
-      - sam-opendj:opendj
-  sam-opendj:
-    image: broadinstitute/openam:opendj_3
-    ports:
-      - "390:390"
-    volumes:
-      # Uncomment the following volume mapping to persist opendj data
-      # https://docs.docker.com/compose/compose-file/compose-file-v2/#short-syntax
-      #- ./opendjstore/sam:/opt/opendj/data
-      - ./opendjsetup.sh:/opt/opendj/bootstrap/setup.sh
-      - ./proxy_user.ldif:/opt/opendj/bootstrap/ldif/zzz_proxy_user.ldif
-    environment:
-      BASE_DN: "dc=example,dc=com"
-      ROOTPASS: "testtesttest"
-    restart: always

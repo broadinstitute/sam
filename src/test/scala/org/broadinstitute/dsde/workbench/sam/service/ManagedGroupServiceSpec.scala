@@ -2,12 +2,10 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.{global => globalEc}
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._
@@ -17,7 +15,6 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-import java.net.URI
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -27,17 +24,12 @@ import scala.concurrent.Future
   */
 class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport with MockitoSugar
   with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
-  val directoryConfig = TestSupport.appConfig.directoryConfig
-  val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
   private val resourceTypes = TestSupport.appConfig.resourceTypes
   private val resourceTypeMap = resourceTypes.map(rt => rt.name -> rt).toMap
 
-  val dirURI = new URI(directoryConfig.directoryUrl)
-  val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
-  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val resourceId = ResourceId("myNewGroup")
   private val expectedResource = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId)
@@ -55,7 +47,6 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    runAndWait(schemaDao.init())
   }
 
   def makeResourceType(resourceType: ResourceType): ResourceType = resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync()

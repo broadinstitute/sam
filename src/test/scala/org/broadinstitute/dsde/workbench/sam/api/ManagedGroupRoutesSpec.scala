@@ -71,7 +71,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
   def makeOtherUser(samRoutes: TestSamRoutes, samUser: SamUser = defaultNewUser) = new {
     runAndWait(samRoutes.userService.createUser(samUser, samRequestContext))
     val email = samUser.email
-    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, samUser, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao, tosService = samRoutes.tosService)
+    val routes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, samUser, samRoutes.mockDirectoryDao,  tosService = samRoutes.tosService)
   }
 
   def setGroupMembers(samRoutes: TestSamRoutes, members: Set[WorkbenchEmail], expectedStatus: StatusCode): Unit = {
@@ -86,7 +86,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     val theDude = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
     defaultRoutes.directoryDAO.createUser(theDude, samRequestContext).unsafeRunSync()
-    val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.policyEvaluatorService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.mockDirectoryDao, defaultRoutes.mockRegistrationDao, tosService = defaultRoutes.tosService)
+    val dudesRoutes = new TestSamRoutes(defaultRoutes.resourceService, defaultRoutes.policyEvaluatorService, defaultRoutes.userService, defaultRoutes.statusService, defaultRoutes.managedGroupService, theDude, defaultRoutes.mockDirectoryDao, tosService = defaultRoutes.tosService)
 
     body(dudesRoutes)
   }
@@ -102,7 +102,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
     val samRoutes = TestSamRoutes(resourceTypes)
 
     val newGuy = Generator.genWorkbenchUserGoogle.sample.get
-    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao, tosService = samRoutes.tosService)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao,  tosService = samRoutes.tosService)
 
     assertCreateGroup(samRoutes)
     assertGetGroup(samRoutes)
@@ -127,7 +127,7 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
 
     val newGuy = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
     samRoutes.directoryDAO.createUser(newGuy, samRequestContext).unsafeRunSync()
-    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao, samRoutes.mockRegistrationDao, tosService = samRoutes.tosService)
+    val newGuyRoutes = new TestSamRoutes(samRoutes.resourceService, samRoutes.policyEvaluatorService, samRoutes.userService, samRoutes.statusService, samRoutes.managedGroupService, newGuy, samRoutes.mockDirectoryDao,  tosService = samRoutes.tosService)
 
 
     Get(s"/api/group/$groupId") ~> newGuyRoutes.route ~> check {
@@ -489,7 +489,6 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
     }
   }
 
-  // TODO: In order to be able to delete the subject, they need to exist in opendj.  Is this what we want?
   "DELETE /api/group/{groupName}/{policyName}/{email}" should "respond with 204 and remove the email address from the specified group and policy" in {
     val samRoutes = TestSamRoutes(resourceTypes)
 

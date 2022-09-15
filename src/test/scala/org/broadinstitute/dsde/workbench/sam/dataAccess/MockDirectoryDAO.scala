@@ -8,7 +8,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -18,7 +17,8 @@ import scala.collection.mutable
 /**
   * Created by mbemis on 6/23/17.
   */
-class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
+class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap(),
+                       passStatusCheck: Boolean = true) extends DirectoryDAO {
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
@@ -33,8 +33,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   private val petManagedIdentitiesByUser: mutable.Map[PetManagedIdentityId, PetManagedIdentity] = new TrieMap()
 
-  override def getConnectionType(): ConnectionType = ConnectionType.Postgres
-
   override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
     if (groups.keySet.contains(group.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists")))
@@ -43,8 +41,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       groupsWithEmails += group.email -> group.id
       IO.pure(group)
     }
-
-  override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
@@ -292,15 +288,13 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext)
       : IO[Option[SamUser]] = IO.pure(users.values.find(_.azureB2CId.contains(userId)))
 
-  override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] = IO {
-    for {
-      user <- users.get(userId)
-    } yield {
-      users += user.id -> user.copy(azureB2CId = Option(b2CId))
-    }
-  }
+  override def setUserAzureB2CId(userId: WorkbenchUserId, azureB2CId: AzureB2CId, samRequestContext: SamRequestContext)
+  : IO[Unit] = users.get(userId) match {
+        case Some(user) => IO.pure(users += userId -> user.copy(azureB2CId = Option(azureB2CId)))
+        case None => IO.unit
+      }
 
-  override def checkStatus(samRequestContext: SamRequestContext): Boolean = true
+  override def checkStatus(samRequestContext: SamRequestContext): Boolean = passStatusCheck
 
   override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(users.values.find(_.googleSubjectId.contains(userId)))

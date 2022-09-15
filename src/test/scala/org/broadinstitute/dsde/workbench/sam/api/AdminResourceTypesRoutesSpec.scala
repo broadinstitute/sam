@@ -8,7 +8,7 @@ import cats.implicits.catsSyntaxOptionId
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -62,7 +62,6 @@ class AdminResourceTypesRoutesSpec
                               user: SamUser = firecloudAdmin): SamRoutes = {
     val directoryDAO = new MockDirectoryDAO()
     val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
-    val registrationDAO = new MockRegistrationDAO()
     val emailDomain = "example.com"
 
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
@@ -73,14 +72,14 @@ class AdminResourceTypesRoutesSpec
 
     val cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin)
 
-    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val mockUserService = new UserService(directoryDAO, cloudExtensions, registrationDAO, Seq.empty, tosService)
-    val mockStatusService = new StatusService(directoryDAO, registrationDAO, cloudExtensions, TestSupport.dbRef)
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+    val mockStatusService = new StatusService(directoryDAO, cloudExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
     runAndWait(mockUserService.createUser(user, samRequestContext))
 
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, cloudExtensions, tosService = tosService)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, cloudExtensions, tosService = tosService)
   }
 
   "GET /api/admin/v1/resourceTypes/{resourceType}/policies/" should "200 when successful" in {
