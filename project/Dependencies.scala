@@ -5,7 +5,7 @@ object Dependencies {
   val akkaHttpV = "10.2.9"
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.9.2"
-  val scalaTestV    = "3.2.3"
+  val scalaTestV    = "3.2.12"
   val scalaCheckV    = "1.14.3"
   val scalikejdbcVersion    = "3.4.2"
   val postgresDriverVersion = "42.3.4"
@@ -64,8 +64,8 @@ object Dependencies {
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %%  "monocle-macro" % monocleVersion
 
   val scalaTest: ModuleID =       "org.scalatest" %% "scalatest"    % scalaTestV % "test"
-  val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-15" % s"${scalaTestV}.0" % Test
-  val scalaTestMockito = "org.scalatestplus" %% "mockito-3-4" % s"${scalaTestV}.0" % Test
+  val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-15" % s"${scalaTestV}.0-RC2" % Test
+  val scalaTestMockito = "org.scalatestplus" %% "mockito-4-5" % s"${scalaTestV}.0" % Test
 
   val unboundid: ModuleID = "com.unboundid" % "unboundid-ldapsdk" % "4.0.14"
 
