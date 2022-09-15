@@ -124,13 +124,12 @@ function docker_cmd()
         echo GIT_SHA=$GIT_SHA > env.properties
         HASH_TAG=${GIT_SHA:0:12}
 
-        targetPlatform="--platform=linux/amd64"
         echo "building ${DOCKERHUB_REGISTRY}:${HASH_TAG}..."
-        docker build -t "${DOCKERHUB_REGISTRY}:${HASH_TAG}" ${targetPlatform} --pull .
+        docker build -t "${DOCKERHUB_REGISTRY}:${HASH_TAG}" --pull .
 
         echo "building ${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}..."
         cd automation
-        docker build -f Dockerfile-tests -t "${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}" ${targetPlatform} --pull .
+        docker build -f Dockerfile-tests -t "${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}" --pull .
 
         cd ..
 
