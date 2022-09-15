@@ -1237,7 +1237,7 @@ paths:
     get:
       tags:
         - Resources
-      summary: List resources (of a resource type) with the caller's roles and actions granted directly on the policy but not the default actions on the role for each resource.
+      summary: List resources (of a resource type) with the caller's roles and actions (but currently it will only show the actions granted directly on the policy and not the default actions on the role) for each resource.
       operationId: listResourcesAndPoliciesV2
       parameters:
         - name: resourceTypeName
