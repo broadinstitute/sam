@@ -1,6 +1,6 @@
 #!/bin/bash
 
-HELP_TEXT="$(cat <<EOF
+HELP_TEXT=$(cat <<EOF
  Build jar and docker images.
    jar: build jar
    -d | --docker : (default: no action) provide either "build" or "push" to
@@ -15,7 +15,7 @@ HELP_TEXT="$(cat <<EOF
      ./docker/build.sh jar -d push -g "my-gcr-registry" -k "path-to-my-keyfile"
 \t
 EOF
-)"
+)
 
 # Enable strict evaluation semantics
 set -e
@@ -124,16 +124,17 @@ function docker_cmd()
         echo GIT_SHA=$GIT_SHA > env.properties
         HASH_TAG=${GIT_SHA:0:12}
 
+        targetPlatform="--platform=linux/amd64"
         echo "building ${DOCKERHUB_REGISTRY}:${HASH_TAG}..."
-        docker build -t $DOCKERHUB_REGISTRY:${HASH_TAG} --pull .
+        docker build -t "${DOCKERHUB_REGISTRY}:${HASH_TAG}" ${targetPlatform} --pull .
 
         echo "building ${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}..."
         cd automation
-        docker build -f Dockerfile-tests -t $DOCKERHUB_TESTS_REGISTRY:${HASH_TAG} --pull .
+        docker build -f Dockerfile-tests -t "${DOCKERHUB_TESTS_REGISTRY}:${HASH_TAG}" ${targetPlatform} --pull .
 
         cd ..
 
-        if [ $DOCKER_CMD="push" ]; then
+        if [ $DOCKER_CMD = "push" ]; then
             echo "pushing ${DOCKERHUB_REGISTRY}:${HASH_TAG}..."
             docker push $DOCKERHUB_REGISTRY:${HASH_TAG}
             docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $DOCKERHUB_REGISTRY:${DOCKERTAG_SAFE_NAME}
