@@ -324,10 +324,10 @@ class GoogleExtensions(
 
   def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
-    // The normal situation is that the pet either exists in both ldap and google or neither.
-    // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
-    // This code is a little extra complicated to detect the cases when a pet does not exist in google, ldap or both
-    // and do the right thing.
+    // The normal situation is that the pet either exists in both the database and google or neither.
+    // Sometimes, especially in tests, the pet may be removed from the database, but not google or the other way around.
+    // This code is a little extra complicated to detect the cases when a pet does not exist in google, the database or
+    // both and do the right thing.
     val createPet = for {
       (maybePet, maybeServiceAccount) <- retrievePetAndSA(user.id, petSaName, project, samRequestContext)
       serviceAccount <- maybeServiceAccount match {

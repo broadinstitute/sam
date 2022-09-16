@@ -380,7 +380,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     })
   }
 
-  // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
     serializableWriteTransaction("deleteUser", samRequestContext)({ implicit session =>
       val userTable = UserTable.syntax
