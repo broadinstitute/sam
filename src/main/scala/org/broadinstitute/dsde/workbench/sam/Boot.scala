@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail}
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
@@ -31,6 +31,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import java.io.File
 import java.nio.file.{Files, Paths}
+import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
@@ -84,7 +85,7 @@ object Boot extends IOApp with LazyLogging {
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
       (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _) <- createDAOs(appConfig, DatabaseNames.Background, DatabaseNames.Background)
 
-      blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
+      googleSynchronizerExecutionContext <- ExecutionContexts.fixedThreadPool[IO](24)
 
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
@@ -92,7 +93,8 @@ object Boot extends IOApp with LazyLogging {
         foregroundAccessPolicyDAO,
         backgroundDirectoryDAO,
         backgroundAccessPolicyDAO,
-        postgresDistributedLockDAO)
+        postgresDistributedLockDAO,
+        googleSynchronizerExecutionContext)
 
       oauth2Config <- cats.effect.Resource.eval(
         OpenIDConnectConfiguration[IO](
@@ -110,7 +112,8 @@ object Boot extends IOApp with LazyLogging {
       foregroundAccessPolicyDAO: AccessPolicyDAO,
       backgroundDirectoryDAO: DirectoryDAO,
       backgroundAccessPolicyDAO: AccessPolicyDAO,
-      postgresDistributedLockDAO: PostgresDistributedLockDAO[IO])(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+      postgresDistributedLockDAO: PostgresDistributedLockDAO[IO],
+      googleSynchronizerExecutionContext: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
         for {
@@ -137,7 +140,7 @@ object Boot extends IOApp with LazyLogging {
             appConfig.adminConfig
           )
           val googleGroupSynchronizer =
-            new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)
+            new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(googleSynchronizerExecutionContext)
           new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
         }
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
