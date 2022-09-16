@@ -18,7 +18,8 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "$GITHUB_CONTEXT"
-          HASH_TAG=${${{ github.sha }}:0:12}
+          GIT_SHA=${{ github.sha }}
+          HASH_TAG=${GIT_SHA:0:12}
           echo "HASH_TAG=$HASH_TAG" >> $GITHUB_ENV
           echo '${{ env.HASH_TAG }}'
 
