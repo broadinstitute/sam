@@ -1,0 +1,24 @@
+name: Sam PR tests
+
+on:
+  push:
+    branches:
+      - QA-2001
+    paths-ignore:
+      - 'README.md'
+jobs:
+  sam-bee-workflow:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: dispatch to terra-github-workflows
+        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        with:
+          workflow: sam-build
+          repo: broadinstitute/terra-github-workflows
+          ref: refs/heads/main
+          token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
+          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
+          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ github.event.ref }}" }'
