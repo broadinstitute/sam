@@ -159,10 +159,7 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
     maybeEmail.value.value shouldEqual s"${resourceId.value}@$testDomain"
   }
 
-  // NOTE: All since we don't have a way to look up policies directly without going through a Resource, this test
-  // may not be actually confirming that the policies have been deleted.  They may still be in LDAP, just orphaned
-  // because the resource no longer exists
-  "ManagedGroupService delete" should "delete policies associated to that resource in LDAP and in Google" in {
+  "ManagedGroupService delete" should "delete policies associated with that resource in the database and in Google" in {
     val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
     val mockGoogleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))

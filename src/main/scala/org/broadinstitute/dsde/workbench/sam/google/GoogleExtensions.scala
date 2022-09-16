@@ -347,13 +347,13 @@ class GoogleExtensions(
         case Some(sa) => IO.pure(sa)
       }
       pet <- (maybePet, maybeServiceAccount) match {
-        // pet does not exist in ldap, create it and enable the identity
+        // pet does not exist in the database, create it and enable the identity
         case (None, _) =>
           for {
             p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount), samRequestContext)
             _ <- directoryDAO.enableIdentity(p.id, samRequestContext)
           } yield p
-        // pet already exists in ldap, but a new SA was created so update ldap with new SA info
+        // pet already exists in the database, but a new SA was created so update the database with new SA info
         case (Some(p), None) =>
           for {
             p <- directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount), samRequestContext)

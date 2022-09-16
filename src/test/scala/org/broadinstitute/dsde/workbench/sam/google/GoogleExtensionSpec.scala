@@ -289,7 +289,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
 
-    // verify ldap
     dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe Some(petServiceAccount)
 
     val ldapPetOpt = dirDAO.loadSubjectFromEmail(petServiceAccount.serviceAccount.email, samRequestContext).flatMap {
@@ -889,7 +888,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val inBothSubGroupUser = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(inBothSubGroupUser, samRequestContext).unsafeRunSync()
 
-    // Create subgroups as groups in ldap
+    // Create subgroups as groups in the database
     val inAuthDomainSubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inAuthDomainSubGroup"), Set(inAuthDomainSubGroupUser.id), WorkbenchEmail("imAuthDomain@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
     val inPolicySubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inPolicySubGroup"), Set(inPolicySubGroupUser.id), WorkbenchEmail("inPolicy@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
     val inBothSubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set(inBothSubGroupUser.id), WorkbenchEmail("inBoth@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
