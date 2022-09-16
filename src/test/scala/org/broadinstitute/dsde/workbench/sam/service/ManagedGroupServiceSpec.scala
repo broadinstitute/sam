@@ -45,10 +45,6 @@ class ManagedGroupServiceSpec extends AnyFlatSpec with Matchers with TestSupport
 
   val dummyUser = Generator.genWorkbenchUserBoth.sample.get
 
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-  }
-
   def makeResourceType(resourceType: ResourceType): ResourceType = resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
   def assertPoliciesOnResource(resource: FullyQualifiedResourceId, policyDAO: AccessPolicyDAO = policyDAO, expectedPolicies: LazyList[AccessPolicyName] = LazyList(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName)) = {

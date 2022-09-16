@@ -96,10 +96,6 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
     val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
   }
 
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-  }
-
   before {
     clearDatabase()
     dirDAO.createUser(dummyUser, samRequestContext).unsafeRunSync()
