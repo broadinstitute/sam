@@ -18,6 +18,9 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "$GITHUB_CONTEXT"
+          HASH_TAG=${${{ github.sha }}:0:12}
+          echo "HASH_TAG=$HASH_TAG" >> $GITHUB_ENV
+          echo '${{ env.HASH_TAG }}'
 
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
@@ -44,7 +47,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "oauth-proxy-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "{\"sam\":{\"appVersion\":\"${{ github.sha }}\"}}" }'
+          inputs: '{ "bee-name": "oauth-proxy-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "{\"sam\":{\"appVersion\":\"${{ env.HASH_TAG }}\"}}" }'
 
   destroy-bee-workflow:
     runs-on: ubuntu-latest
