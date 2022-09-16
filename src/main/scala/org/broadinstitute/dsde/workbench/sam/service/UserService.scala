@@ -132,8 +132,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             tosAcceptedStatus <- tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
             adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
-            // Because of legacy reasons related to LDAP, we are purposefully linking both ldap and adminEnabled to the same value
-            // ticket to fix: https://broadworkbench.atlassian.net/browse/ID-266
+            // We are removing references to LDAP but this will require an API version change here, so we are leaving
+            // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
+            // leaving that logic unchanged for now.
+            // ticket: https://broadworkbench.atlassian.net/browse/ID-266
             val enabledMap = Map("ldap" -> adminEnabled, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
             val enabledStatuses = tosAcceptedStatus match {
               case Some(status) => enabledMap + ("tosAccepted" -> status) + ("adminEnabled" -> adminEnabled)
@@ -169,7 +171,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) => {
         // pulled out of for comprehension to allow concurrent execution
-        val ldapStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture() // calling postgres instead of opendj here as a temporary measure as we work toward eliminating opendj
         val tosAcceptedStatus = tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
         val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
@@ -178,7 +179,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         val googleStatus = cloudExtensions.getUserStatus(user)
 
         for {
-          ldap <- ldapStatus
+          // We are removing references to LDAP but this will require an API version change here, so we are leaving
+          // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
+          // leaving that logic unchanged for now.
+          // ticket: https://broadworkbench.atlassian.net/browse/ID-266
+          ldap <- adminEnabledStatus
           allUsers <- allUsersStatus
           tosAccepted <- tosAcceptedStatus
           google <- googleStatus
