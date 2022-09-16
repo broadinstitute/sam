@@ -291,16 +291,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe Some(petServiceAccount)
 
-    val ldapPetOpt = dirDAO.loadSubjectFromEmail(petServiceAccount.serviceAccount.email, samRequestContext).flatMap {
-      case Some(subject: PetServiceAccountId) => dirDAO.loadPetServiceAccount(subject, samRequestContext)
-      case _ => fail(s"could not load pet LDAP entry from ${petServiceAccount.serviceAccount.email.value}")
-    }.unsafeRunSync()
-
-    ldapPetOpt shouldBe Symbol("defined")
-    val Some(ldapPet) = ldapPetOpt
-    // MockGoogleIamDAO generates the subject ID as a random Long
-    Try(ldapPet.serviceAccount.subjectId.value.toLong) shouldBe a[Success[_]]
-
     // verify google
     mockGoogleIamDAO.serviceAccounts should contain key petServiceAccount.serviceAccount.email
     mockGoogleDirectoryDAO.groups should contain key defaultUserProxyEmail
