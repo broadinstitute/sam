@@ -37,7 +37,6 @@ import java.util.{Date, GregorianCalendar, UUID}
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.{Success, Try}
 
 class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
