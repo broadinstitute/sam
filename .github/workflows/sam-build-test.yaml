@@ -21,7 +21,10 @@ jobs:
           GIT_SHA=${{ github.sha }}
           HASH_TAG=${GIT_SHA:0:12}
           echo "HASH_TAG=$HASH_TAG" >> $GITHUB_ENV
-          echo '${{ env.HASH_TAG }}'
+
+      - name: Check
+        run: |
+          echo "$HASH_TAG"
 
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
