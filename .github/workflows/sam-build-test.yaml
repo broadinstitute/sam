@@ -39,6 +39,13 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
+      - name: Check hash tag
+        run: |
+          echo $HASH_TAG
+          echo "test"
+          echo ${{ env.HASH_TAG }}
+          echo "test1"
+
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
