@@ -130,10 +130,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
             allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
             tosAcceptedStatus <- tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
-            ldapStatus <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture() // calling postgres instead of opendj here as a temporary measure as we work toward eliminating opendj
             adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
-            val enabledMap = Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
+            // Because of legacy reasons related to LDAP, we are purposefully linking both ldap and adminEnabled to the same value
+            // ticket to fix: https://broadworkbench.atlassian.net/browse/ID-266
+            val enabledMap = Map("ldap" -> adminEnabled, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
             val enabledStatuses = tosAcceptedStatus match {
               case Some(status) => enabledMap + ("tosAccepted" -> status) + ("adminEnabled" -> adminEnabled)
               case None => enabledMap
