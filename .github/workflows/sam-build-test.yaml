@@ -12,16 +12,9 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+    outputs:
+      custom-version-json: ${{ steps.render-data.outputs.custom-version-json }}
     steps:
-      - name: Dump GitHub context
-        env:
-          GITHUB_CONTEXT: ${{ toJSON(github) }}
-        run: |
-          echo "$GITHUB_CONTEXT"
-          GIT_SHA=${{ github.sha }}
-          HASH_TAG=${GIT_SHA:0:12}
-          echo "HASH_TAG=$HASH_TAG" >> $GITHUB_ENV
-
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
@@ -32,6 +25,16 @@ jobs:
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ github.event.ref }}" }'
 
+      - name: Render any data to share with dependent jobs
+        id: render-data
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: |
+          echo "$GITHUB_CONTEXT"
+          GIT_SHA=${{ github.sha }}
+          HASH_TAG=${GIT_SHA:0:12}
+          echo ::set-output name=custom-version-json::"{\"sam\":{\"appVersion\":\"$HASH_TAG\"}}"
+
   create-bee-workflow:
     runs-on: ubuntu-latest
     needs: [sam-build-tag-publish-job]
@@ -41,10 +44,7 @@ jobs:
     steps:
       - name: Check hash tag
         run: |
-          echo $HASH_TAG
-          echo "test"
-          echo ${{ env.HASH_TAG }}
-          echo "test1"
+          echo '${{ steps.sam-build-tag-publish-job.outputs.custom-version-json }}'
 
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
@@ -54,7 +54,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "oauth-proxy-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "{\"sam\":{\"appVersion\":\"${{ env.HASH_TAG }}\"}}" }'
+          inputs: '{ "bee-name": "oauth-proxy-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ steps.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
 
   destroy-bee-workflow:
     runs-on: ubuntu-latest
