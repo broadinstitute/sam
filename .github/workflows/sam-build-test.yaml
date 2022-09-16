@@ -13,6 +13,11 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
+      - name:
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: |
+          echo "$GITHUB_CONTEXT"
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
@@ -21,4 +26,4 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: "{ \"repository\": \"${{ github.event.repository.full_name }}\", \"ref\": \"$GITHUB_REF\" }"
+          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ github.event.ref }}" }'
