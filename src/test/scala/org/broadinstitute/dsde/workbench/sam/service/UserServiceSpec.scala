@@ -113,7 +113,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     val savedUser = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().value
 
-    // get user status info (id, email, ldap)
+    // get user status info
     val info = service.getUserStatusInfo(savedUser, samRequestContext).unsafeRunSync()
     info shouldBe UserStatusInfo(savedUser.id.value, savedUser.email.value, true, true)
   }
@@ -126,7 +126,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
-    // get user status diagnostics (ldap, usersGroups, googleGroups
+    // get user status diagnostics
     val diagnostics = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
     diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true, None, true))
   }
@@ -147,7 +147,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val response = service.disableUser(defaultUser.id, samRequestContext).futureValue
     response shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
 
-    // check ldap
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
   }
 
