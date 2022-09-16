@@ -21,4 +21,4 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ github.event.ref }}" }'
+          inputs: "{ \"repository\": \"${{ github.event.repository.full_name }}\", \"ref\": \"$GITHUB_REF\" }"
