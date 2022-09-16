@@ -33,7 +33,7 @@ jobs:
           echo "$GITHUB_CONTEXT"
           GIT_SHA=${{ github.sha }}
           HASH_TAG=${GIT_SHA:0:12}
-          echo ::set-output name=custom-version-json::"{\"sam\":{\"appVersion\":\"$HASH_TAG\"}}"
+          echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"$HASH_TAG\\\"}}"
 
   create-bee-workflow:
     runs-on: ubuntu-latest
