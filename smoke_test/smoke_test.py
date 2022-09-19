@@ -1,77 +1,18 @@
 import argparse
-import json
 import sys
 import unittest
-from functools import cache
-from unittest import TestCase, TestSuite
-from urllib.parse import urlunsplit, urljoin
+from unittest import TestSuite
 
-import requests
-from requests import Response
+from tests.authenticated.sam_user_info_tests import SamUserInfoTests
+from tests.sam_smoke_tests import SamSmokeTests
+from tests.unauthenticated.sam_status_tests import SamStatusTests
+from tests.unauthenticated.sam_version_tests import SamVersionTests
 
 DESCRIPTION = """
 Sam Smoke Test
 Enter the host (domain and optional port) of the Sam instance you want to to test.  This test will ensure that the Sam 
 instance running on that host is minimally functional.
 """
-
-
-class SamSmokeTests(TestCase):
-    SAM_HOST = None
-    USER_TOKEN = None
-
-    @staticmethod
-    def build_sam_url(path: str) -> str:
-        assert SamSmokeTests.SAM_HOST, "ERROR - SamSmokeTests.SAM_HOST not properly set"
-        return urljoin(f"https://{SamSmokeTests.SAM_HOST}", path)
-
-    @staticmethod
-    @cache
-    def call_sam(url: str, user_token: str = None) -> Response:
-        """Function is memoized so that we only make the call once"""
-        headers = {"Authorization": f"Bearer {user_token}"} if user_token else {}
-        return requests.get(url, headers=headers)
-
-
-class SamStatusTests(SamSmokeTests):
-    @staticmethod
-    def status_url() -> str:
-        return SamSmokeTests.build_sam_url("/status")
-
-    def test_status_code_is_200(self):
-        response = SamSmokeTests.call_sam(self.status_url())
-        self.assertEqual(response.status_code, 200)
-
-    def test_subsystems(self):
-        response = SamSmokeTests.call_sam(self.status_url())
-        status = json.loads(response.text)
-        for system in status["systems"]:
-            self.assertEqual(status["systems"][system]["ok"], True, f"{system} is not OK")
-
-
-class SamVersionTests(SamSmokeTests):
-    @staticmethod
-    def version_url() -> str:
-        return SamSmokeTests.build_sam_url("/version")
-
-    def test_status_code_is_200(self):
-        response = SamSmokeTests.call_sam(self.version_url())
-        self.assertEqual(response.status_code, 200)
-
-    def test_version_value_specified(self):
-        response = SamSmokeTests.call_sam(self.version_url())
-        version = json.loads(response.text)
-        self.assertIsNotNone(version["version"], "Version value must be non-empty")
-
-
-class SamUserInfoTests(SamSmokeTests):
-    @staticmethod
-    def user_info_url() -> str:
-        return SamSmokeTests.build_sam_url("/register/user/v2/self/info")
-
-    def test_status_code_is_200(self):
-        response = SamSmokeTests.call_sam(self.user_info_url(), SamSmokeTests.USER_TOKEN)
-        self.assertEqual(response.status_code, 200, f"User info HTTP Status is not 200: {response.text}")
 
 
 def gather_tests(is_authenticated: bool = False) -> TestSuite:
