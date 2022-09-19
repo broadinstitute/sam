@@ -33,6 +33,7 @@ jobs:
           echo "$GITHUB_CONTEXT"
           GIT_SHA=${{ github.sha }}
           HASH_TAG=${GIT_SHA:0:12}
+          # Need to escape twice because custom-version-json is going to be passed as an argument string
           echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"$HASH_TAG\\\"}}"
 
   create-bee-workflow:
