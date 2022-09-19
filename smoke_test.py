@@ -23,6 +23,7 @@ def call_sam(sam_url):
 
 class SamSmokeTests(TestCase):
     SAM_HOST = None
+    USER_TOKEN = None
 
     @staticmethod
     def build_sam_url(path: str) -> str:
@@ -46,7 +47,7 @@ class SamStatusTests(SamSmokeTests):
             self.assertTrue(status["systems"][system]["ok"], f"{system} is not OK")
 
 
-class SamVersion(SamSmokeTests):
+class SamVersionTests(SamSmokeTests):
     @staticmethod
     def version_url() -> str:
         return SamSmokeTests.build_sam_url("/version")
@@ -61,9 +62,30 @@ class SamVersion(SamSmokeTests):
         self.assertIsNotNone(version["version"], "Version value must be non-empty")
 
 
+def gather_tests(is_authenticated: bool = False):
+    suite = unittest.TestSuite()
+
+    status_tests = unittest.defaultTestLoader.loadTestsFromTestCase(SamStatusTests)
+    version_tests = unittest.defaultTestLoader.loadTestsFromTestCase(SamVersionTests)
+
+    suite.addTests(status_tests)
+    suite.addTests(version_tests)
+
+    if is_authenticated:
+        # TODO: Add authenticated tests
+        x = 1
+    else:
+        print("No User Token provided.  Skipping authenticated tests.")
+
+    return suite
+
+
 def main(main_args):
     SamSmokeTests.SAM_HOST = main_args.sam_host
-    unittest.main(verbosity=main_args.verbosity)
+    SamSmokeTests.USER_TOKEN = main_args.user_token
+    runner = unittest.TextTestRunner(verbosity=main_args.verbosity)
+    test_suite = gather_tests(main_args.user_token)
+    runner.run(test_suite)
 
 
 if __name__ == "__main__":
@@ -86,6 +108,12 @@ if __name__ == "__main__":
         parser.add_argument(
             "sam_host",
             help="domain with optional port number of the Sam host you want to test"
+        )
+        parser.add_argument(
+            "user_token",
+            nargs='?',
+            default=None,
+            help="Optional. If present, will test additional authenticated endpoints using the specified token"
         )
 
         args = parser.parse_args()
