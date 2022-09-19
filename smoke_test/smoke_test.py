@@ -36,8 +36,10 @@ def gather_tests(is_authenticated: bool = False) -> TestSuite:
 def main(main_args):
     SamSmokeTests.SAM_HOST = main_args.sam_host
     SamSmokeTests.USER_TOKEN = main_args.user_token
-    runner = unittest.TextTestRunner(verbosity=main_args.verbosity)
+
     test_suite = gather_tests(main_args.user_token)
+
+    runner = unittest.TextTestRunner(verbosity=main_args.verbosity)
     runner.run(test_suite)
 
 
