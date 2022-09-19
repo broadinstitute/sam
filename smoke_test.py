@@ -4,6 +4,7 @@ import sys
 import unittest
 from functools import cache
 from unittest import TestCase
+from urllib.parse import urlunsplit, urljoin
 
 import requests
 
@@ -15,28 +16,53 @@ instance running on that host is minimally functional.
 
 
 @cache
-def get_sam_status(sam_host):
+def call_sam(sam_url):
     """Function is memoized so that we only make the call once"""
-    status_url = f"https://{sam_host}/status"
-    return requests.get(status_url)
+    return requests.get(sam_url)
 
 
-class SamStatusTests(TestCase):
+class SamSmokeTests(TestCase):
     SAM_HOST = None
 
-    def test_ok(self):
-        response = get_sam_status(self.SAM_HOST)
+    @staticmethod
+    def build_sam_url(path: str) -> str:
+        assert SamSmokeTests.SAM_HOST, "ERROR - SamSmokeTests.SAM_HOST not properly set"
+        return urljoin(f"https://{SamSmokeTests.SAM_HOST}", path)
+
+
+class SamStatusTests(SamSmokeTests):
+    @staticmethod
+    def status_url() -> str:
+        return SamSmokeTests.build_sam_url("/status")
+
+    def test_status_code_is_200(self):
+        response = call_sam(self.status_url())
         self.assertTrue(response.status_code == 200)
 
     def test_subsystems(self):
-        response = get_sam_status(self.SAM_HOST)
+        response = call_sam(self.status_url())
         status = json.loads(response.text)
         for system in status["systems"]:
             self.assertTrue(status["systems"][system]["ok"], f"{system} is not OK")
 
 
+class SamVersion(SamSmokeTests):
+    @staticmethod
+    def version_url() -> str:
+        return SamSmokeTests.build_sam_url("/version")
+
+    def test_status_code_is_200(self):
+        response = call_sam(self.version_url())
+        self.assertTrue(response.status_code == 200)
+
+    def test_version_value_specified(self):
+        response = call_sam(self.version_url())
+        version = json.loads(response.text)
+        self.assertIsNotNone(version["version"], "Version value must be non-empty")
+
+
 def main(main_args):
-    SamStatusTests.SAM_HOST = main_args.sam_host
+    SamSmokeTests.SAM_HOST = main_args.sam_host
     unittest.main(verbosity=main_args.verbosity)
 
 
@@ -54,7 +80,7 @@ if __name__ == "__main__":
             default=1,
             help="""Python unittest verbosity setting: 
 0: Quiet - Prints only number of tests executed
-1: Default - Prints number of tests executed plus a dot for each success and an F for each failure
+1: Minimal - (default) Prints number of tests executed plus a dot for each success and an F for each failure
 2: Verbose - Help string and its result will be printed for each test"""
         )
         parser.add_argument(
