@@ -34,12 +34,6 @@ jobs:
           echo ::set-output name=ref::$GITHUB_REF
           echo ::set-output name=sha::$GITHUB_SHA
 
-      - name: Extract ref
-        id: extract-ref
-        run: |
-          echo ${{ steps.extract-branch.outputs.ref }}
-          echo ${{ steps.extract-branch.outputs.sha }}
-
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
