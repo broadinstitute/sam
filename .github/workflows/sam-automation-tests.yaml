@@ -1,11 +1,11 @@
 name: sam-automation-tests
 
 on:
+  pull_request:
+    paths-ignore: ['**.md']
   push:
-    branches:
-      - QA-2001
-    paths-ignore:
-      - 'README.md'
+    paths-ignore: ['**.md']
+
 jobs:
   sam-build-tag-publish-job:
     runs-on: ubuntu-latest
@@ -35,7 +35,7 @@ jobs:
           HASH_TAG=${GIT_SHA:0:12}
           # Need to escape twice because custom-version-json is passed like an cli argument string
           echo "HASH_TAG=$HASH_TAG"
-          echo ::set-output name=custom-version-json::"{\\\"jobmanager\\\":{\\\"enabled\\\":false},\\\"sam\\\":{\\\"appVersion\\\":\\\"$HASH_TAG\\\"}}"
+          echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"$HASH_TAG\\\"}}"
 
   create-bee-workflow:
     runs-on: ubuntu-latest
@@ -47,10 +47,6 @@ jobs:
       - name: Check hash tag
         run: |
           echo '${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}'
-
-      - name: check bee name
-        run: |
-          echo ${{ github.workflow }}-${{ github.run_id }}
 
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
@@ -65,15 +61,10 @@ jobs:
   sam-automation-test-job:
     runs-on: ubuntu-latest
     needs: [create-bee-workflow]
-    if: always() # always run to confirm bee is destroyed
     permissions:
       contents: 'read'
       id-token: 'write'
     steps:
-      - name: check bee name
-        run: |
-          echo ${{ github.workflow }}-${{ github.run_id }}
-
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
@@ -82,8 +73,8 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          # inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "ENV": "qa" }'
-          inputs: '{ "bee-name": "fiab-ichang-comic-lizard", "ENV": "qa" }'
+          inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "ENV": "qa" }'
+          # inputs: '{ "bee-name": "fiab-ichang-comic-lizard", "ENV": "qa" }'
 
   destroy-bee-workflow:
     runs-on: ubuntu-latest
