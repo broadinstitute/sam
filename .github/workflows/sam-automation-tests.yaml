@@ -15,28 +15,30 @@ jobs:
     outputs:
       custom-version-json: ${{ steps.render-data.outputs.custom-version-json }}
     steps:
-      - name: Print branch
+      - name: Extract branch
+        id: extract-branch
         run: |
-          push_branch=${{ github.ref }}
-          pr_branch=refs/heads/${{ github.head_ref }}
-          branch=$push_branch || $pr_branch
-          echo $branch
+          GITHUB_EVENT_NAME=$ {{ github.event_name }}
+          if [[ "$GITHUB_EVENT_NAME" == "push' ]]; then
+            GITHUB_REF=${{ github.ref }}
+            GITHUB_SHA=${{ github.sha }}
+          elif [[ "$GITHUB_EVENT_NAME" == "pull_request' ]]
+            GITHUB_REF=refs/heads/${{ github.head_ref }}
+            GITHUB_SHA=${{ github.event.pull_request.head.sha }}
+          else
+            GITHUB_REF=
+            GITHUB_SHA=
+          fi
+          echo $GITHUB_REF
+          echo $GITHUB_SHA
+          echo ::set-output name=ref::$GITHUB_REF
+          echo ::set-output name=sha::$GITHUB_SHA
 
-      - name: Extract branch from push event
-        if: github.event_name == 'push'
-        id: extract-branch-push
-        env:
-          GITHUB_CONTEXT: ${{ toJSON(github) }}
+      - name: Extract ref
+        id: extract-ref
         run: |
-          echo ::set-output name=ref::${{ github.ref }}
-
-      - name: Extract branch from PR event
-        if: github.event_name == 'pull_request'
-        id: extract-branch-pr
-        env:
-          GITHUB_CONTEXT: ${{ toJSON(github) }}
-        run: |
-          echo ::set-output name=ref::refs/heads/${{ github.head_ref }}
+          echo ${{ steps.extract-branch.outputs.ref }}
+          echo ${{ steps.extract-branch.outputs.sha }}
 
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
@@ -46,7 +48,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ github.sha }}" }'
+          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}" }'
 
       - name: Render data to share with dependent jobs
         id: render-data
@@ -54,7 +56,7 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "$GITHUB_CONTEXT"
-          GIT_SHA=${{ github.sha }}
+          GIT_SHA=${{ steps.extract-branch.outputs.sha }}
           HASH_TAG=${GIT_SHA:0:12}
           # Need to escape twice because custom-version-json is passed like an cli argument string
           echo "HASH_TAG=$HASH_TAG"
