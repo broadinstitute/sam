@@ -35,7 +35,7 @@ jobs:
           HASH_TAG=${GIT_SHA:0:12}
           # Need to escape twice because custom-version-json is passed like an cli argument string
           echo "HASH_TAG=$HASH_TAG"
-          echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"$HASH_TAG\\\"}}"
+          echo ::set-output name=custom-version-json::"{\\\"jobmanager\\\":{\\\"enabled\\\":false,\\\"sam\\\":{\\\"appVersion\\\":\\\"$HASH_TAG\\\"}}"
 
   create-bee-workflow:
     runs-on: ubuntu-latest
