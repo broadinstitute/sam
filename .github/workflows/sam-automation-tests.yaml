@@ -1,4 +1,4 @@
-name: Sam PR tests
+name: sam-automation-tests
 
 on:
   push:
@@ -56,7 +56,28 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "oauth-proxy-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
+          echo '${{ github.workflow }}-${{ github.run_id }}'
+          inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
+
+  sam-automation-test-job:
+    runs-on: ubuntu-latest
+    needs: [create-bee-workflow]
+    if: always() # always run to confirm bee is destroyed
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: dispatch to terra-github-workflows
+        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        with:
+          workflow: sam-tests
+          repo: broadinstitute/terra-github-workflows
+          ref: refs/heads/main
+          token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
+          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
+          echo '${{ github.workflow }}-${{ github.run_id }}'
+          # inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "ENV": "qa" }'
+          inputs: '{ "bee-name": "sam-fiab-ichang-comic-lizard", "ENV": "qa" }'
 
   destroy-bee-workflow:
     runs-on: ubuntu-latest
@@ -74,4 +95,4 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "oauth-proxy-${{ github.run_id }}" }'
+          inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}" }'
