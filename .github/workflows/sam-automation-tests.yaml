@@ -18,7 +18,7 @@ jobs:
       - name: Extract branch
         id: extract-branch
         run: |
-          GITHUB_EVENT_NAME=$ {{ github.event_name }}
+          GITHUB_EVENT_NAME=${{ github.event_name }}
           if [[ "$GITHUB_EVENT_NAME" == "push' ]]; then
             GITHUB_REF=${{ github.ref }}
             GITHUB_SHA=${{ github.sha }}
