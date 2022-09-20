@@ -15,8 +15,8 @@ jobs:
     outputs:
       custom-version-json: ${{ steps.render-data.outputs.custom-version-json }}
     steps:
-      - name: Render data to share with dependent jobs
-        id: render-data
+      - name: Check github
+        id: check-github
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
