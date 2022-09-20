@@ -56,7 +56,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          echo ${{ github.workflow }}-${{ github.run_id }}
+          echo "${{ github.workflow }}-${{ github.run_id }}"
           inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
 
   sam-automation-test-job:
@@ -75,7 +75,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          echo ${{ github.workflow }}-${{ github.run_id }}
+          echo "${{ github.workflow }}-${{ github.run_id }}"
           # inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "ENV": "qa" }'
           inputs: '{ "bee-name": "sam-fiab-ichang-comic-lizard", "ENV": "qa" }'
 
