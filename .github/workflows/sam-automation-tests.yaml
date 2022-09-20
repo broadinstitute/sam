@@ -15,12 +15,28 @@ jobs:
     outputs:
       custom-version-json: ${{ steps.render-data.outputs.custom-version-json }}
     steps:
-      - name: Check github
-        id: check-github
+      - name: Print branch
+        run: |
+          push_branch=${{ github.ref }}
+          pr_branch=refs/heads/${{ github.head_ref }}
+          $branch=$push_branch || $pr_branch
+          echo $branch
+
+      - name: Extract branch from push event
+        if: github.event_name == 'push'
+        id: extract-branch-push
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
-          echo ${GITHUB_REF#refs/heads/}
+          echo ::set-output name=ref::${{ github.ref }}
+
+      - name: Extract branch from PR event
+        if: github.event_name == 'pull_request'
+        id: extract-branch-pr
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: |
+          echo ::set-output name=ref::refs/heads/${{ github.head_ref }}
 
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
