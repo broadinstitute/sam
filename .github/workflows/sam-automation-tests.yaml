@@ -19,7 +19,7 @@ jobs:
         run: |
           push_branch=${{ github.ref }}
           pr_branch=refs/heads/${{ github.head_ref }}
-          $branch=$push_branch || $pr_branch
+          branch=$push_branch || $pr_branch
           echo $branch
 
       - name: Extract branch from push event
