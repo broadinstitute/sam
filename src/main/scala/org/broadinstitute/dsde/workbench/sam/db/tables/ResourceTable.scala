@@ -5,10 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.model.ResourceId
 import scalikejdbc._
 
 final case class ResourcePK(value: Long) extends DatabaseKey
-final case class ResourceRecord(id: ResourcePK,
-                                name: ResourceId,
-                                resourceTypeId: ResourceTypePK,
-                                resourceParentId: Option[ResourcePK])
+final case class ResourceRecord(id: ResourcePK, name: ResourceId, resourceTypeId: ResourceTypePK, resourceParentId: Option[ResourcePK])
 
 object ResourceTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceRecord] {
   override def tableName: String = "SAM_RESOURCE"

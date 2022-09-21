@@ -12,8 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, FullyQualified
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-/**
-  * Created by gpolumbo on 3/26/2018
+/** Created by gpolumbo on 3/26/2018
   */
 trait SamModelDirectives {
   val userService: UserService
@@ -48,10 +47,15 @@ trait SamModelDirectives {
 
   def withNonAdminResourceType(name: ResourceTypeName): Directive1[ResourceType] =
     if (name != resourceTypeAdminName)
-      withResourceType(name) else
-      failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(
-        StatusCodes.BadRequest,
-        "Please use the admin resourceTypes routes to view and make changes to admin resource policies."
-      )))
+      withResourceType(name)
+    else
+      failWith(
+        new WorkbenchExceptionWithErrorReport(
+          ErrorReport(
+            StatusCodes.BadRequest,
+            "Please use the admin resourceTypes routes to view and make changes to admin resource policies."
+          )
+        )
+      )
 
 }

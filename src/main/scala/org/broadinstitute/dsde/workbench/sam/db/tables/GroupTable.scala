@@ -7,11 +7,7 @@ import scalikejdbc._
 import java.time.Instant
 
 final case class GroupPK(value: Long) extends DatabaseKey
-final case class GroupRecord(id: GroupPK,
-                             name: WorkbenchGroupName,
-                             email: WorkbenchEmail,
-                             updatedDate: Option[Instant],
-                             synchronizedDate: Option[Instant])
+final case class GroupRecord(id: GroupPK, name: WorkbenchGroupName, email: WorkbenchEmail, updatedDate: Option[Instant], synchronizedDate: Option[Instant])
 
 object GroupTable extends SQLSyntaxSupportWithDefaultSamDB[GroupRecord] {
   override def tableName: String = "SAM_GROUP"

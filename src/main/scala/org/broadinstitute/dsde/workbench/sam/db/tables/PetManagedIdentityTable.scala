@@ -5,12 +5,14 @@ import org.broadinstitute.dsde.workbench.sam.azure._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 import scalikejdbc._
 
-final case class PetManagedIdentityRecord(userId: WorkbenchUserId,
-                                          tenantId: TenantId,
-                                          subscriptionId: SubscriptionId,
-                                          managedResourceGroupName: ManagedResourceGroupName,
-                                          objectId: ManagedIdentityObjectId,
-                                          displayName: ManagedIdentityDisplayName)
+final case class PetManagedIdentityRecord(
+    userId: WorkbenchUserId,
+    tenantId: TenantId,
+    subscriptionId: SubscriptionId,
+    managedResourceGroupName: ManagedResourceGroupName,
+    objectId: ManagedIdentityObjectId,
+    displayName: ManagedIdentityDisplayName
+)
 
 object PetManagedIdentityTable extends SQLSyntaxSupportWithDefaultSamDB[PetManagedIdentityRecord] {
   override def tableName: String = "SAM_PET_MANAGED_IDENTITY"

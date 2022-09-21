@@ -3,8 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import scalikejdbc._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 
-final case class AuthDomainRecord(resourceId: ResourcePK,
-                                  groupId: GroupPK)
+final case class AuthDomainRecord(resourceId: ResourcePK, groupId: GroupPK)
 
 object AuthDomainTable extends SQLSyntaxSupportWithDefaultSamDB[AuthDomainRecord] {
   override def tableName: String = "SAM_RESOURCE_AUTH_DOMAIN"

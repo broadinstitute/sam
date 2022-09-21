@@ -15,14 +15,12 @@ import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-/**
-  * Created by mbemis on 10/3/17.
+/** Created by mbemis on 10/3/17.
   */
 object JndiSchemaDAO {
 
-  /**
-    * This is the version of the schema reflected by this code. Update this when adding code that updates the schema.
-    * If schemaVersion is not updated your changes may not be applied.
+  /** This is the version of the schema reflected by this code. Update this when adding code that updates the schema. If schemaVersion is not updated your
+    * changes may not be applied.
     */
   val schemaVersion = 4
 
@@ -75,13 +73,15 @@ object SchemaStatus {
 class JndiSchemaDAO(
     protected val directoryConfig: DirectoryConfig,
     val schemaLockConfig: SchemaLockConfig,
-    val schemaVersion: Int = JndiSchemaDAO.schemaVersion)(implicit executionContext: ExecutionContext)
+    val schemaVersion: Int = JndiSchemaDAO.schemaVersion
+)(implicit executionContext: ExecutionContext)
     extends JndiSupport
     with DirectorySubjectNameSupport
     with LazyLogging {
 
   def init(): Future[Unit] =
-    if (schemaLockConfig.lockSchemaOnBoot) { initWithSchemaLock() } else { recreateSchema().map(_ => ()) }
+    if (schemaLockConfig.lockSchemaOnBoot) { initWithSchemaLock() }
+    else { recreateSchema().map(_ => ()) }
 
   def initWithSchemaLock(): Future[Unit] =
     for {
@@ -124,7 +124,7 @@ class JndiSchemaDAO(
   }
 
   def readSchemaStatus(): Future[SchemaStatus] = withContext { ctx =>
-    val attributes = Try { ctx.getAttributes(schemaLockDn(schemaVersion)) }
+    val attributes = Try(ctx.getAttributes(schemaLockDn(schemaVersion)))
 
     attributes match {
       case Success(attrs) =>
@@ -153,9 +153,10 @@ class JndiSchemaDAO(
     }
 
   def waitForSchemaLock(remainingAttempts: Int): Future[SchemaStatus] =
-    if (remainingAttempts == 0) { throw new WorkbenchException(s"Operation timed out. Could not acquire schema lock before timeout...") } else {
+    if (remainingAttempts == 0) { throw new WorkbenchException(s"Operation timed out. Could not acquire schema lock before timeout...") }
+    else {
       logger.info("Waiting for schema lock...")
-      Thread.sleep(schemaLockConfig.recheckTimeInterval * 100L) //change this to 1k
+      Thread.sleep(schemaLockConfig.recheckTimeInterval * 100L) // change this to 1k
       readSchemaStatus().flatMap {
         case Wait => waitForSchemaLock(remainingAttempts - 1)
         case s: SchemaStatus => Future.successful(s)
@@ -328,20 +329,20 @@ class JndiSchemaDAO(
     val schema = ctx.getSchema("")
 
     // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchPerson) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.proxyEmail) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.googleSubjectId) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.azureB2CId) }
+    Try(schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchPerson))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.proxyEmail))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.googleSubjectId))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.azureB2CId))
   }
 
   private def removeWorkbenchGroupSchema(): Future[Unit] = withContext { ctx =>
     val schema = ctx.getSchema("")
 
     // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchGroup) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.accessInstructions) }
+    Try(schema.destroySubcontext("ClassDefinition/" + ObjectClass.workbenchGroup))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.groupSynchronizedTimestamp))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.groupUpdatedTimestamp))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.accessInstructions))
   }
 
   private def createPolicySchema(): Future[Unit] = withContext { ctx =>
@@ -424,16 +425,16 @@ class JndiSchemaDAO(
     val schema = ctx.getSchema("")
 
     // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.policy) }
-    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.resource) }
-    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.resourceType) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceType) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.resourceId) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.action) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.role) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.policy) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.authDomain) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.public) }
+    Try(schema.destroySubcontext("ClassDefinition/" + ObjectClass.policy))
+    Try(schema.destroySubcontext("ClassDefinition/" + ObjectClass.resource))
+    Try(schema.destroySubcontext("ClassDefinition/" + ObjectClass.resourceType))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.resourceType))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.resourceId))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.action))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.role))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.policy))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.authDomain))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.public))
   }
 
   private def createOrgUnit(dn: String): Future[Unit] = withContext { ctx =>
@@ -483,8 +484,8 @@ class JndiSchemaDAO(
     val schema = ctx.getSchema("")
 
     // Intentionally ignores errors
-    Try { schema.destroySubcontext("ClassDefinition/" + ObjectClass.petServiceAccount) }
-    Try { schema.destroySubcontext("AttributeDefinition/" + Attr.project) }
+    Try(schema.destroySubcontext("ClassDefinition/" + ObjectClass.petServiceAccount))
+    Try(schema.destroySubcontext("AttributeDefinition/" + Attr.project))
   }
 
   private def createAttributeDefinition(
@@ -495,7 +496,8 @@ class JndiSchemaDAO(
       singleValue: Boolean,
       equality: Option[String] = None,
       ordering: Option[String] = None,
-      syntax: Option[String] = None) = {
+      syntax: Option[String] = None
+  ) = {
     val attributes = new BasicAttributes(true)
     attributes.put("NUMERICOID", numericOID)
     attributes.put("NAME", name)
@@ -503,7 +505,8 @@ class JndiSchemaDAO(
     equality.foreach(attributes.put("EQUALITY", _))
     ordering.foreach(attributes.put("ORDERING", _))
     syntax.foreach(attributes.put("SYNTAX", _))
-    if (singleValue) attributes.put("SINGLE-VALUE", singleValue.toString) // note absence of this attribute means multi-value and presence means single, value does not matter
+    if (singleValue)
+      attributes.put("SINGLE-VALUE", singleValue.toString) // note absence of this attribute means multi-value and presence means single, value does not matter
     schema.createSubcontext(s"AttributeDefinition/$name", attributes)
   }
 
@@ -527,7 +530,6 @@ class JndiSchemaDAO(
         clear(ctx, fullName)
       }
       ctx.unbind(dn)
-    } recover {
-      case _: NameNotFoundException =>
+    } recover { case _: NameNotFoundException =>
     }
 }

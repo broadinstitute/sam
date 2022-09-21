@@ -17,15 +17,16 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 class StatusService(
-                     val directoryDAO: DirectoryDAO,
-                     // We expect this to be of type LdapRegistrationDAO, because
-                     // the status service specifically cares about checking LDAP's
-                     // status here, not a generic RegistrationDAO
-                     val ldapRegistrationDAO: RegistrationDAO,
-                     val cloudExtensions: CloudExtensions,
-                     val dbReference: DbReference,
-                     initialDelay: FiniteDuration = Duration.Zero,
-                     pollInterval: FiniteDuration = 1 minute)(implicit system: ActorSystem, executionContext: ExecutionContext)
+    val directoryDAO: DirectoryDAO,
+    // We expect this to be of type LdapRegistrationDAO, because
+    // the status service specifically cares about checking LDAP's
+    // status here, not a generic RegistrationDAO
+    val ldapRegistrationDAO: RegistrationDAO,
+    val cloudExtensions: CloudExtensions,
+    val dbReference: DbReference,
+    initialDelay: FiniteDuration = Duration.Zero,
+    pollInterval: FiniteDuration = 1 minute
+)(implicit system: ActorSystem, executionContext: ExecutionContext)
     extends LazyLogging {
   implicit val askTimeout = Timeout(5 seconds)
 
