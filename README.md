@@ -252,17 +252,8 @@ https://local.broadinstitute.org:50443/status](https://local.broadinstitute.org:
 [Swagger page:
 https://local.broadinstitute.org:50443/#/](https://local.broadinstitute.org:50443/#/)
 
-#### Verify that Sam is running anywhere
-Sam includes smoke tests that can be run anywhere and test a running Sam instance running anywhere.  These tests run
-quickly and in 2 modes: authenticated and unauthenticated.
-
-To run the _unauthenticated_ smoke tests:
-
-```python smoke_test/smoke_test.py {SAM_HOST}```
-
-To run the _authenticated_ smoke tests:
-
-```python smoke_test/smoke_test.py {SAM_HOST} $(gcloud auth print-access-token)```
-
 ### [CONTRIBUTING.md](CONTRIBUTING.md)
 
+## Smoke Tests
+Sam includes smoke tests that can be run anywhere and test a running Sam instance on any network accessible host.  See
+the [Smoke Test README](smoke_test/README.md) for more information.
