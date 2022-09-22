@@ -32,8 +32,8 @@ object MockCrlService extends MockitoSugar {
     when(mockCrlService.buildMsiManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockMsi))
 
-    when(mockCrlService.getManagedAppPlanId)
-      .thenReturn(mockPlanName)
+    when(mockCrlService.getManagedAppPlanIds)
+      .thenReturn(Seq(mockPlanName))
 
     mockCrlService
   }

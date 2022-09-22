@@ -112,7 +112,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO) {
       planId <- IO.fromOption(planIdOpt)(
         new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "Validation failed: could not retrieve plan for managed app"))
       )
-      _ <- IO.raiseUnless(planId == crlService.getManagedAppPlanId)(
+      _ <- IO.raiseUnless(crlService.getManagedAppPlanIds.contains(planId))(
         new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "Validation failed: wrong managed app plan"))
       )
     } yield ()
