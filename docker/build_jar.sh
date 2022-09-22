@@ -1,8 +1,8 @@
+#!/bin/bash
+
 # This script provides an entry point to assemble the Sam jar file.
 # Used by the sam-build.yaml workflow in terra-github-workflows.
 #
-#!/bin/bash
-
 set -e
 
 # Get the last commit hash of the model directory and set it as an environment variable

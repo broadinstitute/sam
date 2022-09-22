@@ -1,8 +1,8 @@
+#!/bin/bash
+
 # This script runs sbt assembly to produce a target jar file.
 # Used by build_jar.sh
 #
-#!/bin/bash
-
 set -e
 
 SAM_DIR=$1
