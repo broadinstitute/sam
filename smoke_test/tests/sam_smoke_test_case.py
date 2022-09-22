@@ -1,3 +1,4 @@
+import re
 from functools import cache
 from unittest import TestCase
 from urllib.parse import urljoin
@@ -13,7 +14,10 @@ class SamSmokeTestCase(TestCase):
     @staticmethod
     def build_sam_url(path: str) -> str:
         assert SamSmokeTestCase.SAM_HOST, "ERROR - SamSmokeTests.SAM_HOST not properly set"
-        return urljoin(f"https://{SamSmokeTestCase.SAM_HOST}", path)
+        if re.match(r"^\s*https?://", SamSmokeTestCase.SAM_HOST):
+            return urljoin(SamSmokeTestCase.SAM_HOST, path)
+        else:
+            return urljoin(f"https://{SamSmokeTestCase.SAM_HOST}", path)
 
     @staticmethod
     @cache

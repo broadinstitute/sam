@@ -26,13 +26,34 @@ To run the _unauthenticated_ smoke tests:
 
 ```python smoke_test.py {SAM_HOST}```
 
-To run the _authenticated_ smoke tests:
+```python smoke_test.py sam.dsde-dev.broadinstitute.org```
+
+To run all (_authenticated_ and _unauthenticated_) smoke tests:
 
 ```python smoke_test.py {SAM_HOST} $(gcloud auth print-access-token)```
 
-## Verbosity
+```python smoke_test.py sam.dsde-dev.broadinstitute.org $(gcloud auth print-access-token)```
 
-You may control how much information is printed to `STDOUT` while running the smoke tests by passing a verbosity 
-argument to `smoke_test.py`.  For example to print more information about the tests being run:
+## Required and Optional Arguments
+
+### SAM_HOST
+Required - Can be just a domain or a domain and port:
+
+* `sam.dsde-dev.broadinstitute.org`
+* `sam.dsde-dev.broadinstitute.org:443`
+
+The protocol can also be added if you desire, however, most Sam instance can and should use HTTPS and this is the
+default if no protocol is specified:
+
+* `http://sam.dsde-dev.broadinstitute.org`
+* `https://sam.dsde-dev.broadinstitute.org`
+
+### USER_TOKEN
+Optional - A `gcloud` access token.  If present, `smoke_test.py` will execute all unauthenticated tests as well as all
+authenticated tests using the access token provided in this argument. 
+
+### Verbosity
+Optional - You may control how much information is printed to `STDOUT` while running the smoke tests by passing a 
+verbosity argument to `smoke_test.py`.  For example to print more information about the tests being run:
 
 ```python -v 2 smoke_test.py {SAM_HOST}```
