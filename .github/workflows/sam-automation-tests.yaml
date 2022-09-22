@@ -31,8 +31,7 @@ jobs:
             echo "Failed to extract branch information"
             exit 1
           fi
-          echo $GITHUB_REF
-          echo $GITHUB_SHA
+
           echo ::set-output name=ref::$GITHUB_REF
           echo ::set-output name=sha::$GITHUB_SHA
 
@@ -94,7 +93,6 @@ jobs:
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "ENV": "qa" }'
-          # inputs: '{ "bee-name": "fiab-ichang-comic-lizard", "ENV": "qa" }'
 
   destroy-bee-workflow:
     runs-on: ubuntu-latest
