@@ -8,7 +8,7 @@ on:
 
 jobs:
   sam-build-tag-publish-job:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     permissions:
       contents: 'read'
       id-token: 'write'
