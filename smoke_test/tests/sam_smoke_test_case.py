@@ -6,14 +6,14 @@ import requests
 from requests import Response
 
 
-class SamSmokeTests(TestCase):
+class SamSmokeTestCase(TestCase):
     SAM_HOST = None
     USER_TOKEN = None
 
     @staticmethod
     def build_sam_url(path: str) -> str:
-        assert SamSmokeTests.SAM_HOST, "ERROR - SamSmokeTests.SAM_HOST not properly set"
-        return urljoin(f"https://{SamSmokeTests.SAM_HOST}", path)
+        assert SamSmokeTestCase.SAM_HOST, "ERROR - SamSmokeTests.SAM_HOST not properly set"
+        return urljoin(f"https://{SamSmokeTestCase.SAM_HOST}", path)
 
     @staticmethod
     @cache

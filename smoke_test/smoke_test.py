@@ -7,7 +7,7 @@ import requests
 
 from tests.authenticated.sam_resource_types_tests import SamResourceTypesTests
 from tests.authenticated.sam_user_info_tests import SamUserInfoTests
-from tests.sam_smoke_tests import SamSmokeTests
+from tests.sam_smoke_test_case import SamSmokeTestCase
 from tests.unauthenticated.sam_status_tests import SamStatusTests
 from tests.unauthenticated.sam_version_tests import SamVersionTests
 
@@ -43,8 +43,8 @@ def main(main_args):
     if main_args.user_token:
         verify_user_token(main_args.user_token)
 
-    SamSmokeTests.SAM_HOST = main_args.sam_host
-    SamSmokeTests.USER_TOKEN = main_args.user_token
+    SamSmokeTestCase.SAM_HOST = main_args.sam_host
+    SamSmokeTestCase.USER_TOKEN = main_args.user_token
 
     test_suite = gather_tests(main_args.user_token)
 
