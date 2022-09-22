@@ -6,11 +6,13 @@ import scalikejdbc._
 
 final case class ResourceActionPatternPK(value: Long) extends DatabaseKey
 final case class ResourceActionPatternName(value: String) extends ValueObject
-final case class ResourceActionPatternRecord(id: ResourceActionPatternPK,
-                                             resourceTypeId: ResourceTypePK,
-                                             actionPattern: ResourceActionPatternName,
-                                             description: String,
-                                             isAuthDomainConstrainable: Boolean)
+final case class ResourceActionPatternRecord(
+    id: ResourceActionPatternPK,
+    resourceTypeId: ResourceTypePK,
+    actionPattern: ResourceActionPatternName,
+    description: String,
+    isAuthDomainConstrainable: Boolean
+)
 
 object ResourceActionPatternTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceActionPatternRecord] {
   override def tableName: String = "SAM_RESOURCE_TYPE_ACTION_PATTERN"

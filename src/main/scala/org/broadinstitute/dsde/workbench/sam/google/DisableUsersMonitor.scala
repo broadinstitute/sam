@@ -16,8 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.service.UserService
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
 
-/**
-  * Created by srubenst on 02/04/21.
+/** Created by srubenst on 02/04/21.
   */
 object DisableUsersMonitorSupervisor {
   sealed trait DisableUsersMonitorSupervisorMessage
@@ -25,26 +24,37 @@ object DisableUsersMonitorSupervisor {
   case object Start extends DisableUsersMonitorSupervisorMessage
 
   def props(
-             pollInterval: FiniteDuration,
-             pollIntervalJitter: FiniteDuration,
-             disableUsersPubSubDao: GooglePubSubDAO,
-             pubSubTopicName: String,
-             pubSubSubscriptionName: String,
-             workerCount: Int,
-             userService: UserService
-           ): Props =
-    Props(new DisableUsersMonitorSupervisor(pollInterval, pollIntervalJitter, disableUsersPubSubDao, pubSubTopicName, pubSubSubscriptionName, workerCount, userService))
+      pollInterval: FiniteDuration,
+      pollIntervalJitter: FiniteDuration,
+      disableUsersPubSubDao: GooglePubSubDAO,
+      pubSubTopicName: String,
+      pubSubSubscriptionName: String,
+      workerCount: Int,
+      userService: UserService
+  ): Props =
+    Props(
+      new DisableUsersMonitorSupervisor(
+        pollInterval,
+        pollIntervalJitter,
+        disableUsersPubSubDao,
+        pubSubTopicName,
+        pubSubSubscriptionName,
+        workerCount,
+        userService
+      )
+    )
 }
 
 class DisableUsersMonitorSupervisor(
-  val pollInterval: FiniteDuration,
-  pollIntervalJitter: FiniteDuration,
-  pubSubDao: GooglePubSubDAO,
-  pubSubTopicName: String,
-  pubSubSubscriptionName: String,
-  workerCount: Int,
-  userService: UserService
-) extends Actor with LazyLogging {
+    val pollInterval: FiniteDuration,
+    pollIntervalJitter: FiniteDuration,
+    pubSubDao: GooglePubSubDAO,
+    pubSubTopicName: String,
+    pubSubSubscriptionName: String,
+    workerCount: Int,
+    userService: UserService
+) extends Actor
+    with LazyLogging {
   import DisableUsersMonitorSupervisor._
   import context._
 
@@ -68,12 +78,11 @@ class DisableUsersMonitorSupervisor(
   }
 
   override val supervisorStrategy: OneForOneStrategy =
-    OneForOneStrategy() {
-      case e =>
-        logger.error("unexpected error in disable users monitor", e)
-        // start one to replace the error, stop the errored child so that we also drop its mailbox (i.e. restart not good enough)
-        startOne()
-        Stop
+    OneForOneStrategy() { case e =>
+      logger.error("unexpected error in disable users monitor", e)
+      // start one to replace the error, stop the errored child so that we also drop its mailbox (i.e. restart not good enough)
+      startOne()
+      Stop
     }
 
 }
@@ -86,22 +95,24 @@ object DisableUsersMonitor {
   final case class FailToDisable(t: Throwable, ackId: String)
 
   def props(
-             pollInterval: FiniteDuration,
-             pollIntervalJitter: FiniteDuration,
-             pubSubDao: GooglePubSubDAO,
-             pubSubSubscriptionName: String,
-             userService: UserService
-           ): Props =
+      pollInterval: FiniteDuration,
+      pollIntervalJitter: FiniteDuration,
+      pubSubDao: GooglePubSubDAO,
+      pubSubSubscriptionName: String,
+      userService: UserService
+  ): Props =
     Props(new DisableUsersMonitorActor(pollInterval, pollIntervalJitter, pubSubDao, pubSubSubscriptionName, userService))
 }
 
 class DisableUsersMonitorActor(
-  val pollInterval: FiniteDuration,
-  pollIntervalJitter: FiniteDuration,
-  pubSubDao: GooglePubSubDAO,
-  pubSubSubscriptionName: String,
-  userService: UserService
-) extends Actor with LazyLogging with FutureSupport {
+    val pollInterval: FiniteDuration,
+    pollIntervalJitter: FiniteDuration,
+    pubSubDao: GooglePubSubDAO,
+    pubSubSubscriptionName: String,
+    userService: UserService
+) extends Actor
+    with LazyLogging
+    with FutureSupport {
   import DisableUsersMonitor._
   import context._
 
@@ -141,7 +152,7 @@ class DisableUsersMonitorActor(
     case x => logger.info(s"Received unhandleable message in DisableUsersMonitor", x)
   }
 
-  private def handleDisableUserResponse(disableUserResponse: DisableUserResponse, ackId: String) = {
+  private def handleDisableUserResponse(disableUserResponse: DisableUserResponse, ackId: String) =
     Tracing.trace("DisableUsersMonitor-ReportMessage") { _ =>
       disableUserResponse.value match {
         case Some(_) =>
@@ -152,7 +163,6 @@ class DisableUsersMonitorActor(
       }
       acknowledgeMessage(ackId).map(_ => StartMonitorPass)
     }
-  }
 
   private def attemptToDisableUser(message: PubSubMessage) = {
     logger.debug(s"received disable user message: $message")
@@ -171,8 +181,7 @@ class DisableUsersMonitorActor(
   override def postStop(): Unit = logger.info(s"DisableUsersMonitorActor $self terminated")
 
   override val supervisorStrategy: OneForOneStrategy =
-    OneForOneStrategy() {
-      case _ =>
-        Escalate
+    OneForOneStrategy() { case _ =>
+      Escalate
     }
 }

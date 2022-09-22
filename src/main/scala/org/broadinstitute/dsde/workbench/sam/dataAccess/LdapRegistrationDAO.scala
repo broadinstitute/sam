@@ -24,14 +24,14 @@ import org.broadinstitute.dsde.workbench.sam.model.SamUser
 class LdapRegistrationDAO(
     protected val ldapConnectionPool: LDAPConnectionPool,
     protected val directoryConfig: DirectoryConfig,
-    protected val ecForLdapBlockingIO: ExecutionContext)(implicit timer: Temporal[IO])
+    protected val ecForLdapBlockingIO: ExecutionContext
+)(implicit timer: Temporal[IO])
     extends DirectorySubjectNameSupport
-      with LdapSupport
-      with LazyLogging
-      with RegistrationDAO {
+    with LdapSupport
+    with LazyLogging
+    with RegistrationDAO {
 
-  def retryLdapBusyWithBackoff[A](initialDelay: FiniteDuration, maxRetries: Int)(ioa: IO[A])
-                         (implicit timer: Temporal[IO]): IO[A] = {
+  def retryLdapBusyWithBackoff[A](initialDelay: FiniteDuration, maxRetries: Int)(ioa: IO[A])(implicit timer: Temporal[IO]): IO[A] =
     ioa.handleErrorWith { error =>
       error match {
         case ldape: LDAPException if maxRetries > 0 && ldape.getResultCode == ResultCode.BUSY =>
@@ -42,7 +42,6 @@ class LdapRegistrationDAO(
           IO.raiseError(error)
       }
     }
-  }
 
   override def getConnectionType(): ConnectionType = ConnectionType.LDAP
 
@@ -64,7 +63,8 @@ class LdapRegistrationDAO(
     } *> IO.pure(user)
   }
 
-  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = executeLdap(IO(loadUserInternal(userId)), "loadUser", samRequestContext)
+  override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    executeLdap(IO(loadUserInternal(userId)), "loadUser", samRequestContext)
 
   def loadUserInternal(userId: WorkbenchUserId) =
     Option(ldapConnectionPool.getEntry(userDn(userId))) flatMap { results =>
@@ -73,30 +73,48 @@ class LdapRegistrationDAO(
 
   // Deleting a user in ldap will also disable them to clear them out of the enabled-users group
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
-    executeLdap(for {
-      _ <- disableIdentity(userId, samRequestContext)
-      _ <- IO(ldapConnectionPool.delete(userDn(userId)))
-    } yield (), "deleteUser", samRequestContext)
+    executeLdap(
+      for {
+        _ <- disableIdentity(userId, samRequestContext)
+        _ <- IO(ldapConnectionPool.delete(userDn(userId)))
+      } yield (),
+      "deleteUser",
+      samRequestContext
+    )
 
   override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
     retryLdapBusyWithBackoff(100.millisecond, 4) {
-      executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))).void, "enableIdentity-modify", samRequestContext).recoverWith {
+      executeLdap(
+        IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.ADD, Attr.member, subjectDn(subject)))).void,
+        "enableIdentity-modify",
+        samRequestContext
+      ).recoverWith {
         case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
-          executeLdap(IO(
+          executeLdap(
+            IO(
               ldapConnectionPool.add(
                 directoryConfig.enabledUsersGroupDn,
                 new Attribute("objectclass", Seq("top", "groupofnames").asJava),
-                new Attribute(Attr.member, subjectDn(subject)))), "enableIdentity-add", samRequestContext).void
+                new Attribute(Attr.member, subjectDn(subject))
+              )
+            ),
+            "enableIdentity-add",
+            samRequestContext
+          ).void
         case ldape: LDAPException if ldape.getResultCode == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS => IO.unit
       }
     }
 
-  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = {
-    executeLdap(IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, subjectDn(subject)))).void, "disableIdentity", samRequestContext).recover {
-      case ldape: LDAPException if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE
-        || ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
+  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
+    executeLdap(
+      IO(ldapConnectionPool.modify(directoryConfig.enabledUsersGroupDn, new Modification(ModificationType.DELETE, Attr.member, subjectDn(subject)))).void,
+      "disableIdentity",
+      samRequestContext
+    ).recover {
+      case ldape: LDAPException
+          if ldape.getResultCode == ResultCode.NO_SUCH_ATTRIBUTE
+            || ldape.getResultCode == ResultCode.NO_SUCH_OBJECT =>
     }
-  }
 
   @deprecated
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
@@ -164,11 +182,17 @@ class LdapRegistrationDAO(
     val modifications = createPetServiceAccountAttributes(petServiceAccount).map { attribute =>
       new Modification(ModificationType.REPLACE, attribute.getName, attribute.getRawValues)
     }
-    executeLdap(IO(ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava)), "updatePetServiceAccount", samRequestContext) *> IO.pure(petServiceAccount)
+    executeLdap(IO(ldapConnectionPool.modify(petDn(petServiceAccount.id), modifications.asJava)), "updatePetServiceAccount", samRequestContext) *> IO.pure(
+      petServiceAccount
+    )
   }
 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] =
-    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))), "setGoogleSubjectId", samRequestContext)
+    executeLdap(
+      IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.ADD, Attr.googleSubjectId, googleSubjectId.value))),
+      "setGoogleSubjectId",
+      samRequestContext
+    )
 
   override def checkStatus(samRequestContext: SamRequestContext): Boolean = {
     val ldapIsHealthy = Try {
@@ -184,6 +208,10 @@ class LdapRegistrationDAO(
   }
 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
-    executeLdap(IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.REPLACE, Attr.azureB2CId, b2CId.value))), "setUserAzureB2CId", samRequestContext)
+    executeLdap(
+      IO(ldapConnectionPool.modify(userDn(userId), new Modification(ModificationType.REPLACE, Attr.azureB2CId, b2CId.value))),
+      "setUserAzureB2CId",
+      samRequestContext
+    )
 
 }
