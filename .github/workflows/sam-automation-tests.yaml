@@ -26,22 +26,21 @@ jobs:
             GITHUB_REF=refs/heads/${{ github.head_ref }}
             GITHUB_SHA=${{ github.event.pull_request.head.sha }}
           else
-            GITHUB_REF=
-            GITHUB_SHA=
+            echo "Failed to extract branch information"
+            exit 1
           fi
           echo $GITHUB_REF
           echo $GITHUB_SHA
           echo ::set-output name=ref::$GITHUB_REF
           echo ::set-output name=sha::$GITHUB_SHA
 
-      - name: dispatch to terra-github-workflows
+      - name: dispatch build to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
           workflow: sam-build
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}" }'
 
       - name: Render data to share with dependent jobs
