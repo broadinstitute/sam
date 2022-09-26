@@ -15,26 +15,18 @@ trait LdapSupport {
   protected val batchSize = 1000
   protected val ecForLdapBlockingIO: ExecutionContext
 
-
-  protected def getAttribute(result: Entry, key: String): Option[String] = {
+  protected def getAttribute(result: Entry, key: String): Option[String] =
     for {
       searchResultEntry <- Option(result)
       attribute <- Option(searchResultEntry.getAttribute(key))
-    } yield {
-     attribute.getValue
-    }
-  }
-
+    } yield attribute.getValue
 
   protected def getAttributes(results: Entry, key: String): Set[String] = {
     for {
       searchResultEntries <- Option(results)
       attributes <- Option(searchResultEntries.getAttribute(key))
-    } yield {
-      attributes.getValues.toSet
-    }
+    } yield attributes.getValues.toSet
   }.getOrElse(Set.empty)
-
 
   protected def unmarshalUser(results: Entry): Either[String, SamUser] =
     for {
@@ -42,13 +34,14 @@ trait LdapSupport {
       email <- getAttribute(results, Attr.email).toRight(s"${Attr.email} attribute missing")
     } yield SamUser(WorkbenchUserId(uid), getAttribute(results, Attr.googleSubjectId).map(GoogleSubjectId), WorkbenchEmail(email), None, false, None)
 
-  /**
-    * Executes ldap query.
+  /** Executes ldap query.
     *
-    * @param ioa IO[A]
-    * @param dbQueryName name of the database query. Used to identify the name of the tracing span.
-    * @param samRequestContext context of the request. If it contains a parentSpan, then a child span will be
-    *                          created under the parent span.
+    * @param ioa
+    *   IO[A]
+    * @param dbQueryName
+    *   name of the database query. Used to identify the name of the tracing span.
+    * @param samRequestContext
+    *   context of the request. If it contains a parentSpan, then a child span will be created under the parent span.
     */
   protected def executeLdap[A](ioa: IO[A], dbQueryName: String, samRequestContext: SamRequestContext): IO[A] =
     Async[IO].evalOnK(ecForLdapBlockingIO) {

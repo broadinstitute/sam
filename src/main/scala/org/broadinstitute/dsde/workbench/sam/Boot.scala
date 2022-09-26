@@ -11,7 +11,16 @@ import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{
+  GoogleDirectoryDAO,
+  GoogleKmsInterpreter,
+  GoogleKmsService,
+  HttpGoogleDirectoryDAO,
+  HttpGoogleIamDAO,
+  HttpGoogleProjectDAO,
+  HttpGooglePubSubDAO,
+  HttpGoogleStorageDAO
+}
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
@@ -44,10 +53,9 @@ import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
   def run(args: List[String]): IO[ExitCode] =
-    (startup() *> ExitCode.Success.pure[IO]).recoverWith {
-      case NonFatal(t) =>
-        logger.error("sam failed to start, trying again in 5s", t)
-        IO.sleep(5 seconds) *> run(args)
+    (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
+      logger.error("sam failed to start, trying again in 5s", t)
+      IO.sleep(5 seconds) *> run(args)
     }
 
   private def startup(): IO[Unit] = {
@@ -74,16 +82,16 @@ object Boot extends IOApp with LazyLogging {
             IO(logger.error("FATAL - could not init ldap schema", t)) *> IO.raiseError(t)
         }
 
-        _ <- dependencies.samApplication.resourceService.initResourceTypes().onError {
-          case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+        _ <- dependencies.samApplication.resourceService.initResourceTypes().onError { case t: Throwable =>
+          IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
 
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
 
-        binding <- IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(dependencies.samRoutes.route))).onError {
-          case t: Throwable => IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+        binding <- IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(dependencies.samRoutes.route))).onError { case t: Throwable =>
+          IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
         _ <- IO.fromFuture(IO(binding.whenTerminated))
         _ <- IO(system.terminate())
@@ -91,7 +99,13 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private[sam] def createLdapConnectionPool(directoryUrl: String, user: String, password: String, connectionPoolSize: Int, name: String): cats.effect.Resource[IO, LDAPConnectionPool] = {
+  private[sam] def createLdapConnectionPool(
+      directoryUrl: String,
+      user: String,
+      password: String,
+      connectionPoolSize: Int,
+      name: String
+  ): cats.effect.Resource[IO, LDAPConnectionPool] = {
     val dirURI = new URI(directoryUrl)
     val (socketFactory, defaultPort) = dirURI.getScheme.toLowerCase match {
       case "ldaps" => (SSLContext.getDefault.getSocketFactory, 636)
@@ -99,27 +113,38 @@ object Boot extends IOApp with LazyLogging {
       case unsupported => throw new WorkbenchException(s"unsupported directory url scheme: $unsupported")
     }
     val port = if (dirURI.getPort > 0) dirURI.getPort else defaultPort
-    cats.effect.Resource.make(
-      IO {
-        val connectionPool = new LDAPConnectionPool(
-          new LDAPConnection(socketFactory, dirURI.getHost, port, user, password),
-          connectionPoolSize, connectionPoolSize
-        )
-        connectionPool.setCreateIfNecessary(false)
-        connectionPool.setMaxWaitTimeMillis(30000)
-        connectionPool.setConnectionPoolName(name)
-        connectionPool
-      })(ldapConnectionPool => IO(ldapConnectionPool.close()))
+    cats.effect.Resource.make(IO {
+      val connectionPool = new LDAPConnectionPool(
+        new LDAPConnection(socketFactory, dirURI.getHost, port, user, password),
+        connectionPoolSize,
+        connectionPoolSize
+      )
+      connectionPool.setCreateIfNecessary(false)
+      connectionPool.setMaxWaitTimeMillis(30000)
+      connectionPool.setConnectionPoolName(name)
+      connectionPool
+    })(ldapConnectionPool => IO(ldapConnectionPool.close()))
   }
 
-  private[sam] def createAppDependencies(
-      appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
+  private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
     for {
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO, postgresDistributedLockDAO) <- createDAOs(appConfig, DatabaseNames.Write, DatabaseNames.Read, appConfig.directoryConfig.connectionPoolSize, "foreground")
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, _, registrationDAO, postgresDistributedLockDAO) <- createDAOs(
+        appConfig,
+        DatabaseNames.Write,
+        DatabaseNames.Read,
+        appConfig.directoryConfig.connectionPoolSize,
+        "foreground"
+      )
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext, _, _) <- createDAOs(appConfig, DatabaseNames.Background, DatabaseNames.Background, appConfig.directoryConfig.backgroundConnectionPoolSize, "background")
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, backgroundLdapExecutionContext, _, _) <- createDAOs(
+        appConfig,
+        DatabaseNames.Background,
+        DatabaseNames.Background,
+        appConfig.directoryConfig.backgroundConnectionPoolSize,
+        "background"
+      )
 
       blockingEc <- ExecutionContexts.fixedThreadPool[IO](24)
 
@@ -131,7 +156,8 @@ object Boot extends IOApp with LazyLogging {
         backgroundDirectoryDAO,
         backgroundAccessPolicyDAO,
         postgresDistributedLockDAO,
-        backgroundLdapExecutionContext)
+        backgroundLdapExecutionContext
+      )
 
       oauth2Config <- cats.effect.Resource.eval(
         OpenIDConnectConfiguration[IO](
@@ -139,9 +165,17 @@ object Boot extends IOApp with LazyLogging {
           ClientId(appConfig.oidcConfig.clientId),
           oidcClientSecret = appConfig.oidcConfig.clientSecret.map(ClientSecret),
           extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
-          extraAuthParams = Some("prompt=login"))
+          extraAuthParams = Some("prompt=login")
+        )
       )
-    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, registrationDAO, oauth2Config)
+    } yield createAppDependenciesWithSamRoutes(
+      appConfig,
+      cloudExtensionsInitializer,
+      foregroundAccessPolicyDAO,
+      foregroundDirectoryDAO,
+      registrationDAO,
+      oauth2Config
+    )
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -151,7 +185,8 @@ object Boot extends IOApp with LazyLogging {
       backgroundDirectoryDAO: DirectoryDAO,
       backgroundAccessPolicyDAO: AccessPolicyDAO,
       postgresDistributedLockDAO: PostgresDistributedLockDAO[IO],
-      backgroundLdapExecutionContext: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+      backgroundLdapExecutionContext: ExecutionContext
+  )(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
         for {
@@ -180,21 +215,30 @@ object Boot extends IOApp with LazyLogging {
           )
           val googleGroupSynchronizer =
             new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(
-              backgroundLdapExecutionContext)
+              backgroundLdapExecutionContext
+            )
           new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
         }
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
     }
 
-  private def createDAOs(appConfig: AppConfig,
-                         writeDbName: DatabaseName,
-                         readDbName: DatabaseName,
-                         ldapConnectionPoolSize: Int,
-                         ldapConnectionPoolName: String): cats.effect.Resource[IO, (DirectoryDAO, AccessPolicyDAO, ExecutionContext, RegistrationDAO, PostgresDistributedLockDAO[IO])] = {
+  private def createDAOs(
+      appConfig: AppConfig,
+      writeDbName: DatabaseName,
+      readDbName: DatabaseName,
+      ldapConnectionPoolSize: Int,
+      ldapConnectionPoolName: String
+  ): cats.effect.Resource[IO, (DirectoryDAO, AccessPolicyDAO, ExecutionContext, RegistrationDAO, PostgresDistributedLockDAO[IO])] =
     for {
       writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbName)
       readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbName)
-      ldapConnectionPool <- createLdapConnectionPool(appConfig.directoryConfig.directoryUrl, appConfig.directoryConfig.user, appConfig.directoryConfig.password, ldapConnectionPoolSize, ldapConnectionPoolName)
+      ldapConnectionPool <- createLdapConnectionPool(
+        appConfig.directoryConfig.directoryUrl,
+        appConfig.directoryConfig.user,
+        appConfig.directoryConfig.password,
+        ldapConnectionPoolSize,
+        ldapConnectionPoolName
+      )
       ldapExecutionContext <- ExecutionContexts.fixedThreadPool[IO](appConfig.directoryConfig.connectionPoolSize)
 
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
@@ -202,13 +246,9 @@ object Boot extends IOApp with LazyLogging {
       registrationDAO = createRegistrationDAO(appConfig, ldapExecutionContext, ldapConnectionPool)
       postgresDistributedLockDAO = new PostgresDistributedLockDAO[IO](writeDbRef, readDbRef, appConfig.distributedLockConfig)
     } yield (directoryDAO, accessPolicyDAO, ldapExecutionContext, registrationDAO, postgresDistributedLockDAO)
-  }
 
-  private def createRegistrationDAO(appConfig: AppConfig,
-                                    ldapExecutionContext: ExecutionContext,
-                                    ldapConnectionPool: LDAPConnectionPool): RegistrationDAO = {
+  private def createRegistrationDAO(appConfig: AppConfig, ldapExecutionContext: ExecutionContext, ldapConnectionPool: LDAPConnectionPool): RegistrationDAO =
     new LdapRegistrationDAO(ldapConnectionPool, appConfig.directoryConfig, ldapExecutionContext)
-  }
 
   private[sam] def createGoogleCloudExt(
       accessPolicyDAO: AccessPolicyDAO,
@@ -219,7 +259,8 @@ object Boot extends IOApp with LazyLogging {
       distributedLock: PostgresDistributedLockDAO[IO],
       googleStorageNew: GoogleStorageService[IO],
       googleKms: GoogleKmsService[IO],
-      adminConfig: AdminConfig)(implicit actorSystem: ActorSystem): GoogleExtensions = {
+      adminConfig: AdminConfig
+  )(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
     val googleDirDaos = createGoogleDirDaos(config, workspaceMetricBaseName)
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
@@ -270,7 +311,8 @@ object Boot extends IOApp with LazyLogging {
         googleStorageNew,
         googleKeyCachePubSubDAO,
         config.googleServicesConfig,
-        config.petServiceAccountConfig)
+        config.petServiceAccountConfig
+      )
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, config.googleServicesConfig.notificationTopic)
 
     new GoogleExtensions(
@@ -295,10 +337,10 @@ object Boot extends IOApp with LazyLogging {
     )
   }
 
-  private def createGoogleDirDaos(config: GoogleConfig, workspaceMetricBaseName: String)
-                                 (implicit actorSystem: ActorSystem): NonEmptyList[HttpGoogleDirectoryDAO] = {
-    val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(
-      _.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
+  private def createGoogleDirDaos(config: GoogleConfig, workspaceMetricBaseName: String)(implicit
+      actorSystem: ActorSystem
+  ): NonEmptyList[HttpGoogleDirectoryDAO] = {
+    val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
 
     val googleCredentials = serviceAccountJsons match {
       case None =>
@@ -307,12 +349,12 @@ object Boot extends IOApp with LazyLogging {
             WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
             new File(config.googleServicesConfig.pemFile),
             Option(config.googleServicesConfig.subEmail)
-          ))
+          )
+        )
       case Some(accounts) => accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
     }
 
-    googleCredentials.map(credentials =>
-      new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName))
+    googleCredentials.map(credentials => new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName))
   }
 
   private[sam] def createAppDependenciesWithSamRoutes(
@@ -321,31 +363,73 @@ object Boot extends IOApp with LazyLogging {
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
       registrationDAO: RegistrationDAO,
-      oauth2Config: OpenIDConnectConfiguration)(implicit actorSystem: ActorSystem): AppDependencies = {
+      oauth2Config: OpenIDConnectConfiguration
+  )(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
-    val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain, config.adminConfig.allowedEmailDomains)
+    val resourceService = new ResourceService(
+      resourceTypeMap,
+      policyEvaluatorService,
+      accessPolicyDAO,
+      directoryDAO,
+      cloudExtensionsInitializer.cloudExtensions,
+      config.emailDomain,
+      config.adminConfig.allowedEmailDomains
+    )
     val tosService = new TosService(directoryDAO, registrationDAO, config.googleConfig.get.googleServicesConfig.appsDomain, config.termsOfServiceConfig)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, registrationDAO, config.blockedEmailDomains, tosService)
-    val statusService = new StatusService(directoryDAO, registrationDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
+    val statusService =
+      new StatusService(directoryDAO, registrationDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
     val managedGroupService =
-      new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain)
+      new ManagedGroupService(
+        resourceService,
+        policyEvaluatorService,
+        resourceTypeMap,
+        accessPolicyDAO,
+        directoryDAO,
+        cloudExtensionsInitializer.cloudExtensions,
+        config.emailDomain
+      )
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
     val azureService = config.azureServicesConfig.map { config =>
       new AzureService(new CrlService(config), directoryDAO)
     }
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config, azureService)
-        with StandardSamUserDirectives with GoogleExtensionRoutes {
+        val routes = new SamRoutes(
+          resourceService,
+          userService,
+          statusService,
+          managedGroupService,
+          config.termsOfServiceConfig,
+          directoryDAO,
+          registrationDAO,
+          policyEvaluatorService,
+          tosService,
+          config.liquibaseConfig,
+          oauth2Config,
+          azureService
+        ) with StandardSamUserDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>
-        val routes = new SamRoutes(resourceService, userService, statusService, managedGroupService, config.termsOfServiceConfig, directoryDAO, registrationDAO, policyEvaluatorService, tosService, config.liquibaseConfig, oauth2Config, azureService)
-        with StandardSamUserDirectives with NoExtensionRoutes
+        val routes = new SamRoutes(
+          resourceService,
+          userService,
+          statusService,
+          managedGroupService,
+          config.termsOfServiceConfig,
+          directoryDAO,
+          registrationDAO,
+          policyEvaluatorService,
+          tosService,
+          config.liquibaseConfig,
+          oauth2Config,
+          azureService
+        ) with StandardSamUserDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }
   }
@@ -357,4 +441,5 @@ final case class AppDependencies(
     cloudExtensionsInitializer: CloudExtensionsInitializer,
     directoryDAO: DirectoryDAO,
     accessPolicyDAO: AccessPolicyDAO,
-    policyEvaluatorService: PolicyEvaluatorService)
+    policyEvaluatorService: PolicyEvaluatorService
+)

@@ -5,11 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.model.AccessPolicyName
 import scalikejdbc._
 
 final case class PolicyPK(value: Long) extends DatabaseKey
-final case class PolicyRecord(id: PolicyPK,
-                              resourceId: ResourcePK,
-                              groupId: GroupPK,
-                              name: AccessPolicyName,
-                              public: Boolean)
+final case class PolicyRecord(id: PolicyPK, resourceId: ResourcePK, groupId: GroupPK, name: AccessPolicyName, public: Boolean)
 
 object PolicyTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyRecord] {
   override def tableName: String = "SAM_RESOURCE_POLICY"

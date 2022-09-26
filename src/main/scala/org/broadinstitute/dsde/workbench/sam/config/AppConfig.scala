@@ -14,23 +14,22 @@ import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.duration.Duration
 
-/**
-  * Created by dvoet on 7/18/17.
+/** Created by dvoet on 7/18/17.
   */
 final case class AppConfig(
-                            emailDomain: String,
-                            directoryConfig: DirectoryConfig,
-                            schemaLockConfig: SchemaLockConfig,
-                            distributedLockConfig: DistributedLockConfig,
-                            googleConfig: Option[GoogleConfig],
-                            resourceTypes: Set[ResourceType],
-                            liquibaseConfig: LiquibaseConfig,
-                            blockedEmailDomains: Seq[String],
-                            termsOfServiceConfig: TermsOfServiceConfig,
-                            oidcConfig: OidcConfig,
-                            adminConfig: AdminConfig,
-                            azureServicesConfig: Option[AzureServicesConfig]
-                          )
+    emailDomain: String,
+    directoryConfig: DirectoryConfig,
+    schemaLockConfig: SchemaLockConfig,
+    distributedLockConfig: DistributedLockConfig,
+    googleConfig: Option[GoogleConfig],
+    resourceTypes: Set[ResourceType],
+    liquibaseConfig: LiquibaseConfig,
+    blockedEmailDomains: Seq[String],
+    termsOfServiceConfig: TermsOfServiceConfig,
+    oidcConfig: OidcConfig,
+    adminConfig: AdminConfig,
+    azureServicesConfig: Option[AzureServicesConfig]
+)
 
 object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
@@ -51,7 +50,9 @@ object AppConfig {
         ResourceRoleName(uqPath),
         config.as[Set[String]](s"$uqPath.roleActions").map(ResourceAction.apply),
         config.as[Option[Set[String]]](s"$uqPath.includedRoles").getOrElse(Set.empty).map(ResourceRoleName.apply),
-        config.as[Option[Map[String, Set[String]]]](s"$uqPath.descendantRoles").getOrElse(Map.empty)
+        config
+          .as[Option[Map[String, Set[String]]]](s"$uqPath.descendantRoles")
+          .getOrElse(Map.empty)
           .map { case (resourceTypeName, roleNames) =>
             (ResourceTypeName(resourceTypeName), roleNames.map(ResourceRoleName.apply))
           }
@@ -167,10 +168,9 @@ object AppConfig {
       config.getString("managedAppClientId"),
       config.getString("managedAppClientSecret"),
       config.getString("managedAppTenantId"),
-      config.getString("managedAppPlanId")
+      config.as[Seq[String]]("managedAppPlanIds")
     )
   }
-
 
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
