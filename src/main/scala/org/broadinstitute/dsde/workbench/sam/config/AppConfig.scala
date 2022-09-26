@@ -168,7 +168,7 @@ object AppConfig {
       config.getString("managedAppClientId"),
       config.getString("managedAppClientSecret"),
       config.getString("managedAppTenantId"),
-      config.getString("managedAppPlanId")
+      config.as[Seq[String]]("managedAppPlanIds")
     )
   }
 
