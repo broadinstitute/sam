@@ -63,7 +63,7 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
-      - name: Check hash tag
+      - name: Print hash tag
         run: |
           echo '${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}'
 
