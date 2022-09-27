@@ -371,7 +371,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
   }
 
-  it should "204 when a user tries to leave a public resource with allowLeaving enabled the user has other means of access" in {
+  it should "204 when a user tries to leave a public resource with allowLeaving enabled and the user has other means of access" in {
     val resourceType = ResourceType(ResourceTypeName("rt"), Set(ResourceActionPattern("run", "", false), ResourceActionPattern("view", "", false)), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))), ResourceRoleName("owner"), allowLeaving = true)
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
