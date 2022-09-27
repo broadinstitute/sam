@@ -1,0 +1,23 @@
+name: sam-automation-tests
+
+on:
+  push:
+    branches:
+      - QA-2028
+    paths-ignore: ['**.md']
+
+jobs:
+  sam-build-tag-publish-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    outputs:
+      custom-version-json: ${{ steps.render-data.outputs.custom-version-json }}
+    steps:
+      - name: Install python
+        run: |
+          python --version
+          exit 1
+
+
