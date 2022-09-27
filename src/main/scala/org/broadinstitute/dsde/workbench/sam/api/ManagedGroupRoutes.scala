@@ -131,7 +131,7 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
         complete(
           managedGroupService
             .addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext)
-            .map(if (_) StatusCodes.NoContent else StatusCodes.NotFound)
+            .map(_ => StatusCodes.NoContent)
         )
       }
     }
