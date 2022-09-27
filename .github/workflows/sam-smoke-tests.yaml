@@ -18,6 +18,7 @@ jobs:
       - name: Install python
         run: |
           python --version
-          exit 1
+          pip --version
+
 
 
