@@ -3,9 +3,9 @@ import Merging._
 import Testing._
 import Version._
 import sbt.Keys.{scalacOptions, _}
-import sbt._
-import sbtassembly.AssemblyPlugin.autoImport._
-import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmtOnCompile
+import sbt.{Compile, Test, _}
+import sbtassembly.AssemblyPlugin.autoImport.{assembly, _}
+import org.scalafmt.sbt.ScalafmtPlugin.autoImport.{scalafmt, scalafmtAll, scalafmtCheck, scalafmtCheckAll, scalafmtOnCompile, scalafmtSbt, scalafmtSbtCheck}
 
 object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
@@ -51,25 +51,28 @@ object Settings {
     "-Ywarn-unused:implicits", // Warn if an implicit parameter is unused.
     "-Ywarn-unused:imports", // Warn if an import selector is not referenced.
     "-language:postfixOps",
-    "-Ymacro-annotations"
+    "-Ymacro-annotations",
+
   )
 
   //sbt assembly settings
   lazy val commonAssemblySettings = Seq(
     assemblyMergeStrategy in assembly := customMergeStrategy((assemblyMergeStrategy in assembly).value),
-    test in assembly := {}
+    test in assembly := {},
+    assembly := assembly.dependsOn(Test / scalafmtCheckAll).value,
+    assembly := assembly.dependsOn(Test / scalafmtSbtCheck).value,
   )
 
   //common settings for all sbt subprojects
   lazy val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
-    organization  := "org.broadinstitute.dsde.workbench",
-    scalaVersion  := "2.13.5",
-    resolvers ++= commonResolvers,
-    scalacOptions ++= commonCompilerSettings
-  )
-
-  val scalafmtSettings = List(scalafmtOnCompile := true)
+      organization  := "org.broadinstitute.dsde.workbench",
+      scalaVersion  := "2.13.5",
+      resolvers ++= commonResolvers,
+      scalacOptions ++= commonCompilerSettings,
+      Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtAll).value,
+      Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtSbt).value,
+    )
 
   //the full list of settings for the root project that's ultimately the one we build into a fat JAR and run
   //coreDefaultSettings (inside commonSettings) sets the project name, which we want to override, so ordering is important.
@@ -77,5 +80,5 @@ object Settings {
   lazy val rootSettings = commonSettings ++ List(
     name := "sam",
     libraryDependencies ++= rootDependencies
-  ) ++ commonAssemblySettings ++ rootVersionSettings ++ scalafmtSettings
+  ) ++ commonAssemblySettings ++ rootVersionSettings
 }
