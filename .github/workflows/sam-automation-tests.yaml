@@ -75,7 +75,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-prod-${{ github.run_id }}", "version-template": "prod", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-prod-${{ github.run_id }}", "version-template": "prod", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
 
   sam-automation-test-job-prod:
     runs-on: ubuntu-latest
@@ -92,7 +92,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-prod-${{ github.run_id }}", "ENV": "qa" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-prod-${{ github.run_id }}", "ENV": "qa" }'
 
   destroy-bee-workflow-prod:
     runs-on: ubuntu-latest
@@ -110,7 +110,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-prod-${{ github.run_id }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-prod-${{ github.run_id }}" }'
 
   # Dev Test against BEEs
   create-bee-workflow-dev:
@@ -132,7 +132,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-dev-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-dev-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
 
   sam-automation-test-job-dev:
     runs-on: ubuntu-latest
@@ -149,7 +149,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-dev-${{ github.run_id }}", "ENV": "qa" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-dev-${{ github.run_id }}", "ENV": "qa" }'
 
   destroy-bee-workflow-dev:
     runs-on: ubuntu-latest
@@ -167,4 +167,4 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-dev-${{ github.run_id }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-dev-${{ github.run_id }}" }'
