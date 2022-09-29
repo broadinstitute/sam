@@ -15,7 +15,7 @@ object Settings {
     "artifactory-snapshots" at artifactory + "libs-snapshot"
   )
 
-  //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
+  // coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
   lazy val commonBuildSettings = Defaults.coreDefaultSettings ++ Defaults.defaultConfigs ++ Seq(
     javaOptions += "-Xmx2G",
     javacOptions ++= Seq("--release", "17"),
@@ -51,32 +51,31 @@ object Settings {
     "-Ywarn-unused:implicits", // Warn if an implicit parameter is unused.
     "-Ywarn-unused:imports", // Warn if an import selector is not referenced.
     "-language:postfixOps",
-    "-Ymacro-annotations",
-
+    "-Ymacro-annotations"
   )
 
-  //sbt assembly settings
+  // sbt assembly settings
   lazy val commonAssemblySettings = Seq(
     assemblyMergeStrategy in assembly := customMergeStrategy((assemblyMergeStrategy in assembly).value),
     test in assembly := {},
     assembly := assembly.dependsOn(Test / scalafmtCheckAll).value,
-    assembly := assembly.dependsOn(Test / scalafmtSbtCheck).value,
+    assembly := assembly.dependsOn(Test / scalafmtSbtCheck).value
   )
 
-  //common settings for all sbt subprojects
+  // common settings for all sbt subprojects
   lazy val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
-      organization  := "org.broadinstitute.dsde.workbench",
-      scalaVersion  := "2.13.5",
+      organization := "org.broadinstitute.dsde.workbench",
+      scalaVersion := "2.13.5",
       resolvers ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtAll).value,
-      Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtSbt).value,
+      Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtSbt).value
     )
 
-  //the full list of settings for the root project that's ultimately the one we build into a fat JAR and run
-  //coreDefaultSettings (inside commonSettings) sets the project name, which we want to override, so ordering is important.
-  //thus commonSettings needs to be added first.
+  // the full list of settings for the root project that's ultimately the one we build into a fat JAR and run
+  // coreDefaultSettings (inside commonSettings) sets the project name, which we want to override, so ordering is important.
+  // thus commonSettings needs to be added first.
   lazy val rootSettings = commonSettings ++ List(
     name := "sam",
     libraryDependencies ++= rootDependencies
