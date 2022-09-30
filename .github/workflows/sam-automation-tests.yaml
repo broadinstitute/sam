@@ -40,7 +40,7 @@ jobs:
         with:
           workflow: sam-build
           repo: broadinstitute/terra-github-workflows
-          ref: reads/heads/ch-fix-bee-craete # refs/heads/main
+          ref: refs/heads/ch-fix-bee-craete # REVERT TO refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}" }'
 
