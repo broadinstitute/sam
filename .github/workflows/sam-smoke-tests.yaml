@@ -81,6 +81,10 @@ jobs:
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ matrix.terra-env }}-${{ github.run_id }}", "version-template": "${{ matrix.terra-env }}", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
 
   sam-smoke-test-job:
+    strategy:
+      matrix:
+        terra-env: [ dev, prod ] # what versions of apps do we use to emulate types of environments
+        testing-env: [ qa ] # what env resources to use, e.g. SA keys
     runs-on: ubuntu-latest
     needs: [create-bee-workflow]
     permissions:
@@ -99,6 +103,10 @@ jobs:
           inputs: '{ "sam-hostname": "sam.${{ github.event.repository.name }}-${{ matrix.terra-env }}-${{ github.run_id }}.bee.envs-terra.bio", "ENV": "${{ matrix.testing-env }}", "auth-service-account-email": "firecloud-qa@broad-dsde-qa.iam.gserviceaccount.com" }'
 
   destroy-bee-workflow:
+    strategy:
+      matrix:
+        terra-env: [ dev, prod ] # what versions of apps do we use to emulate types of environments
+        testing-env: [ qa ] # what env resources to use, e.g. SA keys
     runs-on: ubuntu-latest
     needs: [sam-smoke-test-job]
     if: always() # always run to confirm bee is destroyed
