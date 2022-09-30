@@ -59,6 +59,10 @@ jobs:
           ./minnie-kenny.sh --force
           git secrets --scan-history
 
+      - name: Run Scalafmt Check
+        id: Scalafmt Check
+        run: sbt scalafmtCheckAll scalafmtSbtCheck
+
       - name: Run unit tests and generate coverage report
         id: coverageReport
         run: sbt coverage "testOnly --" coverageReport
