@@ -56,7 +56,11 @@ jobs:
           echo "HASH_TAG=$HASH_TAG"
           echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"$HASH_TAG\\\"}}"
 
-  create-bee-workflow-prod:
+  create-bee-workflow:
+    strategy:
+      matrix:
+        terra-env: [dev, prod] # what versions of apps do we use to emulate types of environments
+        testing-env: [qa] # what env resources to use, e.g. SA keys
     runs-on: ubuntu-latest
     needs: [sam-build-tag-publish-job]
     permissions:
@@ -75,11 +79,11 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-prod-${{ github.run_id }}", "version-template": "prod", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ matrix.terra-env }}-${{ github.run_id }}", "version-template": "${{ matrix.terra-env }}", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
 
-  sam-automation-test-job-prod:
+  sam-automation-test-job:
     runs-on: ubuntu-latest
-    needs: [create-bee-workflow-prod]
+    needs: [create-bee-workflow]
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -92,11 +96,11 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-prod-${{ github.run_id }}", "ENV": "qa" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ matrix.terra-env }}-${{ github.run_id }}", "ENV": "${{ matrix.testing-env }}" }'
 
-  destroy-bee-workflow-prod:
+  destroy-bee-workflow:
     runs-on: ubuntu-latest
-    needs: [sam-automation-test-job-prod]
+    needs: [sam-automation-test-job]
     if: always() # always run to confirm bee is destroyed
     permissions:
       contents: 'read'
@@ -110,61 +114,4 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-prod-${{ github.run_id }}" }'
-
-  # Dev Test against BEEs
-  create-bee-workflow-dev:
-    runs-on: ubuntu-latest
-    needs: [sam-build-tag-publish-job]
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    steps:
-      - name: Print hash tag
-        run: |
-          echo '${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}'
-
-      - name: dispatch to terra-github-workflows
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
-        with:
-          workflow: bee-create
-          repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
-          token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-dev-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
-
-  sam-automation-test-job-dev:
-    runs-on: ubuntu-latest
-    needs: [create-bee-workflow-dev]
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    steps:
-      - name: dispatch to terra-github-workflows
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
-        with:
-          workflow: sam-tests
-          repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
-          token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-dev-${{ github.run_id }}", "ENV": "qa" }'
-
-  destroy-bee-workflow-dev:
-    runs-on: ubuntu-latest
-    needs: [sam-automation-test-job-dev]
-    if: always() # always run to confirm bee is destroyed
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    steps:
-      - name: dispatch to terra-github-workflows
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
-        with:
-          workflow: bee-destroy
-          repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
-          token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-dev-${{ github.run_id }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ matrix.terra-env }}-${{ github.run_id }}" }'
