@@ -57,9 +57,7 @@ object Settings {
   // sbt assembly settings
   lazy val commonAssemblySettings = Seq(
     assemblyMergeStrategy in assembly := customMergeStrategy((assemblyMergeStrategy in assembly).value),
-    test in assembly := {},
-    assembly := assembly.dependsOn(Test / scalafmtCheckAll).value,
-    assembly := assembly.dependsOn(Test / scalafmtSbtCheck).value
+    test in assembly := {}
   )
 
   // common settings for all sbt subprojects

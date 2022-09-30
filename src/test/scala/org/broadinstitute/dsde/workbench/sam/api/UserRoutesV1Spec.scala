@@ -7,14 +7,13 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.genNonPetEmail
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport.rootBooleanJsonFormat
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusService, TosService, UserService}
 
-/**
-  * Created by dvoet on 6/7/17.
+/** Created by dvoet on 6/7/17.
   */
 class UserRoutesV1Spec extends UserRoutesSpecHelper {
 
@@ -22,8 +21,28 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper {
     val directoryDAO = new MockDirectoryDAO()
 
     val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, Seq.empty, tosService), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, NoExtensions, tosService = tosService)
-    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, Seq.empty, tosService), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, petSAUser, directoryDAO, NoExtensions, tosService = tosService)
+    val samRoutes = new TestSamRoutes(
+      null,
+      null,
+      new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
+      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      null,
+      defaultUser,
+      directoryDAO,
+      NoExtensions,
+      tosService = tosService
+    )
+    val SARoutes = new TestSamRoutes(
+      null,
+      null,
+      new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
+      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      null,
+      petSAUser,
+      directoryDAO,
+      NoExtensions,
+      tosService = tosService
+    )
     testCode(samRoutes, SARoutes)
   }
 
@@ -105,8 +124,8 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper {
   "POST /api/users/v1/invite/{invitee's email}" should "create user" in {
     val inviteeEmail = genNonPetEmail.sample.get
 
-    val (user, _, routes) = createTestUser() //create a valid user that can invite someone
-    Post(s"/api/users/v1/invite/${inviteeEmail}") ~> routes.route ~> check{
+    val (user, _, routes) = createTestUser() // create a valid user that can invite someone
+    Post(s"/api/users/v1/invite/${inviteeEmail}") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatusDetails]
       res.userEmail shouldBe inviteeEmail

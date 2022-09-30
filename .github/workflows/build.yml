@@ -60,7 +60,7 @@ jobs:
           git secrets --scan-history
 
       - name: Run Scalafmt Check
-        id: Scalafmt Check
+        id: scalafmtCheck
         run: sbt scalafmtCheckAll scalafmtSbtCheck
 
       - name: Run unit tests and generate coverage report

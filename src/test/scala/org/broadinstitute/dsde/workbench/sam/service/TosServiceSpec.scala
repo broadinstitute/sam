@@ -15,10 +15,10 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   val defaultUser = Generator.genWorkbenchUserBoth.sample.get
   val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
 
-  private val tosServiceEnabledV0 = new TosService(dirDAO,"example.com", TestSupport.tosConfig.copy(enabled = true, version = "0"))
+  private val tosServiceEnabledV0 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "0"))
   private val tosServiceEnabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true))
-  private val tosServiceEnabledV2 = new TosService(dirDAO,"example.com", TestSupport.tosConfig.copy(enabled = true, version = "2"))
-  private val tosServiceDisabled = new TosService(dirDAO,  "example.com", TestSupport.tosConfig.copy(enabled = false))
+  private val tosServiceEnabledV2 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2"))
+  private val tosServiceDisabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = false))
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -30,9 +30,8 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     TestSupport.truncateAll
   }
 
-  protected def clearDatabase(): Unit = {
+  protected def clearDatabase(): Unit =
     TestSupport.truncateAll
-  }
 
   "TosService" should "accept, get, and reject the ToS for a user" in {
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()

@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosServic
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.RejectionHandlers.{MethodDisabled, termsOfServiceRejectionHandler}
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAcceptance}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
