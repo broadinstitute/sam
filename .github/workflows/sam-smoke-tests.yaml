@@ -1,9 +1,11 @@
 name: sam-smoke-tests
 
 on:
+  pull_request:
+    paths-ignore: ['**.md']
   push:
     branches:
-      - QA-2028
+      - develop
     paths-ignore: ['**.md']
 
 jobs:
