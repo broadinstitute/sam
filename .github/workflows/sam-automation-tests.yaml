@@ -93,12 +93,6 @@ jobs:
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "ENV": "qa" }'
 
-  sam-smoke-test-job:
-    needs: [create-bee-workflow]
-    uses: ./.github/workflows/sam-smoke-tests.yaml
-    with:
-      sam-hostname:
-
   destroy-bee-workflow:
     runs-on: ubuntu-latest
     needs: [sam-automation-test-job]
