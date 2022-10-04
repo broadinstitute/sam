@@ -42,6 +42,11 @@ jobs:
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}" }'
 
+      - id: check-dir
+        run: |
+          ls -l
+          exit 1
+
       - name: Render data to share with dependent jobs
         id: render-data
         env:
