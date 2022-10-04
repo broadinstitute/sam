@@ -26,11 +26,6 @@ jobs:
           RELEASE_BRANCHES: main
           WITH_V: true
 
-      - id: extract-tag
-        run: |
-          echo "${{ steps.tag.outputs.tag }}"
-          echo "${{ steps.tag.outputs.new_tag }}"
-
       - name: Extract branch
         id: extract-branch
         run: |
@@ -49,8 +44,6 @@ jobs:
           echo ::set-output name=ref::$GITHUB_REF
           echo ::set-output name=sha::$GITHUB_SHA
 
-          exit 1
-
       - name: dispatch build to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
@@ -58,13 +51,7 @@ jobs:
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}" }'
-
-      - id: check-dir
-        run: |
-          pwd
-          ls -l
-          ls -l ..
+          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
 
       - name: Render data to share with dependent jobs
         id: render-data
@@ -76,9 +63,7 @@ jobs:
           HASH_TAG=${GIT_SHA:0:12}
           # Need to escape twice because custom-version-json is passed like an cli argument string
           echo "HASH_TAG=$HASH_TAG"
-          echo "DOCKER_TAG=${{ env.DOCKER_TAG }}"
-          echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"${{ env.DOCKER_TAG }}\\\"}}"
-          exit 1
+          echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"${{ steps.tag.outputs.tag }}\\\"}}"
 
   create-bee-workflow:
     runs-on: ubuntu-latest
@@ -99,7 +84,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}", "version-template": "dev", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
 
   sam-automation-test-job:
     runs-on: ubuntu-latest
@@ -116,7 +101,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}", "ENV": "qa" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}", "ENV": "qa" }'
 
   destroy-bee-workflow:
     runs-on: ubuntu-latest
@@ -134,4 +119,4 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.workflow }}-${{ github.run_id }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}" }'
