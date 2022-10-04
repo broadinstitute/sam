@@ -25,7 +25,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.BROADBOT_TOKEN }}
           RELEASE_BRANCHES: main,develop
           WITH_V: true
-          DRY_RUN: true
 
       - id: extract-tag
         run: |
@@ -49,6 +48,8 @@ jobs:
 
           echo ::set-output name=ref::$GITHUB_REF
           echo ::set-output name=sha::$GITHUB_SHA
+
+          exit 1
 
       - name: dispatch build to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
