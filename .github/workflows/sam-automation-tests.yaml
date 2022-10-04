@@ -23,7 +23,7 @@ jobs:
         env:
           DEFAULT_BUMP: patch
           GITHUB_TOKEN: ${{ secrets.BROADBOT_TOKEN }}
-          RELEASE_BRANCHES: main,develop
+          RELEASE_BRANCHES: main
           WITH_V: true
 
       - id: extract-tag
