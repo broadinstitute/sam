@@ -105,7 +105,7 @@ jobs:
 
   sam-smoke-test-job:
     needs: [create-bee-workflow]
-    uses: ./sam-smoke-tests.yaml
+    uses: ./.github/workflows/sam-smoke-tests.yaml@QA-2028
     with:
       sam-hostname: sam.${{ github.event.repository.name }}-${{ github.run_id }}.bee.envs-terra.bio
       ENV: qa
