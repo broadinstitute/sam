@@ -2,18 +2,19 @@ name: sam-smoke-tests
 
 on:
   workflow_call:
-    sam-hostname:
-      description: 'a generic hostname for Sam'
-      required: true
-      type: string
-    ENV:
-      description: 'test environment (qa, alpha)'
-      required: true
-      type: string
-    auth-service-account-email:
-      description: 'email of auth service account to run smoke test'
-      required: true
-      type: string
+    inputs:
+      sam-hostname:
+        description: 'a generic hostname for Sam'
+        required: true
+        type: string
+      ENV:
+        description: 'test environment (qa, alpha)'
+        required: true
+        type: string
+      auth-service-account-email:
+        description: 'email of auth service account to run smoke test'
+        required: true
+        type: string
 
 jobs:
   sam-smoke-test-job:
