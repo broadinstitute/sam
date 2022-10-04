@@ -110,6 +110,8 @@ jobs:
       sam-hostname: sam.${{ github.event.repository.name }}-${{ github.run_id }}.bee.envs-terra.bio
       ENV: qa
       auth-service-account-email: firecloud-qa@broad-dsde-qa.iam.gserviceaccount.com
+    secrets:
+      token: ${{ secrets.BROADBOT_TOKEN}}
 
   destroy-bee-workflow:
     runs-on: ubuntu-latest

@@ -15,6 +15,9 @@ on:
         description: 'email of auth service account to run smoke test'
         required: true
         type: string
+    secrets:
+      token:
+        required: true
 
 jobs:
   sam-smoke-test-job:
@@ -29,7 +32,7 @@ jobs:
           workflow: sam-smoke-tests
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
-          token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
+          token: ${{ secrets.token}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           # inputs: '{ "sam-hostname": "sam.${{ github.event.repository.name }}-${{ github.run_id }}.bee.envs-terra.bio", "ENV": "qa", "auth-service-account-email": "firecloud-qa@broad-dsde-qa.iam.gserviceaccount.com" }'
           inputs: '{ "sam-hostname": "${{ inputs.sam-hostname }}", "ENV": "qa", "auth-service-account-email": "${{ inputs.auth-service-account-email }}" }'
