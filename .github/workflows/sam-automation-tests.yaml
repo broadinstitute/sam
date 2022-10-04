@@ -44,8 +44,8 @@ jobs:
 
       - id: check-dir
         run: |
+          pwd
           ls -l
-          exit 1
 
       - name: Render data to share with dependent jobs
         id: render-data
@@ -59,6 +59,7 @@ jobs:
           echo "HASH_TAG=$HASH_TAG"
           echo "DOCKER_TAG=${{ env.DOCKER_TAG }}"
           echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"${{ env.DOCKER_TAG }}\\\"}}"
+          exit 1
 
   create-bee-workflow:
     runs-on: ubuntu-latest
