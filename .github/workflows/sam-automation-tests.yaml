@@ -46,6 +46,7 @@ jobs:
         run: |
           pwd
           ls -l
+          ls -l ..
 
       - name: Render data to share with dependent jobs
         id: render-data
