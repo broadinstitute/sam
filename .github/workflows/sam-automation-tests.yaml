@@ -15,6 +15,23 @@ jobs:
     outputs:
       custom-version-json: ${{ steps.render-data.outputs.custom-version-json }}
     steps:
+      - uses: 'actions/checkout@v3'
+
+      - name: Bump the tag to a new version
+        uses: databiosphere/github-actions/actions/bumper@bumper-0.0.6
+        id: tag
+        env:
+          DEFAULT_BUMP: patch
+          GITHUB_TOKEN: ${{ secrets.BROADBOT_TOKEN }}
+          RELEASE_BRANCHES: main,develop
+          WITH_V: true
+          DRY_RUN: true
+
+      - id: extract-tag
+        run: |
+          echo "${{ steps.tag.outputs.tag }}"
+          echo "${{ steps.tag.outputs.new_tag }}"
+
       - name: Extract branch
         id: extract-branch
         run: |
