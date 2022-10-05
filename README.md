@@ -249,3 +249,6 @@ https://local.broadinstitute.org:50443/#/](https://local.broadinstitute.org:5044
 
 ### [CONTRIBUTING.md](CONTRIBUTING.md)
 
+## Smoke Tests
+Sam includes smoke tests that can be run anywhere and test a running Sam instance on any network accessible host.  See
+the [Smoke Test README](smoke_test/README.md) for more information.
