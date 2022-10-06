@@ -15,7 +15,7 @@ jobs:
       contents: 'read'
       id-token: 'write'
     outputs:
-      custom-version-json: ${{ steps.render-data.outputs.custom-version-json }}
+      custom-version-json: ${{ steps.render-sam-version.outputs.custom-version-json }}
     steps:
       - uses: 'actions/checkout@v3'
 
@@ -55,16 +55,16 @@ jobs:
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
 
-      - name: Render data to share with dependent jobs
-        id: render-data
+      - name: Render Sam version
+        id: render-sam-version
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "$GITHUB_CONTEXT"
-          GIT_SHA=${{ steps.extract-branch.outputs.sha }}
-          HASH_TAG=${GIT_SHA:0:12}
+          # GIT_SHA=${{ steps.extract-branch.outputs.sha }}
+          # HASH_TAG=${GIT_SHA:0:12}
           # Need to escape twice because custom-version-json is passed like an cli argument string
-          echo "HASH_TAG=$HASH_TAG"
+          # echo "HASH_TAG=$HASH_TAG"
           echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"${{ steps.tag.outputs.tag }}\\\"}}"
 
   create-bee-workflow:
@@ -77,7 +77,7 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
-      - name: Print hash tag
+      - name: Echo Sam version
         run: |
           echo '${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}'
 
@@ -90,6 +90,27 @@ jobs:
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "version-template": "${{ matrix.terra-env }}", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
+
+  sam-smoke-test-job:
+    strategy:
+      matrix:
+        terra-env: [ dev, prod ] # what versions of apps do we use to emulate types of environments
+        testing-env: [ qa ] # what env resources to use, e.g. SA keys
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: dispatch to terra-github-workflows
+        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        with:
+          workflow: sam-smoke-tests
+          repo: broadinstitute/terra-github-workflows
+          ref: refs/heads/main
+          token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
+          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
+          # inputs: '{ "sam-hostname": "sam.${{ github.event.repository.name }}-${{ github.run_id }}.bee.envs-terra.bio", "ENV": "qa", "auth-service-account-email": "firecloud-qa@broad-dsde-qa.iam.gserviceaccount.com" }'
+          inputs: '{ "sam-hostname": "sam.${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}.bee.envs-terra.bio", "ENV": "qa", "auth-service-account-email": "firecloud-qa@broad-dsde-qa.iam.gserviceaccount.com" }'
 
   sam-automation-test-job:
     strategy:
@@ -111,20 +132,6 @@ jobs:
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}" }'
-
-  sam-smoke-test-job:
-    strategy:
-      matrix:
-        terra-env: [ dev, prod ] # what versions of apps do we use to emulate types of environments
-        testing-env: [ qa ] # what env resources to use, e.g. SA keys
-    needs: [create-bee-workflow]
-    uses: ./.github/workflows/sam-smoke-tests.yaml
-    with:
-      sam-hostname: sam.${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}.bee.envs-terra.bio
-      ENV: ${{ matrix.testing-env }}
-      auth-service-account-email: firecloud-qa@broad-dsde-qa.iam.gserviceaccount.com
-    secrets:
-      token: ${{ secrets.BROADBOT_TOKEN}}
 
   destroy-bee-workflow:
     strategy:
