@@ -3,30 +3,22 @@ package org.broadinstitute.dsde.workbench.sam.service
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import cats.implicits._
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import java.net.URI
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
-  val dirURI = new URI(directoryConfig.directoryUrl)
-  val connectionPool = new LDAPConnectionPool(
-    new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password),
-    directoryConfig.connectionPoolSize)
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
-  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   override protected def beforeEach(): Unit = {
     setup().unsafeRunSync()

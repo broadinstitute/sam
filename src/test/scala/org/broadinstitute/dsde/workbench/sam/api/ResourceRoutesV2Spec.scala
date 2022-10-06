@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{configResourceTypes, googleServicesConfig}
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -45,7 +45,6 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
                               samUser: SamUser = defaultUserInfo): SamRoutes = {
     val directoryDAO = new MockDirectoryDAO()
     val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
-    val registrationDAO = new MockRegistrationDAO()
     val emailDomain = "example.com"
 
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
@@ -53,14 +52,14 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     resourceTypes.map { case (resourceTypeName, resourceType) =>
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
-    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService)
-    val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
+    val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
     mockUserService.createUser(samUser, samRequestContext)
 
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, registrationDAO, tosService = tosService)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, tosService = tosService)
   }
 
   private val managedGroupResourceType = configResourceTypes.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))

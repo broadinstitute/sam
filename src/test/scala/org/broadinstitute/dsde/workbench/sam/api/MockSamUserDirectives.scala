@@ -19,11 +19,11 @@ trait MockSamUserDirectives extends SamUserDirectives {
     OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
 
   override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-    StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, directoryDAO, registrationDAO, tosService, samRequestContext).unsafeToFuture()
+    StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
   }
 
   override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-    StandardSamUserDirectives.getSamUser(fakeOidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeToFuture()
+    StandardSamUserDirectives.getSamUser(fakeOidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
   }
 
   override def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = newSamUser match {

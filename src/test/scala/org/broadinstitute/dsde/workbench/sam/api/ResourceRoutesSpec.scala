@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -45,19 +45,18 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
   private def createSamRoutes(resourceTypes: Map[ResourceTypeName, ResourceType], samUser: SamUser = defaultUserInfo) = {
     val directoryDAO = new MockDirectoryDAO()
     val accessPolicyDAO = new MockAccessPolicyDAO(resourceTypes, directoryDAO)
-    val registrationDAO = new MockRegistrationDAO()
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain, Set.empty)
-    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService)
-    val mockStatusService = new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef)
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
+    val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
     mockUserService.createUser(defaultUserInfo, samRequestContext)
 
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, registrationDAO, tosService = tosService)
+    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, samUser, directoryDAO, tosService = tosService)
   }
 
   "GET /api/resource/{resourceType}/{resourceId}/actions/{action}" should "404 for unknown resource type" in {

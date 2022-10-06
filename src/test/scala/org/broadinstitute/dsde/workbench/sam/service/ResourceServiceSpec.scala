@@ -7,7 +7,6 @@ import cats.effect.unsafe.implicits.{global => globalEc}
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
@@ -16,7 +15,6 @@ import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.ArgumentMatchers._
@@ -30,7 +28,6 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatestplus.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 
-import java.net.URI
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -41,17 +38,12 @@ import scala.jdk.CollectionConverters._
   * Created by dvoet on 6/27/17.
   */
 class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures with TestSupport with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar with PropertyBasedTesting {
-  val directoryConfig = TestSupport.directoryConfig
-  val schemaLockConfig = TestSupport.schemaLockConfig
   //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
   private val realResourceTypes = TestSupport.appConfig.resourceTypes
   private val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap
 
-  val dirURI = new URI(directoryConfig.directoryUrl)
-  val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
-  val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   private val ownerRoleName = ResourceRoleName("owner")
 
@@ -102,11 +94,6 @@ class ResourceServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures wi
 
     val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
     val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
-  }
-
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    runAndWait(schemaDao.init())
   }
 
   before {

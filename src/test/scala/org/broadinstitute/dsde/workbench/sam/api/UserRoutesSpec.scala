@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, googleServicesConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -82,10 +82,9 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockRegistrationDAO()
 
-    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO,
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, Seq.empty, tosService), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO,
       newSamUser = Option(defaultUser), tosService = tosService)
 
     testCode(samRoutes)

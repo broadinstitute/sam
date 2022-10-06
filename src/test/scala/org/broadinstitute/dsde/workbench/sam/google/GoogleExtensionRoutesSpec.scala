@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, _}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockRegistrationDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -329,10 +328,8 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       user = samUser
     )
 
-    val regDAO = new MockRegistrationDAO
-
     samDeps.cloudExtensions.asInstanceOf[GoogleExtensions].onBoot(SamApplication(samDeps.userService,
-      samDeps.resourceService, samDeps.statusService, new TosService(samDeps.directoryDAO, regDAO, "example.com", TestSupport.tosConfig))).unsafeRunSync()
+      samDeps.resourceService, samDeps.statusService, new TosService(samDeps.directoryDAO, "example.com", TestSupport.tosConfig))).unsafeRunSync()
     (user, routes, expectedJson)
   }
 }

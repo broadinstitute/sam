@@ -6,36 +6,6 @@ import sbt.util.Logger
 import scala.sys.process._
 
 object Testing {
-  val validDirectoryUrl = taskKey[Unit]("Determine if directory.url is provided.")
-  val validDirectoryPassword = taskKey[Unit]("Determine if directory.password is provided.")
-
-  val validDirectoryUrlSetting = validDirectoryUrl := {
-    val setting = sys.props.getOrElse("directory.url", "")
-    if (setting.length == 0) {
-      Def.taskDyn{
-        streams.map{
-          str =>
-            str.log.error("directory.url not set")
-        }
-      }
-
-      sys.exit()
-    }
-  }
-
-  val validDirectoryPasswordSetting = validDirectoryPassword := {
-    val setting = sys.props.getOrElse("directory.password", "")
-    if (setting.length == 0) {
-      Def.taskDyn{
-        streams.map{
-          str =>
-            str.log.error("directory.password not set")
-        }
-      }
-      sys.exit()
-    }
-  }
-
   val minnieKenny = inputKey[Unit]("Run minnie-kenny.")
 
   def isIntegrationTest(name: String) = name contains "integrationtest"
@@ -95,9 +65,6 @@ object Testing {
     testOptions in Test ++= Seq(Tests.Filter(s => !isIntegrationTest(s))),
     testOptions in IntegrationTest := Seq(Tests.Filter(s => isIntegrationTest(s))),
 
-    validDirectoryUrlSetting,
-    validDirectoryPasswordSetting,
-
     minnieKenny := {
       val log = streams.value.log
       val args = spaceDelimited("<arg>").parsed
@@ -108,10 +75,7 @@ object Testing {
 	
     (test in Test) := {
       minnieKenny.toTask("").value
-      ((test in Test).dependsOn(validDirectoryUrl, validDirectoryPassword)).value
     },
-    (testOnly in Test) := ((testOnly in Test) dependsOn(validDirectoryUrl, validDirectoryPassword)).inputTaskValue.evaluated
-
   )
 
   implicit class ProjectTestSettings(val project: Project) extends AnyVal {

@@ -6,7 +6,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -17,11 +17,10 @@ import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusServic
 class UserRoutesV2Spec extends UserRoutesSpecHelper {
   def withSARoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockRegistrationDAO()
 
-    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO, NoExtensions, tosService = tosService)
-    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO,registrationDAO, NoExtensions, TestSupport.dbRef), null, petSAUser, directoryDAO, registrationDAO, NoExtensions, tosService = tosService)
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, Seq.empty, tosService), new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, NoExtensions, tosService = tosService)
+    val SARoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, Seq.empty, tosService), new StatusService(directoryDAO,NoExtensions, TestSupport.dbRef), null, petSAUser, directoryDAO, NoExtensions, tosService = tosService)
     testCode(samRoutes, SARoutes)
   }
 

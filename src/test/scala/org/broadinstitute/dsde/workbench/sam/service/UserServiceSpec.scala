@@ -3,14 +3,12 @@ package service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.{global => globalEc}
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LdapRegistrationDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
@@ -21,7 +19,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
 import org.scalatestplus.mockito.MockitoSugar
 
-import java.net.URI
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -37,14 +34,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
   val defaultUser = genWorkbenchUserBoth.sample.get
 
-  lazy val directoryConfig = TestSupport.appConfig.directoryConfig
-  lazy val schemaLockConfig = TestSupport.appConfig.schemaLockConfig
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
-  lazy val dirURI = new URI(directoryConfig.directoryUrl)
-  lazy val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
-  lazy val registrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
-  lazy val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
 
   var service: UserService = _
   var tos: TosService = _
@@ -52,11 +43,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   var tosServiceEnabled: TosService = _
   var googleExtensions: GoogleExtensions = _
   val blockedDomain = "blocked.domain.com"
-
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    runAndWait(schemaDao.init())
-  }
 
   before {
     clearDatabase()
@@ -70,18 +56,13 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    tos = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    service = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tos)
-    tosServiceEnabled = new TosService(dirDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
-    serviceTosEnabled = new UserService(dirDAO, googleExtensions, registrationDAO, Seq(blockedDomain), tosServiceEnabled)
+    tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)
+    tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
+    serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
   }
 
   protected def clearDatabase(): Unit = {
-    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.init())
-    runAndWait(schemaDao.createOrgUnits())
-
     TestSupport.truncateAll
   }
 
@@ -92,7 +73,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     verify(googleExtensions).onUserCreate(defaultUser, samRequestContext)
 
     dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
-    registrationDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(azureB2CId = None)) // ldap does not know about azure or enabled
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
       Some(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultUser.id), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
@@ -133,7 +113,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     val savedUser = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().value
 
-    // get user status info (id, email, ldap)
+    // get user status info
     val info = service.getUserStatusInfo(savedUser, samRequestContext).unsafeRunSync()
     info shouldBe UserStatusInfo(savedUser.id.value, savedUser.email.value, true, true)
   }
@@ -146,7 +126,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
-    // get user status diagnostics (ldap, usersGroups, googleGroups
+    // get user status diagnostics
     val diagnostics = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
     diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true, None, true))
   }
@@ -167,7 +147,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val response = service.disableUser(defaultUser.id, samRequestContext).futureValue
     response shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
 
-    // check ldap
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
   }
 
@@ -181,7 +160,6 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
 
     // check
     dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
-    registrationDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
   }
 
   it should "generate unique identifier properly" in {
@@ -204,9 +182,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val user = genWorkbenchUserGoogle.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
     val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    val registrationRes = registrationDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(user)
-    registrationRes shouldEqual res
   }
 
   it should "create new user when there's no existing subject for a given azureB2CId and email" in{
@@ -226,9 +202,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     service.registerUser(user, samRequestContext).unsafeRunSync()
     val userId = dirDAO.loadSubjectFromEmail(user.email, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
     val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
-    val registrationRes = registrationDAO.loadUser(userId, samRequestContext).unsafeRunSync()
     res shouldBe Some(user.copy(id = userId))
-    registrationRes shouldEqual res
   }
 
   it should "update azureB2CId when there's no existing subject for a given googleSubjectId and but there is one for email" in{
@@ -336,9 +310,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     service.inviteUser(userEmail, samRequestContext).unsafeRunSync()
     val userId = dirDAO.loadSubjectFromEmail(userEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
     val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
-    val registrationRes = registrationDAO.loadUser(userId, samRequestContext).unsafeRunSync()
     res shouldBe Some(SamUser(userId, None, userEmail, None, false, None))
-    registrationRes shouldEqual res
   }
 
   it should "reject blocked domain" in {
@@ -388,19 +360,15 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
 
     val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    val userInLDAP = registrationDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
     userInPostgres.value should {
-      equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None)) and
-      equal(userInLDAP.value)
+      equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None))
     }
 
     val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    val updatedUserInLDAP = registrationDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
     updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true, None)
-    updatedUserInLDAP.value shouldBe updatedUserInPostgres.value.copy(enabled = false) // ldap does not store enabled attribute of user
   }
 
   it should "update azureB2CId for this user" in {
@@ -409,20 +377,13 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
 
     val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    val userInLDAP = registrationDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    userInPostgres.value should {
-      equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None)) and
-      equal(userInLDAP.value)
-    }
+    userInPostgres.value should equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None))
 
     val registeringUser = genWorkbenchUserAzure.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    val updatedUserInLDAP = registrationDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
     updatedUserInPostgres.value shouldBe SamUser(invitedUserId, None, inviteeEmail, registeringUser.azureB2CId, true, None)
-    // LDAP does not store the AzureB2CId OR the "enabled" status
-    updatedUserInLDAP.value shouldBe SamUser(invitedUserId, None, inviteeEmail, None, false, None)
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {
