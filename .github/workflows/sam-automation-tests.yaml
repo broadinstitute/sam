@@ -139,7 +139,7 @@ jobs:
       matrix:
         terra-env: [ dev, prod ] # what versions of apps do we use to emulate types of environments
     runs-on: ubuntu-latest
-    needs: [sam-automation-test-job]
+    needs: [sam-swat-test-job]
     if: always() # always run to confirm bee is destroyed
     permissions:
       contents: 'read'
