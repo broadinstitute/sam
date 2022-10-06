@@ -232,7 +232,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user, samRequestContext)
-    } yield logger.info(s"Enabled new user ${user.toUserIdInfo}")
+    } yield logger.info(s"Enabled user ${user.toUserIdInfo}")
 
   val serviceAccountDomain = "\\S+@\\S+\\.gserviceaccount\\.com".r
 
