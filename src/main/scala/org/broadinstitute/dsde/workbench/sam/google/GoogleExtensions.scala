@@ -293,12 +293,12 @@ class GoogleExtensions(
       _ <- withProxyEmail(user.id) { proxyEmail =>
         googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
       }
-      _ <- forAllPets(user.id, samRequestContext) { (petServiceAccount: PetServiceAccount) => enablePetServiceAccount(petServiceAccount, samRequestContext) }
+      _ <- forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) => enablePetServiceAccount(petServiceAccount, samRequestContext))
     } yield ()
 
   override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-      _ <- forAllPets(user.id, samRequestContext) { (petServiceAccount: PetServiceAccount) => disablePetServiceAccount(petServiceAccount, samRequestContext) }
+      _ <- forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) => disablePetServiceAccount(petServiceAccount, samRequestContext))
       _ <- withProxyEmail(user.id) { proxyEmail =>
         googleDirectoryDAO.removeMemberFromGroup(proxyEmail, WorkbenchEmail(user.email.value))
       }

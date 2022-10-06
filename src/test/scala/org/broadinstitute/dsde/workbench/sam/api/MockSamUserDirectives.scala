@@ -8,8 +8,7 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-/**
-  * Created by dvoet on 6/7/17.
+/** Created by dvoet on 6/7/17.
   */
 trait MockSamUserDirectives extends SamUserDirectives {
   val user: SamUser

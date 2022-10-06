@@ -25,31 +25,42 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
   val allUsersEmail = WorkbenchEmail("allusers@example.com")
   val dbReference = TestSupport.dbRef
 
-
-  override def afterAll(): Unit = {
+  override def afterAll(): Unit =
     system.terminate()
-  }
 
-  private def newStatusService(directoryDAO: DirectoryDAO) = {
-    new StatusService(directoryDAO, new NoExtensions {
-      override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = Map(Subsystems.GoogleGroups -> Future.successful(SubsystemStatus(true, None)))
-    }, dbReference, pollInterval = 10 milliseconds)
-  }
+  private def newStatusService(directoryDAO: DirectoryDAO) =
+    new StatusService(
+      directoryDAO,
+      new NoExtensions {
+        override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] =
+          Map(Subsystems.GoogleGroups -> Future.successful(SubsystemStatus(true, None)))
+      },
+      dbReference,
+      pollInterval = 10 milliseconds
+    )
 
   private def directoryDAOWithAllUsersGroup(response: Boolean = true) = {
     val directoryDAO = new MockDirectoryDAO {
       override def checkStatus(samRequestContext: SamRequestContext): Boolean = response
     }
-    directoryDAO.createGroup(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersEmail), samRequestContext = samRequestContext).unsafeRunSync()
+    directoryDAO
+      .createGroup(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersEmail), samRequestContext = samRequestContext)
+      .unsafeRunSync()
     directoryDAO
   }
 
   private def ok = newStatusService(directoryDAOWithAllUsersGroup())
 
   private def failingExtension = {
-    val service = new StatusService(directoryDAOWithAllUsersGroup(), new NoExtensions {
-      override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
-    }, dbReference, pollInterval = 10 milliseconds)
+    val service = new StatusService(
+      directoryDAOWithAllUsersGroup(),
+      new NoExtensions {
+        override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] =
+          Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
+      },
+      dbReference,
+      pollInterval = 10 milliseconds
+    )
     service
   }
 
@@ -60,13 +71,20 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
     service
   }
 
-  val cases = {
+  val cases =
     Seq(
       ("ok", ok, StatusCheckResponse(true, Map(GoogleGroups -> SubsystemStatus(true, None), Database -> SubsystemStatus(true, None)))),
-      ("failingExtension", failingExtension, StatusCheckResponse(false, Map(GoogleGroups -> SubsystemStatus(false, Option(List(s"bad google"))), Database -> SubsystemStatus(true, None)))),
-      ("failingDatabase", failingDatabase, StatusCheckResponse(false, Map(Database -> SubsystemStatus(false, Option(List("Postgres database connection invalid or timed out checking"))))))
+      (
+        "failingExtension",
+        failingExtension,
+        StatusCheckResponse(false, Map(GoogleGroups -> SubsystemStatus(false, Option(List(s"bad google"))), Database -> SubsystemStatus(true, None)))
+      ),
+      (
+        "failingDatabase",
+        failingDatabase,
+        StatusCheckResponse(false, Map(Database -> SubsystemStatus(false, Option(List("Postgres database connection invalid or timed out checking")))))
+      )
     )
-  }
 
   "StatusService" - {
     cases.foreach { case (name, service, expected) =>
