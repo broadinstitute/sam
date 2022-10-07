@@ -6,19 +6,14 @@ import org.broadinstitute.dsde.workbench.sam.model.SamUser
 
 import java.net.InetAddress
 
-/**
-  * Contains any additional data for the request.
+/** Contains any additional data for the request.
   *
-  * SamRequestContext was created with the goal of pre-empting a repeat of the crazy plumbing that was required to add
-  * the trace. In the future, instead of needing to add a new param to each API and underlying function, we can just add
-  * to this class instead.
+  * SamRequestContext was created with the goal of pre-empting a repeat of the crazy plumbing that was required to add the trace. In the future, instead of
+  * needing to add a new param to each API and underlying function, we can just add to this class instead.
   *
-  * @param parentSpan the parent span for tracing spans. To create a new parent span, create a new context with the new
-  *                   parent span.
-  *
- */
-case class SamRequestContext(parentSpan: Option[Span] = None,
-                             clientIp: Option[InetAddress] = None,
-                             samUser: Option[SamUser] = None) {
+  * @param parentSpan
+  *   the parent span for tracing spans. To create a new parent span, create a new context with the new parent span.
+  */
+case class SamRequestContext(parentSpan: Option[Span] = None, clientIp: Option[InetAddress] = None, samUser: Option[SamUser] = None) {
   def createAuditInfo: AuditInfo = AuditInfo(samUser.map(_.id), clientIp)
 }

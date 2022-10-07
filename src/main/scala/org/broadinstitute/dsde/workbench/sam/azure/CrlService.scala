@@ -10,12 +10,9 @@ import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
 import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 
-/**
-  * Service class for interacting with Terra Cloud Resource Library (CRL).
-  * See: https://github.com/DataBiosphere/terra-cloud-resource-lib
+/** Service class for interacting with Terra Cloud Resource Library (CRL). See: https://github.com/DataBiosphere/terra-cloud-resource-lib
   *
-  * Note: this class is Azure-specific for now because Sam uses workbench-libs for
-  * Google Cloud calls.
+  * Note: this class is Azure-specific for now because Sam uses workbench-libs for Google Cloud calls.
   */
 class CrlService(config: AzureServicesConfig) {
   // TODO: Update Sam tests to talk to Janitor service:
@@ -32,7 +29,7 @@ class CrlService(config: AzureServicesConfig) {
     IO(Defaults.crlConfigure(clientConfig, ResourceManager.configure()).authenticate(credential, profile).withSubscription(subscriptionId.value))
   }
 
-  def getManagedAppPlanId: String = config.managedAppPlanId
+  def getManagedAppPlanIds: Seq[String] = config.managedAppPlanIds
 
   private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (ClientSecretCredential, AzureProfile) = {
     val credential = new ClientSecretCredentialBuilder()
@@ -41,10 +38,7 @@ class CrlService(config: AzureServicesConfig) {
       .tenantId(config.managedAppTenantId)
       .build
 
-    val profile = new AzureProfile(
-      tenantId.value,
-      subscriptionId.value,
-      AzureEnvironment.AZURE)
+    val profile = new AzureProfile(tenantId.value, subscriptionId.value, AzureEnvironment.AZURE)
 
     (credential, profile)
   }

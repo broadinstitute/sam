@@ -4,9 +4,7 @@ import org.broadinstitute.dsde.workbench.sam.db.{DatabaseKey, SamTypeBinders}
 import scalikejdbc._
 
 final case class AccessInstructionsPK(value: Long) extends DatabaseKey
-final case class AccessInstructionsRecord(id: AccessInstructionsPK,
-                                          groupId: GroupPK,
-                                          instructions: String)
+final case class AccessInstructionsRecord(id: AccessInstructionsPK, groupId: GroupPK, instructions: String)
 
 object AccessInstructionsTable extends SQLSyntaxSupportWithDefaultSamDB[AccessInstructionsRecord] {
   override def tableName: String = "SAM_ACCESS_INSTRUCTIONS"

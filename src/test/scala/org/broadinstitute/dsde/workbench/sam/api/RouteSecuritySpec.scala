@@ -13,8 +13,7 @@ import org.yaml.snakeyaml.Yaml
 
 import scala.jdk.CollectionConverters._
 
-/**
-  * These tests verify that the apis published in swagger/api-docs.yaml call the correct SamUserDirectives.
+/** These tests verify that the apis published in swagger/api-docs.yaml call the correct SamUserDirectives.
   */
 class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport {
   lazy val routesFromApiYml: Iterable[PathAndMethod] = {
@@ -31,7 +30,7 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
     } yield PathAndMethod(path, method)
   }
 
-  for(PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api")) {
+  for (PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api"))
     s"$method $path" should "call withActiveUser" in {
       val samRoutes = Mockito.spy(TestSamRoutes(Map.empty))
 
@@ -41,9 +40,8 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
         }
       }
     }
-  }
 
-  for(PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/register")) {
+  for (PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/register"))
     s"$method $path" should "call withUserAllowInactive" in {
       val samRoutes = Mockito.spy(TestSamRoutes(Map.empty))
 
@@ -53,9 +51,8 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
         }
       }
     }
-  }
 
-  for(PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/user") || path.startsWith("/api/admin/v1/user")) {
+  for (PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/user") || path.startsWith("/api/admin/v1/user"))
     s"$method $path" should "call withWorkbenchAdmin" in {
       val samRoutes = Mockito.spy(TestSamRoutes(Map.empty))
 
@@ -65,9 +62,8 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
         }
       }
     }
-  }
 
-  for(PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/v1/resourceTypes")) {
+  for (PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/v1/resourceTypes"))
     s"$method $path" should "call asSamSuperAdmin" in {
       val samRoutes = Mockito.spy(TestSamRoutes(Map.empty))
 
@@ -77,16 +73,14 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
         }
       }
     }
-  }
 
-  private def createRequest(path: String, method: String) = {
+  private def createRequest(path: String, method: String) =
     method.toLowerCase match {
       case "get" => Get(path)
       case "put" => Put(path)
       case "post" => Post(path)
       case "delete" => Delete(path)
     }
-  }
 }
 
 case class PathAndMethod(path: String, method: String)

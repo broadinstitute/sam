@@ -5,8 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.audit.AccessChange
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, AccessPolicyDescendantPermissions, ResourceAction, ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.groupByFirstInPair
 
-/**
-  * Utility class for comparing collections of policies for use in audit logs
+/** Utility class for comparing collections of policies for use in audit logs
   * @param policies
   */
 private[service] class PermissionsByUsers(policies: Iterable[AccessPolicy]) {
@@ -15,8 +14,7 @@ private[service] class PermissionsByUsers(policies: Iterable[AccessPolicy]) {
   private val memberDescendantRoles: Set[(WorkbenchSubject, (ResourceTypeName, ResourceRoleName))] = flattenMemberDescendant(policies, _.roles)
   private val memberDescendantActions: Set[(WorkbenchSubject, (ResourceTypeName, ResourceAction))] = flattenMemberDescendant(policies, _.actions)
 
-  /**
-    * Returns the set of access changes if all the permissions in `other` are removed from `this`.
+  /** Returns the set of access changes if all the permissions in `other` are removed from `this`.
     */
   def removeAll(other: PermissionsByUsers): Set[AccessChange] = {
     val memberRolesDiff = groupByFirstInPair(this.memberRoles removedAll other.memberRoles)
@@ -30,19 +28,17 @@ private[service] class PermissionsByUsers(policies: Iterable[AccessPolicy]) {
       memberRolesDiff: Map[WorkbenchSubject, Iterable[ResourceRoleName]],
       memberActionsDiff: Map[WorkbenchSubject, Iterable[ResourceAction]],
       memberDescendantRolesDiff: Map[WorkbenchSubject, Iterable[(ResourceTypeName, ResourceRoleName)]],
-      memberDescendantActionsDiff: Map[WorkbenchSubject, Iterable[(ResourceTypeName, ResourceAction)]]) = {
+      memberDescendantActionsDiff: Map[WorkbenchSubject, Iterable[(ResourceTypeName, ResourceAction)]]
+  ) =
     for {
       member <- memberRolesDiff.keySet ++ memberActionsDiff.keySet ++ memberDescendantRolesDiff.keySet ++ memberDescendantActionsDiff.keySet
-    } yield {
-      AccessChange(
-        member,
-        memberRolesDiff.get(member),
-        memberActionsDiff.get(member),
-        memberDescendantRolesDiff.get(member).map(groupByFirstInPair),
-        memberDescendantActionsDiff.get(member).map(groupByFirstInPair)
-      )
-    }
-  }
+    } yield AccessChange(
+      member,
+      memberRolesDiff.get(member),
+      memberActionsDiff.get(member),
+      memberDescendantRolesDiff.get(member).map(groupByFirstInPair),
+      memberDescendantActionsDiff.get(member).map(groupByFirstInPair)
+    )
 
   private def flattenMember[A](policies: Iterable[AccessPolicy], select: AccessPolicy => Set[A]): Set[(WorkbenchSubject, A)] =
     (for {
@@ -51,7 +47,10 @@ private[service] class PermissionsByUsers(policies: Iterable[AccessPolicy]) {
       selected <- select(policy)
     } yield (member, selected)).toSet
 
-  private def flattenMemberDescendant[A](policies: Iterable[AccessPolicy], select: AccessPolicyDescendantPermissions => Set[A]): Set[(WorkbenchSubject, (ResourceTypeName, A))] =
+  private def flattenMemberDescendant[A](
+      policies: Iterable[AccessPolicy],
+      select: AccessPolicyDescendantPermissions => Set[A]
+  ): Set[(WorkbenchSubject, (ResourceTypeName, A))] =
     (for {
       policy <- policies
       member <- policy.members ++ maybeAllUsers(policy.public)
