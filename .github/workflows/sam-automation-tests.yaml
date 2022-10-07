@@ -103,7 +103,7 @@ jobs:
         with:
           workflow: sam-smoke-tests
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/QA-2028-3
+          ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           # The smoke tests just need an access token for an enabled user on the Sam host that is being tested.
@@ -126,7 +126,7 @@ jobs:
         with:
           workflow: sam-swat-tests
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/QA-2028-3
+          ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}" }'
