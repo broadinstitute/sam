@@ -6,8 +6,8 @@ object Version {
     def getLastCommitFromGit = { s"""git rev-parse --short HEAD""" !! }
 
     // either specify git hash as an env var or derive it
-    // if building from the broadinstitute/scala-baseimage docker image use env var
-    // (scala-baseimage doesn't have git in it)
+    // if building from the hseeberger/scala-sbt docker image use env var
+    // (scala-sbt doesn't have git in it)
     val lastCommit = sys.env.getOrElse("GIT_HASH", getLastCommitFromGit ).trim()
     val version = baseVersion + "-" + lastCommit
 

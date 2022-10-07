@@ -5,9 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.model.ResourceAction
 import scalikejdbc._
 
 final case class ResourceActionPK(value: Long) extends DatabaseKey
-final case class ResourceActionRecord(id: ResourceActionPK,
-                                      resourceTypeId: ResourceTypePK,
-                                      action: ResourceAction)
+final case class ResourceActionRecord(id: ResourceActionPK, resourceTypeId: ResourceTypePK, action: ResourceAction)
 
 object ResourceActionTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceActionRecord] {
   override def tableName: String = "SAM_RESOURCE_ACTION"

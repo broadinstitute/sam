@@ -20,13 +20,14 @@ import scala.concurrent.{ExecutionContext, Future}
 
 object CloudExtensions {
   val resourceTypeName = ResourceTypeName("cloud-extension")
+  val allUsersGroupName = WorkbenchGroupName("All_Users")
 }
 
 trait CloudExtensions {
-  val allUsersGroupName = WorkbenchGroupName("All_Users")
-
   // this is temporary until we get the admin group rolled into a sam group
   def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean]
+
+  def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean]
 
   def publishGroup(id: WorkbenchGroupName): Future[Unit]
 
@@ -56,7 +57,9 @@ trait CloudExtensions {
 
   def emailDomain: String
 
-  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup]
+  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+      executionContext: ExecutionContext
+  ): Future[WorkbenchGroup]
 }
 
 trait CloudExtensionsInitializer {
@@ -66,6 +69,8 @@ trait CloudExtensionsInitializer {
 
 trait NoExtensions extends CloudExtensions {
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
+
+  override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
 
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 
@@ -85,7 +90,8 @@ trait NoExtensions extends CloudExtensions {
 
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
 
-  override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchEmail]] = Future.successful(Option(userEmail))
+  override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchEmail]] =
+    Future.successful(Option(userEmail))
 
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit = ()
 
@@ -95,8 +101,11 @@ trait NoExtensions extends CloudExtensions {
 
   override val emailDomain = "example.com"
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
-    val allUsersGroup = BasicWorkbenchGroup(allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${allUsersGroupName.value}@$emailDomain"))
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+      executionContext: ExecutionContext
+  ): Future[WorkbenchGroup] = {
+    val allUsersGroup =
+      BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"))
     for {
       createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup

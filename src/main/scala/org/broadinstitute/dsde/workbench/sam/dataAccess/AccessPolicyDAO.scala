@@ -6,8 +6,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, _}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-/**
-  * Created by dvoet on 6/26/17.
+/** Created by dvoet on 6/26/17.
   */
 trait AccessPolicyDAO {
   def upsertResourceTypes(resourceTypes: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]]
@@ -22,7 +21,10 @@ trait AccessPolicyDAO {
 
   def loadResourceAuthDomain(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LoadResourceAuthDomainResult]
 
-  def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedPolicyId]]
+  def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
+      groupId: WorkbenchGroupIdentity,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedPolicyId]]
 
   def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
 
@@ -58,7 +60,11 @@ trait AccessPolicyDAO {
   def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]]
 
   @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
-  def listAccessPoliciesForUser(resource: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyWithoutMembers]]
+  def listAccessPoliciesForUser(
+      resource: FullyQualifiedResourceId,
+      user: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[Set[AccessPolicyWithoutMembers]]
 
   def listUserResourceActions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]]
 
@@ -66,7 +72,7 @@ trait AccessPolicyDAO {
 
   def listFlattenedPolicyMembers(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Set[SamUser]]
 
-  def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Unit]
+  def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Boolean]
 
   def getResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]]
 
@@ -76,24 +82,25 @@ trait AccessPolicyDAO {
 
   def listResourceChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]]
 
-  def listUserResourcesWithRolesAndActions(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ResourceIdWithRolesAndActions]]
+  def listUserResourcesWithRolesAndActions(
+      resourceTypeName: ResourceTypeName,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[Iterable[ResourceIdWithRolesAndActions]]
 
-  /**
-    * Utility function that takes a bunch of ResourceIdWithRolesAndActions, probably more than one for a give
-    * resource id, and aggregates all the ones with same resource id together.
+  /** Utility function that takes a bunch of ResourceIdWithRolesAndActions, probably more than one for a give resource id, and aggregates all the ones with same
+    * resource id together.
     *
     * @param fragmentedRolesAndActions
     * @return
     */
-  protected def aggregateByResource(fragmentedRolesAndActions: Iterable[ResourceIdWithRolesAndActions]): Iterable[ResourceIdWithRolesAndActions] = {
+  protected def aggregateByResource(fragmentedRolesAndActions: Iterable[ResourceIdWithRolesAndActions]): Iterable[ResourceIdWithRolesAndActions] =
     fragmentedRolesAndActions.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
       rowsForResource.reduce { (left, right) =>
         ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
       }
     }
-  }
 }
-
 
 sealed abstract class LoadResourceAuthDomainResult
 object LoadResourceAuthDomainResult {

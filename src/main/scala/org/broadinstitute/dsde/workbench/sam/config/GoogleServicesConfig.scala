@@ -1,18 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
+import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject}
-import net.ceedubs.ficus.Ficus._
-import AppConfig.nonEmptyListReader
-import com.typesafe.config.ConfigRenderOptions
-import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.nonEmptyListReader
 
 import scala.concurrent.duration.FiniteDuration
 
-/**
-  * Created by mbemis on 8/17/17.
+/** Created by mbemis on 8/17/17.
   */
 final case class GoogleServicesConfig(
     appName: String,
@@ -31,7 +29,7 @@ final case class GoogleServicesConfig(
     notificationTopic: String,
     googleKeyCacheConfig: GoogleKeyCacheConfig,
     resourceNamePrefix: Option[String],
-    adminSdkServiceAccounts: Option[NonEmptyList[ServiceAccountConfig]],
+    adminSdkServiceAccountPaths: Option[NonEmptyList[String]],
     googleKms: GoogleKmsConfig,
     terraGoogleOrgNumber: String
 )
@@ -66,13 +64,8 @@ object GoogleServicesConfig {
     )
   }
 
-  implicit val serviceAccountConfigReader: ValueReader[ServiceAccountConfig] = ValueReader.relative { config =>
-    ServiceAccountConfig(config.root().render(ConfigRenderOptions.concise))
-  }
-
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
     val jsonCredentials = ServiceAccountCredentialJson(
-      FirestoreServiceAccountJsonPath(config.getString("pathToFirestoreCredentialJson")),
       DefaultServiceAccountJsonPath(config.getString("pathToDefaultCredentialJson"))
     )
 
@@ -93,17 +86,13 @@ object GoogleServicesConfig {
       config.getString("notifications.topicName"),
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix"),
-      config.as[Option[NonEmptyList[ServiceAccountConfig]]]("adminSdkServiceAccounts"),
+      config.as[Option[NonEmptyList[String]]]("adminSdkServiceAccountPaths"),
       config.as[GoogleKmsConfig]("kms"),
       config.getString("terraGoogleOrgNumber")
     )
   }
 }
 
-final case class ServiceAccountConfig(json: String) extends AnyVal
-final case class FirestoreServiceAccountJsonPath(asString: String) extends AnyVal
 final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
-final case class ServiceAccountCredentialJson(
-    firestoreServiceAccountJsonPath: FirestoreServiceAccountJsonPath,
-    defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)
+final case class ServiceAccountCredentialJson(defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)
 final case class GoogleConfig(googleServicesConfig: GoogleServicesConfig, petServiceAccountConfig: PetServiceAccountConfig)

@@ -14,8 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 
-/**
-  * Created by gpolumbo on 2/21/2018.
+/** Created by gpolumbo on 2/21/2018.
   */
 class ManagedGroupService(
     private val resourceService: ResourceService,
@@ -24,36 +23,51 @@ class ManagedGroupService(
     private val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
-    private val emailDomain: String)
-    extends LazyLogging {
+    private val emailDomain: String
+) extends LazyLogging {
 
   def managedGroupType: ResourceType =
     resourceTypes.getOrElse(
       ManagedGroupService.managedGroupTypeName,
-      throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found"))
+      throw new WorkbenchException(s"resource type ${ManagedGroupService.managedGroupTypeName.value} not found")
+    )
 
-  def createManagedGroup(groupId: ResourceId, samUser: SamUser, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[Resource] = {
+  def createManagedGroup(
+      groupId: ResourceId,
+      samUser: SamUser,
+      accessInstructionsOpt: Option[String] = None,
+      samRequestContext: SamRequestContext
+  ): IO[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
     val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), None, None)
     val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(samUser.email), Set.empty, Set(adminRole), None, None)
-    val adminNotificationPolicy = ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(
-      Set.empty,
-      Set.empty,
-      Set(ManagedGroupService.adminNotifierRoleName),
-      None,
-      None)
+    val adminNotificationPolicy =
+      ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.adminNotifierRoleName), None, None)
 
     validateGroupName(groupId.value)
     for {
-      managedGroup <- resourceService.createResource(managedGroupType, groupId, Map(adminPolicy, memberPolicy, adminNotificationPolicy), Set.empty, None, samUser.id, samRequestContext)
+      managedGroup <- resourceService.createResource(
+        managedGroupType,
+        groupId,
+        Map(adminPolicy, memberPolicy, adminNotificationPolicy),
+        Set.empty,
+        None,
+        samUser.id,
+        samRequestContext
+      )
       policies <- accessPolicyDAO.listAccessPolicies(managedGroup.fullyQualifiedId, samRequestContext)
       workbenchGroup <- createAggregateGroup(managedGroup, policies.toSet, accessInstructionsOpt, samRequestContext)
       _ <- IO.fromFuture(IO(cloudExtensions.publishGroup(workbenchGroup.id)))
     } yield managedGroup
   }
 
-  private def createAggregateGroup(resource: Resource, componentPolicies: Set[AccessPolicy], accessInstructionsOpt: Option[String], samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] = {
+  private def createAggregateGroup(
+      resource: Resource,
+      componentPolicies: Set[AccessPolicy],
+      accessInstructionsOpt: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[BasicWorkbenchGroup] = {
     val email = WorkbenchEmail(constructEmail(resource.resourceId.value))
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {
@@ -70,15 +84,19 @@ class ManagedGroupService(
     val errors = validateGroupNamePattern(groupName) ++ validateGroupNameLength(groupName)
     if (errors.nonEmpty)
       throw new WorkbenchExceptionWithErrorReport(
-        ErrorReport(StatusCodes.BadRequest, s"Cannot create valid email address with the group name: $groupName", errors.toSeq))
+        ErrorReport(StatusCodes.BadRequest, s"Cannot create valid email address with the group name: $groupName", errors.toSeq)
+      )
   }
 
   private def validateGroupNamePattern(str: String): Option[ErrorReport] =
     str match {
       case ManagedGroupService.groupNameRe() => None
       case _ =>
-        Option(ErrorReport(
-          s"You have specified a group name that contains characters that are not permitted in an email address. Group name may only contain alphanumeric characters, underscores, and dashes"))
+        Option(
+          ErrorReport(
+            s"You have specified a group name that contains characters that are not permitted in an email address. Group name may only contain alphanumeric characters, underscores, and dashes"
+          )
+        )
     }
 
   private val maxLength = 60
@@ -94,8 +112,8 @@ class ManagedGroupService(
 
   def deleteManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-      // order is important here, we want to make sure we do all the cloudExtensions calls before we touch ldap
-      // so failures there do not leave ldap in a bad state
+      // order is important here, we want to make sure we do all the cloudExtensions calls before we touch the database
+      // so failures there do not leave the database in a bad state
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
       managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
@@ -130,19 +148,34 @@ class ManagedGroupService(
     }
   }
 
-  def overwritePolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, emails: Set[WorkbenchEmail], samRequestContext: SamRequestContext): IO[Unit] = {
+  def overwritePolicyMemberEmails(
+      resourceId: ResourceId,
+      policyName: ManagedGroupPolicyName,
+      emails: Set[WorkbenchEmail],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.overwritePolicyMembers(resourceAndPolicyName, emails, samRequestContext)
   }
 
-  def addSubjectToPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
+  def addSubjectToPolicy(
+      resourceId: ResourceId,
+      policyName: ManagedGroupPolicyName,
+      subject: WorkbenchSubject,
+      samRequestContext: SamRequestContext
+  ): IO[Boolean] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.addSubjectToPolicy(resourceAndPolicyName, subject, samRequestContext)
   }
 
-  def removeSubjectFromPolicy(resourceId: ResourceId, policyName: ManagedGroupPolicyName, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = {
+  def removeSubjectFromPolicy(
+      resourceId: ResourceId,
+      policyName: ManagedGroupPolicyName,
+      subject: WorkbenchSubject,
+      samRequestContext: SamRequestContext
+  ): IO[Boolean] = {
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject, samRequestContext)
@@ -150,7 +183,10 @@ class ManagedGroupService(
 
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
     def extractGoogleSubjectId(requesterUser: Option[SamUser]): IO[WorkbenchUserId] =
-      (for { u <- requesterUser; s <- u.googleSubjectId } yield s) match {
+      (for {
+        u <- requesterUser
+        s <- u.googleSubjectId
+      } yield s) match {
         case Some(subjectId) => IO.pure(WorkbenchUserId(subjectId.value))
         // don't know how a user would get this far without getting a subject id
         case None => IO.raiseError(new WorkbenchException(s"unable to find subject id for $requesterUserId"))
@@ -159,7 +195,8 @@ class ManagedGroupService(
     getAccessInstructions(resourceId, samRequestContext).flatMap {
       case Some(accessInstructions) =>
         IO.raiseError(
-          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions")))
+          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions"))
+        )
       case None =>
         // Thurloe is the thing that sends the emails and it knows only about google subject ids, not internal sam user ids
         // so we have to do some conversion here which makes the code look less straight forward
@@ -215,14 +252,13 @@ object ManagedGroupService {
   val userMembershipRoleNames: Set[ResourceRoleName] = Set(adminRoleName, memberRoleName)
 
   object MangedGroupRoleName {
-    def unapply(roleName: ResourceRoleName): Option[MangedGroupRoleName] = {
+    def unapply(roleName: ResourceRoleName): Option[MangedGroupRoleName] =
       roleName.value match {
         case `memberValue` => Option(ManagedGroupService.memberRoleName)
         case `adminValue` => Option(ManagedGroupService.adminRoleName)
         case `adminNotifierValue` => Option(ManagedGroupService.adminNotifierRoleName)
         case _ => None
       }
-    }
   }
 
   def getPolicyName(policyName: String): ManagedGroupPolicyName =
@@ -232,7 +268,8 @@ object ManagedGroupService {
       case `adminNotifierValue` => ManagedGroupService.adminNotifierPolicyName
       case _ =>
         throw new WorkbenchExceptionWithErrorReport(
-          ErrorReport(StatusCodes.NotFound, s"Policy name for managed groups must be one of: ['$adminValue', '$memberValue']"))
+          ErrorReport(StatusCodes.NotFound, s"Policy name for managed groups must be one of: ['$adminValue', '$memberValue']")
+        )
     }
 
   def getRoleName(roleName: String): MangedGroupRoleName =
@@ -242,6 +279,7 @@ object ManagedGroupService {
       case `adminNotifierValue` => ManagedGroupService.adminNotifierRoleName
       case _ =>
         throw new WorkbenchExceptionWithErrorReport(
-          ErrorReport(StatusCodes.NotFound, s"Role name for managed groups must be one of: ['$adminValue', '$memberValue']"))
+          ErrorReport(StatusCodes.NotFound, s"Role name for managed groups must be one of: ['$adminValue', '$memberValue']")
+        )
     }
 }

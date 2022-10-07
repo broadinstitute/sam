@@ -138,7 +138,7 @@ Note that Sam does not actually launch workflows create VMs but appears to in th
 ## Development
 ### Required Tooling:
 #### Java:
-Make sure you have Java JDK 11 installed. Instructions for our recommended package can be found [here](https://adoptopenjdk.net/)
+Make sure you have Java JDK 17 installed. Instructions for our recommended package can be found [here](https://adoptium.net/)
 #### Scala:
 Mac:
 ```$xslt
@@ -166,12 +166,10 @@ Build jar and docker image:
 ### To run unit tests
 #### Set up your environment
 ```
-#Spin up a local OpenDJ:
-sh docker/run-opendj.sh start
 #Spin up a local postgres:
 sh docker/run-postgres.sh start
 #Make sure your `SBT_OPTS` are set:
-export SBT_OPTS="-Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest"
+export SBT_OPTS="-Dpostgres.host=localhost -Dpostgres.port=5432"
 ```
 
 Note: if you run Postgres in another way (i.e. you're running the Postgres Mac app), the unit tests will fail because they will look at that installation instead of the Docker container you've spun up. You can either specify a port when starting the Postgres Docker container or quit your Postgres client.
@@ -186,7 +184,7 @@ Set up ScalaTest Template:
 
 You need to set some default VM parameters for ScalaTest run configurations. In IntelliJ, go to `Run` > `Edit Configurations...`, select `ScalaTest` under `🔧Templates`, and add these VM parameters:
 ```
--Dpostgres.host=localhost -Dpostgres.port=5432 -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
+-Dpostgres.host=localhost -Dpostgres.port=5432
 ```
 Then you can run unit tests within IntelliJ by clicking the green play button on a unit test.
 
@@ -201,8 +199,6 @@ From there, set the:
 
 #### Cleaning up after tests
 ```
-#Stop your local opendj:
-sh docker/run-opendj.sh stop
 #Stop your local postgres:
 sh docker/run-postgres.sh stop
 ```
@@ -236,10 +232,13 @@ sh config/docker-rsync-local-sam.sh
 ##### Using local DBs
 
 ```
-# Start up local Sam with local opendj and postgres
-LOCAL_OPENDJ=true LOCAL_POSTGRES=true sh config/docker-rsync-local-sam.sh
+# Start up local Sam with local postgres
+LOCAL_POSTGRES=true sh config/docker-rsync-local-sam.sh
 ```
-NOTE: OpenDJ has some heavy memory requirements.  If you see the OpenDJ container silently dying when running this command, try opening your Docker Desktop preferenes and increasing the Memory resources, 4GB seems to be sufficient, but more may be needed as well as increasing the Swap space maybe.
+
+##### Human-Readable Logging
+To make Sam output human-readable log messages instead of Stackdriver-compatible messages, 
+add `SAM_LOG_APPENDER=Console-Standard` to your environment variables.
 
 #### Verify that local Sam is running
 [Status endpoint:
@@ -250,3 +249,6 @@ https://local.broadinstitute.org:50443/#/](https://local.broadinstitute.org:5044
 
 ### [CONTRIBUTING.md](CONTRIBUTING.md)
 
+## Smoke Tests
+Sam includes smoke tests that can be run anywhere and test a running Sam instance on any network accessible host.  See
+the [Smoke Test README](smoke_test/README.md) for more information.

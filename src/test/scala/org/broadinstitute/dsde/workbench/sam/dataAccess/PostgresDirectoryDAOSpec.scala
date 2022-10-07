@@ -6,6 +6,15 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ManagedIdentityDisplayName,
+  ManagedIdentityObjectId,
+  ManagedResourceGroupName,
+  PetManagedIdentity,
+  PetManagedIdentityId,
+  SubscriptionId,
+  TenantId
+}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.freespec.AnyFreeSpec
@@ -21,10 +30,17 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
   val defaultGroupName = WorkbenchGroupName("group")
   val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
   val defaultUser = Generator.genWorkbenchUserBoth.sample.get
-  val defaultPetSA = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares")))
+  val defaultPetSA = PetServiceAccount(
+    PetServiceAccountId(defaultUser.id, GoogleProject("testProject")),
+    ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares"))
+  )
+  val defaultPetMI = PetManagedIdentity(
+    PetManagedIdentityId(defaultUser.id, TenantId("testTenant"), SubscriptionId("testSubscription"), ManagedResourceGroupName("testMrg")),
+    ManagedIdentityObjectId("testObjectId"),
+    ManagedIdentityDisplayName("Managed Identity")
+  )
 
-  val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false),
-    ResourceActionPattern("read", "description of pattern2", false))
+  val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false), ResourceActionPattern("read", "description of pattern2", false))
   val writeAction = ResourceAction("write")
   val readAction = ResourceAction("read")
 
@@ -37,13 +53,21 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
   val resourceTypeName = ResourceTypeName("awesomeType")
   val resourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName, false)
   val defaultResource = Resource(resourceType.name, ResourceId("defaultResource"), Set.empty)
-  val defaultPolicy = AccessPolicy(FullyQualifiedPolicyId(defaultResource.fullyQualifiedId, AccessPolicyName("defaultPolicy")), Set.empty, WorkbenchEmail("default@policy.com"), roles.map(_.roleName), Set(writeAction, readAction), Set.empty, false)
+  val defaultPolicy = AccessPolicy(
+    FullyQualifiedPolicyId(defaultResource.fullyQualifiedId, AccessPolicyName("defaultPolicy")),
+    Set.empty,
+    WorkbenchEmail("default@policy.com"),
+    roles.map(_.roleName),
+    Set(writeAction, readAction),
+    Set.empty,
+    false
+  )
 
-  override protected def beforeEach(): Unit = {
+  override protected def beforeEach(): Unit =
     TestSupport.truncateAll
-  }
 
-  private def emptyWorkbenchGroup(groupName: String): BasicWorkbenchGroup = BasicWorkbenchGroup(WorkbenchGroupName(groupName), Set.empty, WorkbenchEmail(s"$groupName@test.com"))
+  private def emptyWorkbenchGroup(groupName: String): BasicWorkbenchGroup =
+    BasicWorkbenchGroup(WorkbenchGroupName(groupName), Set.empty, WorkbenchEmail(s"$groupName@test.com"))
 
   "PostgresDirectoryDAO" - {
     "createGroup" - {
@@ -123,7 +147,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
     }
 
     "loadGroup" - {
-        "load a group" in {
+      "load a group" in {
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
         loadedGroup shouldEqual defaultGroup
@@ -217,7 +241,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
         dao.addGroupMember(defaultPolicy.id, defaultGroup.id, samRequestContext).unsafeRunSync()
 
-        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        val loadedPolicy =
+          policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(defaultGroup.id)
       }
 
@@ -229,7 +254,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
         dao.addGroupMember(defaultPolicy.id, defaultUser.id, samRequestContext).unsafeRunSync()
 
-        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        val loadedPolicy =
+          policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(defaultUser.id)
       }
 
@@ -237,12 +263,14 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
-        val memberPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
+        val memberPolicy =
+          defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
         policyDAO.createPolicy(memberPolicy, samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultPolicy.id, memberPolicy.id, samRequestContext).unsafeRunSync()
 
-        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        val loadedPolicy =
+          policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(memberPolicy.id)
       }
 
@@ -270,7 +298,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         }
 
         exception.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
-        exception.errorReport.message should include (defaultGroup.email.value)
+        exception.errorReport.message should include(defaultGroup.email.value)
       }
     }
 
@@ -282,7 +310,9 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.createGroup(group1, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(group2, samRequestContext = samRequestContext).unsafeRunSync()
 
-        dao.batchLoadGroupEmail(Set(group1.id, group2.id), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(group1, group2).map(group => (group.id, group.email))
+        dao.batchLoadGroupEmail(Set(group1.id, group2.id), samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(group1, group2).map(group =>
+          (group.id, group.email)
+        )
       }
     }
 
@@ -342,7 +372,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         policyDAO.listFlattenedPolicyMembers(defaultPolicy.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(defaultUser)
         dao.removeGroupMember(defaultPolicy.id, defaultGroup.id, samRequestContext).unsafeRunSync()
 
-        val afterRemove = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        val afterRemove =
+          policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         afterRemove.members shouldBe empty
         policyDAO.listFlattenedPolicyMembers(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe empty
       }
@@ -356,7 +387,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.addGroupMember(defaultPolicy.id, defaultUser.id, samRequestContext).unsafeRunSync()
         dao.removeGroupMember(defaultPolicy.id, defaultUser.id, samRequestContext).unsafeRunSync()
 
-        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        val loadedPolicy =
+          policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members shouldBe empty
       }
 
@@ -364,13 +396,15 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
-        val memberPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
+        val memberPolicy =
+          defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
         policyDAO.createPolicy(memberPolicy, samRequestContext).unsafeRunSync()
 
         dao.addGroupMember(defaultPolicy.id, memberPolicy.id, samRequestContext).unsafeRunSync()
         dao.removeGroupMember(defaultPolicy.id, memberPolicy.id, samRequestContext).unsafeRunSync()
 
-        val loadedPolicy = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
+        val loadedPolicy =
+          policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members shouldBe empty
       }
     }
@@ -427,8 +461,16 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "list all of the policies a user is in" in {
-        val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(defaultUser.id))
-        val parentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id))
+        val subPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
+          email = WorkbenchEmail("sp@policy.com"),
+          members = Set(defaultUser.id)
+        )
+        val parentPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")),
+          email = WorkbenchEmail("pp@policy.com"),
+          members = Set(subPolicy.id)
+        )
 
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -483,10 +525,16 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       "get all pet service accounts for user" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
-        val petSA1 = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject1")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId1"), WorkbenchEmail("test1@pet.co"), ServiceAccountDisplayName("whoCares")))
+        val petSA1 = PetServiceAccount(
+          PetServiceAccountId(defaultUser.id, GoogleProject("testProject1")),
+          ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId1"), WorkbenchEmail("test1@pet.co"), ServiceAccountDisplayName("whoCares"))
+        )
         dao.createPetServiceAccount(petSA1, samRequestContext).unsafeRunSync()
 
-        val petSA2 = PetServiceAccount(PetServiceAccountId(defaultUser.id, GoogleProject("testProject2")), ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId2"), WorkbenchEmail("test2@pet.co"), ServiceAccountDisplayName("whoCares")))
+        val petSA2 = PetServiceAccount(
+          PetServiceAccountId(defaultUser.id, GoogleProject("testProject2")),
+          ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId2"), WorkbenchEmail("test2@pet.co"), ServiceAccountDisplayName("whoCares"))
+        )
         dao.createPetServiceAccount(petSA2, samRequestContext).unsafeRunSync()
 
         dao.getAllPetServiceAccountsForUser(defaultUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Seq(petSA1, petSA2)
@@ -509,7 +557,9 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
-        val updatedPetSA = defaultPetSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
+        val updatedPetSA = defaultPetSA.copy(serviceAccount =
+          ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares"))
+        )
         dao.updatePetServiceAccount(updatedPetSA, samRequestContext).unsafeRunSync() shouldBe updatedPetSA
 
         dao.loadPetServiceAccount(updatedPetSA.id, samRequestContext).unsafeRunSync() shouldBe Some(updatedPetSA)
@@ -518,7 +568,9 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       "throw an exception when updating a nonexistent pet SA" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
-        val updatedPetSA = defaultPetSA.copy(serviceAccount = ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares")))
+        val updatedPetSA = defaultPetSA.copy(serviceAccount =
+          ServiceAccount(ServiceAccountSubjectId("updatedTestGoogleSubjectId"), WorkbenchEmail("new@pet.co"), ServiceAccountDisplayName("whoCares"))
+        )
         assertThrows[WorkbenchException] {
           dao.updatePetServiceAccount(updatedPetSA, samRequestContext).unsafeRunSync() shouldBe updatedPetSA
         }
@@ -553,7 +605,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.createGroup(subGroup2, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        dao.isGroupMember(parentGroup.id, subGroup1.id, samRequestContext).unsafeRunSync() should be (true)
+        dao.isGroupMember(parentGroup.id, subGroup1.id, samRequestContext).unsafeRunSync() should be(true)
       }
 
       "return false when member is not in sub group" in {
@@ -565,7 +617,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.createGroup(subGroup2, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        dao.isGroupMember(parentGroup.id, subGroup1.id, samRequestContext).unsafeRunSync() should be (false)
+        dao.isGroupMember(parentGroup.id, subGroup1.id, samRequestContext).unsafeRunSync() should be(false)
       }
 
       "return true when user is in sub group" in {
@@ -592,7 +644,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.createGroup(subGroup2, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        dao.isGroupMember(parentGroup.id, user.id, samRequestContext).unsafeRunSync() should be (true)
+        dao.isGroupMember(parentGroup.id, user.id, samRequestContext).unsafeRunSync() should be(true)
       }
 
       "return false when user is not in sub group" in {
@@ -632,7 +684,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return true when policy is in policy" in {
-        val memberPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
+        val memberPolicy =
+          defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
         val policy = defaultPolicy.copy(members = Set(memberPolicy.id))
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -644,7 +697,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return false when policy is not in policy" in {
-        val memberPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
+        val memberPolicy =
+          defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
         val policy = defaultPolicy
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -740,7 +794,13 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
         // create a user and a group containing that single user
         val allUserGroups = for (i <- 1 to userCount) yield {
-          val user = dao.createUser(Generator.genWorkbenchUserGoogle.sample.get.copy(id = WorkbenchUserId(s"user$i")), samRequestContext).unsafeRunSync()
+          val user = dao
+            .createUser(
+              Generator.genWorkbenchUserGoogle.sample.get
+                .copy(id = WorkbenchUserId(s"user$i"), email = WorkbenchEmail(s"user$i@email"), googleSubjectId = None),
+              samRequestContext
+            )
+            .unsafeRunSync()
           val group = BasicWorkbenchGroup(WorkbenchGroupName(s"usergroup$i"), Set(user.id), WorkbenchEmail(s"usergroup$i"))
           dao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
         }
@@ -872,9 +932,21 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
       "lists all policies that a user is in directly" in {
         // disclaimer: not sure this ever happens in actual sam usage, but it should still work
-        val subSubPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("ssp")), email = WorkbenchEmail("ssp@policy.com"), members = Set(defaultUser.id))
-        val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(subSubPolicy.id, defaultUser.id))
-        val parentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id))
+        val subSubPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("ssp")),
+          email = WorkbenchEmail("ssp@policy.com"),
+          members = Set(defaultUser.id)
+        )
+        val subPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
+          email = WorkbenchEmail("sp@policy.com"),
+          members = Set(subSubPolicy.id, defaultUser.id)
+        )
+        val parentPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")),
+          email = WorkbenchEmail("pp@policy.com"),
+          members = Set(subPolicy.id)
+        )
 
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -904,8 +976,16 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "list all of the policies a group is in" in {
-        val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(defaultGroup.id))
-        val parentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id))
+        val subPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
+          email = WorkbenchEmail("sp@policy.com"),
+          members = Set(defaultGroup.id)
+        )
+        val parentPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")),
+          email = WorkbenchEmail("pp@policy.com"),
+          members = Set(subPolicy.id)
+        )
 
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -933,10 +1013,21 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "list all of the policies a policy is in" in {
-        val subPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")), email = WorkbenchEmail("sp@policy.com"), members = Set(defaultPolicy.id))
-        val directParentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")), email = WorkbenchEmail("pp@policy.com"), members = Set(subPolicy.id, defaultPolicy.id))
-        val indirectParentPolicy = defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("ssp")), email = WorkbenchEmail("ssp@policy.com"), members = Set(subPolicy.id))
-
+        val subPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
+          email = WorkbenchEmail("sp@policy.com"),
+          members = Set(defaultPolicy.id)
+        )
+        val directParentPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("pp")),
+          email = WorkbenchEmail("pp@policy.com"),
+          members = Set(subPolicy.id, defaultPolicy.id)
+        )
+        val indirectParentPolicy = defaultPolicy.copy(
+          id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("ssp")),
+          email = WorkbenchEmail("ssp@policy.com"),
+          members = Set(subPolicy.id)
+        )
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -973,7 +1064,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.updateSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync()
 
         val loadedDate = dao.getSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail("failed to load date"))
-        loadedDate.getTime() should equal (new Date().getTime +- 2.seconds.toMillis)
+        loadedDate.getTime() should equal(new Date().getTime +- 2.seconds.toMillis)
       }
 
       "load the synchronized date for a policy" in {
@@ -984,7 +1075,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.updateSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync()
 
         val loadedDate = dao.getSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail("failed to load date"))
-        loadedDate.getTime() should equal (new Date().getTime +- 2.seconds.toMillis)
+        loadedDate.getTime() should equal(new Date().getTime +- 2.seconds.toMillis)
       }
     }
 
@@ -1048,7 +1139,9 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
       "throw an exception when an email refers to more than one subject" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email)), samRequestContext).unsafeRunSync()
+        dao
+          .createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email)), samRequestContext)
+          .unsafeRunSync()
 
         assertThrows[WorkbenchException] {
           dao.loadSubjectFromEmail(defaultUser.email, samRequestContext).unsafeRunSync() shouldBe Some(defaultPetSA.id)
@@ -1067,7 +1160,9 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
-        dao.loadSubjectFromGoogleSubjectId(GoogleSubjectId(defaultPetSA.serviceAccount.subjectId.value), samRequestContext).unsafeRunSync() shouldBe Some(defaultPetSA.id)
+        dao.loadSubjectFromGoogleSubjectId(GoogleSubjectId(defaultPetSA.serviceAccount.subjectId.value), samRequestContext).unsafeRunSync() shouldBe Some(
+          defaultPetSA.id
+        )
       }
     }
 
@@ -1136,6 +1231,26 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         assertThrows[WorkbenchException] {
           dao.setUserAzureB2CId(defaultUser.id, newAzureB2cId, samRequestContext).unsafeRunSync()
         }
+      }
+    }
+
+    "createPetManagedIdentity" - {
+      "create pet managed identity" in {
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.createPetManagedIdentity(defaultPetMI, samRequestContext).unsafeRunSync() shouldBe defaultPetMI
+      }
+    }
+
+    "loadPetManagedIdentity" - {
+      "load pet managed identity" in {
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.createPetManagedIdentity(defaultPetMI, samRequestContext).unsafeRunSync()
+
+        dao.loadPetManagedIdentity(defaultPetMI.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultPetMI)
+      }
+
+      "return None for nonexistent pet managed identities" in {
+        dao.loadPetManagedIdentity(defaultPetMI.id, samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 

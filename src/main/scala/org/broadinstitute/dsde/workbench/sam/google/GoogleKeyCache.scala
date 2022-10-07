@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import java.nio.charset.Charset
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
@@ -10,29 +9,29 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.storage.{BucketInfo, StorageException}
 import com.google.cloud.storage.BucketInfo.LifecycleRule
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google2.util.{DistributedLock, LockPath}
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
-import org.broadinstitute.dsde.workbench.google2.{CollectionName, Document, GcsBlobName, GoogleStorageService}
+import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 import fs2.Stream
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{LockDetails, PostgresDistributedLockDAO}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
-/**
-  * Created by mbemis on 1/10/18.
+/** Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
-                      val distributedLock: DistributedLock[IO],
-                      val googleIamDAO: GoogleIamDAO,
-                      val googleStorageDAO: GoogleStorageDAO, //this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
-                      val googleStorageAlg: GoogleStorageService[IO],
-                      val googleKeyCachePubSubDao: GooglePubSubDAO,
-                      val googleServicesConfig: GoogleServicesConfig,
-                      val petServiceAccountConfig: PetServiceAccountConfig)(implicit val executionContext: ExecutionContext)
+    val distributedLock: PostgresDistributedLockDAO[IO],
+    val googleIamDAO: GoogleIamDAO,
+    val googleStorageDAO: GoogleStorageDAO, // this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
+    val googleStorageAlg: GoogleStorageService[IO],
+    val googleKeyCachePubSubDao: GooglePubSubDAO,
+    val googleServicesConfig: GoogleServicesConfig,
+    val petServiceAccountConfig: PetServiceAccountConfig
+)(implicit val executionContext: ExecutionContext)
     extends KeyCache
     with LazyLogging {
   val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
@@ -50,7 +49,8 @@ class GoogleKeyCache(
         googleServicesConfig.projectServiceAccount,
         googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.workerCount,
         this
-      ))
+      )
+    )
 
     googleStorageAlg
       .insertBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName)
@@ -68,7 +68,7 @@ class GoogleKeyCache(
   }.compile.drain
 
   override def getKey(pet: PetServiceAccount): IO[String] = {
-    def maybeCreateKey(createKey: (List[GcsObjectName], List[ServiceAccountKey]) => IO[String]): IO[String] = {
+    def maybeCreateKey(createKey: (List[GcsObjectName], List[ServiceAccountKey]) => IO[String]): IO[String] =
       for {
         (maybeActiveKey, keysFromCache, keysFromIam) <- retrieveActiveKey(pet)
         activeKey <- maybeActiveKey match {
@@ -76,19 +76,15 @@ class GoogleKeyCache(
           case None => createKey(keysFromCache, keysFromIam)
         }
       } yield activeKey
-    }
 
-    def cleanupAndCreateKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey]): IO[String] = {
+    def cleanupAndCreateKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey]): IO[String] =
       for {
         _ <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keysFromCache, keysFromIam)))
         key <- furnishNewKey(pet)
       } yield key
-    }
 
-    val lockPath = LockPath(CollectionName(s"${pet.id.project.value}-getKey"), Document(pet.serviceAccount.subjectId.value), 20 seconds)
-    maybeCreateKey((_, _) =>
-      distributedLock.withLock(lockPath).use { _ => maybeCreateKey(cleanupAndCreateKey)
-    })
+    val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
+    maybeCreateKey((_, _) => distributedLock.withLock(lockDetails).use(_ => maybeCreateKey(cleanupAndCreateKey)))
   }
 
   private def fetchKeysFromCacheAndIam(pet: PetServiceAccount): IO[(List[GcsObjectName], List[ServiceAccountKey])] = {
@@ -99,7 +95,7 @@ class GoogleKeyCache(
     (fetchKeyFromCache, fetchKeyFromIam).parTupled
   }
 
-  private def retrieveActiveKey(pet: PetServiceAccount): IO[(Option[String], List[GcsObjectName], List[ServiceAccountKey])] = {
+  private def retrieveActiveKey(pet: PetServiceAccount): IO[(Option[String], List[GcsObjectName], List[ServiceAccountKey])] =
     for {
       (keysFromCache, keysFromIam) <- fetchKeysFromCacheAndIam(pet)
       maybeMostRecentKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).lastOption
@@ -111,16 +107,18 @@ class GoogleKeyCache(
         case _ => IO.pure(None)
       }
     } yield (mostRecentKey, keysFromCache, keysFromIam)
-  }
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =
     for {
-      _ <- googleStorageAlg.removeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, keyId)).compile.drain
+      _ <- googleStorageAlg
+        .removeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, keyId))
+        .compile
+        .drain
       _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)))
     } yield ()
 
   private[google] def keyNamePrefix(project: GoogleProject, saEmail: WorkbenchEmail) =
-    s"${project.value}/${saEmail.value}/" //the google storage emulator doesn't return objects without `/` properly
+    s"${project.value}/${saEmail.value}/" // the google storage emulator doesn't return objects without `/` properly
   private def keyNameFull(project: GoogleProject, saEmail: WorkbenchEmail, keyId: ServiceAccountKeyId): GcsBlobName =
     GcsBlobName(s"${keyNamePrefix(project, saEmail)}${keyId.value}")
 
@@ -142,7 +140,7 @@ class GoogleKeyCache(
 
     val keyPathPattern(project, petSaEmail, keyId) = mostRecentKey.value
 
-    //The key may exist in the Google bucket cache, but could have been deleted from the SA directly
+    // The key may exist in the Google bucket cache, but could have been deleted from the SA directly
     val keyExistsForSA = serviceAccountKeys.exists(_.id.value.contentEquals(keyId))
 
     !keyRetired && keyExistsForSA

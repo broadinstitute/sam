@@ -7,21 +7,19 @@ import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
+import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 
-/**
-  * Created by mbemis on 6/23/17.
+/** Created by mbemis on 6/23/17.
   */
-class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()) extends DirectoryDAO {
+class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap(), passStatusCheck: Boolean = true) extends DirectoryDAO {
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
-  private val enabledUsers: mutable.Map[WorkbenchSubject, Unit] = new TrieMap()
 
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
   private val usersWithGoogleSubjectIds: mutable.Map[GoogleSubjectId, WorkbenchSubject] = new TrieMap()
@@ -31,9 +29,13 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
 
-  override def getConnectionType(): ConnectionType = ConnectionType.Postgres
+  private val petManagedIdentitiesByUser: mutable.Map[PetManagedIdentityId, PetManagedIdentity] = new TrieMap()
 
-  override def createGroup(group: BasicWorkbenchGroup, accessInstruction: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
+  override def createGroup(
+      group: BasicWorkbenchGroup,
+      accessInstruction: Option[String] = None,
+      samRequestContext: SamRequestContext
+  ): IO[BasicWorkbenchGroup] =
     if (groups.keySet.contains(group.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists")))
     } else {
@@ -42,20 +44,19 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       IO.pure(group)
     }
 
-  override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] = IO.unit
-
   override def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]] = IO {
     groups.get(groupName).map(_.asInstanceOf[BasicWorkbenchGroup])
   }
 
-  override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] = {
+  override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] =
     listAncestorGroups(groupName, samRequestContext).map { ancestors =>
       if (ancestors.nonEmpty)
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group"))
+        throw new WorkbenchExceptionWithErrorReport(
+          ErrorReport(StatusCodes.Conflict, s"group ${groupName.value} cannot be deleted because it is a member of at least 1 other group")
+        )
       else
         groups -= groupName
     }
-  }
 
   override def addGroupMember(groupName: WorkbenchGroupIdentity, addMember: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
     val group = groups(groupName)
@@ -111,7 +112,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   }
 
   private def listSubjectsGroups(subject: WorkbenchSubject, accumulatedGroups: Set[WorkbenchGroup]): Set[WorkbenchGroup] = {
-    val immediateGroups = groups.values.toSet.filter { group => group.members.contains(subject) }
+    val immediateGroups = groups.values.toSet.filter(group => group.members.contains(subject))
 
     val unvisitedGroups = immediateGroups -- accumulatedGroups
     if (unvisitedGroups.isEmpty) {
@@ -127,7 +128,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     groupIds.flatMap(groupId => listGroupUsers(groupId, Set.empty))
   }
 
-  private def listGroupUsers(groupName: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity]): Set[WorkbenchUserId] = {
+  private def listGroupUsers(groupName: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity]): Set[WorkbenchUserId] =
     if (!visitedGroups.contains(groupName)) {
       val members = groups.getOrElse(groupName, BasicWorkbenchGroup(null, Set.empty, WorkbenchEmail("g1@example.com"))).members
 
@@ -139,30 +140,46 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     } else {
       Set.empty
     }
-  }
 
   override def listAncestorGroups(groupName: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = IO {
     listSubjectsGroups(groupName, Set.empty).map(_.id)
   }
 
-  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO.pure(enabledUsers += ((subject, ())))
+  override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
+    updateUserEnabled(subject, true)
 
-  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] = IO {
-    enabledUsers -= subject
-  }
+  override def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
+    updateUserEnabled(subject, false)
 
-  override def disableAllHumanIdentities(samRequestContext: SamRequestContext): IO[Unit] = IO {
-    enabledUsers --= enabledUsers.keys
-  }
+  private def updateUserEnabled(subject: WorkbenchSubject, enabled: Boolean): IO[Unit] =
+    subject match {
+      case id: WorkbenchUserId =>
+        users.get(id) match {
+          case Some(user) => IO.pure(users += id -> user.copy(enabled = enabled))
+          case None => IO.unit
+        }
+      case _ => IO.unit
+    }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] = IO {
-    enabledUsers.contains(subject)
+    subject match {
+      case id: WorkbenchUserId =>
+        users.get(id) match {
+          case Some(user) => user.enabled
+          case None => false
+        }
+      case _ => false
+    }
   }
 
-  override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = loadGroup(groupName, samRequestContext).map(_.map(_.email))
+  override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
+    loadGroup(groupName, samRequestContext).map(_.map(_.email))
 
-  override def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[(WorkbenchGroupName, WorkbenchEmail)]] = groupNames.to(LazyList).parTraverse { name =>
-    loadGroupEmail(name, samRequestContext).map { y => (name -> y.get)}
+  override def batchLoadGroupEmail(
+      groupNames: Set[WorkbenchGroupName],
+      samRequestContext: SamRequestContext
+  ): IO[LazyList[(WorkbenchGroupName, WorkbenchEmail)]] = groupNames.to(LazyList).parTraverse { name =>
+    loadGroupEmail(name, samRequestContext).map(y => name -> y.get)
   }
 
   override def createPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
@@ -184,8 +201,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   }
 
   override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]] = IO {
-    petServiceAccountsByUser.collect {
-      case (PetServiceAccountId(`userId`, _), petSA) => petSA
+    petServiceAccountsByUser.collect { case (PetServiceAccountId(`userId`, _), petSA) =>
+      petSA
     }.toSeq
   }
 
@@ -202,13 +219,11 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     }
   }
 
-  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[Date]] = {
+  override def getSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[Date]] =
     IO.pure(groupSynchronizedDates.get(groupId))
-  }
 
-  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = {
+  override def getSynchronizedEmail(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     IO.pure(groups.get(WorkbenchGroupName(groupId.toString)).map(_.email))
-  }
 
   override def getUserFromPetServiceAccount(petSAId: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     val userIds = petServiceAccountsByUser.toSeq.collect {
@@ -226,12 +241,11 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     petServiceAccount
   }
 
-  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]] = {
+  override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]] =
     if (groups.contains(groupName))
       IO.pure(groupAccessInstructions.get(groupName))
     else
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
-  }
 
   override def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String, samRequestContext: SamRequestContext): IO[Unit] = {
     groupAccessInstructions += groupName -> accessInstructions
@@ -255,43 +269,40 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   }
 
   override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] = {
-    val res = for{
+    val res = for {
       uid <- usersWithGoogleSubjectIds.get(googleSubjectId)
     } yield uid
-   res.traverse(IO.pure)
+    res.traverse(IO.pure)
   }
 
-  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] = {
-    users.get(userId).fold[IO[Unit]](IO.pure(new Exception(s"user $userId not found")))(
-      u => IO.pure(users.concat(List((userId, u.copy(googleSubjectId = Some(googleSubjectId))))))
-    )
-  }
+  override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] =
+    users
+      .get(userId)
+      .fold[IO[Unit]](IO.pure(new Exception(s"user $userId not found")))(u =>
+        IO.pure(users.concat(List((userId, u.copy(googleSubjectId = Some(googleSubjectId))))))
+      )
 
-  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchGroupIdentity]] = {
+  override def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchGroupIdentity]] =
     IO.pure(groups.filter { case (_, group) => group.members.contains(userId) }.keys.to(LazyList))
-  }
 
-  override def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] = {
+  override def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] =
     IO(listGroupUsers(groupName, Set.empty))
-  }
 
-  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext)
-      : IO[Option[SamUser]] = IO.pure(users.values.find(_.azureB2CId.contains(userId)))
+  override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    IO.pure(users.values.find(_.azureB2CId.contains(userId)))
 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2CId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     for {
       user <- users.get(userId)
-    } yield {
-      users += user.id -> user.copy(azureB2CId = Option(b2CId))
-    }
+    } yield users += user.id -> user.copy(azureB2CId = Option(b2CId))
   }
 
-  override def checkStatus(samRequestContext: SamRequestContext): Boolean = true
+  override def checkStatus(samRequestContext: SamRequestContext): Boolean = passStatusCheck
 
   override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(users.values.find(_.googleSubjectId.contains(userId)))
 
-  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] = {
+  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
     loadUser(userId, samRequestContext).map {
       case None => false
       case Some(user) =>
@@ -302,9 +313,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
           true
         }
     }
-  }
 
-  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     loadUser(userId, samRequestContext).map {
       case None => false
       case Some(user) =>
@@ -315,5 +325,18 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
           true
         }
     }
+
+  override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {
+    if (petManagedIdentitiesByUser.keySet.contains(petManagedIdentity.id)) {
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet managed identity ${petManagedIdentity.id} already exists")))
+    }
+    petManagedIdentitiesByUser += petManagedIdentity.id -> petManagedIdentity
+    IO.pure(petManagedIdentity)
   }
+
+  override def loadPetManagedIdentity(petManagedIdentityId: PetManagedIdentityId, samRequestContext: SamRequestContext): IO[Option[PetManagedIdentity]] =
+    IO.pure(petManagedIdentitiesByUser.get(petManagedIdentityId))
+
+  override def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    IO.pure(None)
 }
