@@ -10,7 +10,6 @@ import cats.implicits._
 import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.api.services.cloudresourcemanager.model.Ancestor
 import com.google.api.services.groupssettings.model.Groups
-import com.unboundid.ldap.sdk.{LDAPConnection, LDAPConnectionPool}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock._
@@ -21,7 +20,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.schema.JndiSchemaDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
@@ -34,30 +32,31 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
 import org.scalatestplus.mockito.MockitoSugar
 
-import java.net.URI
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{Date, GregorianCalendar, UUID}
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.{Success, Try}
 
-class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with ScalaFutures with BeforeAndAfterAll with PrivateMethodTester {
+class GoogleExtensionSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
+    with Matchers
+    with TestSupport
+    with MockitoSugar
+    with ScalaFutures
+    with BeforeAndAfterAll
+    with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
-  override def beforeAll(): Unit = {
+  override def beforeAll(): Unit =
     super.beforeAll()
-  }
 
   override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
     super.afterAll()
   }
 
-  lazy val directoryConfig = TestSupport.directoryConfig
-  lazy val dirURI = new URI(directoryConfig.directoryUrl)
-  lazy val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
-  lazy val schemaLockConfig = TestSupport.schemaLockConfig
   lazy val petServiceAccountConfig = TestSupport.petServiceAccountConfig
   lazy val googleServicesConfig = TestSupport.googleServicesConfig
   lazy val superAdminsGroup = TestSupport.adminConfig.superAdminsGroup
@@ -92,8 +91,14 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val testGroup = BasicWorkbenchGroup(groupName, Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail)
     val testPolicy = AccessPolicy(
-      model.FullyQualifiedPolicyId(
-        FullyQualifiedResourceId(ResourceTypeName("workspace"), ResourceId("rid")), AccessPolicyName("ap")), Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError), groupEmail, Set.empty, Set.empty, Set.empty, public = true)
+      model.FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("workspace"), ResourceId("rid")), AccessPolicyName("ap")),
+      Set(inSamSubGroup.id, inBothSubGroup.id, inSamUserId, inBothUserId, addError),
+      groupEmail,
+      Set.empty,
+      Set.empty,
+      Set.empty,
+      public = true
+    )
 
     Seq(testGroup, testPolicy).foreach { target =>
       val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
@@ -102,7 +107,25 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
       val mockGoogleNotificationsPubSubDAO = new MockGooglePubSubDAO
       val mockGoogleGroupSyncPubSubDAO = new MockGooglePubSubDAO
       val mockGoogleDisableUsersPubSubDAO = new MockGooglePubSubDAO
-      val ge = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGoogleNotificationsPubSubDAO, mockGoogleGroupSyncPubSubDAO, mockGoogleDisableUsersPubSubDAO, null, null,null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
+      val ge = new GoogleExtensions(
+        TestSupport.distributedLock,
+        mockDirectoryDAO,
+        mockAccessPolicyDAO,
+        mockGoogleDirectoryDAO,
+        mockGoogleNotificationsPubSubDAO,
+        mockGoogleGroupSyncPubSubDAO,
+        mockGoogleDisableUsersPubSubDAO,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        googleServicesConfig,
+        petServiceAccountConfig,
+        configResourceTypes,
+        superAdminsGroup
+      )
       val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, ge, configResourceTypes)
 
       target match {
@@ -111,12 +134,14 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
         case p: AccessPolicy =>
           when(mockAccessPolicyDAO.loadPolicy(p.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
       }
-      when(mockDirectoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
+      when(mockDirectoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext))
+        .thenReturn(IO.pure(Option(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.unit)
-      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.pure(Some((new GregorianCalendar(2017, 11, 22).getTime()))))
+      when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext]))
+        .thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
 
       val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
-      subGroups.foreach { g => when(mockDirectoryDAO.loadSubjectEmail(g.id, samRequestContext)).thenReturn(IO.pure(Option(g.email))) }
+      subGroups.foreach(g => when(mockDirectoryDAO.loadSubjectEmail(g.id, samRequestContext)).thenReturn(IO.pure(Option(g.email))))
       when(mockDirectoryDAO.loadSubjectEmail(CloudExtensions.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(ge.allUsersGroupEmail)))
 
       val added = Seq(inSamSubGroup.email, WorkbenchEmail(inSamUserProxyEmail)) ++ (target match {
@@ -126,7 +151,19 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
       val removed = Seq(inGoogleSubGroup.email, WorkbenchEmail(inGoogleUserProxyEmail))
 
-      when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(Future.successful(Option(Seq(WorkbenchEmail(inGoogleUserProxyEmail).value, WorkbenchEmail(inBothUserProxyEmail).value.toLowerCase, inGoogleSubGroup.email.value, inBothSubGroup.email.value, removeError))))
+      when(mockGoogleDirectoryDAO.listGroupMembers(target.email)).thenReturn(
+        Future.successful(
+          Option(
+            Seq(
+              WorkbenchEmail(inGoogleUserProxyEmail).value,
+              WorkbenchEmail(inBothUserProxyEmail).value.toLowerCase,
+              inGoogleSubGroup.email.value,
+              inBothSubGroup.email.value,
+              removeError
+            )
+          )
+        )
+      )
       when(mockGoogleDirectoryDAO.listGroupMembers(ge.allUsersGroupEmail)).thenReturn(Future.successful(Option(Seq.empty)))
       when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
       when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
@@ -140,15 +177,15 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
       val results = runAndWait(synchronizer.synchronizeGroupMembers(target.id, samRequestContext = samRequestContext))
 
       results.head._1 should equal(target.email)
-      results.head._2 should contain theSameElementsAs (
-        added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
-          removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
-          Seq(
-            SyncReportItem("added", addErrorProxyEmail.toLowerCase, Option(ErrorReport(addException))),
-            SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))))
+      results.head._2 should contain theSameElementsAs (added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
+        removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
+        Seq(
+          SyncReportItem("added", addErrorProxyEmail.toLowerCase, Option(ErrorReport(addException))),
+          SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))
+        ))
 
-      added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email.value.toLowerCase)) }
-      removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchEmail(email.value.toLowerCase)) }
+      added.foreach(email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email.value.toLowerCase)))
+      removed.foreach(email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchEmail(email.value.toLowerCase)))
       verify(mockDirectoryDAO).updateSynchronizedDate(target.id, samRequestContext)
     }
   }
@@ -181,9 +218,12 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val subAuthorizedGoogleGroupUserId = WorkbenchUserId("authorizedGoogleSubUser")
     val subAuthorizedGoogleGroupUserProxyEmail = s"PROXY_authorizedGoogleSubUser@${googleServicesConfig.appsDomain}"
 
-    val policyOnlySamSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inSamSubGroup"), Set(subPolicyOnlySamGroupUserId), WorkbenchEmail("inSamSubGroup@example.com"))
-    val intersectionSamSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inGoogleSubGroup"), Set(subIntersectionSamGroupUserId), WorkbenchEmail("inGoogleSubGroup@example.com"))
-    val authorizedGoogleSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set(subAuthorizedGoogleGroupUserId), WorkbenchEmail("inBothSubGroup@example.com"))
+    val policyOnlySamSubGroup =
+      BasicWorkbenchGroup(WorkbenchGroupName("inSamSubGroup"), Set(subPolicyOnlySamGroupUserId), WorkbenchEmail("inSamSubGroup@example.com"))
+    val intersectionSamSubGroup =
+      BasicWorkbenchGroup(WorkbenchGroupName("inGoogleSubGroup"), Set(subIntersectionSamGroupUserId), WorkbenchEmail("inGoogleSubGroup@example.com"))
+    val authorizedGoogleSubGroup =
+      BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set(subAuthorizedGoogleGroupUserId), WorkbenchEmail("inBothSubGroup@example.com"))
 
     // Set up constrainable resource type
     val constrainableActionPatterns = Set(ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true))
@@ -192,10 +232,10 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val constrainableReaderRoleName = ResourceRoleName("constrainable_reader")
     val constrainableRole = ResourceRole(constrainableReaderRoleName, constrainableResourceTypeActions)
     val constrainableResourceType = ResourceType(
-    ResourceTypeName(UUID.randomUUID().toString),
-    constrainableActionPatterns,
-    Set(ResourceRole(constrainableReaderRoleName, constrainableResourceTypeActions)),
-    constrainableReaderRoleName
+      ResourceTypeName(UUID.randomUUID().toString),
+      constrainableActionPatterns,
+      Set(ResourceRole(constrainableReaderRoleName, constrainableResourceTypeActions)),
+      constrainableReaderRoleName
     )
     val constrainableResourceTypes = Map(constrainableResourceType.name -> constrainableResourceType)
 
@@ -203,27 +243,66 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val managedGroupId = WorkbenchGroupName("authDomainGroup")
     val resource = Resource(constrainableResourceType.name, ResourceId("rid"), Set(managedGroupId))
     val rpn = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("ap"))
-    val testPolicy = AccessPolicy(rpn, Set(policyOnlySamUserId, intersectionSamUserId, authorizedGoogleUserId, policyOnlySamSubGroup.id, intersectionSamSubGroup.id, authorizedGoogleSubGroup.id, addError), WorkbenchEmail("testPolicy@example.com"), Set(constrainableRole.roleName), constrainableRole.actions, Set.empty, public = false)
+    val testPolicy = AccessPolicy(
+      rpn,
+      Set(
+        policyOnlySamUserId,
+        intersectionSamUserId,
+        authorizedGoogleUserId,
+        policyOnlySamSubGroup.id,
+        intersectionSamSubGroup.id,
+        authorizedGoogleSubGroup.id,
+        addError
+      ),
+      WorkbenchEmail("testPolicy@example.com"),
+      Set(constrainableRole.roleName),
+      constrainableRole.actions,
+      Set.empty,
+      public = false
+    )
 
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
-    val ge = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, mockGoogleDirectoryDAO, null, null, null, null, null,null, null, null, null, googleServicesConfig, petServiceAccountConfig, constrainableResourceTypes, superAdminsGroup)
-    val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO,ge, constrainableResourceTypes)
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      constrainableResourceTypes,
+      superAdminsGroup
+    )
+    val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, ge, constrainableResourceTypes)
 
     when(mockAccessPolicyDAO.loadPolicy(testPolicy.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
-    when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId, samRequestContext)).thenReturn(IO.pure(LoadResourceAuthDomainResult.Constrained(NonEmptyList.one(managedGroupId)): LoadResourceAuthDomainResult))
+    when(mockAccessPolicyDAO.loadResourceAuthDomain(resource.fullyQualifiedId, samRequestContext))
+      .thenReturn(IO.pure(LoadResourceAuthDomainResult.Constrained(NonEmptyList.one(managedGroupId)): LoadResourceAuthDomainResult))
 
-    when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id), samRequestContext)).thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
+    when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id), samRequestContext))
+      .thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
     when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.unit)
-    when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
+    when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext]))
+      .thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
 
     val added = Seq(WorkbenchEmail(intersectionSamUserProxyEmail), WorkbenchEmail(subIntersectionSamGroupUserProxyEmail))
     val removed = Seq(WorkbenchEmail(unauthorizedGoogleUserProxyEmail))
 
     // mock pre-sync google group members
-    when(mockGoogleDirectoryDAO.listGroupMembers(testPolicy.email)).thenReturn(Future.successful(Option(Seq(authorizedGoogleUserProxyEmail, unauthorizedGoogleUserProxyEmail, subAuthorizedGoogleGroupUserProxyEmail, removeError))))
+    when(mockGoogleDirectoryDAO.listGroupMembers(testPolicy.email)).thenReturn(
+      Future.successful(Option(Seq(authorizedGoogleUserProxyEmail, unauthorizedGoogleUserProxyEmail, subAuthorizedGoogleGroupUserProxyEmail, removeError)))
+    )
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
@@ -236,15 +315,15 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val results = runAndWait(synchronizer.synchronizeGroupMembers(testPolicy.id, samRequestContext = samRequestContext))
 
     results.head._1 should equal(testPolicy.email)
-    results.head._2 should contain theSameElementsAs (
-      added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
-        removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
-        Seq(
-          SyncReportItem("added", addErrorProxyEmail.toLowerCase, Option(ErrorReport(addException))),
-          SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))))
+    results.head._2 should contain theSameElementsAs (added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
+      removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
+      Seq(
+        SyncReportItem("added", addErrorProxyEmail.toLowerCase, Option(ErrorReport(addException))),
+        SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))
+      ))
 
-    added.foreach { email => verify(mockGoogleDirectoryDAO).addMemberToGroup(testPolicy.email, WorkbenchEmail(email.value.toLowerCase)) }
-    removed.foreach { email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(testPolicy.email, WorkbenchEmail(email.value.toLowerCase)) }
+    added.foreach(email => verify(mockGoogleDirectoryDAO).addMemberToGroup(testPolicy.email, WorkbenchEmail(email.value.toLowerCase)))
+    removed.foreach(email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(testPolicy.email, WorkbenchEmail(email.value.toLowerCase)))
     verify(mockDirectoryDAO).updateSynchronizedDate(testPolicy.id, samRequestContext)
   }
 
@@ -264,17 +343,35 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleGroupSyncPubSubDAO = new MockGooglePubSubDAO
     val mockGoogleDisableUsersPubSubDAO = new MockGooglePubSubDAO
     val mockGoogleIamDAO = new MockGoogleIamDAO
-    val ge = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGoogleNotificationsPubSubDAO, mockGoogleGroupSyncPubSubDAO, mockGoogleDisableUsersPubSubDAO, mockGoogleIamDAO, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
-    val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO,ge, configResourceTypes)
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      mockGoogleDirectoryDAO,
+      mockGoogleNotificationsPubSubDAO,
+      mockGoogleGroupSyncPubSubDAO,
+      mockGoogleDisableUsersPubSubDAO,
+      mockGoogleIamDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
+    val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, ge, configResourceTypes)
 
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
-    //create groups
+    // create groups
     mockDirectoryDAO.createGroup(topGroup, samRequestContext = samRequestContext).unsafeRunSync()
     mockDirectoryDAO.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
-    //add subGroup to topGroup
+    // add subGroup to topGroup
     runAndWait(mockGoogleDirectoryDAO.addMemberToGroup(groupEmail, subGroupEmail))
     mockDirectoryDAO.addGroupMember(topGroup.id, subGroup.id, samRequestContext).unsafeRunSync()
-    //add topGroup to subGroup - creating cycle
+    // add topGroup to subGroup - creating cycle
     runAndWait(mockGoogleDirectoryDAO.addMemberToGroup(subGroupEmail, groupEmail))
     mockDirectoryDAO.addGroupMember(subGroup.id, topGroup.id, samRequestContext).unsafeRunSync()
     when(mockGoogleDirectoryDAO.listGroupMembers(topGroup.email)).thenReturn(Future.successful(Option(Seq(subGroupEmail.value))))
@@ -284,7 +381,15 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   }
 
   "GoogleExtension" should "get a pet service account for a user" in {
-    val (dirDAO: DirectoryDAO, _: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserProxyEmail: WorkbenchEmail, defaultUser: SamUser) = initPetTest
+    val (
+      dirDAO: DirectoryDAO,
+      mockGoogleIamDAO: MockGoogleIamDAO,
+      mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
+      googleExtensions: GoogleExtensions,
+      service: UserService,
+      defaultUserProxyEmail: WorkbenchEmail,
+      defaultUser: SamUser
+    ) = initPetTest
 
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
@@ -296,18 +401,7 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
 
-    // verify ldap
     dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe Some(petServiceAccount)
-
-    val ldapPetOpt = dirDAO.loadSubjectFromEmail(petServiceAccount.serviceAccount.email, samRequestContext).flatMap {
-      case Some(subject: PetServiceAccountId) => dirDAO.loadPetServiceAccount(subject, samRequestContext)
-      case _ => fail(s"could not load pet LDAP entry from ${petServiceAccount.serviceAccount.email.value}")
-    }.unsafeRunSync()
-
-    ldapPetOpt shouldBe Symbol("defined")
-    val Some(ldapPet) = ldapPetOpt
-    // MockGoogleIamDAO generates the subject ID as a random Long
-    Try(ldapPet.serviceAccount.subjectId.value.toLong) shouldBe a[Success[_]]
 
     // verify google
     mockGoogleIamDAO.serviceAccounts should contain key petServiceAccount.serviceAccount.email
@@ -328,13 +422,12 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe None
 
     // the pet should not exist in Google
-    mockGoogleIamDAO.serviceAccounts should not contain key (petServiceAccount.serviceAccount.email)
+    mockGoogleIamDAO.serviceAccounts should not contain key(petServiceAccount.serviceAccount.email)
 
   }
 
-  private def initPetTest: (DirectoryDAO, RegistrationDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchEmail, SamUser) = {
+  private def initPetTest: (DirectoryDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchEmail, SamUser) = {
     val dirDAO = newDirectoryDAO()
-    val regDAO = newRegistrationDAO()
 
     clearDatabase()
 
@@ -342,21 +435,46 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
 
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, dirDAO, newRegistrationDAO(), null, mockGoogleDirectoryDAO, null, null, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
-    val tosService = new TosService(dirDAO, regDAO, "example.com", TestSupport.tosConfig)
-    val service = new UserService(dirDAO, googleExtensions, googleExtensions.registrationDAO, Seq.empty, new TosService(dirDAO, regDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      mockGoogleIamDAO,
+      null,
+      mockGoogleProjectDAO,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
+    val tosService = new TosService(dirDAO, "example.com", TestSupport.tosConfig)
+    val service = new UserService(dirDAO, googleExtensions, Seq.empty, new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
 
     val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
     val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_${defaultUser.id}@${googleServicesConfig.appsDomain}")
-    (dirDAO, regDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserProxyEmail, defaultUser)
+    (dirDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserProxyEmail, defaultUser)
   }
 
   protected def newDirectoryDAO(): DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
-  protected def newRegistrationDAO(): RegistrationDAO = new LdapRegistrationDAO(connectionPool, directoryConfig, TestSupport.blockingEc)
   protected def newAccessPolicyDAO(): AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   it should "attach existing service account to pet" in {
-    val (dirDAO: DirectoryDAO, _: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserProxyEmail: WorkbenchEmail, defaultUser: SamUser) = initPetTest
+    val (
+      dirDAO: DirectoryDAO,
+      mockGoogleIamDAO: MockGoogleIamDAO,
+      mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
+      googleExtensions: GoogleExtensions,
+      service: UserService,
+      defaultUserProxyEmail: WorkbenchEmail,
+      defaultUser: SamUser
+    ) = initPetTest
     val googleProject = GoogleProject("testproject")
 
     val (saName, saDisplayName) = googleExtensions.toPetSAFromUser(defaultUser)
@@ -373,7 +491,15 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   }
 
   it should "recreate service account when missing for pet" in {
-    val (dirDAO: DirectoryDAO, regDAO: RegistrationDAO, mockGoogleIamDAO: MockGoogleIamDAO, mockGoogleDirectoryDAO: MockGoogleDirectoryDAO, googleExtensions: GoogleExtensions, service: UserService, defaultUserProxyEmail: WorkbenchEmail, defaultUser: SamUser) = initPetTest
+    val (
+      dirDAO: DirectoryDAO,
+      mockGoogleIamDAO: MockGoogleIamDAO,
+      mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
+      googleExtensions: GoogleExtensions,
+      service: UserService,
+      defaultUserProxyEmail: WorkbenchEmail,
+      defaultUser: SamUser
+    ) = initPetTest
 
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
@@ -391,7 +517,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     petServiceAccount.serviceAccount shouldNot equal(petServiceAccount2.serviceAccount)
     val res = dirDAO.loadPetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(petServiceAccount2)
-    regDAO.loadPetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync() shouldBe res
     mockGoogleIamDAO.findServiceAccount(googleProject, petServiceAccount.serviceAccount.email).futureValue shouldBe Some(petServiceAccount2.serviceAccount)
   }
 
@@ -400,7 +525,25 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
-    val ge = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), null, null, null, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     when(mockDirectoryDAO.getSynchronizedDate(groupName, samRequestContext)).thenReturn(IO.pure(None))
     ge.getSynchronizedDate(groupName, samRequestContext).unsafeRunSync() shouldBe None
@@ -412,91 +555,215 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
   it should "throw an exception with a NotFound error report when getting sync date for group that does not exist" in {
     val dirDAO = newDirectoryDAO()
-    val regDAO = newRegistrationDAO()
-    val ge = new GoogleExtensions(TestSupport.distributedLock, dirDAO, regDAO, null, null, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
     val groupName = WorkbenchGroupName("missing-group")
     val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
       ge.getSynchronizedDate(groupName, samRequestContext).unsafeRunSync()
     }
     caught.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
-    caught.errorReport.message should include (groupName.toString)
+    caught.errorReport.message should include(groupName.toString)
   }
 
   it should "return None when getting sync date for a group that has not been synced" in {
     val dirDAO = newDirectoryDAO()
-    val regDAO = newRegistrationDAO()
-    val ge = new GoogleExtensions(TestSupport.distributedLock, dirDAO, regDAO,null, null, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
     val groupName = WorkbenchGroupName("group-sync")
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("")), samRequestContext = samRequestContext).unsafeRunSync()
-    try {
+    try
       ge.getSynchronizedDate(groupName, samRequestContext).unsafeRunSync() shouldBe None
-    } finally {
+    finally
       dirDAO.deleteGroup(groupName, samRequestContext).unsafeRunSync()
-    }
   }
 
   it should "return sync date for a group that has been synced" in {
     val dirDAO = newDirectoryDAO()
-    val regDAO = newRegistrationDAO()
+
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val ge = new GoogleExtensions(TestSupport.distributedLock, dirDAO, regDAO, null, new MockGoogleDirectoryDAO(), null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      new MockGoogleDirectoryDAO(),
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
     val synchronizer = new GoogleGroupSynchronizer(dirDAO, null, mockGoogleDirectoryDAO, ge, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
-    dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("group1@test.firecloud.org")), samRequestContext = samRequestContext).unsafeRunSync()
+    dirDAO
+      .createGroup(BasicWorkbenchGroup(groupName, Set(), WorkbenchEmail("group1@test.firecloud.org")), samRequestContext = samRequestContext)
+      .unsafeRunSync()
     try {
       runAndWait(synchronizer.synchronizeGroupMembers(groupName, samRequestContext = samRequestContext))
       val syncDate = ge.getSynchronizedDate(groupName, samRequestContext).unsafeRunSync().get
-      syncDate.getTime should equal (new Date().getTime +- 1.second.toMillis)
-    } finally {
+      syncDate.getTime should equal(new Date().getTime +- 1.second.toMillis)
+    } finally
       dirDAO.deleteGroup(groupName, samRequestContext).unsafeRunSync()
-    }
   }
 
   it should "throw an exception with a NotFound error report when getting email for group that does not exist" in {
     val dirDAO = newDirectoryDAO()
-    val regDAO = newRegistrationDAO()
-    val ge = new GoogleExtensions(TestSupport.distributedLock, dirDAO, regDAO, null, null, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
     val groupName = WorkbenchGroupName("missing-group")
     val caught: WorkbenchExceptionWithErrorReport = intercept[WorkbenchExceptionWithErrorReport] {
       ge.getSynchronizedEmail(groupName, samRequestContext).unsafeRunSync()
     }
     caught.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
-    caught.errorReport.message should include (groupName.toString)
+    caught.errorReport.message should include(groupName.toString)
   }
 
   it should "return email for a group" in {
     val dirDAO = newDirectoryDAO()
-    val regDAO = newRegistrationDAO()
-    val ge = new GoogleExtensions(TestSupport.distributedLock, dirDAO, regDAO, null, null, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
     val groupName = WorkbenchGroupName("group-sync")
     val email = WorkbenchEmail("foo@bar.com")
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email), samRequestContext = samRequestContext).unsafeRunSync()
-    try {
+    try
       ge.getSynchronizedEmail(groupName, samRequestContext).unsafeRunSync() shouldBe Some(email)
-    } finally {
+    finally
       dirDAO.deleteGroup(groupName, samRequestContext).unsafeRunSync()
-    }
   }
 
   it should "return None if an email is found, but the group has not been synced" in {
     val dirDAO = newDirectoryDAO()
-    val regDAO = newRegistrationDAO()
-    val ge = new GoogleExtensions(TestSupport.distributedLock, dirDAO, regDAO, null, null, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
     val groupName = WorkbenchGroupName("group-sync")
     val email = WorkbenchEmail("foo@bar.com")
     dirDAO.createGroup(BasicWorkbenchGroup(groupName, Set(), email), samRequestContext = samRequestContext).unsafeRunSync()
-    try {
+    try
       ge.getSynchronizedState(groupName, samRequestContext).unsafeRunSync() shouldBe None
-    } finally {
+    finally
       dirDAO.deleteGroup(groupName, samRequestContext).unsafeRunSync()
-    }
   }
 
   it should "return SyncState with email and last sync date if there is an email and the group has been synced" in {
     val dirDAO = newDirectoryDAO()
-    val regDAO = newRegistrationDAO()
+
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val ge = new GoogleExtensions(TestSupport.distributedLock, dirDAO, regDAO, null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
     val synchronizer = new GoogleGroupSynchronizer(dirDAO, null, mockGoogleDirectoryDAO, ge, configResourceTypes)
     val groupName = WorkbenchGroupName("group-sync")
     val email = WorkbenchEmail("foo@bar.com")
@@ -506,15 +773,13 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
       runAndWait(synchronizer.synchronizeGroupMembers(groupName, samRequestContext = samRequestContext))
       val maybeSyncResponse = ge.getSynchronizedState(groupName, samRequestContext).unsafeRunSync()
       maybeSyncResponse.map(_.email) should equal(Some(email))
-    } finally {
+    } finally
       dirDAO.deleteGroup(groupName, samRequestContext).unsafeRunSync()
-    }
   }
 
   it should "create google extension resource on boot" in {
     val mockDirectoryDAO = new MockDirectoryDAO
     val mockAccessPolicyDAO = new MockAccessPolicyDAO(mockDirectoryDAO)
-    val mockRegistrationDAO = new MockRegistrationDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGoogleKeyCachePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleNotificationPubSubDAO = new MockGooglePubSubDAO
@@ -524,20 +789,54 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val notificationDAO = new PubSubNotificationDAO(mockGoogleNotificationPubSubDAO, "foo")
     val googleKeyCache = new GoogleKeyCache(
-      TestSupport.distributedLock, mockGoogleIamDAO, mockGoogleStorageDAO, FakeGoogleStorageInterpreter, mockGoogleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
+      TestSupport.distributedLock,
+      mockGoogleIamDAO,
+      mockGoogleStorageDAO,
+      FakeGoogleStorageInterpreter,
+      mockGoogleKeyCachePubSubDAO,
+      googleServicesConfig,
+      petServiceAccountConfig
+    )
 
-    val ge = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mockRegistrationDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, mockGoogleNotificationPubSubDAO, mockGoogleGroupSyncPubSubDAO, mockGoogleDisableUsersPubSubDAO, mockGoogleIamDAO, mockGoogleStorageDAO, null, googleKeyCache, notificationDAO, FakeGoogleKmsInterpreter, googleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      mockGoogleDirectoryDAO,
+      mockGoogleNotificationPubSubDAO,
+      mockGoogleGroupSyncPubSubDAO,
+      mockGoogleDisableUsersPubSubDAO,
+      mockGoogleIamDAO,
+      mockGoogleStorageDAO,
+      null,
+      googleKeyCache,
+      notificationDAO,
+      FakeGoogleKmsInterpreter,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
-    val app = SamApplication(new UserService(mockDirectoryDAO, ge, mockRegistrationDAO, Seq.empty, new TosService(mockDirectoryDAO, mockRegistrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)), new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com", Set.empty), null,
-      new TosService(mockDirectoryDAO, mockRegistrationDAO, "example.com", TestSupport.tosConfig))
-    val resourceAndPolicyName = FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
+    val app = SamApplication(
+      new UserService(mockDirectoryDAO, ge, Seq.empty, new TosService(mockDirectoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)),
+      new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com", Set.empty),
+      null,
+      new TosService(mockDirectoryDAO, "example.com", TestSupport.tosConfig)
+    )
+    val resourceAndPolicyName =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
 
     mockDirectoryDAO.loadUser(WorkbenchUserId(googleServicesConfig.serviceAccountClientId), samRequestContext).unsafeRunSync() shouldBe None
     mockAccessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync() shouldBe None
 
     ge.onBoot(app).unsafeRunSync()
 
-    val uid = mockDirectoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId), samRequestContext).unsafeRunSync().get.asInstanceOf[WorkbenchUserId]
+    val uid = mockDirectoryDAO
+      .loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId), samRequestContext)
+      .unsafeRunSync()
+      .get
+      .asInstanceOf[WorkbenchUserId]
     val owner = mockDirectoryDAO.loadUser(uid, samRequestContext).unsafeRunSync().get
     owner.googleSubjectId shouldBe Some(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))
     owner.email shouldBe googleServicesConfig.serviceAccountClientEmail
@@ -554,7 +853,25 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val appsDomain = "test.cloudfire.org"
 
     val config = googleServicesConfig.copy(appsDomain = appsDomain)
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, null, null, null, null, null, null, null, null, null, null, null, null, null, config, null, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      config,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val userId = UserService.genWorkbenchUserId(System.currentTimeMillis())
     val proxyEmail = googleExtensions.toProxyFromUser(userId).value
@@ -563,7 +880,25 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
   it should "truncate username if proxy group email would otherwise be too long" in {
     val config = googleServicesConfig.copy(appsDomain = "test.cloudfire.org")
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, null, null, null, null, null, null, null, null, null, null, null, null, null, config, null, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      config,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val userId = UserService.genWorkbenchUserId(System.currentTimeMillis())
 
@@ -577,7 +912,25 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val allUsersGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"TEST_ALL_USERS_GROUP@test.firecloud.org"))
     val allUsersGroupNameMatcher = new ArgumentMatcher[WorkbenchGroupName] {
@@ -600,7 +953,25 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
   it should "do Googley stuff onGroupDelete" in {
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), null, mockGoogleDirectoryDAO, null, null, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val testPolicy = BasicWorkbenchGroup(WorkbenchGroupName("blahblahblah"), Set.empty, WorkbenchEmail(s"blahblahblah@test.firecloud.org"))
 
@@ -615,23 +986,44 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val mockGoogleGroupSyncPubSubDAO = mock[MockGooglePubSubDAO](RETURNS_SMART_NULLS)
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, null, null, mockGoogleGroupSyncPubSubDAO, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      null,
+      null,
+      mockGoogleGroupSyncPubSubDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val managedGroupId = "managedGroupId"
 
-    val managedGroupRPN = FullyQualifiedPolicyId(
-      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
+    val managedGroupRPN =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
     val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext]))
+      .thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
+      .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
+    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext))
+      .thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN), samRequestContext))
 
@@ -642,27 +1034,49 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val mockGoogleGroupSyncPubSubDAO = mock[MockGooglePubSubDAO](RETURNS_SMART_NULLS)
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, null, null, mockGoogleGroupSyncPubSubDAO, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      null,
+      null,
+      mockGoogleGroupSyncPubSubDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val managedGroupId = "managedGroupId"
     val subGroupId = "subGroupId"
-    val managedGroupRPN = FullyQualifiedPolicyId(
-      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
+    val managedGroupRPN =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
 
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
     val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext]))
+      .thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
+      .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish subgroup relationship to managed group
-    when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext)).thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
+      .thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
+    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext))
+      .thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), samRequestContext))
 
@@ -673,28 +1087,50 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val mockGoogleGroupSyncPubSubDAO = mock[MockGooglePubSubDAO](RETURNS_SMART_NULLS)
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, mockDirectoryDAO, mock[RegistrationDAO](RETURNS_SMART_NULLS), mockAccessPolicyDAO, null, null, mockGoogleGroupSyncPubSubDAO, null, null, null, null, null, null, null, googleServicesConfig, null, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      null,
+      null,
+      mockGoogleGroupSyncPubSubDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val managedGroupId = "managedGroupId"
     val subGroupId = "subGroupId"
-    val managedGroupRPN = FullyQualifiedPolicyId(
-      FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
+    val managedGroupRPN =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("managed-group"), ResourceId(managedGroupId)), ManagedGroupService.memberPolicyName)
 
     val resource = Resource(ResourceTypeName("resource"), ResourceId("rid"), Set(WorkbenchGroupName(managedGroupId)))
     val ownerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("owner"))
     val readerRPN = FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("reader"))
 
     // mock responses for onGroupUpdate
-    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    when(mockDirectoryDAO.listAncestorGroups(any[FullyQualifiedPolicyId], any[SamRequestContext]))
+      .thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
+      .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
-    when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext)).thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
+    when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
+      .thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
     when(mockDirectoryDAO.listAncestorGroups(ownerRPN, samRequestContext)).thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext)).thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
+    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext))
+      .thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), samRequestContext))
 
@@ -714,11 +1150,36 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleStorageDAO = new MockGoogleStorageDAO
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
     val notificationDAO = new PubSubNotificationDAO(mockGoogleNotificationPubSubDAO, "foo")
-    val googleKeyCache = new GoogleKeyCache(TestSupport.distributedLock, mockGoogleIamDAO, mockGoogleStorageDAO, FakeGoogleStorageInterpreter, mockGoogleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
+    val googleKeyCache = new GoogleKeyCache(
+      TestSupport.distributedLock,
+      mockGoogleIamDAO,
+      mockGoogleStorageDAO,
+      FakeGoogleStorageInterpreter,
+      mockGoogleKeyCachePubSubDAO,
+      googleServicesConfig,
+      petServiceAccountConfig
+    )
 
-    val regDAO = newRegistrationDAO()
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, dirDAO, regDAO, null, mockGoogleDirectoryDAO, mockGoogleNotificationPubSubDAO, null, null, mockGoogleIamDAO, mockGoogleStorageDAO, mockGoogleProjectDAO, googleKeyCache, notificationDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
-    val service = new UserService(dirDAO, googleExtensions, regDAO, Seq.empty, new TosService(dirDAO, regDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      mockGoogleNotificationPubSubDAO,
+      null,
+      null,
+      mockGoogleIamDAO,
+      mockGoogleStorageDAO,
+      mockGoogleProjectDAO,
+      googleKeyCache,
+      notificationDAO,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
+    val service = new UserService(dirDAO, googleExtensions, Seq.empty, new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
 
     (googleExtensions, service)
   }
@@ -730,15 +1191,18 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
     val newUser = service.createUser(createDefaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(createDefaultUser.id, createDefaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    newUser shouldBe UserStatus(
+      UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
+      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    )
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
     val petServiceAccount = googleExtensions.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
-    //get a key, which should create a brand new one
+    // get a key, which should create a brand new one
     val firstKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
-    //get a key again, which should return the original cached key created above
+    // get a key again, which should return the original cached key created above
     val secondKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
     assert(firstKey == secondKey)
   }
@@ -750,24 +1214,29 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
     val newUser = service.createUser(createDefaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(createDefaultUser.id, createDefaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    newUser shouldBe UserStatus(
+      UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
+      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    )
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
     val petServiceAccount = googleExtensions.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
-    //get a key, which should create a brand new one
+    // get a key, which should create a brand new one
     val firstKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
-    //remove the key we just created
+    // remove the key we just created
     runAndWait(for {
       keys <- googleExtensions.googleIamDAO.listServiceAccountKeys(googleProject, petServiceAccount.serviceAccount.email)
-      _ <- keys.toList.parTraverse { key =>
-        googleExtensions.removePetServiceAccountKey(createDefaultUser.id, googleProject, key.id, samRequestContext)
-      }.unsafeToFuture()
+      _ <- keys.toList
+        .parTraverse { key =>
+          googleExtensions.removePetServiceAccountKey(createDefaultUser.id, googleProject, key.id, samRequestContext)
+        }
+        .unsafeToFuture()
     } yield ())
 
-    //get a key again, which should once again create a brand new one because we've deleted the cached one
+    // get a key again, which should once again create a brand new one because we've deleted the cached one
     val secondKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     assert(firstKey != secondKey)
@@ -780,19 +1249,28 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
     val newUser = service.createUser(createDefaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(createDefaultUser.id, createDefaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    newUser shouldBe UserStatus(
+      UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
+      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    )
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
     val petServiceAccount = googleExtensions.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
-    //get a key, which should create a brand new one
+    // get a key, which should create a brand new one
     val firstKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
-    //remove the key we just created behind the scenes
+    // remove the key we just created behind the scenes
     val removedKeyObjects = (for {
-      keyObject <- googleExtensions.googleKeyCache.googleStorageAlg.listObjectsWithPrefix(googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName, googleExtensions.googleKeyCache.keyNamePrefix(googleProject, petServiceAccount.serviceAccount.email))
-      _ <- googleExtensions.googleKeyCache.googleStorageAlg.removeObject(googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(keyObject.value))
+      keyObject <- googleExtensions.googleKeyCache.googleStorageAlg.listObjectsWithPrefix(
+        googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName,
+        googleExtensions.googleKeyCache.keyNamePrefix(googleProject, petServiceAccount.serviceAccount.email)
+      )
+      _ <- googleExtensions.googleKeyCache.googleStorageAlg.removeObject(
+        googleExtensions.googleServicesConfig.googleKeyCacheConfig.bucketName,
+        GcsBlobName(keyObject.value)
+      )
     } yield keyObject).compile.toList.unsafeRunSync()
 
     // assert that keys still exist on service account
@@ -801,8 +1279,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
       existingKeys.exists(key => removed.value.endsWith(key.id.value))
     })
 
-    //get a key again, which should once again create a brand new one because we've deleted the cached one
-    //and all the keys removed should have been removed from google
+    // get a key again, which should once again create a brand new one because we've deleted the cached one
+    // and all the keys removed should have been removed from google
     val secondKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     // assert that keys have been removed from service account
@@ -814,18 +1292,16 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     assert(firstKey != secondKey)
   }
 
-  /**
-    * Function to initialize the necessary state for the tests related to private functions isConstrainable and calculateIntersectionGroup
-    * In addition to the values it returns, this function creates the 'constrainableResourceType' and the 'managedGroupResourceType' in
-    * the ResourceService and clears the database
+  /** Function to initialize the necessary state for the tests related to private functions isConstrainable and calculateIntersectionGroup In addition to the
+    * values it returns, this function creates the 'constrainableResourceType' and the 'managedGroupResourceType' in the ResourceService and clears the database
     */
-  private def initPrivateTest: (DirectoryDAO, RegistrationDAO, GoogleExtensions, ResourceService, ManagedGroupService, ResourceType, ResourceRole, GoogleGroupSynchronizer) = {
-    //Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
+  private def initPrivateTest: (DirectoryDAO, GoogleExtensions, ResourceService, ManagedGroupService, ResourceType, ResourceRole, GoogleGroupSynchronizer) = {
+    // Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
     val realResourceTypes = TestSupport.appConfig.resourceTypes
     val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap
-    val managedGroupResourceType = realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
+    val managedGroupResourceType =
+      realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
-    val connectionPool = new LDAPConnectionPool(new LDAPConnection(dirURI.getHost, dirURI.getPort, directoryConfig.user, directoryConfig.password), directoryConfig.connectionPoolSize)
     val dirDAO = newDirectoryDAO()
     val policyDAO = newAccessPolicyDAO()
 
@@ -847,21 +1323,55 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     val emailDomain = "example.com"
 
-    val registrationDAO = newRegistrationDAO()
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, dirDAO, registrationDAO, policyDAO, null, null, null, null, null, null, null, null, null, null, googleServicesConfig, petServiceAccountConfig, constrainableResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      policyDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      constrainableResourceTypes,
+      superAdminsGroup
+    )
     val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
-    val constrainableService = new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
-    val managedGroupService = new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
+    val constrainableService =
+      new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
+    val managedGroupService = new ManagedGroupService(
+      constrainableService,
+      constrainablePolicyEvaluatorService,
+      constrainableResourceTypes,
+      policyDAO,
+      dirDAO,
+      NoExtensions,
+      emailDomain
+    )
 
     constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
     constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
 
     val googleGroupSynchronizer = new GoogleGroupSynchronizer(dirDAO, policyDAO, null, googleExtensions, constrainableResourceTypes)
-    (dirDAO, registrationDAO, googleExtensions, constrainableService, managedGroupService, constrainableResourceType, constrainableRole, googleGroupSynchronizer)
+    (dirDAO, googleExtensions, constrainableService, managedGroupService, constrainableResourceType, constrainableRole, googleGroupSynchronizer)
   }
 
   "calculateIntersectionGroup" should "find the intersection of the resource auth domain and the policy" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, managedGroupService: ManagedGroupService, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      managedGroupService: ManagedGroupService,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
     val inAuthDomainUser = Generator.genWorkbenchUserBoth.sample.get
     val inPolicyUser = Generator.genWorkbenchUserBoth.sample.get
@@ -874,17 +1384,50 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupId), inAuthDomainUser, samRequestContext = samRequestContext))
     runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inBothUser.id, samRequestContext))
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.email, inBothUser.email), constrainableRole.actions, Set(constrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), None, inBothUser.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(
+        Set(inPolicyUser.email, inBothUser.email),
+        constrainableRole.actions,
+        Set(constrainableRole.roleName),
+        None
+      )
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId("rid"),
+        accessPolicyMap,
+        Set(WorkbenchGroupName(managedGroupId)),
+        None,
+        inBothUser.id,
+        samRequestContext
+      )
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.email, inBothUser.email), Set.empty, Set.empty, None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set(inPolicyUser.email, inBothUser.email), Set.empty, Set.empty, None),
+        samRequestContext
+      )
+    )
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothUser.id)
   }
 
   it should "handle nested group structures for policies and auth domains" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, managedGroupService: ManagedGroupService, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      managedGroupService: ManagedGroupService,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
     // User in owner policy of both auth domain and resource to be used during creation of the managed group and resource
     val superAdminOwner = Generator.genWorkbenchUserBoth.sample.get
@@ -902,46 +1445,116 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val inBothSubGroupUser = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(inBothSubGroupUser, samRequestContext).unsafeRunSync()
 
-    // Create subgroups as groups in ldap
-    val inAuthDomainSubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inAuthDomainSubGroup"), Set(inAuthDomainSubGroupUser.id), WorkbenchEmail("imAuthDomain@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
-    val inPolicySubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inPolicySubGroup"), Set(inPolicySubGroupUser.id), WorkbenchEmail("inPolicy@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
-    val inBothSubGroup = dirDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set(inBothSubGroupUser.id), WorkbenchEmail("inBoth@subGroup.com")), samRequestContext = samRequestContext).unsafeRunSync()
+    // Create subgroups as groups in the database
+    val inAuthDomainSubGroup = dirDAO
+      .createGroup(
+        BasicWorkbenchGroup(WorkbenchGroupName("inAuthDomainSubGroup"), Set(inAuthDomainSubGroupUser.id), WorkbenchEmail("imAuthDomain@subGroup.com")),
+        samRequestContext = samRequestContext
+      )
+      .unsafeRunSync()
+    val inPolicySubGroup = dirDAO
+      .createGroup(
+        BasicWorkbenchGroup(WorkbenchGroupName("inPolicySubGroup"), Set(inPolicySubGroupUser.id), WorkbenchEmail("inPolicy@subGroup.com")),
+        samRequestContext = samRequestContext
+      )
+      .unsafeRunSync()
+    val inBothSubGroup = dirDAO
+      .createGroup(
+        BasicWorkbenchGroup(WorkbenchGroupName("inBothSubGroup"), Set(inBothSubGroupUser.id), WorkbenchEmail("inBoth@subGroup.com")),
+        samRequestContext = samRequestContext
+      )
+      .unsafeRunSync()
 
     // Create managed group to act as auth domain and add appropriate subgroups
     val managedGroupId = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupId), superAdminOwner, samRequestContext = samRequestContext))
-    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inAuthDomainSubGroup.id, samRequestContext))
+    runAndWait(
+      managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inAuthDomainSubGroup.id, samRequestContext)
+    )
     runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inBothSubGroup.id, samRequestContext))
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(superAdminOwner.email), Set.empty, Set(constrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), None, superAdminOwner.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(superAdminOwner.email), Set.empty, Set(constrainableRole.roleName), None)
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId("rid"),
+        accessPolicyMap,
+        Set(WorkbenchGroupName(managedGroupId)),
+        None,
+        superAdminOwner.id,
+        samRequestContext
+      )
+    )
 
     // Access policy that intersection group will be calculated for
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicySubGroup.email, inBothSubGroup.email), Set.empty, Set.empty, None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set(inPolicySubGroup.email, inBothSubGroup.email), Set.empty, Set.empty, None),
+        samRequestContext
+      )
+    )
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothSubGroupUser.id)
   }
 
   it should "return the policy members if there is no auth domain set" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, _, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      _,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
     val inPolicyUser = Generator.genWorkbenchUserBoth.sample.get
     val inBothUser = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(inPolicyUser, samRequestContext).unsafeRunSync()
     dirDAO.createUser(inBothUser, samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.email, inBothUser.email), constrainableRole.actions, Set(constrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, inBothUser.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(
+        Set(inPolicyUser.email, inBothUser.email),
+        constrainableRole.actions,
+        Set(constrainableRole.roleName),
+        None
+      )
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, inBothUser.id, samRequestContext)
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.email, inBothUser.email), Set.empty, Set.empty, None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set(inPolicyUser.email, inBothUser.email), Set.empty, Set.empty, None),
+        samRequestContext
+      )
+    )
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set(inBothUser.id, inPolicyUser.id)
   }
 
   it should "return an empty set if none of the policy members are in the auth domain" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, managedGroupService: ManagedGroupService, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      managedGroupService: ManagedGroupService,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
     val inAuthDomainUser = Generator.genWorkbenchUserBoth.sample.get
     val inPolicyUser = Generator.genWorkbenchUserBoth.sample.get
@@ -952,95 +1565,225 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val managedGroupId = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupId), inAuthDomainUser, samRequestContext = samRequestContext))
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.email), constrainableRole.actions, Set(constrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set(WorkbenchGroupName(managedGroupId)), None, inAuthDomainUser.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(
+        Set(inPolicyUser.email),
+        constrainableRole.actions,
+        Set(constrainableRole.roleName),
+        None
+      )
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId("rid"),
+        accessPolicyMap,
+        Set(WorkbenchGroupName(managedGroupId)),
+        None,
+        inAuthDomainUser.id,
+        samRequestContext
+      )
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set(inPolicyUser.email), Set.empty, Set.empty, None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set(inPolicyUser.email), Set.empty, Set.empty, None),
+        samRequestContext
+      )
+    )
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set.empty
   }
 
   it should "return an empty set if both the auth domain and the policy are empty" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, managedGroupService: ManagedGroupService, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      managedGroupService: ManagedGroupService,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
     val inPolicyUser = Generator.genWorkbenchUserBoth.sample.get
     val inBothUser = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(inPolicyUser, samRequestContext).unsafeRunSync()
     dirDAO.createUser(inBothUser, samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(inPolicyUser.email), constrainableRole.actions, Set(constrainableRole.roleName), None),
-      AccessPolicyName("emptyPolicy") -> AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, inBothUser.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(
+        Set(inPolicyUser.email),
+        constrainableRole.actions,
+        Set(constrainableRole.roleName),
+        None
+      ),
+      AccessPolicyName("emptyPolicy") -> AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None)
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, inBothUser.id, samRequestContext)
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None),
+        samRequestContext
+      )
+    )
 
     val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
     intersectionGroup shouldEqual Set.empty
   }
 
   "isConstrainable" should "return true when the policy has constrainable actions and roles" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, _, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      _,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
     val dummyUserInfo = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None)
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext)
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set(constrainableRole.roleName), None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set.empty, constrainableRole.actions, Set(constrainableRole.roleName), None),
+        samRequestContext
+      )
+    )
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
   }
 
   it should "return true when the policy has a constrainable role, but no constrainable actions" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, _, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      _,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
-    val dummyUserInfo =Generator.genWorkbenchUserBoth.sample.get
+    val dummyUserInfo = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None)
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext)
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set(constrainableRole.roleName), None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set.empty, Set.empty, Set(constrainableRole.roleName), None),
+        samRequestContext
+      )
+    )
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
   }
 
   it should "return true when the policy has a constrainable action, but no constrainable roles" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, _, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      _,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
     val dummyUserInfo = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None)
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext)
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, constrainableRole.actions, Set.empty, None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set.empty, constrainableRole.actions, Set.empty, None),
+        samRequestContext
+      )
+    )
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual true
   }
 
   it should "return false when the policy is not constrainable" in {
-    val (dirDAO: DirectoryDAO, _, ge: GoogleExtensions, constrainableService: ResourceService, _, constrainableResourceType: ResourceType, constrainableRole: ResourceRole, synchronizer) = initPrivateTest
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      _,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
 
     val dummyUserInfo = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None)
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext)
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(constrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None),
+        samRequestContext
+      )
+    )
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual false
   }
 
   it should "return false when the resource type is not constrainable" in {
-    val (dirDAO: DirectoryDAO, regDAO, _, constrainableService: ResourceService, _, _, _, _) = initPrivateTest
+    val (dirDAO: DirectoryDAO, _, constrainableService: ResourceService, _, _, _, _) = initPrivateTest
 
     val dummyUserInfo = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
@@ -1064,10 +1807,35 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
 
     constrainableService.createResourceType(nonConstrainableResourceType, samRequestContext).unsafeRunSync()
 
-    val accessPolicyMap = Map(AccessPolicyName(nonConstrainableRole.roleName.value) -> AccessPolicyMembership(Set(dummyUserInfo.email), nonConstrainableRole.actions, Set(nonConstrainableRole.roleName), None))
-    val resource = runAndWait(constrainableService.createResource(nonConstrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext))
+    val accessPolicyMap = Map(
+      AccessPolicyName(nonConstrainableRole.roleName.value) -> AccessPolicyMembership(
+        Set(dummyUserInfo.email),
+        nonConstrainableRole.actions,
+        Set(nonConstrainableRole.roleName),
+        None
+      )
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(
+        nonConstrainableResourceType,
+        ResourceId("rid"),
+        accessPolicyMap,
+        Set.empty,
+        None,
+        dummyUserInfo.id,
+        samRequestContext
+      )
+    )
 
-    val accessPolicy = runAndWait(constrainableService.overwritePolicy(nonConstrainableResourceType, AccessPolicyName("ap"), resource.fullyQualifiedId, AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None), samRequestContext))
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        nonConstrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None),
+        samRequestContext
+      )
+    )
 
     val constrained = synchronizer.isConstrainable(resource.fullyQualifiedId, accessPolicy)
     constrained shouldEqual false
@@ -1082,7 +1850,25 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
     val garbageOrgGoogleServicesConfig = TestSupport.googleServicesConfig.copy(terraGoogleOrgNumber = "garbage")
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, dirDAO, newRegistrationDAO(), null, mockGoogleDirectoryDAO, null, null, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, garbageOrgGoogleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      mockGoogleIamDAO,
+      null,
+      mockGoogleProjectDAO,
+      null,
+      null,
+      null,
+      garbageOrgGoogleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val defaultUser = Generator.genWorkbenchUserBoth.sample.get
 
@@ -1102,11 +1888,28 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGoogleProjectDAO = new MockGoogleProjectDAO {
-      override def getAncestry(projectName: String): Future[Seq[Ancestor]] = {
+      override def getAncestry(projectName: String): Future[Seq[Ancestor]] =
         Future.failed(new HttpResponseException.Builder(403, "Made up error message", new HttpHeaders()).build())
-      }
     }
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, dirDAO, newRegistrationDAO(), null, mockGoogleDirectoryDAO, null, null, null, mockGoogleIamDAO, null, mockGoogleProjectDAO, null, null, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      mockGoogleIamDAO,
+      null,
+      mockGoogleProjectDAO,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val defaultUser = Generator.genWorkbenchUserBoth.sample.get
 
@@ -1122,7 +1925,25 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     val mockGoogleNotificationPubSubDAO = new MockGooglePubSubDAO
     val topicName = "neat_topic"
     val notificationDAO = new PubSubNotificationDAO(mockGoogleNotificationPubSubDAO, topicName)
-    val googleExtensions = new GoogleExtensions(TestSupport.distributedLock, null, newRegistrationDAO(), null, null, mockGoogleNotificationPubSubDAO, null, null, null, null, null, null, notificationDAO, null, googleServicesConfig, petServiceAccountConfig, configResourceTypes, superAdminsGroup)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      null,
+      null,
+      null,
+      mockGoogleNotificationPubSubDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      notificationDAO,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
 
     val messages = Set(
       Notifications.GroupAccessRequestNotification(
@@ -1130,7 +1951,8 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
         WorkbenchGroupName("bobs_buds").value,
         Set(WorkbenchUserId("reply_to_address")),
         WorkbenchUserId("requesters_id")
-      ))
+      )
+    )
 
     googleExtensions.fireAndForgetNotifications(messages)
 
@@ -1139,12 +1961,6 @@ class GoogleExtensionSpec(_system: ActorSystem) extends TestKit(_system) with An
     messageLog should contain theSameElementsAs formattedMessages
   }
 
-  protected def clearDatabase(): Unit = {
-    val schemaDao = new JndiSchemaDAO(directoryConfig, schemaLockConfig)
-    runAndWait(schemaDao.clearDatabase())
-    runAndWait(schemaDao.init())
-    runAndWait(schemaDao.createOrgUnits())
-
+  protected def clearDatabase(): Unit =
     TestSupport.truncateAll
-  }
 }

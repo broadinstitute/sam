@@ -3,9 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import scalikejdbc._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 
-final case class PolicyActionRecord(resourcePolicyId: PolicyPK,
-                                    resourceActionId: ResourceActionPK,
-                                    descendantsOnly: Boolean)
+final case class PolicyActionRecord(resourcePolicyId: PolicyPK, resourceActionId: ResourceActionPK, descendantsOnly: Boolean)
 
 object PolicyActionTable extends SQLSyntaxSupportWithDefaultSamDB[PolicyActionRecord] {
   override def tableName: String = "SAM_POLICY_ACTION"

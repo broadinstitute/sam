@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, MockRegistrationDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -35,17 +35,14 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import scalikejdbc.QueryDSL.delete
 import scalikejdbc.withSQL
 
-import java.net.URI
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
 
-
-/**
-  * Created by dvoet on 6/27/17.
+/** Created by dvoet on 6/27/17.
   */
-trait TestSupport{
+trait TestSupport {
   def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
   def runAndWait[T](f: IO[T]): T = f.unsafeRunSync()
 
@@ -54,7 +51,8 @@ trait TestSupport{
 
   val samRequestContext = SamRequestContext()
 
-  def dummyResourceType(name: ResourceTypeName) = ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
+  def dummyResourceType(name: ResourceTypeName) =
+    ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
 }
 
 trait PropertyBasedTesting extends ScalaCheckPropertyChecks with Configuration with Matchers {
@@ -70,30 +68,26 @@ object TestSupport extends TestSupport {
   val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
   val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
-  val directoryConfig = config.as[DirectoryConfig]("directory")
-  val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
   val adminConfig = config.as[AdminConfig]("admin")
-
-  val dirURI = new URI(directoryConfig.directoryUrl)
 
   val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
 
-  def genSamDependencies(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty,
-                         googIamDAO: Option[GoogleIamDAO] = None,
-                         googleServicesConfig: GoogleServicesConfig = googleServicesConfig,
-                         cloudExtensions: Option[CloudExtensions] = None,
-                         googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
-                         policyAccessDAO: Option[AccessPolicyDAO] = None,
-                         policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-                         resourceServiceOpt: Option[ResourceService] = None,
-                         tosEnabled: Boolean = false)
-                        (implicit system: ActorSystem) = {
+  def genSamDependencies(
+      resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty,
+      googIamDAO: Option[GoogleIamDAO] = None,
+      googleServicesConfig: GoogleServicesConfig = googleServicesConfig,
+      cloudExtensions: Option[CloudExtensions] = None,
+      googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
+      policyAccessDAO: Option[AccessPolicyDAO] = None,
+      policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
+      resourceServiceOpt: Option[ResourceService] = None,
+      tosEnabled: Boolean = false
+  )(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockRegistrationDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(resourceTypes, directoryDAO))
     val notificationPubSubDAO = new MockGooglePubSubDAO()
@@ -103,67 +97,107 @@ object TestSupport extends TestSupport {
     val googleStorageDAO = new MockGoogleStorageDAO()
     val googleProjectDAO = new MockGoogleProjectDAO()
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
-    val cloudKeyCache = new GoogleKeyCache(distributedLock, googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, googleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
-    val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
+    val cloudKeyCache = new GoogleKeyCache(
       distributedLock,
-      directoryDAO,
-      registrationDAO,
-      policyDAO,
-      googleDirectoryDAO,
-      notificationPubSubDAO,
-      googleGroupSyncPubSubDAO,
-      googleDisableUsersPubSubDAO,
       googleIamDAO,
       googleStorageDAO,
-      googleProjectDAO,
-      cloudKeyCache,
-      notificationDAO,
-      FakeGoogleKmsInterpreter,
+      FakeGoogleStorageInterpreter,
+      googleKeyCachePubSubDAO,
       googleServicesConfig,
-      petServiceAccountConfig,
-      resourceTypes,
-      adminConfig.superAdminsGroup
-    ))
+      petServiceAccountConfig
+    )
+    val googleExt = cloudExtensions.getOrElse(
+      new GoogleExtensions(
+        distributedLock,
+        directoryDAO,
+        policyDAO,
+        googleDirectoryDAO,
+        notificationPubSubDAO,
+        googleGroupSyncPubSubDAO,
+        googleDisableUsersPubSubDAO,
+        googleIamDAO,
+        googleStorageDAO,
+        googleProjectDAO,
+        cloudKeyCache,
+        notificationDAO,
+        FakeGoogleKmsInterpreter,
+        googleServicesConfig,
+        petServiceAccountConfig,
+        resourceTypes,
+        adminConfig.superAdminsGroup
+      )
+    )
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
-    val mockResourceService = resourceServiceOpt.getOrElse(new ResourceService(
-      resourceTypes,
-      policyEvaluatorService,
-      policyDAO,
-      directoryDAO,
-      googleExt,
-      emailDomain = "example.com",
-      adminConfig.allowedEmailDomains
-    ))
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
+    val mockResourceService = resourceServiceOpt.getOrElse(
+      new ResourceService(
+        resourceTypes,
+        policyEvaluatorService,
+        policyDAO,
+        directoryDAO,
+        googleExt,
+        emailDomain = "example.com",
+        adminConfig.allowedEmailDomains
+      )
+    )
+    val mockManagedGroupService =
+      new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
     val azureService = new AzureService(MockCrlService(), directoryDAO)
-    SamDependencies(mockResourceService, policyEvaluatorService, tosService, new UserService(directoryDAO, googleExt, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, googleExt, dbRef), mockManagedGroupService, directoryDAO, registrationDAO, policyDAO, googleExt, FakeOpenIDConnectConfiguration, azureService)
+    SamDependencies(
+      mockResourceService,
+      policyEvaluatorService,
+      tosService,
+      new UserService(directoryDAO, googleExt, Seq.empty, tosService),
+      new StatusService(directoryDAO, googleExt, dbRef),
+      mockManagedGroupService,
+      directoryDAO,
+      policyDAO,
+      googleExt,
+      FakeOpenIDConnectConfiguration,
+      azureService
+    )
   }
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(samDependencies.resourceService, samDependencies.userService, samDependencies.statusService, samDependencies.managedGroupService, samDependencies.tosService.tosConfig, samDependencies.directoryDAO, samDependencies.registrationDAO, samDependencies.policyEvaluatorService, samDependencies.tosService, LiquibaseConfig("", false), samDependencies.oauth2Config, Some(samDependencies.azureService))
-    with MockSamUserDirectives
-    with GoogleExtensionRoutes {
-      override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
-      override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
-        case extensions: GoogleExtensions => extensions
-        case _ => null
-      }
-      override val googleGroupSynchronizer: GoogleGroupSynchronizer = {
-        if(samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) {
-          new GoogleGroupSynchronizer(googleExtensions.directoryDAO, googleExtensions.accessPolicyDAO, googleExtensions.googleDirectoryDAO, googleExtensions, googleExtensions.resourceTypes)(executionContext)
-        } else null
-      }
-      val googleKeyCache = samDependencies.cloudExtensions match {
-        case extensions: GoogleExtensions => extensions.googleKeyCache
-        case _ => null
-      }
-      override val user: SamUser = uInfo
-      override val newSamUser: Option[SamUser] = Option(uInfo)
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(
+    samDependencies.resourceService,
+    samDependencies.userService,
+    samDependencies.statusService,
+    samDependencies.managedGroupService,
+    samDependencies.tosService.tosConfig,
+    samDependencies.directoryDAO,
+    samDependencies.policyEvaluatorService,
+    samDependencies.tosService,
+    LiquibaseConfig("", false),
+    samDependencies.oauth2Config,
+    Some(samDependencies.azureService)
+  ) with MockSamUserDirectives with GoogleExtensionRoutes {
+    override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
+    override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
+      case extensions: GoogleExtensions => extensions
+      case _ => null
+    }
+    override val googleGroupSynchronizer: GoogleGroupSynchronizer =
+      if (samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) {
+        new GoogleGroupSynchronizer(
+          googleExtensions.directoryDAO,
+          googleExtensions.accessPolicyDAO,
+          googleExtensions.googleDirectoryDAO,
+          googleExtensions,
+          googleExtensions.resourceTypes
+        )(executionContext)
+      } else null
+    val googleKeyCache = samDependencies.cloudExtensions match {
+      case extensions: GoogleExtensions => extensions.googleKeyCache
+      case _ => null
+    }
+    override val user: SamUser = uInfo
+    override val newSamUser: Option[SamUser] = Option(uInfo)
   }
 
-  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes = genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes =
+    genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
 
   /*
   In unit tests there really is not a difference between read and write pools.
@@ -174,9 +208,10 @@ object TestSupport extends TestSupport {
    */
   lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Read, TestSupport.blockingEc)
 
-  def truncateAll: Int = {
+  def truncateAll: Int =
     dbRef.inLocalTransaction { implicit session =>
-      val tables = List(PolicyActionTable,
+      val tables = List(
+        PolicyActionTable,
         PolicyRoleTable,
         PolicyTable,
         AuthDomainTable,
@@ -193,15 +228,31 @@ object TestSupport extends TestSupport {
         PetManagedIdentityTable,
         UserTable,
         AccessInstructionsTable,
-        GroupTable)
+        GroupTable
+      )
 
-      tables.map(table => withSQL{
-        delete.from(table)
-      }.update().apply()).sum
+      tables
+        .map(table =>
+          withSQL {
+            delete.from(table)
+          }.update().apply()
+        )
+        .sum
     }
-  }
 }
 
-final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, tosService: TosService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, registrationDAO: MockRegistrationDAO, policyDao: AccessPolicyDAO, cloudExtensions: CloudExtensions, oauth2Config: OpenIDConnectConfiguration, azureService: AzureService)
+final case class SamDependencies(
+    resourceService: ResourceService,
+    policyEvaluatorService: PolicyEvaluatorService,
+    tosService: TosService,
+    userService: UserService,
+    statusService: StatusService,
+    managedGroupService: ManagedGroupService,
+    directoryDAO: MockDirectoryDAO,
+    policyDao: AccessPolicyDAO,
+    cloudExtensions: CloudExtensions,
+    oauth2Config: OpenIDConnectConfiguration,
+    azureService: AzureService
+)
 
 object ConnectedTest extends Tag("connected test")

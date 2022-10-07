@@ -19,11 +19,7 @@ import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
-trait AdminRoutes
-  extends SecurityDirectives
-    with SamRequestContextDirectives
-    with SamUserDirectives
-    with SamModelDirectives {
+trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives with SamUserDirectives with SamModelDirectives {
 
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
@@ -91,7 +87,8 @@ trait AdminRoutes
                   put {
                     complete {
                       userService
-                        .addToAllUsersGroup(WorkbenchUserId(userId), samRequestContext).map(_ => OK)
+                        .addToAllUsersGroup(WorkbenchUserId(userId), samRequestContext)
+                        .map(_ => OK)
                     }
                   }
                 }
@@ -191,10 +188,7 @@ trait AdminRoutes
       }
     }
 
-  def requireAdminResourceAction(action: ResourceAction,
-                                 resourceType: ResourceType,
-                                 user: SamUser,
-                                 samRequestContext: SamRequestContext): Directive0 =
+  def requireAdminResourceAction(action: ResourceAction, resourceType: ResourceType, user: SamUser, samRequestContext: SamRequestContext): Directive0 =
     requireAction(
       FullyQualifiedResourceId(resourceTypeAdminName, ResourceId(resourceType.name.value)),
       action,

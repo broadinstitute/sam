@@ -16,12 +16,14 @@ final case class GroupMembershipPath(path: List[GroupPK]) extends DatabaseArray 
 }
 
 // lastGroupMembershipElement is added so it can be indexed as a performance optimization, it is always the last element of groupMembershipPath
-final case class GroupMemberFlatRecord(id: GroupMemberFlatPK,
-                                       groupId: GroupPK,
-                                       memberUserId: Option[WorkbenchUserId],
-                                       memberGroupId: Option[GroupPK],
-                                       groupMembershipPath: GroupMembershipPath,
-                                       lastGroupMembershipElement: Option[GroupPK])
+final case class GroupMemberFlatRecord(
+    id: GroupMemberFlatPK,
+    groupId: GroupPK,
+    memberUserId: Option[WorkbenchUserId],
+    memberGroupId: Option[GroupPK],
+    groupMembershipPath: GroupMembershipPath,
+    lastGroupMembershipElement: Option[GroupPK]
+)
 object GroupMemberFlatTable extends SQLSyntaxSupportWithDefaultSamDB[GroupMemberFlatRecord] {
   override def tableName: String = "SAM_GROUP_MEMBER_FLAT"
 
@@ -31,7 +33,7 @@ object GroupMemberFlatTable extends SQLSyntaxSupportWithDefaultSamDB[GroupMember
     rs.stringOpt(e.memberUserId).map(WorkbenchUserId),
     rs.longOpt(e.memberGroupId).map(GroupPK),
     rs.get(e.groupMembershipPath),
-    rs.longOpt(e.memberGroupId).map(GroupPK),
+    rs.longOpt(e.memberGroupId).map(GroupPK)
   )
 
   def apply(m: SyntaxProvider[GroupMemberFlatRecord])(rs: WrappedResultSet): GroupMemberFlatRecord = apply(m.resultName)(rs)

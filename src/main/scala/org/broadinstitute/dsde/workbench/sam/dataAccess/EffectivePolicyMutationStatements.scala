@@ -5,27 +5,26 @@ import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, FullyQualifiedResourceId, ResourceTypeName}
 import scalikejdbc.{DBSession, _}
 
-/**
-  * Resources can specify access policies that affect their descendants. Checking these inherited policies
-  * at query time is expensive as it requires a recursive query. Effective policies are an optimization
-  * that shifts this burden from read time to write time by calculating and storing all policies that are
+/** Resources can specify access policies that affect their descendants. Checking these inherited policies at query time is expensive as it requires a recursive
+  * query. Effective policies are an optimization that shifts this burden from read time to write time by calculating and storing all policies that are
   * effective for all resources so that at query time the lookup is straight forward, less stress on the db and fast.
   *
-  * An effective policy applies to one and only one resource, never to descendants. It contains roles and actions
-  * that are applicable only to the resource; it is not required to check if roles are descendant only or apply
-  * to other resource types.
+  * An effective policy applies to one and only one resource, never to descendants. It contains roles and actions that are applicable only to the resource; it
+  * is not required to check if roles are descendant only or apply to other resource types.
   *
-  * It is crucial that all resource and policy updates are in serializable transactions to avoid race conditions when
-  * concurrent modifications are made affecting the same resource structure.
+  * It is crucial that all resource and policy updates are in serializable transactions to avoid race conditions when concurrent modifications are made
+  * affecting the same resource structure.
   */
 trait EffectivePolicyMutationStatements {
-  /**
-    * Delete all effective policies on the specified resource.
+
+  /** Delete all effective policies on the specified resource.
     * @param resource
     * @param session
     * @return
     */
-  protected def deleteEffectivePolicies(resource: FullyQualifiedResourceId, resourceTypePKsByName: collection.Map[ResourceTypeName, ResourceTypePK])(implicit session: DBSession): Int = {
+  protected def deleteEffectivePolicies(resource: FullyQualifiedResourceId, resourceTypePKsByName: collection.Map[ResourceTypeName, ResourceTypePK])(implicit
+      session: DBSession
+  ): Int = {
     val r = ResourceTable.syntax("r")
     val ep = EffectiveResourcePolicyTable.syntax("ep")
 
@@ -37,9 +36,8 @@ trait EffectivePolicyMutationStatements {
               """.update().apply()
   }
 
-  /**
-    * Delete all effective policies on the resource specified by childResourcePK and all of its descendants that are
-    * inherited from ancestors of childResourcePK.
+  /** Delete all effective policies on the resource specified by childResourcePK and all of its descendants that are inherited from ancestors of
+    * childResourcePK.
     *
     * @param childResourcePK
     * @param session
@@ -70,21 +68,18 @@ trait EffectivePolicyMutationStatements {
         and ${p.id} = ${ep.sourcePolicyId}""".update().apply()
   }
 
-  /**
-    * Calculate and store all effective policies for resource for given resource and its descendants.
+  /** Calculate and store all effective policies for resource for given resource and its descendants.
     * @param childResourcePK
     * @param session
     * @return
     */
-  protected def populateInheritedEffectivePolicies(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
+  protected def populateInheritedEffectivePolicies(childResourcePK: ResourcePK)(implicit session: DBSession): Int =
     insertEffectivePoliciesForChildAndDescendants(childResourcePK) +
       insertEffectivePolicyActionsForChildAndDescendants(childResourcePK) +
       insertEffectivePolicyRolesForChildAndDescendants(childResourcePK)
-  }
 
-  /**
-    * For this resource and all of its descendants, find all of the effective policies and unroll any roles that
-    * those policies grant. Check that they are applicable to the resource in question and insert them if so.
+  /** For this resource and all of its descendants, find all of the effective policies and unroll any roles that those policies grant. Check that they are
+    * applicable to the resource in question and insert them if so.
     *
     * @param childResourcePK
     * @param session
@@ -119,10 +114,8 @@ trait EffectivePolicyMutationStatements {
               on conflict do nothing""".update().apply()
   }
 
-  /**
-    * For this resource and all of its descendants, find all of the policies that could possibly apply to them and
-    * grab all the actions on those policies and then insert them into the EPA table if the resource type of the
-    * action matches the resource type of the descendant.
+  /** For this resource and all of its descendants, find all of the policies that could possibly apply to them and grab all the actions on those policies and
+    * then insert them into the EPA table if the resource type of the action matches the resource type of the descendant.
     *
     * @param childResourcePK
     * @param session
@@ -155,9 +148,7 @@ trait EffectivePolicyMutationStatements {
               on conflict do nothing""".update().apply()
   }
 
-  /**
-    * For this resource and all of its descendants, insert a record in the EP table for every policy on this resource
-    * or any of its ancestors.
+  /** For this resource and all of its descendants, insert a record in the EP table for every policy on this resource or any of its ancestors.
     *
     * @param childResourcePK
     * @param session
@@ -184,8 +175,7 @@ trait EffectivePolicyMutationStatements {
         join ${PolicyTable as p} on ${ancestorResource.resourceId} = ${p.resourceId}""".update().apply()
   }
 
-  /**
-    * Returns a recursive query to be used in a with clause (CTE) whose result includes all the ancestors of the given childResourcePK.
+  /** Returns a recursive query to be used in a with clause (CTE) whose result includes all the ancestors of the given childResourcePK.
     *
     * @param resourcePK
     * @param descendantResourceTable
@@ -208,9 +198,7 @@ trait EffectivePolicyMutationStatements {
           where ${parentResource.resourceParentId} is not null)"""
   }
 
-  /**
-    * Returns a recursive query to be used in a with clause (CTE) whose result includes the given resourcePK
-    * and PKs of all of its descendants.
+  /** Returns a recursive query to be used in a with clause (CTE) whose result includes the given resourcePK and PKs of all of its descendants.
     *
     * @param resourcePK
     * @param descendantResourceTable
@@ -229,8 +217,7 @@ trait EffectivePolicyMutationStatements {
             join ${descendantResourceTable as descendantResource} on ${descendantResource.resourceId} = ${resource.resourceParentId})"""
   }
 
-  /**
-    * Insert effective policy roles from the specified policy for all descendants.
+  /** Insert effective policy roles from the specified policy for all descendants.
     * @param policyId
     * @param session
     * @return
@@ -264,8 +251,7 @@ trait EffectivePolicyMutationStatements {
               on conflict do nothing""".update().apply()
   }
 
-  /**
-    * Insert effective policy actions from the specified policy for all descendants.
+  /** Insert effective policy actions from the specified policy for all descendants.
     * @param policyId
     * @param session
     * @return
@@ -297,9 +283,7 @@ trait EffectivePolicyMutationStatements {
               on conflict do nothing""".update().apply()
   }
 
-  /**
-    * Insert effective policy records for descendants of resource associated to policyPK.
-    * This does not include roles or actions.
+  /** Insert effective policy records for descendants of resource associated to policyPK. This does not include roles or actions.
     * @param policy
     * @param policyPK
     * @param session
@@ -317,9 +301,8 @@ trait EffectivePolicyMutationStatements {
             """.update().apply()
   }
 
-  /**
-    * Returns a recursive query to be used in a with clause (CTE) whose result includes thePK of the resource of the
-    * given policyPK and PKs of all of its descendants.
+  /** Returns a recursive query to be used in a with clause (CTE) whose result includes thePK of the resource of the given policyPK and PKs of all of its
+    * descendants.
     *
     * @param resourcePK
     * @param descendantResourceTable
@@ -342,61 +325,49 @@ trait EffectivePolicyMutationStatements {
             join ${ancestorResourceTable as ar} on ${ar.resourceId} = ${child.resourceParentId})"""
   }
 
-  /**
-    * Delete all roles on effecitve policies with source policy of policyPK.
+  /** Delete all roles on effecitve policies with source policy of policyPK.
     * @param policyPK
     * @param session
     * @return
     */
   protected def deleteEffectivePolicyRoles(policyPK: PolicyPK)(implicit session: DBSession): Int = {
     val ep = EffectiveResourcePolicyTable.syntax("ep")
-    val epr = EffectivePolicyRoleTable.syntax(("epr"))
+    val epr = EffectivePolicyRoleTable.syntax("epr")
     samsql"""delete from ${EffectivePolicyRoleTable as epr}
               using ${EffectiveResourcePolicyTable as ep}
               where ${ep.sourcePolicyId} = $policyPK
               and ${epr.effectiveResourcePolicyId} = ${ep.id}""".update().apply()
   }
 
-  /**
-    * Delete all actions on effecitve policies with source policy of policyPK.
+  /** Delete all actions on effecitve policies with source policy of policyPK.
     * @param policyPK
     * @param session
     * @return
     */
   protected def deleteEffectivePolicyActions(policyPK: PolicyPK)(implicit session: DBSession): Int = {
     val ep = EffectiveResourcePolicyTable.syntax("ep")
-    val epa = EffectivePolicyActionTable.syntax(("epa"))
+    val epa = EffectivePolicyActionTable.syntax("epa")
     samsql"""delete from ${EffectivePolicyActionTable as epa}
               using ${EffectiveResourcePolicyTable as ep}
               where ${ep.sourcePolicyId} = $policyPK
               and ${epa.effectiveResourcePolicyId} = ${ep.id}""".update().apply()
   }
 
-  /**
+  /** Determining whether a role should or should not apply to a resource is a bit more complicated than it initially appears. This logic is shared across
+    * queries that search a resource's hierarchy for all of the relevant roles and actions that a user has on said resource. The following truth table shows the
+    * desired behavior of this SQL fragment where result indicates whether a given role does or does not apply to the resource. inherited is determined by
+    * sourcePolicy.resourceId != effectivePolicy.resourceId
     *
-    * Determining whether a role should or should not apply to a resource is a bit more complicated than it initially
-    * appears. This logic is shared across queries that search a resource's hierarchy for all of the relevant roles and actions
-    * that a user has on said resource. The following truth table shows the desired behavior of this SQL fragment where
-    * result indicates whether a given role does or does not apply to the resource.
-    * inherited is determined by sourcePolicy.resourceId != effectivePolicy.resourceId
-    *
-    *         inherited             |  policyRole.descendantsOnly  |  flattenedRole.descendantsOnly  |  result
-    *            T                  |             T                |                T                |    T
-    *            T                  |             T                |                F                |    T
-    *            T                  |             F                |                T                |    T
-    *            T                  |             F                |                F                |    F
-    *            F                  |             T                |                T                |    F
-    *            F                  |             T                |                F                |    F
-    *            F                  |             F                |                T                |    F
-    *            F                  |             F                |                F                |    T
-    *
+    * inherited | policyRole.descendantsOnly | flattenedRole.descendantsOnly | result T | T | T | T T | T | F | T T | F | T | T T | F | F | F F | T | T | F F |
+    * T | F | F F | F | T | F F | F | F | T
     */
-  private def roleAppliesToResource(policyRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRoleRecord], PolicyRoleRecord],
-                                    flattenedRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[FlattenedRoleRecord], FlattenedRoleRecord],
-                                    effectivePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[EffectiveResourcePolicyRecord], EffectiveResourcePolicyRecord],
-                                    sourcePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord]) = {
+  private def roleAppliesToResource(
+      policyRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRoleRecord], PolicyRoleRecord],
+      flattenedRole: QuerySQLSyntaxProvider[SQLSyntaxSupport[FlattenedRoleRecord], FlattenedRoleRecord],
+      effectivePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[EffectiveResourcePolicyRecord], EffectiveResourcePolicyRecord],
+      sourcePolicy: QuerySQLSyntaxProvider[SQLSyntaxSupport[PolicyRecord], PolicyRecord]
+  ) =
     samsqls"""(((${sourcePolicy.resourceId} != ${effectivePolicy.resourceId}) and (${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))
              or not ((${sourcePolicy.resourceId} != ${effectivePolicy.resourceId}) or ${policyRole.descendantsOnly} or ${flattenedRole.descendantsOnly}))"""
-  }
 
 }

@@ -8,15 +8,15 @@ import spray.json.{JsonWriter, enrichAny}
 import SamAuditModelJsonSupport.AuditInfoFormat
 
 object AuditLogger extends LazyLogging {
-  def logAuditEventIO[T <: AuditEvent : JsonWriter](samRequestContext: SamRequestContext, auditEvents: T*): IO[Unit] = {
+  def logAuditEventIO[T <: AuditEvent: JsonWriter](samRequestContext: SamRequestContext, auditEvents: T*): IO[Unit] =
     IO(auditEvents.foreach(logAuditEvent(_, samRequestContext)))
-  }
 
-  def logAuditEvent[T <: AuditEvent : JsonWriter](auditEvent: T, samRequestContext: SamRequestContext): Unit = {
+  def logAuditEvent[T <: AuditEvent: JsonWriter](auditEvent: T, samRequestContext: SamRequestContext): Unit =
     logger.whenInfoEnabled {
-      logger.info(auditEvent.eventType.toString,
+      logger.info(
+        auditEvent.eventType.toString,
         StructuredArguments.raw("eventDetails", auditEvent.toJson.compactPrint),
-        StructuredArguments.raw("auditInfo", samRequestContext.createAuditInfo.toJson.compactPrint))
+        StructuredArguments.raw("auditInfo", samRequestContext.createAuditInfo.toJson.compactPrint)
+      )
     }
-  }
 }
