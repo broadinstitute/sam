@@ -103,12 +103,12 @@ jobs:
         with:
           workflow: sam-smoke-tests
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
+          ref: refs/heads/QA-2028-3
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           # The smoke tests just need an access token for an enabled user on the Sam host that is being tested.
           # inputs: '{ "sam-hostname": "sam.${{ github.event.repository.name }}-${{ github.run_id }}.bee.envs-terra.bio", "ENV": "qa", "auth-service-account-email": "firecloud-qa@broad-dsde-qa.iam.gserviceaccount.com" }'
-          inputs: '{ "sam-hostname": "sam.${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}.bee.envs-terra.bio", "ENV": "${{ matrix.testing-env }}", "auth-service-account-email": "firecloud-${{ matrix.testing-env }}@broad-dsde-${{ matrix.testing-env }}.iam.gserviceaccount.com" }'
+          inputs: '{ "sam-hostname": "sam.${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}.bee.envs-terra.bio", "ENV": "${{ matrix.testing-env }}", "smoke-test-user-email": "firecloud-${{ matrix.testing-env }}@broad-dsde-${{ matrix.testing-env }}.iam.gserviceaccount.com" }'
 
   sam-swat-test-job:
     strategy:
