@@ -112,8 +112,8 @@ class ManagedGroupService(
 
   def deleteManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-      // order is important here, we want to make sure we do all the cloudExtensions calls before we touch ldap
-      // so failures there do not leave ldap in a bad state
+      // order is important here, we want to make sure we do all the cloudExtensions calls before we touch the database
+      // so failures there do not leave the database in a bad state
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
       _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
       managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)

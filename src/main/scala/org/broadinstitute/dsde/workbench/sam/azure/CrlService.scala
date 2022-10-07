@@ -29,7 +29,7 @@ class CrlService(config: AzureServicesConfig) {
     IO(Defaults.crlConfigure(clientConfig, ResourceManager.configure()).authenticate(credential, profile).withSubscription(subscriptionId.value))
   }
 
-  def getManagedAppPlanId: String = config.managedAppPlanId
+  def getManagedAppPlanIds: Seq[String] = config.managedAppPlanIds
 
   private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (ClientSecretCredential, AzureProfile) = {
     val credential = new ClientSecretCredentialBuilder()

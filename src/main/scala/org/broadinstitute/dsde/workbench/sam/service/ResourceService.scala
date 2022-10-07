@@ -47,7 +47,7 @@ class ResourceService(
   def getResourceType(name: ResourceTypeName): IO[Option[ResourceType]] =
     IO.pure(resourceTypes.get(name))
 
-  /** Creates each resource type in ldap and creates a resource for each with the resource type SamResourceTypes.resourceTypeAdmin.
+  /** Creates each resource type in the database and creates a resource for each with the resource type SamResourceTypes.resourceTypeAdmin.
     *
     * This will fail if SamResourceTypes.resourceTypeAdmin does not exist in resourceTypes
     */
@@ -503,16 +503,17 @@ class ResourceService(
       samRequestContext: SamRequestContext
   ): IO[List[Boolean]] =
     accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext) flatMap { policiesForResource =>
-      // 1. Make sure that there are no public policies for this resource. Leaving a public resource is not supported.
-      val isPublic = policiesForResource.exists(_.public)
-      if (isPublic) throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You may not leave a public resource."))
+      val policiesForUser = policiesForResource.filter(_.members.contains(samUser.id)).toSet
+      val publicPoliciesForResource = policiesForResource.filter(_.public).toSet
 
-      val policiesForUser = policiesForResource.filter(_.members.contains(samUser.id)).toList
-
-      // 2. Make sure that the user has direct access that can be removed. Note that if user has both direct and indrect access,
-      //   this will succeed in removing their direct access. Which is still useful functionality.
+      // 1. Make sure that the user has direct access that can be removed. Note that if user has both direct and indirect access,
+      //    this will succeed in removing their direct access. Which is still useful functionality.
       if (policiesForUser.isEmpty)
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You can only leave a resource that you have direct access to."))
+
+      // 2. Make sure that the user cannot leave the resource if they only have access via a public policy
+      if ((policiesForUser -- publicPoliciesForResource).isEmpty)
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You may not leave a public resource."))
 
       // 3. Make sure that removing the user will not orphan it, i.e. there must be at least one other owner on an "owning" policy
       val ownerPolicies = policiesForUser.filter(_.roles.contains(resourceType.ownerRoleName))
@@ -523,7 +524,7 @@ class ResourceService(
         )
 
       // Any cases that we want to protect against are handled above, so it should be safe to proceed with removals
-      policiesForUser.parTraverse { policy =>
+      policiesForUser.toList.parTraverse { policy =>
         logger.info(s"Removing user ${samUser.id} from policy ${policy.id}")
         removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
       }
