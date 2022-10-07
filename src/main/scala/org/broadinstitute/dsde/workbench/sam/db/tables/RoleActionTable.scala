@@ -3,8 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import scalikejdbc._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 
-final case class RoleActionRecord(resourceRoleId: ResourceRolePK,
-                                  resourceActionId: ResourceActionPK)
+final case class RoleActionRecord(resourceRoleId: ResourceRolePK, resourceActionId: ResourceActionPK)
 
 object RoleActionTable extends SQLSyntaxSupportWithDefaultSamDB[RoleActionRecord] {
   override def tableName: String = "SAM_ROLE_ACTION"

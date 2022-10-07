@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.scalatest.BeforeAndAfterAll
 import org.scalatestplus.mockito.MockitoSugar
-import org.mockito.ArgumentMatchers.{ eq => mockitoEq }
+import org.mockito.ArgumentMatchers.{eq => mockitoEq}
 
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers.any
@@ -22,12 +22,18 @@ import spray.json._
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
-class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with TestSupport with MockitoSugar with BeforeAndAfterAll with Eventually {
+class GoogleGroupSyncMonitorSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
+    with Matchers
+    with TestSupport
+    with MockitoSugar
+    with BeforeAndAfterAll
+    with Eventually {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
-  override def beforeAll(): Unit = {
+  override def beforeAll(): Unit =
     super.beforeAll()
-  }
 
   override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
@@ -41,15 +47,19 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
 
     val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
-    when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(Map(groupToSyncEmail -> Seq.empty[SyncReportItem])))
+    when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext]))
+      .thenReturn(Future.successful(Map(groupToSyncEmail -> Seq.empty[SyncReportItem])))
 
     val policyToSyncEmail = WorkbenchEmail("testpolicy@example.com")
     val policyToSyncId = FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("rt"), ResourceId("rid")), AccessPolicyName("pname"))
-    when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(policyToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(Map(policyToSyncEmail -> Seq.empty[SyncReportItem])))
+    when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(policyToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext]))
+      .thenReturn(Future.successful(Map(policyToSyncEmail -> Seq.empty[SyncReportItem])))
 
     val topicName = "testtopic"
     val subscriptionName = "testsub"
-    system.actorOf(GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, mockGoogleExtensions))
+    system.actorOf(
+      GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, mockGoogleExtensions)
+    )
 
     eventually {
       assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
@@ -64,7 +74,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     // try to use `Retrying[Future[T]]`, which gets weird when we're using mockito together with it.
     // Hence adding ascribing [Unit] explicitly here so that `eventually` will use `Retrying[Unit]`
     eventually[Unit] {
-      assertResult(2) { mockGooglePubSubDAO.acks.size() }
+      assertResult(2)(mockGooglePubSubDAO.acks.size())
       verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])
       verify(mockGoogleExtensions, atLeastOnce).synchronizeGroupMembers(mockitoEq(policyToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])
       ()
@@ -78,11 +88,14 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
 
     val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
-    when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
+    when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext]))
+      .thenReturn(Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
 
     val topicName = "testtopic"
     val subscriptionName = "testsub"
-    system.actorOf(GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, mockGoogleExtensions))
+    system.actorOf(
+      GoogleGroupSyncMonitorSupervisor.props(10 milliseconds, 0 seconds, mockGooglePubSubDAO, topicName, subscriptionName, 1, mockGoogleExtensions)
+    )
 
     eventually {
       assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
@@ -92,7 +105,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem) extends TestKit(_system) 
     mockGooglePubSubDAO.publishMessages(topicName, Seq(groupToSyncId.toJson.compactPrint))
 
     eventually {
-      assertResult(1) { mockGooglePubSubDAO.acks.size() }
+      assertResult(1)(mockGooglePubSubDAO.acks.size())
     }
   }
 }

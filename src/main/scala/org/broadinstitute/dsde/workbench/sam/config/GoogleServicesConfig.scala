@@ -10,8 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.config.AppConfig.nonEmptyListReader
 
 import scala.concurrent.duration.FiniteDuration
 
-/**
-  * Created by mbemis on 8/17/17.
+/** Created by mbemis on 8/17/17.
   */
 final case class GoogleServicesConfig(
     appName: String,
@@ -95,6 +94,5 @@ object GoogleServicesConfig {
 }
 
 final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
-final case class ServiceAccountCredentialJson(
-    defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)
+final case class ServiceAccountCredentialJson(defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)
 final case class GoogleConfig(googleServicesConfig: GoogleServicesConfig, petServiceAccountConfig: PetServiceAccountConfig)

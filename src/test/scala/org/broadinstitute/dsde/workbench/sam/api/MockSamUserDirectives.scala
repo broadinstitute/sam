@@ -8,8 +8,7 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-/**
-  * Created by dvoet on 6/7/17.
+/** Created by dvoet on 6/7/17.
   */
 trait MockSamUserDirectives extends SamUserDirectives {
   val user: SamUser
@@ -19,11 +18,11 @@ trait MockSamUserDirectives extends SamUserDirectives {
     OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
 
   override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-    StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, directoryDAO, registrationDAO, tosService, samRequestContext).unsafeToFuture()
+    StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
   }
 
   override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-    StandardSamUserDirectives.getSamUser(fakeOidcHeaders, directoryDAO, registrationDAO, samRequestContext).unsafeToFuture()
+    StandardSamUserDirectives.getSamUser(fakeOidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
   }
 
   override def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = newSamUser match {
