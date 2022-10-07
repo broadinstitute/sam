@@ -6,7 +6,7 @@ object Dependencies {
   val jacksonV = "2.9.5"
   val scalaLoggingV = "3.9.2"
   val scalaTestV = "3.2.12"
-  val scalaCheckV = "1.14.3"
+  val scalaCheckV = "1.17.0"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.3.4"
   val http4sVersion = "0.21.13"
