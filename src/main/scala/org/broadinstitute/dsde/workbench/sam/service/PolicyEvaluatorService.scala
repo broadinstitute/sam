@@ -148,7 +148,7 @@ class PolicyEvaluatorService(
               val userNotMemberOf = resourceAuthDomains -- userManagedGroups
               Some(UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, resourceAuthDomains, userNotMemberOf, false))
             case None =>
-              logger.error(s"ldap has corrupted data. ${rnp.resourceId} should have auth domains defined")
+              logger.error(s"whoops. ${rnp.resourceId} should have auth domains defined")
               none[UserPolicyResponse]
           }
         } else UserPolicyResponse(rnp.resourceId, rnp.accessPolicyName, Set.empty, Set.empty, false).some

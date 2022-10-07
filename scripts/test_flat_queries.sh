@@ -2,7 +2,7 @@
 
 # USAGE:
 # 1) git checkout develop
-# 2) LOCAL_POSTGRES=true LOCAL_OPENDJ=true ./config/docker-rsync-local-sam.sh
+# 2) LOCAL_POSTGRES=true ./config/docker-rsync-local-sam.sh
 # 3) gcloud auth login USER_EMAIL
 # 4) sh scripts/test_flat_queries.sh <USER_EMAIL>
 # 5) when prompted: git checkout flat_queries
