@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, googleServicesConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockRegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -14,8 +14,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 
-/**
-  * Created by dvoet on 6/7/17.
+/** Created by dvoet on 6/7/17.
   */
 class UserRoutesSpec extends UserRoutesSpecHelper {
   "POST /register/user" should "create user" in withDefaultRoutes { samRoutes =>
@@ -42,7 +41,7 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   }
 }
 
-trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport{
+trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
   val defaultUserId = defaultUser.id
   val defaultUserEmail = defaultUser.email
@@ -53,7 +52,13 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
   val petSAUserId = petSAUser.id
   val petSAEmail = petSAUser.email
 
-  def createTestUser(testUser: SamUser = Generator.genWorkbenchUserBoth.sample.get, cloudExtensions: Option[CloudExtensions] = None, googleDirectoryDAO: Option[GoogleDirectoryDAO] = None, tosEnabled: Boolean = false, tosAccepted: Boolean = false): (SamUser, SamDependencies, SamRoutes) = {
+  def createTestUser(
+      testUser: SamUser = Generator.genWorkbenchUserBoth.sample.get,
+      cloudExtensions: Option[CloudExtensions] = None,
+      googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
+      tosEnabled: Boolean = false,
+      tosAccepted: Boolean = false
+  ): (SamUser, SamDependencies, SamRoutes) = {
     val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO, tosEnabled = tosEnabled)
     val routes = genSamRoutes(samDependencies, testUser)
 
@@ -63,7 +68,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
       res.userInfo.userEmail shouldBe testUser.email
       val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
 
-      if (tosEnabled) res.enabled shouldBe  enabledBaseArray + ("tosAccepted" -> false) + ("adminEnabled" -> true)
+      if (tosEnabled) res.enabled shouldBe enabledBaseArray + ("tosAccepted" -> false) + ("adminEnabled" -> true)
       else res.enabled shouldBe enabledBaseArray
     }
 
@@ -82,11 +87,19 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
 
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val directoryDAO = new MockDirectoryDAO()
-    val registrationDAO = new MockRegistrationDAO()
 
-    val tosService = new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val samRoutes = new TestSamRoutes(null, null, new UserService(directoryDAO, NoExtensions, registrationDAO, Seq.empty, tosService), new StatusService(directoryDAO, registrationDAO, NoExtensions, TestSupport.dbRef), null, defaultUser, directoryDAO, registrationDAO,
-      newSamUser = Option(defaultUser), tosService = tosService)
+    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val samRoutes = new TestSamRoutes(
+      null,
+      null,
+      new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
+      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      null,
+      defaultUser,
+      directoryDAO,
+      newSamUser = Option(defaultUser),
+      tosService = tosService
+    )
 
     testCode(samRoutes)
   }

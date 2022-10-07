@@ -22,7 +22,9 @@ class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterE
     override protected val writeDbRef: DbReference = TestSupport.dbRef
     override protected val readDbRef: DbReference = TestSupport.dbRef
 
-    override def serializableWriteTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext, maxTries: Int = 3)(databaseFunction: DBSession => A)(implicit timer: Temporal[IO]): IO[A] =
+    override def serializableWriteTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext, maxTries: Int = 3)(
+        databaseFunction: DBSession => A
+    )(implicit timer: Temporal[IO]): IO[A] =
       super.serializableWriteTransaction(dbQueryName, samRequestContext, maxTries)(databaseFunction)
   }
 
@@ -47,15 +49,10 @@ class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterE
     }
   }
 
-  /**
-    * This does some db stuff that causes a serialization failure.
-    * 1) insert a record
-    * 2) in serializable transaction A read the record
-    * 3) in transaction B update the record
-    * 4) in transaction A update the record
-    * A CyclicBarrier is used to make sure of the ordering between transactions A and B to force the serialization failure.
-    * In the case of a retry we only retry transaction A but the thread running B still needs to use the CyclicBarrier
-    * so the thread running A does not get stuck.
+  /** This does some db stuff that causes a serialization failure. 1) insert a record 2) in serializable transaction A read the record 3) in transaction B
+    * update the record 4) in transaction A update the record A CyclicBarrier is used to make sure of the ordering between transactions A and B to force the
+    * serialization failure. In the case of a retry we only retry transaction A but the thread running B still needs to use the CyclicBarrier so the thread
+    * running A does not get stuck.
     *
     * @param maxTries
     * @return

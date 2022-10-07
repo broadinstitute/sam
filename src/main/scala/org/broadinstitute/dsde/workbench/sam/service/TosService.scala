@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
@@ -14,9 +14,8 @@ import scala.concurrent.ExecutionContext
 import java.io.{FileNotFoundException, IOException}
 import scala.io.Source
 
-class TosService(val directoryDao: DirectoryDAO, val registrationDao: RegistrationDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit
-    val executionContext: ExecutionContext
-) extends LazyLogging {
+class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext)
+    extends LazyLogging {
   val termsOfServiceFile = "termsOfService.md"
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] =

@@ -25,7 +25,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
 
   "acquireLock" should "succeed if a lock can be retrieved" in {
     val lockDetails = genLock.sample.get
-    val res = lockResource.use { lock => lock.acquireLock(lockDetails)}
+    val res = lockResource.use(lock => lock.acquireLock(lockDetails))
 
     res.attempt.map(r => r.isRight shouldBe true).unsafeToFuture()
   }
@@ -37,9 +37,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
         _ <- lock.acquireLock(lockDetails)
         _ <- IO.sleep(2 seconds)
         failed <- lock.acquireLock(lockDetails).attempt
-      } yield {
-        failed.swap.toOption.get.asInstanceOf[FailToObtainLock].getMessage shouldBe(s"can't get lock: $lockDetails")
-      }
+      } yield failed.swap.toOption.get.asInstanceOf[FailToObtainLock].getMessage shouldBe s"can't get lock: $lockDetails"
     }
     res.unsafeToFuture()
   }
@@ -51,9 +49,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
         _ <- dl.acquireLock(lockDetails)
         _ <- dl.releaseLock(lockDetails)
         released <- dl.getLockStatus(lockDetails)
-      } yield {
-        released shouldBe Available
-      }
+      } yield released shouldBe Available
     }
 
     res.unsafeToFuture()
@@ -69,9 +65,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
         acquireTime <- lock.withLock(lockDetails).use { _ =>
           Clock[IO].realTime.map(_.toMillis)
         }
-      } yield {
-        acquireTime - current should be > lockDetails.expiresIn.toMillis
-      }
+      } yield acquireTime - current should be > lockDetails.expiresIn.toMillis
     }
 
     res.unsafeToFuture()
@@ -83,8 +77,8 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
     val res = lockResource.use { lock =>
       for {
         currentTime <- Clock[IO].realTime.map(_.toMillis)
-        lockData <- lock.withLock(lockDetails).use {
-          _ => IO.pure(lock.retrieveLock(lockDetails))
+        lockData <- lock.withLock(lockDetails).use { _ =>
+          IO.pure(lock.retrieveLock(lockDetails))
         }
         released <- IO.pure(lock.retrieveLock(lockDetails))
       } yield {
@@ -114,13 +108,13 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
         failed <- lock
           .withLock(lockDetails)
           .use(_ => IO.unit)
-          .attempt //this will fail to acquire lock
+          .attempt // this will fail to acquire lock
         endTime <- Clock[IO].realTime.map(_.toMillis)
       } yield {
-        failed.swap.toOption.get.asInstanceOf[WorkbenchException].getMessage should startWith (s"Reached max retry:")
+        failed.swap.toOption.get.asInstanceOf[WorkbenchException].getMessage should startWith(s"Reached max retry:")
         // validate we actually retried certain amount of time
         val requestDuration = endTime - current
-        //not sure why, but the actual duration seems always slightly shorter than config.maxRetry * config.retryInterval.
+        // not sure why, but the actual duration seems always slightly shorter than config.maxRetry * config.retryInterval.
         // It definitely is retrying and failing.
         // Maybe retries are exclusive not inclusive
         requestDuration should be > ((config.maxRetry - 1) * config.retryInterval.toMillis)

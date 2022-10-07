@@ -47,7 +47,7 @@ class ResourceService(
   def getResourceType(name: ResourceTypeName): IO[Option[ResourceType]] =
     IO.pure(resourceTypes.get(name))
 
-  /** Creates each resource type in ldap and creates a resource for each with the resource type SamResourceTypes.resourceTypeAdmin.
+  /** Creates each resource type in the database and creates a resource for each with the resource type SamResourceTypes.resourceTypeAdmin.
     *
     * This will fail if SamResourceTypes.resourceTypeAdmin does not exist in resourceTypes
     */
@@ -512,7 +512,8 @@ class ResourceService(
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You can only leave a resource that you have direct access to."))
 
       // 2. Make sure that the user cannot leave the resource if they only have access via a public policy
-      if((policiesForUser -- publicPoliciesForResource).isEmpty) throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You may not leave a public resource."))
+      if ((policiesForUser -- publicPoliciesForResource).isEmpty)
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "You may not leave a public resource."))
 
       // 3. Make sure that removing the user will not orphan it, i.e. there must be at least one other owner on an "owning" policy
       val ownerPolicies = policiesForUser.filter(_.roles.contains(resourceType.ownerRoleName))
