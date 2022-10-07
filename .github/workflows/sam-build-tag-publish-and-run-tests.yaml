@@ -1,4 +1,4 @@
-name: sam-automation-tests
+name: sam-build-tag-publish-and-run-tests
 
 on:
   pull_request:
