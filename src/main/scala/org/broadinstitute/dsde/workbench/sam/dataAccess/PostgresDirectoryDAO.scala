@@ -7,7 +7,6 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.ConnectionType.ConnectionType
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
@@ -27,8 +26,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     with DatabaseSupport
     with PostgresGroupDAO {
 
-  override def getConnectionType(): ConnectionType = ConnectionType.Postgres
-
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String], samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
     serializableWriteTransaction("createGroup", samRequestContext) { implicit session =>
       val groupId: GroupPK = insertGroup(group)
@@ -41,9 +38,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
       group
     }
-
-  override def createEnabledUsersGroup(samRequestContext: SamRequestContext): IO[Unit] =
-    IO.unit
 
   private def insertGroup(group: BasicWorkbenchGroup)(implicit session: DBSession): GroupPK = {
     val groupTableColumn = GroupTable.column
@@ -411,7 +405,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       }
     }
 
-  // Not worrying about cascading deletion of user's pet SAs because LDAP doesn't delete user's pet SAs automatically
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteUser", samRequestContext) { implicit session =>
       val userTable = UserTable.syntax
