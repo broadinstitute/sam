@@ -19,32 +19,34 @@ trait AzureRoutes extends SecurityDirectives {
   val azureService: Option[AzureService]
 
   def azureRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    azureService.map { service =>
-      pathPrefix("azure" / "v1") {
-        path("user" / "petManagedIdentity") {
-          post {
-            entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
-              requireUserCreatePetAction(request, samUser, samRequestContext) {
-                complete {
-                  service.getOrCreateUserPetManagedIdentity(samUser, request, samRequestContext).map { case (pet, created) =>
-                    val status = if (created) StatusCodes.Created else StatusCodes.OK
-                    status -> JsString(pet.objectId.value)
+    azureService
+      .map { service =>
+        pathPrefix("azure" / "v1") {
+          path("user" / "petManagedIdentity") {
+            post {
+              entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
+                requireUserCreatePetAction(request, samUser, samRequestContext) {
+                  complete {
+                    service.getOrCreateUserPetManagedIdentity(samUser, request, samRequestContext).map { case (pet, created) =>
+                      val status = if (created) StatusCodes.Created else StatusCodes.OK
+                      status -> JsString(pet.objectId.value)
+                    }
                   }
                 }
               }
             }
-          }
-        } ~
-          path("petManagedIdentity" / Segment) { userEmail =>
-            post {
-              requireCloudExtensionCreatePetAction(samUser, samRequestContext) {
-                loadSamUser(WorkbenchEmail(userEmail), samRequestContext) { targetSamUser =>
-                  entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
-                    requireUserCreatePetAction(request, targetSamUser, samRequestContext) {
-                      complete {
-                        service.getOrCreateUserPetManagedIdentity(targetSamUser, request, samRequestContext).map { case (pet, created) =>
-                          val status = if (created) StatusCodes.Created else StatusCodes.OK
-                          status -> JsString(pet.objectId.value)
+          } ~
+            path("petManagedIdentity" / Segment) { userEmail =>
+              post {
+                requireCloudExtensionCreatePetAction(samUser, samRequestContext) {
+                  loadSamUser(WorkbenchEmail(userEmail), samRequestContext) { targetSamUser =>
+                    entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
+                      requireUserCreatePetAction(request, targetSamUser, samRequestContext) {
+                        complete {
+                          service.getOrCreateUserPetManagedIdentity(targetSamUser, request, samRequestContext).map { case (pet, created) =>
+                            val status = if (created) StatusCodes.Created else StatusCodes.OK
+                            status -> JsString(pet.objectId.value)
+                          }
                         }
                       }
                     }
@@ -52,9 +54,9 @@ trait AzureRoutes extends SecurityDirectives {
                 }
               }
             }
-          }
+        }
       }
-    }.getOrElse(reject)
+      .getOrElse(reject)
 
   // Validates the provided SamUser has 'link' permission on the spend-profile resource represented by the
   // GetOrCreatePetManagedIdentityRequest
@@ -65,7 +67,9 @@ trait AzureRoutes extends SecurityDirectives {
       case None =>
         failWith(
           new WorkbenchExceptionWithErrorReport(
-            ErrorReport(StatusCodes.NotFound, s"Managed resource group ${request.managedResourceGroupName.value} not found")))
+            ErrorReport(StatusCodes.NotFound, s"Managed resource group ${request.managedResourceGroupName.value} not found")
+          )
+        )
 
     }
 
@@ -75,15 +79,14 @@ trait AzureRoutes extends SecurityDirectives {
       FullyQualifiedResourceId(CloudExtensions.resourceTypeName, AzureExtensions.resourceId),
       AzureExtensions.getPetManagedIdentityAction,
       samUser.id,
-      samRequestContext)
+      samRequestContext
+    )
 
   // Loads a SamUser from the database by email. Fails with 404 if not found.
   private def loadSamUser(email: WorkbenchEmail, samRequestContext: SamRequestContext): Directive1[SamUser] =
     onSuccess(azureService.flatTraverse(_.getSamUser(email, samRequestContext))).flatMap {
       case Some(samUser) => provide(samUser)
       case None =>
-        failWith(
-          new WorkbenchExceptionWithErrorReport(
-            ErrorReport(StatusCodes.NotFound, s"User ${email.value} not found")))
+        failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"User ${email.value} not found")))
     }
 }

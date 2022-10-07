@@ -14,23 +14,20 @@ import org.broadinstitute.dsde.workbench.sam.model._
 
 import scala.concurrent.duration.Duration
 
-/**
-  * Created by dvoet on 7/18/17.
+/** Created by dvoet on 7/18/17.
   */
 final case class AppConfig(
-                            emailDomain: String,
-                            directoryConfig: DirectoryConfig,
-                            schemaLockConfig: SchemaLockConfig,
-                            distributedLockConfig: DistributedLockConfig,
-                            googleConfig: Option[GoogleConfig],
-                            resourceTypes: Set[ResourceType],
-                            liquibaseConfig: LiquibaseConfig,
-                            blockedEmailDomains: Seq[String],
-                            termsOfServiceConfig: TermsOfServiceConfig,
-                            oidcConfig: OidcConfig,
-                            adminConfig: AdminConfig,
-                            azureServicesConfig: Option[AzureServicesConfig]
-                          )
+    emailDomain: String,
+    distributedLockConfig: DistributedLockConfig,
+    googleConfig: Option[GoogleConfig],
+    resourceTypes: Set[ResourceType],
+    liquibaseConfig: LiquibaseConfig,
+    blockedEmailDomains: Seq[String],
+    termsOfServiceConfig: TermsOfServiceConfig,
+    oidcConfig: OidcConfig,
+    adminConfig: AdminConfig,
+    azureServicesConfig: Option[AzureServicesConfig]
+)
 
 object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
@@ -51,7 +48,9 @@ object AppConfig {
         ResourceRoleName(uqPath),
         config.as[Set[String]](s"$uqPath.roleActions").map(ResourceAction.apply),
         config.as[Option[Set[String]]](s"$uqPath.includedRoles").getOrElse(Set.empty).map(ResourceRoleName.apply),
-        config.as[Option[Map[String, Set[String]]]](s"$uqPath.descendantRoles").getOrElse(Map.empty)
+        config
+          .as[Option[Map[String, Set[String]]]](s"$uqPath.descendantRoles")
+          .getOrElse(Map.empty)
           .map { case (resourceTypeName, roleNames) =>
             (ResourceTypeName(resourceTypeName), roleNames.map(ResourceRoleName.apply))
           }
@@ -85,24 +84,6 @@ object AppConfig {
     }
   }
 
-  implicit val cacheConfigReader: ValueReader[CacheConfig] = ValueReader.relative { config =>
-    CacheConfig(config.getLong("maxEntries"), config.getDuration("timeToLive"))
-  }
-
-  implicit val directoryConfigReader: ValueReader[DirectoryConfig] = ValueReader.relative { config =>
-    DirectoryConfig(
-      config.getString("url"),
-      config.getString("user"),
-      config.getString("password"),
-      config.getString("baseDn"),
-      config.getString("enabledUsersGroupDn"),
-      config.as[Option[Int]]("connectionPoolSize").getOrElse(15),
-      config.as[Option[Int]]("backgroundConnectionPoolSize").getOrElse(5),
-      config.as[Option[CacheConfig]]("memberOfCache").getOrElse(CacheConfig(100, java.time.Duration.ofMinutes(1))),
-      config.as[Option[CacheConfig]]("resourceCache").getOrElse(CacheConfig(10000, java.time.Duration.ofHours(1)))
-    )
-  }
-
   val jsonFactory = GsonFactory.getDefaultInstance
 
   implicit def nonEmptyListReader[A](implicit valueReader: ValueReader[List[A]]): ValueReader[Option[NonEmptyList[A]]] =
@@ -119,15 +100,6 @@ object AppConfig {
     PetServiceAccountConfig(
       GoogleProject(config.getString("googleProject")),
       config.as[Set[String]]("serviceAccountUsers").map(WorkbenchEmail)
-    )
-  }
-
-  implicit val schemaLockConfigReader: ValueReader[SchemaLockConfig] = ValueReader.relative { config =>
-    SchemaLockConfig(
-      config.getBoolean("lockSchemaOnBoot"),
-      config.getInt("recheckTimeInterval"),
-      config.getInt("maxTimeToWait"),
-      config.getString("instanceId")
     )
   }
 
@@ -167,10 +139,9 @@ object AppConfig {
       config.getString("managedAppClientId"),
       config.getString("managedAppClientSecret"),
       config.getString("managedAppTenantId"),
-      config.getString("managedAppPlanId")
+      config.as[Seq[String]]("managedAppPlanIds")
     )
   }
-
 
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
@@ -184,8 +155,6 @@ object AppConfig {
 
     AppConfig(
       emailDomain,
-      directoryConfig = config.as[DirectoryConfig]("directory"),
-      schemaLockConfig = config.as[SchemaLockConfig]("schemaLock"),
       distributedLockConfig = config.as[DistributedLockConfig]("distributedLock"),
       googleConfigOption,
       resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet,

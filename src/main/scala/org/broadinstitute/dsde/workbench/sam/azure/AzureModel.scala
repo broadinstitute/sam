@@ -29,18 +29,16 @@ final case class ManagedResourceGroupName(value: String) extends ValueObject
 final case class ManagedIdentityObjectId(value: String) extends ValueObject
 final case class ManagedIdentityDisplayName(value: String) extends ValueObject
 
-final case class GetOrCreatePetManagedIdentityRequest(tenantId: TenantId,
-                                                      subscriptionId: SubscriptionId,
-                                                      managedResourceGroupName: ManagedResourceGroupName)
+final case class GetOrCreatePetManagedIdentityRequest(tenantId: TenantId, subscriptionId: SubscriptionId, managedResourceGroupName: ManagedResourceGroupName)
 
-final case class PetManagedIdentityId(user: WorkbenchUserId,
-                                      tenantId: TenantId,
-                                      subscriptionId: SubscriptionId,
-                                      managedResourceGroupName: ManagedResourceGroupName)
+final case class PetManagedIdentityId(
+    user: WorkbenchUserId,
+    tenantId: TenantId,
+    subscriptionId: SubscriptionId,
+    managedResourceGroupName: ManagedResourceGroupName
+)
 
-final case class PetManagedIdentity(id: PetManagedIdentityId,
-                                    objectId: ManagedIdentityObjectId,
-                                    displayName: ManagedIdentityDisplayName)
+final case class PetManagedIdentity(id: PetManagedIdentityId, objectId: ManagedIdentityObjectId, displayName: ManagedIdentityDisplayName)
 
 object AzureExtensions {
   val resourceId = ResourceId("azure")

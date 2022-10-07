@@ -19,24 +19,37 @@ trait SecurityDirectives {
   def requireAction(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
     requireOneOfAction(resource, Set(action), userId, samRequestContext)
 
-  /**
-    * see requireOneOfParentAction
+  /** see requireOneOfParentAction
     */
-  def requireParentAction(resource: FullyQualifiedResourceId, newParent: Option[FullyQualifiedResourceId], parentAction: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
+  def requireParentAction(
+      resource: FullyQualifiedResourceId,
+      newParent: Option[FullyQualifiedResourceId],
+      parentAction: ResourceAction,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): Directive0 =
     requireOneOfParentAction(resource, newParent, Set(parentAction), userId, samRequestContext)
 
-  /**
-    * Ensures the user has one of parentActions on the parent of childResource. Passes if no parent exists.
+  /** Ensures the user has one of parentActions on the parent of childResource. Passes if no parent exists.
     *
-    * @param childResource the child resource
-    * @param newParent if this is None this function will check permissions on the current parent of childResource,
-    *                  if this is Some this function will check permissions on the specified resource
-    * @param parentActions the actions to check for
+    * @param childResource
+    *   the child resource
+    * @param newParent
+    *   if this is None this function will check permissions on the current parent of childResource, if this is Some this function will check permissions on the
+    *   specified resource
+    * @param parentActions
+    *   the actions to check for
     * @param userId
     * @param samRequestContext
     * @return
     */
-  def requireOneOfParentAction(childResource: FullyQualifiedResourceId, newParent: Option[FullyQualifiedResourceId], parentActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
+  def requireOneOfParentAction(
+      childResource: FullyQualifiedResourceId,
+      newParent: Option[FullyQualifiedResourceId],
+      parentActions: Set[ResourceAction],
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
       onSuccess(hasParentPermissionOneOf(childResource, newParent, parentActions, userId, samRequestContext)) { hasPermission =>
         if (hasPermission) {
@@ -52,7 +65,12 @@ trait SecurityDirectives {
       }
     }
 
-  def   requireCreateWithOptionalParent(maybeParent: Option[FullyQualifiedResourceId], resourceType: ResourceType, userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = {
+  def requireCreateWithOptionalParent(
+      maybeParent: Option[FullyQualifiedResourceId],
+      resourceType: ResourceType,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): Directive0 =
     maybeParent match {
       case None => Directives.pass // no parent specified, proceed
       case Some(parent) =>
@@ -61,7 +79,9 @@ trait SecurityDirectives {
         if (!parentAllowed) {
           Directives.failWith(
             new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.BadRequest, s"Parents are not permitted for resource type ${resourceType.name.value}")))
+              ErrorReport(StatusCodes.BadRequest, s"Parents are not permitted for resource type ${resourceType.name.value}")
+            )
+          )
         } else {
           Directives.mapInnerRoute { innerRoute =>
             onSuccess(policyEvaluatorService.hasPermissionOneOf(parent, Set(SamResourceActions.addChild), userId, samRequestContext)) { hasPermission =>
@@ -70,63 +90,94 @@ trait SecurityDirectives {
               } else {
                 Directives.failWith(
                   new WorkbenchExceptionWithErrorReport(
-                    ErrorReport(StatusCodes.Forbidden, s"Parent resource $parent does not exist or you are not permitted to add child resources.")))
+                    ErrorReport(StatusCodes.Forbidden, s"Parent resource $parent does not exist or you are not permitted to add child resources.")
+                  )
+                )
               }
             }
           }
         }
     }
-  }
 
-  def failUnlessUserHasPermission(route: server.Route, resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route = {
+  def failUnlessUserHasPermission(
+      route: server.Route,
+      resource: FullyQualifiedResourceId,
+      requestedActions: Set[ResourceAction],
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): server.Route =
     onSuccess(policyEvaluatorService.hasPermissionOneOf(resource, requestedActions, userId, samRequestContext)) { hasPermission =>
       if (hasPermission) {
         route
       } else {
-        val forbiddenErrorMessage = s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}"
+        val forbiddenErrorMessage =
+          s"You may not perform any of ${requestedActions.mkString("[", ", ", "]").toUpperCase} on ${resource.resourceTypeName.value}/${resource.resourceId.value}"
         determineErrorMessage(resource, userId, forbiddenErrorMessage, samRequestContext)
       }
     }
-  }
 
-
-  def requireOneOfAction(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 =
+  def requireOneOfAction(
+      resource: FullyQualifiedResourceId,
+      requestedActions: Set[ResourceAction],
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): Directive0 =
     Directives.mapInnerRoute { innerRoute =>
       failUnlessUserHasPermission(innerRoute, resource, requestedActions, userId, samRequestContext)
     }
 
-  def requireOneOfActionIfParentIsWorkspace(resource: FullyQualifiedResourceId, requestedActions: Set[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): Directive0 = Directives.mapInnerRoute { innerRoute =>
+  def requireOneOfActionIfParentIsWorkspace(
+      resource: FullyQualifiedResourceId,
+      requestedActions: Set[ResourceAction],
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): Directive0 = Directives.mapInnerRoute { innerRoute =>
     onSuccess(resourceService.getResourceParent(resource, samRequestContext)) {
-      case Some(parent) => if (parent.resourceTypeName == SamResourceTypes.workspaceName) {
-        failUnlessUserHasPermission(innerRoute, resource, requestedActions, userId, samRequestContext)
-      } else {
-        innerRoute
-      }
+      case Some(parent) =>
+        if (parent.resourceTypeName == SamResourceTypes.workspaceName) {
+          failUnlessUserHasPermission(innerRoute, resource, requestedActions, userId, samRequestContext)
+        } else {
+          innerRoute
+        }
       case None => innerRoute
     }
   }
 
-  /**
-    * in the case where we don't have the required action, we need to figure out if we should return
-    * a Not Found (you have no access) vs a Forbidden (you have access, just not the right kind)
+  /** in the case where we don't have the required action, we need to figure out if we should return a Not Found (you have no access) vs a Forbidden (you have
+    * access, just not the right kind)
     */
-  private def determineErrorMessage(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, forbiddenErrorMessage: String, samRequestContext: SamRequestContext) = {
+  private def determineErrorMessage(
+      resource: FullyQualifiedResourceId,
+      userId: WorkbenchUserId,
+      forbiddenErrorMessage: String,
+      samRequestContext: SamRequestContext
+  ) =
     onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId, samRequestContext)) { actions =>
       if (actions.isEmpty) {
         Directives.failWith(
           new WorkbenchExceptionWithErrorReport(
-            ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")))
+            ErrorReport(StatusCodes.NotFound, s"Resource ${resource.resourceTypeName.value}/${resource.resourceId.value} not found")
+          )
+        )
       } else {
         Directives.failWith(
-          new WorkbenchExceptionWithErrorReport(ErrorReport(
-            StatusCodes.Forbidden,
-            forbiddenErrorMessage
-          )))
+          new WorkbenchExceptionWithErrorReport(
+            ErrorReport(
+              StatusCodes.Forbidden,
+              forbiddenErrorMessage
+            )
+          )
+        )
       }
     }
-  }
 
-  private def hasParentPermissionOneOf(resource: FullyQualifiedResourceId, newParent: Option[FullyQualifiedResourceId], actions: Iterable[ResourceAction], userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] = {
+  private def hasParentPermissionOneOf(
+      resource: FullyQualifiedResourceId,
+      newParent: Option[FullyQualifiedResourceId],
+      actions: Iterable[ResourceAction],
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[Boolean] = {
     val parentIO = newParent match {
       case Some(_) => IO.pure(newParent)
       case None => resourceService.getResourceParent(resource, samRequestContext)

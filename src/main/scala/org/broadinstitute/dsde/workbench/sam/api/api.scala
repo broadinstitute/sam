@@ -10,7 +10,7 @@ import scala.concurrent.Future
 
 package object api {
   implicit def ioMarshaller[A, B](implicit m: Marshaller[Future[A], B]): Marshaller[IO[A], B] =
-    Marshaller(implicit ec => (x => m(x.unsafeToFuture())))
+    Marshaller(implicit ec => x => m(x.unsafeToFuture()))
 }
 
 object ImplicitConversions {

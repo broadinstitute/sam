@@ -20,21 +20,72 @@ import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.ExecutionContext
 
-/**
-  * Created by dvoet on 7/14/17.
+/** Created by dvoet on 7/14/17.
   */
-class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val user: SamUser, directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val newSamUser: Option[SamUser] = None, tosService: TosService, override val azureService: Option[AzureService] = None)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, managedGroupService, TermsOfServiceConfig(false, false, "0", "app.terra.bio/#terms-of-service"), directoryDAO, registrationDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false), FakeOpenIDConnectConfiguration, azureService) with MockSamUserDirectives with ExtensionRoutes with ScalaFutures {
+class TestSamRoutes(
+    resourceService: ResourceService,
+    policyEvaluatorService: PolicyEvaluatorService,
+    userService: UserService,
+    statusService: StatusService,
+    managedGroupService: ManagedGroupService,
+    val user: SamUser,
+    directoryDAO: DirectoryDAO,
+    val cloudExtensions: CloudExtensions = NoExtensions,
+    override val newSamUser: Option[SamUser] = None,
+    tosService: TosService,
+    override val azureService: Option[AzureService] = None
+)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+    extends SamRoutes(
+      resourceService,
+      userService,
+      statusService,
+      managedGroupService,
+      TermsOfServiceConfig(false, false, "0", "app.terra.bio/#terms-of-service"),
+      directoryDAO,
+      policyEvaluatorService,
+      tosService,
+      LiquibaseConfig("", false),
+      FakeOpenIDConnectConfiguration,
+      azureService
+    )
+    with MockSamUserDirectives
+    with ExtensionRoutes
+    with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
-  def mockRegistrationDao: RegistrationDAO = registrationDAO
 }
 
-class TestSamTosEnabledRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val user: SamUser, directoryDAO: DirectoryDAO, registrationDAO: RegistrationDAO, val cloudExtensions: CloudExtensions = NoExtensions, override val newSamUser: Option[SamUser] = None, tosService: TosService, override val azureService: Option[AzureService] = None)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-  extends SamRoutes(resourceService, userService, statusService, managedGroupService, TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"), directoryDAO, registrationDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false), FakeOpenIDConnectConfiguration, azureService) with MockSamUserDirectives with ExtensionRoutes with ScalaFutures {
+class TestSamTosEnabledRoutes(
+    resourceService: ResourceService,
+    policyEvaluatorService: PolicyEvaluatorService,
+    userService: UserService,
+    statusService: StatusService,
+    managedGroupService: ManagedGroupService,
+    val user: SamUser,
+    directoryDAO: DirectoryDAO,
+    val cloudExtensions: CloudExtensions = NoExtensions,
+    override val newSamUser: Option[SamUser] = None,
+    tosService: TosService,
+    override val azureService: Option[AzureService] = None
+)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+    extends SamRoutes(
+      resourceService,
+      userService,
+      statusService,
+      managedGroupService,
+      TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"),
+      directoryDAO,
+      policyEvaluatorService,
+      tosService,
+      LiquibaseConfig("", false),
+      FakeOpenIDConnectConfiguration,
+      azureService
+    )
+    with MockSamUserDirectives
+    with ExtensionRoutes
+    with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
-  def mockRegistrationDao: RegistrationDAO = registrationDAO
 }
 
 object TestSamRoutes {
@@ -84,19 +135,19 @@ object TestSamRoutes {
     ResourceRoleName("owner")
   )
 
-  def apply(resourceTypes: Map[ResourceTypeName, ResourceType],
-            user: SamUser = defaultUserInfo,
-            policyAccessDAO: Option[AccessPolicyDAO] = None,
-            maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
-            cloudExtensions: Option[CloudExtensions] = None,
-            adminEmailDomains: Option[Set[String]] = None,
-            crlService: Option[CrlService] = None
-           )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
+  def apply(
+      resourceTypes: Map[ResourceTypeName, ResourceType],
+      user: SamUser = defaultUserInfo,
+      policyAccessDAO: Option[AccessPolicyDAO] = None,
+      maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
+      cloudExtensions: Option[CloudExtensions] = None,
+      adminEmailDomains: Option[Set[String]] = None,
+      crlService: Option[CrlService] = None
+  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
     val directoryDAO = maybeDirectoryDAO.getOrElse(new MockDirectoryDAO())
-    val registrationDAO = new MockRegistrationDAO()
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], directoryDAO))
 
@@ -112,16 +163,29 @@ object TestSamRoutes {
       emailDomain,
       allowedAdminEmailDomains = adminEmailDomains.getOrElse(Set.empty)
     )
-    val mockUserService = new UserService(directoryDAO, cloudXtns, registrationDAO, Seq.empty, new TosService(directoryDAO, registrationDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
-    val mockTosService = new TosService(directoryDAO,registrationDAO, emailDomain, TestSupport.tosConfig)
-    val mockManagedGroupService = new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, cloudXtns, emailDomain)
+    val mockUserService =
+      new UserService(directoryDAO, cloudXtns, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val mockTosService = new TosService(directoryDAO, emailDomain, TestSupport.tosConfig)
+    val mockManagedGroupService =
+      new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, cloudXtns, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(user, samRequestContext))
     val allUsersGroup = TestSupport.runAndWait(cloudXtns.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
-    val mockStatusService = new StatusService(directoryDAO, registrationDAO, cloudXtns, dbRef)
+    val mockStatusService = new StatusService(directoryDAO, cloudXtns, dbRef)
     val azureService = new AzureService(crlService.getOrElse(MockCrlService()), directoryDAO)
-    new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, user, directoryDAO, registrationDAO, tosService = mockTosService, cloudExtensions = cloudXtns, azureService = Some(azureService))
+    new TestSamRoutes(
+      mockResourceService,
+      policyEvaluatorService,
+      mockUserService,
+      mockStatusService,
+      mockManagedGroupService,
+      user,
+      directoryDAO,
+      tosService = mockTosService,
+      cloudExtensions = cloudXtns,
+      azureService = Some(azureService)
+    )
   }
 }

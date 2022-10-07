@@ -5,8 +5,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.PetServiceAccount
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountKeyId
 
-/**
-  * Created by mbemis on 1/10/18.
+/** Created by mbemis on 1/10/18.
   */
 trait KeyCache {
   def onBoot()(implicit system: ActorSystem): IO[Unit]

@@ -4,9 +4,7 @@ import scalikejdbc._
 
 import java.time.Instant
 
-final case class DistributedLockRecord(lockName: String,
-                                       lockValue: String,
-                                       expiresAt: Instant)
+final case class DistributedLockRecord(lockName: String, lockValue: String, expiresAt: Instant)
 
 object DistributedLockTable extends SQLSyntaxSupportWithDefaultSamDB[DistributedLockRecord] {
   override def tableName: String = "DISTRIBUTED_LOCK"

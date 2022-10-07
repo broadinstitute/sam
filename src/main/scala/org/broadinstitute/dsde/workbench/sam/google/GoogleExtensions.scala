@@ -21,7 +21,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LockDetails, PostgresDistributedLockDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LockDetails, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -45,7 +45,6 @@ object GoogleExtensions {
 class GoogleExtensions(
     distributedLock: PostgresDistributedLockDAO[IO],
     val directoryDAO: DirectoryDAO,
-    val registrationDAO: RegistrationDAO,
     val accessPolicyDAO: AccessPolicyDAO,
     val googleDirectoryDAO: GoogleDirectoryDAO,
     val notificationPubSubDAO: GooglePubSubDAO,
@@ -60,7 +59,8 @@ class GoogleExtensions(
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
     val resourceTypes: Map[ResourceTypeName, ResourceType],
-    val superAdminsGroup: WorkbenchEmail)(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
+    val superAdminsGroup: WorkbenchEmail
+)(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
     extends LazyLogging
     with FutureSupport
     with CloudExtensions
@@ -74,9 +74,12 @@ class GoogleExtensions(
   override val emailDomain = googleServicesConfig.appsDomain
 
   private[google] val allUsersGroupEmail = WorkbenchEmail(
-    s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain")
+    s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"
+  )
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[WorkbenchGroup] = {
+  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+      executionContext: ExecutionContext
+  ): Future[WorkbenchGroup] = {
     val allUsersGroupStub = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersGroupEmail)
     for {
       existingGroup <- directoryDAO.loadGroup(allUsersGroupStub.id, samRequestContext = samRequestContext).unsafeToFuture()
@@ -97,13 +100,13 @@ class GoogleExtensions(
   }
 
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
-    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith {
-      case t => throw new WorkbenchException("Unable to query for admin status.", t)
+    googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith { case t =>
+      throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
   override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
-    googleDirectoryDAO.isGroupMember(superAdminsGroup, memberEmail) recoverWith {
-      case t => throw new WorkbenchException("Unable to query for admin status.", t)
+    googleDirectoryDAO.isGroupMember(superAdminsGroup, memberEmail) recoverWith { case t =>
+      throw new WorkbenchException("Unable to query for admin status.", t)
     }
 
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
@@ -115,20 +118,31 @@ class GoogleExtensions(
       maybeSamUser <- directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext)
       samUser <- maybeSamUser match {
         case Some(samUser) => IO.pure(samUser)
-        case None => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).flatMap {
-          case Some(_) =>
-            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a SamUser")))
-          case None =>
-            val newUser = SamUser(genWorkbenchUserId(System.currentTimeMillis()), Option(googleSubjectId), googleServicesConfig.serviceAccountClientEmail, None, false, None)
-            IO.fromFuture(IO(samApplication.userService.createUser(newUser, samRequestContext))).map(_ => newUser)
-        }
+        case None =>
+          directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext).flatMap {
+            case Some(_) =>
+              IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subjectId $googleSubjectId is not a SamUser")))
+            case None =>
+              val newUser = SamUser(
+                genWorkbenchUserId(System.currentTimeMillis()),
+                Option(googleSubjectId),
+                googleServicesConfig.serviceAccountClientEmail,
+                None,
+                false,
+                None
+              )
+              IO.fromFuture(IO(samApplication.userService.createUser(newUser, samRequestContext))).map(_ => newUser)
+          }
       }
 
-      _ <- googleKms.createKeyRing(googleServicesConfig.googleKms.project,
+      _ <- googleKms.createKeyRing(
+        googleServicesConfig.googleKms.project,
         googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId) handleErrorWith { case _: AlreadyExistsException => IO.unit }
+        googleServicesConfig.googleKms.keyRingId
+      ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
 
-      _ <- googleKms.createKey(googleServicesConfig.googleKms.project,
+      _ <- googleKms.createKey(
+        googleServicesConfig.googleKms.project,
         googleServicesConfig.googleKms.location,
         googleServicesConfig.googleKms.keyRingId,
         googleServicesConfig.googleKms.keyId,
@@ -136,12 +150,14 @@ class GoogleExtensions(
         Option(Duration.newBuilder().setSeconds(googleServicesConfig.googleKms.rotationPeriod.toSeconds).build())
       ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
 
-      _ <- googleKms.addMemberToKeyPolicy(googleServicesConfig.googleKms.project,
+      _ <- googleKms.addMemberToKeyPolicy(
+        googleServicesConfig.googleKms.project,
         googleServicesConfig.googleKms.location,
         googleServicesConfig.googleKms.keyRingId,
         googleServicesConfig.googleKms.keyId,
         s"group:$allUsersGroupEmail",
-        "roles/cloudkms.cryptoKeyEncrypterDecrypter")
+        "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+      )
 
       _ <- samApplication.resourceService.createResourceType(extensionResourceType, samRequestContext)
 
@@ -157,7 +173,6 @@ class GoogleExtensions(
   // do all the heavy lifting of creating the Google Group and adding members.
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
     googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, Seq(id.toJson.compactPrint))
-
 
   /*
     - managed groups and access policies are both "groups"
@@ -190,16 +205,19 @@ class GoogleExtensions(
 
       // make all the publish messages for the previously synced groups
       messages <- previouslySyncedIds.traverse {
-          // it is a group that isn't an access policy, could be a managed group
-          case groupName: WorkbenchGroupName =>
-            makeConstrainedResourceAccessPolicyMessages(groupName, samRequestContext).map(_  :+ groupName.toJson.compactPrint)
+        // it is a group that isn't an access policy, could be a managed group
+        case groupName: WorkbenchGroupName =>
+          makeConstrainedResourceAccessPolicyMessages(groupName, samRequestContext).map(_ :+ groupName.toJson.compactPrint)
 
-          // it is the admin or member access policy of a managed group
-          case accessPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) =>
-            makeConstrainedResourceAccessPolicyMessages(accessPolicyId, samRequestContext).map(_  :+ accessPolicyId.toJson.compactPrint)
+        // it is the admin or member access policy of a managed group
+        case accessPolicyId @ FullyQualifiedPolicyId(
+              FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id),
+              ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName
+            ) =>
+          makeConstrainedResourceAccessPolicyMessages(accessPolicyId, samRequestContext).map(_ :+ accessPolicyId.toJson.compactPrint)
 
-          // it is an access policy on a resource that's not a managed group
-          case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
+        // it is an access policy on a resource that's not a managed group
+        case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
       }
 
       // publish all the messages
@@ -209,32 +227,38 @@ class GoogleExtensions(
 
     } yield {
       val duration = end - start
-      logger.info(s"GoogleExtensions.onGroupUpdate timing (ms)", StructuredArguments.entries(Map("duration" -> duration.toMillis, "group-ids" -> groupIdentities.map(_.toString).asJava).asJava))
+      logger.info(
+        s"GoogleExtensions.onGroupUpdate timing (ms)",
+        StructuredArguments.entries(Map("duration" -> duration.toMillis, "group-ids" -> groupIdentities.map(_.toString).asJava).asJava)
+      )
     }
   }.unsafeToFuture()
 
-  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[List[String]] = {
-   // start with a group
+  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[List[String]] =
+    // start with a group
     for {
       // get all the ancestors of that group
       ancestorGroupsOfManagedGroups <- directoryDAO.listAncestorGroups(groupIdentity, samRequestContext)
 
       // get all the ids of the group and its ancestors
       managedGroupIds = (ancestorGroupsOfManagedGroups + groupIdentity).collect {
-        case FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id), ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName) => WorkbenchGroupName(id.value)
+        case FullyQualifiedPolicyId(
+              FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id),
+              ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName
+            ) =>
+          WorkbenchGroupName(id.value)
       }
 
       // get all access policies on any resource that is constrained by the groups
       constrainedResourceAccessPolicyIds <- managedGroupIds.toList.traverse(
-        accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, samRequestContext))
+        accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, samRequestContext)
+      )
 
       // return messages for all the affected access policies and the original group we started with
     } yield constrainedResourceAccessPolicyIds.flatten.map(accessPolicyId => accessPolicyId.toJson.compactPrint)
-  }
 
-  private def publishMessages(messages: Seq[String]): Future[Unit] = {
+  private def publishMessages(messages: Seq[String]): Future[Unit] =
     googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, messages)
-  }
 
   override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
@@ -254,8 +278,7 @@ class GoogleExtensions(
       case None => Future.successful(false)
     }
 
-  /**
-    * Evaluate a future for each pet in parallel.
+  /** Evaluate a future for each pet in parallel.
     */
   private def forAllPets[T](userId: WorkbenchUserId, samRequestContext: SamRequestContext)(f: PetServiceAccount => Future[T]): Future[Seq[T]] =
     for {
@@ -270,12 +293,12 @@ class GoogleExtensions(
       _ <- withProxyEmail(user.id) { proxyEmail =>
         googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
       }
-      _ <- forAllPets(user.id, samRequestContext)({ (petServiceAccount: PetServiceAccount) => enablePetServiceAccount(petServiceAccount, samRequestContext) })
+      _ <- forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) => enablePetServiceAccount(petServiceAccount, samRequestContext))
     } yield ()
 
   override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-      _ <- forAllPets(user.id, samRequestContext)({ (petServiceAccount: PetServiceAccount) => disablePetServiceAccount(petServiceAccount, samRequestContext) })
+      _ <- forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) => disablePetServiceAccount(petServiceAccount, samRequestContext))
       _ <- withProxyEmail(user.id) { proxyEmail =>
         googleDirectoryDAO.removeMemberFromGroup(proxyEmail, WorkbenchEmail(user.email.value))
       }
@@ -284,7 +307,7 @@ class GoogleExtensions(
   override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- forAllPets(userId, samRequestContext)((petServiceAccount: PetServiceAccount) => removePetServiceAccount(petServiceAccount, samRequestContext))
-      _ <- withProxyEmail(userId) { googleDirectoryDAO.deleteGroup }
+      _ <- withProxyEmail(userId)(googleDirectoryDAO.deleteGroup)
     } yield ()
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] =
@@ -301,10 +324,10 @@ class GoogleExtensions(
 
   def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
-    // The normal situation is that the pet either exists in both ldap and google or neither.
-    // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
-    // This code is a little extra complicated to detect the cases when a pet does not exist in google, ldap or both
-    // and do the right thing.
+    // The normal situation is that the pet either exists in both the database and google or neither.
+    // Sometimes, especially in tests, the pet may be removed from the database, but not google or the other way around.
+    // This code is a little extra complicated to detect the cases when a pet does not exist in google, the database or
+    // both and do the right thing.
     val createPet = for {
       (maybePet, maybeServiceAccount) <- retrievePetAndSA(user.id, petSaName, project, samRequestContext)
       serviceAccount <- maybeServiceAccount match {
@@ -324,19 +347,16 @@ class GoogleExtensions(
         case Some(sa) => IO.pure(sa)
       }
       pet <- (maybePet, maybeServiceAccount) match {
-        // pet does not exist in ldap, create it and enable the identity
+        // pet does not exist in the database, create it and enable the identity
         case (None, _) =>
           for {
             p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount), samRequestContext)
-            _ <- registrationDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount), samRequestContext)
             _ <- directoryDAO.enableIdentity(p.id, samRequestContext)
-            _ <- registrationDAO.enableIdentity(p.id, samRequestContext)
           } yield p
-        // pet already exists in ldap, but a new SA was created so update ldap with new SA info
+        // pet already exists in the database, but a new SA was created so update the database with new SA info
         case (Some(p), None) =>
           for {
             p <- directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount), samRequestContext)
-            _ <- registrationDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount), samRequestContext)
           } yield p
 
         // everything already existed
@@ -347,30 +367,42 @@ class GoogleExtensions(
     val lock = LockDetails(s"${project.value}-createPet", user.id.value, 30 seconds)
 
     for {
-      (pet, sa) <- retrievePetAndSA(user.id, petSaName, project, samRequestContext) //I'm loving better-monadic-for
+      (pet, sa) <- retrievePetAndSA(user.id, petSaName, project, samRequestContext) // I'm loving better-monadic-for
       shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
       p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
     } yield p
   }
 
   private def assertProjectInTerraOrg(project: GoogleProject): IO[Unit] = {
-    val validOrg = IO.fromFuture(IO(googleProjectDAO.getAncestry(project.value).map { ancestry =>
-      ancestry.exists { ancestor =>
-        ancestor.getResourceId.getType == GoogleResourceTypes.Organization.value && ancestor.getResourceId.getId == googleServicesConfig.terraGoogleOrgNumber
+    val validOrg = IO
+      .fromFuture(IO(googleProjectDAO.getAncestry(project.value).map { ancestry =>
+        ancestry.exists { ancestor =>
+          ancestor.getResourceId.getType == GoogleResourceTypes.Organization.value && ancestor.getResourceId.getId == googleServicesConfig.terraGoogleOrgNumber
+        }
+      }))
+      .recoverWith {
+        // if the getAncestry call results in a 403 error the project can't be in the right org
+        case e: HttpResponseException if e.getStatusCode == StatusCodes.Forbidden.intValue =>
+          IO.raiseError(
+            new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.BadRequest, s"Access denied from google accessing project ${project.value}, is it a Terra project?", e)
+            )
+          )
       }
-    })).recoverWith {
-      // if the getAncestry call results in a 403 error the project can't be in the right org
-      case e: HttpResponseException if e.getStatusCode == StatusCodes.Forbidden.intValue =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access denied from google accessing project ${project.value}, is it a Terra project?", e)))
-    }
 
     validOrg.flatMap {
       case true => IO.unit
-      case false => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
+      case false =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
     }
   }
 
-  private def retrievePetAndSA(userId: WorkbenchUserId, petServiceAccountName: ServiceAccountName, project: GoogleProject, samRequestContext: SamRequestContext): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
+  private def retrievePetAndSA(
+      userId: WorkbenchUserId,
+      petServiceAccountName: ServiceAccountName,
+      project: GoogleProject,
+      samRequestContext: SamRequestContext
+  ): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
     val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petServiceAccountName)))
     val pet = directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
     (pet, serviceAccount).parTupled
@@ -380,7 +412,8 @@ class GoogleExtensions(
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
-        case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), project, samRequestContext).map(Option(_))
+        case Some(userId: WorkbenchUserId) =>
+          getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), project, samRequestContext).map(Option(_))
         case _ => IO.pure(None)
       }
     } yield key
@@ -405,13 +438,16 @@ class GoogleExtensions(
     }
 
   private def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
-    val projectName = s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" //max 30 characters. subject ID is 21
+    val projectName =
+      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
     for {
-      creationOperationId <- googleProjectDAO.createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization).map(opId => Option(opId)) recover {
+      creationOperationId <- googleProjectDAO
+        .createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
+        .map(opId => Option(opId)) recover {
         case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
       }
       _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) //poll until it's created
+        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
         case None => Future.successful(())
       }
       key <- getPetServiceAccountKey(user, GoogleProject(projectName), samRequestContext).unsafeToFuture()
@@ -426,7 +462,7 @@ class GoogleExtensions(
         case _ => false
       }
 
-    retryExponentially(whenCreating)(() => {
+    retryExponentially(whenCreating) { () =>
       googleProjectDAO.pollOperation(operationId).map { operation =>
         if (operation.getDone && Option(operation.getError).exists(_.getCode.intValue() == Code.ALREADY_EXISTS.getNumber)) true
         else if (operation.getDone && Option(operation.getError).isEmpty) true
@@ -434,7 +470,7 @@ class GoogleExtensions(
           throw new WorkbenchException(s"project creation failed with error ${operation.getError.getMessage}")
         else throw new Exception("project still creating...")
       }
-    })
+    }
   }
 
   def getAccessTokenUsingJson(saKey: String, desiredScopes: Set[String]): Future[String] = Future {
@@ -455,7 +491,6 @@ class GoogleExtensions(
   private def enablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- directoryDAO.enableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
-      _ <- registrationDAO.enableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
         googleDirectoryDAO.addMemberToGroup(proxyEmail, petServiceAccount.serviceAccount.email)
       }
@@ -464,7 +499,6 @@ class GoogleExtensions(
   private def disablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- directoryDAO.disableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
-      _ <- registrationDAO.disableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
         googleDirectoryDAO.removeMemberFromGroup(proxyEmail, petServiceAccount.serviceAccount.email)
       }
@@ -476,7 +510,6 @@ class GoogleExtensions(
       _ <- disablePetServiceAccount(petServiceAccount, samRequestContext)
       // remove the record for the pet service account
       _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext).unsafeToFuture()
-      _ <- registrationDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext).unsafeToFuture()
       // remove the service account itself in Google
       _ <- googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))
     } yield ()
@@ -488,11 +521,9 @@ class GoogleExtensions(
     for {
       dateOpt <- groupDate
       emailOpt <- groupEmail
-    } yield {
-      (dateOpt, emailOpt) match {
-        case (Some(date), Some(email)) => Option(GroupSyncResponse(date.toString, email))
-        case _ => None
-      }
+    } yield (dateOpt, emailOpt) match {
+      case (Some(date), Some(email)) => Option(GroupSyncResponse(date.toString, email))
+      case _ => None
     }
   }
 
@@ -545,38 +576,39 @@ class GoogleExtensions(
       logger.debug("Checking Google Groups...")
       for {
         groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroupEmail)
-      } yield {
-        groupOption match {
-          case Some(_) => OkStatus
-          case None => failedStatus(s"could not find group ${allUsersGroupEmail} in google")
-        }
+      } yield groupOption match {
+        case Some(_) => OkStatus
+        case None => failedStatus(s"could not find group ${allUsersGroupEmail} in google")
       }
     }
 
     def checkPubsub: Future[SubsystemStatus] = {
       logger.debug("Checking PubSub topics...")
-      case class TopicToDaoPair (
-        topic: String,
-        dao: GooglePubSubDAO
+      case class TopicToDaoPair(
+          topic: String,
+          dao: GooglePubSubDAO
       )
 
-      val pubSubDaoToCheck = List(TopicToDaoPair(googleServicesConfig.groupSyncPubSubConfig.topic, googleGroupSyncPubSubDAO),
+      val pubSubDaoToCheck = List(
+        TopicToDaoPair(googleServicesConfig.groupSyncPubSubConfig.topic, googleGroupSyncPubSubDAO),
         TopicToDaoPair(googleServicesConfig.notificationTopic, notificationPubSubDAO),
         TopicToDaoPair(googleServicesConfig.disableUsersPubSubConfig.topic, googleDisableUsersPubSubDAO),
-        TopicToDaoPair(googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.topic, googleKeyCache.googleKeyCachePubSubDao))
+        TopicToDaoPair(googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.topic, googleKeyCache.googleKeyCachePubSubDao)
+      )
       for {
-        listOfUnfoundTopics <- Future.traverse(pubSubDaoToCheck) { pair => {
+        listOfUnfoundTopics <- Future.traverse(pubSubDaoToCheck) { pair =>
           pair.dao.getTopic(pair.topic).map {
             case Some(_) => None
             case None => Some(pair.topic)
           }
-        }}
+        }
         flattenedListOfUnfoundTopics = listOfUnfoundTopics.flatten
-      } yield if (flattenedListOfUnfoundTopics.isEmpty) {
-        OkStatus
-      } else {
-        failedStatus(s"Could not find topic(s): ${flattenedListOfUnfoundTopics.toString}")
-      }
+      } yield
+        if (flattenedListOfUnfoundTopics.isEmpty) {
+          OkStatus
+        } else {
+          failedStatus(s"Could not find topic(s): ${flattenedListOfUnfoundTopics.toString}")
+        }
     }
 
     def checkIam: Future[SubsystemStatus] = {
@@ -608,7 +640,8 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
         cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.subscription,
         cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.workerCount,
         googleGroupSynchronizer
-      ))
+      )
+    )
     system.actorOf(
       DisableUsersMonitorSupervisor.props(
         cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.pollInterval,
@@ -624,8 +657,6 @@ case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, google
     for {
       _ <- googleGroupSynchronizer.init()
       onBootResult <- cloudExtensions.onBoot(samApplication)
-    } yield {
-      onBootResult
-    }
+    } yield onBootResult
   }
 }

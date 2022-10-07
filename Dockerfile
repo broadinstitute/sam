@@ -1,4 +1,4 @@
-FROM us.gcr.io/broad-dsp-gcr-public/base/jre:11-debian
+FROM us.gcr.io/broad-dsp-gcr-public/base/jre:17-debian
 
 # To run, build jar using ./docker/build.sh
 

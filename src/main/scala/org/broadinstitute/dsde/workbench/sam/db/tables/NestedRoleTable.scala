@@ -3,9 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 import scalikejdbc._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
 
-final case class NestedRoleRecord(baseRoleId: ResourceRolePK,
-                                  nestedRoleId: ResourceRolePK,
-                                  descendantsOnly: Boolean)
+final case class NestedRoleRecord(baseRoleId: ResourceRolePK, nestedRoleId: ResourceRolePK, descendantsOnly: Boolean)
 
 object NestedRoleTable extends SQLSyntaxSupportWithDefaultSamDB[NestedRoleRecord] {
   override def tableName: String = "SAM_NESTED_ROLE"
