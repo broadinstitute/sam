@@ -8,7 +8,7 @@ object Dependencies {
   val scalaTestV    = "3.2.3"
   val scalaCheckV    = "1.14.3"
   val scalikejdbcVersion    = "3.4.2"
-  val postgresDriverVersion = "42.3.7"
+  val postgresDriverVersion = "42.3.4"
   val http4sVersion = "0.21.13"
 
   val workbenchUtilV   = "0.6-74c9fc2"
