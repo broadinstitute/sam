@@ -28,8 +28,6 @@ object Dependencies {
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
-  val excludeSpringBoot = ExclusionRule(organization = "org.springframework.boot")
-  val excludeSpring = ExclusionRule(organization = "org.springframework")
   val excludeGoogleCloudResourceManager = ExclusionRule(organization = "com.google.apis", name = "google-api-services-cloudresourcemanager")
   val excludeJerseyCore = ExclusionRule(organization = "org.glassfish.jersey.core", name = "*")
   val excludeJerseyMedia = ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
