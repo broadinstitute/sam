@@ -43,7 +43,8 @@ object Dependencies {
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
-  val stackdriverLogging: ModuleID = "org.springframework.cloud" % "spring-cloud-gcp-logging" % "1.2.8.RELEASE" excludeAll(excludeSpring, excludeSpringBoot)
+//  val stackdriverLogging: ModuleID = "org.springframework.cloud" % "spring-cloud-gcp-logging" % "1.2.8.RELEASE" excludeAll(excludeSpring, excludeSpringBoot)
+  val stackdriverLogging: ModuleID = "com.google.cloud" % "google-cloud-logging-logback" % "0.127.11-alpha"
   val janino: ModuleID = "org.codehaus.janino" % "janino" % "3.1.7" // For if-else logic in logging config
 
   val akkaActor: ModuleID = "com.typesafe.akka" %% "akka-actor" % akkaV
