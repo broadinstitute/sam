@@ -31,10 +31,10 @@ trait StatusRoutes {
           complete {
             statusService.getStatus().map { statusResponse =>
               val httpStatus = if (statusResponse.ok) {
-                openTelemetry.incrementCounter("checkStatus-success", tags= openTelemetryTags).unsafeToFuture() // todo: verify which EC to use
+                openTelemetry.incrementCounter("checkStatus-success", tags= openTelemetryTags).unsafeToFuture()
                 StatusCodes.OK
               } else {
-                openTelemetry.incrementCounter("checkStatus-failure", tags= openTelemetryTags).unsafeToFuture() // todo: verify which EC to use
+                openTelemetry.incrementCounter("checkStatus-failure", tags= openTelemetryTags).unsafeToFuture()
                 StatusCodes.InternalServerError
               }
               (httpStatus, statusResponse)
