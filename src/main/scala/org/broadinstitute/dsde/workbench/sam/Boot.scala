@@ -3,8 +3,7 @@ package org.broadinstitute.dsde.workbench.sam
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
-import cats.effect
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect._
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
@@ -14,6 +13,7 @@ import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsIn
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
+import org.broadinstitute.dsde.workbench.openTelemetry.{OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -87,6 +87,11 @@ object Boot extends IOApp with LazyLogging {
 
       googleSynchronizerExecutionContext <- ExecutionContexts.fixedThreadPool[IO](24)
 
+      // This is for sending custom metrics to stackdriver. all custom metrics starts with `OpenCensus/sam/`.
+      // Typing in `sam` in metrics explorer will show all sam custom metrics.
+      // As best practice, we should have all related metrics under same prefix separated by `/`
+      implicit0(openTelemetry: OpenTelemetryMetrics[IO]) <- OpenTelemetryMetrics.resource[IO] ("sam", appConfig.prometheusConfig.endpointPort)
+
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
         foregroundDirectoryDAO,
@@ -104,7 +109,7 @@ object Boot extends IOApp with LazyLogging {
           extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
           extraAuthParams = Some("prompt=login"))
       )
-    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, oauth2Config)
+    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, oauth2Config)(actorSystem, openTelemetry)
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -113,7 +118,7 @@ object Boot extends IOApp with LazyLogging {
       backgroundDirectoryDAO: DirectoryDAO,
       backgroundAccessPolicyDAO: AccessPolicyDAO,
       postgresDistributedLockDAO: PostgresDistributedLockDAO[IO],
-      googleSynchronizerExecutionContext: ExecutionContext)(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+      googleSynchronizerExecutionContext: ExecutionContext)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
         for {
@@ -267,7 +272,7 @@ object Boot extends IOApp with LazyLogging {
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: PostgresDirectoryDAO,
-      oauth2Config: OpenIDConnectConfiguration)(implicit actorSystem: ActorSystem): AppDependencies = {
+      oauth2Config: OpenIDConnectConfiguration)(implicit actorSystem: ActorSystem, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.emailDomain, config.adminConfig.allowedEmailDomains)
