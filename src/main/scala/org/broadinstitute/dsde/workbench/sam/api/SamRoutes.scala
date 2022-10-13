@@ -40,8 +40,12 @@ abstract class SamRoutes(
     val liquibaseConfig: LiquibaseConfig,
     val oidcConfig: OpenIDConnectConfiguration,
     val azureService: Option[AzureService]
-)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext, val openTelemetry: OpenTelemetryMetricsInterpreter[IO])
-    extends LazyLogging
+)(implicit
+    val system: ActorSystem,
+    val materializer: Materializer,
+    val executionContext: ExecutionContext,
+    val openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+) extends LazyLogging
     with ResourceRoutes
     with UserRoutes
     with StatusRoutes
