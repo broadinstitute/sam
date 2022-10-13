@@ -36,8 +36,12 @@ class TestSamRoutes(
     override val newSamUser: Option[SamUser] = None,
     tosService: TosService,
     override val azureService: Option[AzureService] = None
-)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext, override val openTelemetry: OpenTelemetryMetricsInterpreter[IO])
-    extends SamRoutes(
+)(implicit
+    override val system: ActorSystem,
+    override val materializer: Materializer,
+    override val executionContext: ExecutionContext,
+    override val openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+) extends SamRoutes(
       resourceService,
       userService,
       statusService,
@@ -69,8 +73,12 @@ class TestSamTosEnabledRoutes(
     override val newSamUser: Option[SamUser] = None,
     tosService: TosService,
     override val azureService: Option[AzureService] = None
-)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext, override val openTelemetry: OpenTelemetryMetricsInterpreter[IO])
-    extends SamRoutes(
+)(implicit
+    override val system: ActorSystem,
+    override val materializer: Materializer,
+    override val executionContext: ExecutionContext,
+    override val openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+) extends SamRoutes(
       resourceService,
       userService,
       statusService,
@@ -145,7 +153,7 @@ object TestSamRoutes {
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None
-           )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetricsInterpreter[IO]) = {
+  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetricsInterpreter[IO]) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups

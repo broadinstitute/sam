@@ -164,7 +164,11 @@ object TestSupport extends TestSupport {
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): SamRoutes = new SamRoutes(
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit
+      system: ActorSystem,
+      materializer: Materializer,
+      openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+  ): SamRoutes = new SamRoutes(
     samDependencies.resourceService,
     samDependencies.userService,
     samDependencies.statusService,

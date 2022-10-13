@@ -97,7 +97,7 @@ object Boot extends IOApp with LazyLogging {
       // This is for sending custom metrics to stackdriver. all custom metrics starts with `OpenCensus/sam/`.
       // Typing in `sam` in metrics explorer will show all sam custom metrics.
       // As best practice, we should have all related metrics under same prefix separated by `/`
-      implicit0(openTelemetry: OpenTelemetryMetrics[IO]) <- OpenTelemetryMetrics.resource[IO] ("sam", appConfig.prometheusConfig.endpointPort)
+      implicit0(openTelemetry: OpenTelemetryMetrics[IO]) <- OpenTelemetryMetrics.resource[IO]("sam", appConfig.prometheusConfig.endpointPort)
 
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
@@ -118,7 +118,10 @@ object Boot extends IOApp with LazyLogging {
           extraAuthParams = Some("prompt=login")
         )
       )
-    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, oauth2Config)(actorSystem, openTelemetry)
+    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, oauth2Config)(
+      actorSystem,
+      openTelemetry
+    )
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
