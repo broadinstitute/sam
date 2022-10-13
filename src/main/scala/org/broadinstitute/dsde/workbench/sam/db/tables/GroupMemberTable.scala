@@ -5,10 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.db.{DatabaseKey, SamTypeBinders}
 import scalikejdbc._
 
 final case class GroupMemberPK(value: Long) extends DatabaseKey
-final case class GroupMemberRecord(id: GroupMemberPK,
-                                   groupId: GroupPK,
-                                   memberUserId: Option[WorkbenchUserId],
-                                   memberGroupId: Option[GroupPK])
+final case class GroupMemberRecord(id: GroupMemberPK, groupId: GroupPK, memberUserId: Option[WorkbenchUserId], memberGroupId: Option[GroupPK])
 
 object GroupMemberTable extends SQLSyntaxSupportWithDefaultSamDB[GroupMemberRecord] {
   override def tableName: String = "SAM_GROUP_MEMBER"

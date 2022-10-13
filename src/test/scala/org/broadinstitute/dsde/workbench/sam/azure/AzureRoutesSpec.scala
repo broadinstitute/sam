@@ -70,8 +70,8 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   it should "return 403 if user has access to the billing profile but the MRG could not be validated" in {
     // Change the managed app plan
     val mockCrlService = MockCrlService()
-    when(mockCrlService.getManagedAppPlanId)
-      .thenReturn("some-other-plan")
+    when(mockCrlService.getManagedAppPlanIds)
+      .thenReturn(Seq("some-other-plan", "yet-another-plan"))
     val samRoutes = genSamRoutes(crlService = Some(mockCrlService))
 
     // User has no access
@@ -149,7 +149,9 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
     // Create mock spend-profile resource
     if (createSpendProfile) {
-      Post(s"/api/resources/v2/${MockCrlService.mockSamSpendProfileResource.resourceTypeName.value}/${MockCrlService.mockSamSpendProfileResource.resourceId.value}") ~> samRoutes.route ~> check {
+      Post(
+        s"/api/resources/v2/${MockCrlService.mockSamSpendProfileResource.resourceTypeName.value}/${MockCrlService.mockSamSpendProfileResource.resourceId.value}"
+      ) ~> samRoutes.route ~> check {
         status shouldEqual StatusCodes.NoContent
       }
     }
@@ -162,7 +164,10 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     // Create azure policy on cloud-extension resource
     if (createAzurePolicy) {
       val cloudExtensionMembers = AccessPolicyMembership(Set(samRoutes.user.email), Set(AzureExtensions.getPetManagedIdentityAction), Set.empty, None)
-      Put(s"/api/resources/v2/${CloudExtensions.resourceTypeName.value}/${AzureExtensions.resourceId.value}/policies/azure", cloudExtensionMembers) ~> samRoutes.route ~> check {
+      Put(
+        s"/api/resources/v2/${CloudExtensions.resourceTypeName.value}/${AzureExtensions.resourceId.value}/policies/azure",
+        cloudExtensionMembers
+      ) ~> samRoutes.route ~> check {
         status shouldEqual StatusCodes.Created
       }
     }
@@ -175,7 +180,9 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     // wait for Future to complete by converting to IO
     IO.fromFuture(IO(samRoutes.userService.createUser(newUser, samRequestContext))).unsafeRunSync()
     if (addToSpendProfile) {
-      Put(s"/api/resources/v2/${SamResourceTypes.spendProfile.value}/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/policies/owner/memberEmails/${newUser.email.value}") ~> samRoutes.route ~> check {
+      Put(
+        s"/api/resources/v2/${SamResourceTypes.spendProfile.value}/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/policies/owner/memberEmails/${newUser.email.value}"
+      ) ~> samRoutes.route ~> check {
         status shouldEqual StatusCodes.NoContent
       }
     }

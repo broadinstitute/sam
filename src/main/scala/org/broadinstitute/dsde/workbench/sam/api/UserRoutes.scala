@@ -15,16 +15,14 @@ import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
 
-/**
-  * Created by mbemis on 5/22/17.
+/** Created by mbemis on 5/22/17.
   */
 trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val userService: UserService
 
-  /**
-    * Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where
-    * a user is not found. In most routes that is appropriate but in the user routes it should be a 404.
+  /** Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where a user is not found. In most routes that is appropriate
+    * but in the user routes it should be a 404.
     */
   private val changeForbiddenToNotFound: Directive0 = {
     import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._

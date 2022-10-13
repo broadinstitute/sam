@@ -31,8 +31,6 @@ DOCKERHUB_TESTS_REGISTRY=${DOCKERHUB_REGISTRY}-tests
 GCR_REGISTRY=""
 ENV=${ENV:-""}
 SERVICE_ACCT_KEY_FILE=""
-DIRECTORY_URL=${DIRECTORY_URL:-ldap://opendj:389}
-DIRECTORY_PASSWORD=${DIRECTORY_PASSWORD:-testtesttest}
 
 MAKE_JAR=false
 RUN_DOCKER=false
@@ -93,22 +91,17 @@ function make_jar()
 {
     echo "building jar..."
     bash ./docker/run-postgres.sh start
-    OPENDJ=$(bash ./docker/run-opendj.sh start jenkins | tail -n1)
-    echo $OPENDJ
 
     # Get the last commit hash of the model directory and set it as an environment variable
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
 
     # make jar.  cache sbt dependencies.
-    set +e # Turn off error detection so that opendj has a chance to get stopped before exiting
-    docker run --rm --link postgres:postgres --link $OPENDJ:opendj -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 hseeberger/scala-sbt:eclipse-temurin-17.0.2_1.6.2_2.13.8 /working/docker/init_schema.sh /working
-    docker restart $OPENDJ
+    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 hseeberger/scala-sbt:eclipse-temurin-17.0.2_1.6.2_2.13.8 /working/docker/init_schema.sh /working
     sleep 40
-    docker run --rm --link postgres:postgres --link $OPENDJ:opendj -e DIRECTORY_URL=$DIRECTORY_URL -e GIT_MODEL_HASH=$GIT_MODEL_HASH -e DIRECTORY_PASSWORD=$DIRECTORY_PASSWORD -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 hseeberger/scala-sbt:eclipse-temurin-17.0.2_1.6.2_2.13.8 /working/docker/install.sh /working
+    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 hseeberger/scala-sbt:eclipse-temurin-17.0.2_1.6.2_2.13.8 /working/docker/install.sh /working
     EXIT_CODE=$?
     set -e # Turn error detection back on for the rest of the script
 
-    bash ./docker/run-opendj.sh stop jenkins $OPENDJ
     bash ./docker/run-postgres.sh stop
 
     if [ $EXIT_CODE != 0 ]; then
@@ -145,8 +138,10 @@ function docker_cmd()
             docker push $DOCKERHUB_TESTS_REGISTRY:${DOCKERTAG_SAFE_NAME}
 
             if [[ -n $GCR_REGISTRY ]]; then
+                echo "pushing $GCR_REGISTRY:${HASH_TAG}..."
                 docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $GCR_REGISTRY:${HASH_TAG}
                 gcloud docker -- push $GCR_REGISTRY:${HASH_TAG}
+                gcloud container images add-tag $GCR_REGISTRY:${HASH_TAG} $GCR_REGISTRY:${DOCKERTAG_SAFE_NAME}
             fi
         fi
     else

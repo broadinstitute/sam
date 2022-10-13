@@ -130,12 +130,10 @@ object SamTypeBinders {
   }
 
   implicit val flatGroupMembershipPathPKTypeBinder: TypeBinder[GroupMembershipPath] = new TypeBinder[GroupMembershipPath] {
-    def apply(rs: ResultSet, label: String): GroupMembershipPath = {
+    def apply(rs: ResultSet, label: String): GroupMembershipPath =
       GroupMembershipPath(rs.getArray(label).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
-    }
-    def apply(rs: ResultSet, index: Int): GroupMembershipPath = {
+    def apply(rs: ResultSet, index: Int): GroupMembershipPath =
       GroupMembershipPath(rs.getArray(index).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
-    }
   }
 
   implicit val tenantIdTypeBinder: TypeBinder[TenantId] = new TypeBinder[TenantId] {

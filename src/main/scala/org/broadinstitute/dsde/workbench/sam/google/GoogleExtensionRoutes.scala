@@ -8,7 +8,14 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SamModelDirectives, SamRequestContextDirectives, SecurityDirectives, SamUserDirectives, ioMarshaller}
+import org.broadinstitute.dsde.workbench.sam.api.{
+  ExtensionRoutes,
+  SamModelDirectives,
+  SamRequestContextDirectives,
+  SamUserDirectives,
+  SecurityDirectives,
+  ioMarshaller
+}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
@@ -31,7 +38,8 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
             FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
             GoogleExtensions.getPetPrivateKeyAction,
             samUser.id,
-            samRequestContext) {
+            samRequestContext
+          ) {
             complete {
               import spray.json._
               googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project), samRequestContext) map {
@@ -76,7 +84,8 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                   Set(SamResourceActions.createPet),
                   samUser.id,
-                  samRequestContext) {
+                  samRequestContext
+                ) {
                   get {
                     complete {
                       import spray.json._
@@ -104,7 +113,8 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                     Set(SamResourceActions.createPet),
                     samUser.id,
-                    samRequestContext) {
+                    samRequestContext
+                  ) {
                     post {
                       entity(as[Set[String]]) { scopes =>
                         complete {
@@ -123,12 +133,12 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                     Set(SamResourceActions.createPet),
                     samUser.id,
-                    samRequestContext) {
+                    samRequestContext
+                  ) {
                     get {
                       complete {
-                        googleExtensions.createUserPetServiceAccount(samUser, GoogleProject(project), samRequestContext).map {
-                          petSA =>
-                            StatusCodes.OK -> petSA.serviceAccount.email
+                        googleExtensions.createUserPetServiceAccount(samUser, GoogleProject(project), samRequestContext).map { petSA =>
+                          StatusCodes.OK -> petSA.serviceAccount.email
                         }
                       }
                     }

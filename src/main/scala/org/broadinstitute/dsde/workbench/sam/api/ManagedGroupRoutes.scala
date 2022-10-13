@@ -18,8 +18,7 @@ import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 
-/**
-  * Created by gpolumbo on 2/20/2018.
+/** Created by gpolumbo on 2/20/2018.
   */
 trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with SamModelDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
@@ -84,9 +83,9 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
 
   private def handleGetGroup(resourceId: ResourceId, samRequestContext: SamRequestContext): Route =
     complete(managedGroupService.loadManagedGroup(resourceId, samRequestContext).flatMap {
-        case Some(response) => IO.pure(StatusCodes.OK -> response)
-        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
-      })
+      case Some(response) => IO.pure(StatusCodes.OK -> response)
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "group not found")))
+    })
 
   private def handleCreateGroup(resourceId: ResourceId, samUser: SamUser, samRequestContext: SamRequestContext): Route =
     complete(managedGroupService.createManagedGroup(resourceId, samUser, samRequestContext = samRequestContext).map(_ => StatusCodes.Created))
@@ -96,15 +95,27 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
       complete(managedGroupService.deleteManagedGroup(managedGroup.resourceId, samRequestContext).map(_ => StatusCodes.NoContent))
     }
 
-  private def handleListEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, samUser: SamUser, samRequestContext: SamRequestContext): Route =
+  private def handleListEmails(
+      managedGroup: FullyQualifiedResourceId,
+      accessPolicyName: ManagedGroupPolicyName,
+      samUser: SamUser,
+      samRequestContext: SamRequestContext
+  ): Route =
     requireAction(managedGroup, SamResourceActions.readPolicy(accessPolicyName), samUser.id, samRequestContext) {
       complete(managedGroupService.listPolicyMemberEmails(managedGroup.resourceId, accessPolicyName, samRequestContext).map(StatusCodes.OK -> _))
     }
 
-  private def handleOverwriteEmails(managedGroup: FullyQualifiedResourceId, accessPolicyName: ManagedGroupPolicyName, samUser: SamUser, samRequestContext: SamRequestContext): Route =
+  private def handleOverwriteEmails(
+      managedGroup: FullyQualifiedResourceId,
+      accessPolicyName: ManagedGroupPolicyName,
+      samUser: SamUser,
+      samRequestContext: SamRequestContext
+  ): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), samUser.id, samRequestContext) {
       entity(as[Set[WorkbenchEmail]]) { members =>
-        complete(managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, accessPolicyName, members, samRequestContext).map(_ => StatusCodes.Created))
+        complete(
+          managedGroupService.overwritePolicyMemberEmails(managedGroup.resourceId, accessPolicyName, members, samRequestContext).map(_ => StatusCodes.Created)
+        )
       }
     }
 
@@ -113,11 +124,15 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
       accessPolicyName: ManagedGroupPolicyName,
       email: String,
       samUser: SamUser,
-      samRequestContext: SamRequestContext): Route =
+      samRequestContext: SamRequestContext
+  ): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), samUser.id, samRequestContext) {
       withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
-        complete(managedGroupService.addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext)
-          .map(if (_) StatusCodes.NoContent else StatusCodes.NotFound))
+        complete(
+          managedGroupService
+            .addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext)
+            .map(_ => StatusCodes.NoContent)
+        )
       }
     }
 
@@ -126,10 +141,13 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
       accessPolicyName: ManagedGroupPolicyName,
       email: String,
       samUser: SamUser,
-      samRequestContext: SamRequestContext): Route =
+      samRequestContext: SamRequestContext
+  ): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), samUser.id, samRequestContext) {
       withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
-        complete(managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext).map(_ => StatusCodes.NoContent))
+        complete(
+          managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext).map(_ => StatusCodes.NoContent)
+        )
       }
     }
 
@@ -142,14 +160,15 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
       managedGroup: FullyQualifiedResourceId,
       accessInstructions: ManagedGroupAccessInstructions,
       samUser: SamUser,
-      samRequestContext: SamRequestContext): Route =
+      samRequestContext: SamRequestContext
+  ): Route =
     requireAction(managedGroup, SamResourceActions.setAccessInstructions, samUser.id, samRequestContext) {
       complete(managedGroupService.setAccessInstructions(managedGroup.resourceId, accessInstructions.value, samRequestContext).map(_ => StatusCodes.NoContent))
     }
 
   private def handleGetAccessInstructions(managedGroup: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Route =
     complete(managedGroupService.getAccessInstructions(managedGroup.resourceId, samRequestContext).map {
-        case Some(accessInstructions) => StatusCodes.OK -> Option(accessInstructions)
-        case None => StatusCodes.NoContent -> None
-      })
+      case Some(accessInstructions) => StatusCodes.OK -> Option(accessInstructions)
+      case None => StatusCodes.NoContent -> None
+    })
 }
