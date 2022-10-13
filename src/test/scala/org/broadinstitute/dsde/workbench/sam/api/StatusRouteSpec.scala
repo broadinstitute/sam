@@ -22,7 +22,6 @@ import scala.concurrent.duration._
 
 class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar {
 
-
   "GET /version" should "give 200 for ok" in {
     val samRoutes = TestSamRoutes(Map.empty)
     implicit val patienceConfig = PatienceConfig(timeout = 1 second)
@@ -58,7 +57,16 @@ class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, null, Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map.empty, policyDAO, directoryDAO)
-    val samRoutes = new TestSamRoutes(mockResourceService, policyEvaluatorService, mockUserService, mockStatusService, mockManagedGroupService, Generator.genWorkbenchUserGoogle.sample.get, directoryDAO, tosService = tosService)
+    val samRoutes = new TestSamRoutes(
+      mockResourceService,
+      policyEvaluatorService,
+      mockUserService,
+      mockStatusService,
+      mockManagedGroupService,
+      Generator.genWorkbenchUserGoogle.sample.get,
+      directoryDAO,
+      tosService = tosService
+    )
 
     Get("/status") ~> samRoutes.route ~> check {
       responseAs[StatusCheckResponse].ok shouldEqual false

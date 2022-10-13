@@ -18,7 +18,7 @@ object Testing {
     private var resultOption: Option[Int] = None
 
     /** Run using the logger, throwing an exception only on the first failure. */
-    def runOnce(log: Logger, args: Seq[String]): Unit = {
+    def runOnce(log: Logger, args: Seq[String]): Unit =
       mutex synchronized {
         if (resultOption.isEmpty) {
           log.debug(s"Running minnie-kenny.sh${args.mkString(" ", " ", "")}")
@@ -30,14 +30,12 @@ object Testing {
             sys.error("Running minnie-kenny.sh failed. Please double check for errors above.")
         }
       }
-    }
   }
 
   // Only run one minnie-kenny.sh at a time!
   private lazy val minnieKennySingleRunner = new MinnieKennySingleRunner
-  
-  val commonTestSettings: Seq[Setting[_]] = List(
 
+  val commonTestSettings: Seq[Setting[_]] = List(
     // SLF4J initializes itself upon the first logging call.  Because sbt
     // runs tests in parallel it is likely that a second thread will
     // invoke a second logging call before SLF4J has completed
@@ -64,23 +62,20 @@ object Testing {
     ),
     testOptions in Test ++= Seq(Tests.Filter(s => !isIntegrationTest(s))),
     testOptions in IntegrationTest := Seq(Tests.Filter(s => isIntegrationTest(s))),
-
     minnieKenny := {
       val log = streams.value.log
       val args = spaceDelimited("<arg>").parsed
       minnieKennySingleRunner.runOnce(log, args)
     },
-
     parallelExecution in Test := false,
-	
     (test in Test) := {
       minnieKenny.toTask("").value
-    },
+    }
   )
 
   implicit class ProjectTestSettings(val project: Project) extends AnyVal {
     def withTestSettings: Project = project
-      .configs(IntegrationTest).settings(inConfig(IntegrationTest)(Defaults.testTasks): _*)
+      .configs(IntegrationTest)
+      .settings(inConfig(IntegrationTest)(Defaults.testTasks): _*)
   }
 }
-

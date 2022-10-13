@@ -14,33 +14,37 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
 
-/**
-  * Created by dvoet on 7/14/17.
+/** Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, blockedEmailDomains: Seq[String], tosService: TosService)(implicit val executionContext: ExecutionContext) extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, blockedEmailDomains: Seq[String], tosService: TosService)(implicit
+    val executionContext: ExecutionContext
+) extends LazyLogging {
 
-  def createUser(user: SamUser, samRequestContext: SamRequestContext): Future[UserStatus] = {
+  def createUser(user: SamUser, samRequestContext: SamRequestContext): Future[UserStatus] =
     for {
       _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
       createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
       userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
-      res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
+      res <- userStatus
+        .toRight(new WorkbenchException("getUserStatus returned None after user was created"))
+        .fold(Future.failed, Future.successful)
+        .withInfoLogMessage(s"New user ${createdUser.toUserIdInfo} was successfully created")
     } yield res
-  }
 
-  def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] = {
+  def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
+
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext).unsafeToFuture()
-    } yield ()
-  }
+    } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
 
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
@@ -53,13 +57,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       }
     } yield UserStatusDetails(createdUser.id, createdUser.email)
 
-  /**
-    * First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists
-    * throw a conflict error. If the user does not exist look them up by email. If the user email exists
-    * then this is an invited user, update their googleSubjectId and/or azureB2CId and return the updated user record.
-    * If the email does not exist, this is a new user, create them.
-    * It is critical that this method returns the updated/created SamUser record FROM THE DATABASE and not the SamUser
-    * passed in as the first parameter.
+  /** First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists throw a conflict error. If the user does not exist
+    * look them up by email. If the user email exists then this is an invited user, update their googleSubjectId and/or azureB2CId and return the updated user
+    * record. If the email does not exist, this is a new user, create them. It is critical that this method returns the updated/created SamUser record FROM THE
+    * DATABASE and not the SamUser passed in as the first parameter.
     */
   protected[service] def registerUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
@@ -68,19 +69,22 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       updated <- subjectWithEmail match {
         case Some(uid: WorkbenchUserId) =>
           acceptInvitedUser(user, samRequestContext, uid)
+            .withInfoLogMessage(s"Accepted invited user ${user.email} with uid ${uid.value}")
 
         case None =>
           createUserInternal(user, samRequestContext)
+            .withComputedInfoLogMessage(u => s"Created user ${u.email} with uid ${u.id}")
 
         case Some(_) =>
-          //We don't support inviting a group account or pet service account
+          // We don't support inviting a group account or pet service account
           IO.raiseError[SamUser](
-            new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint")))
+            new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint"))
+          )
 
       }
     } yield updated
 
-  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId): IO[SamUser] = {
+  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId): IO[SamUser] =
     for {
       groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
       _ <- user.googleSubjectId.traverse { googleSubjectId =>
@@ -93,10 +97,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       }
       _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
       updatedUser <- directoryDAO.loadUser(uid, samRequestContext)
-    } yield updatedUser.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, s"$user could not be accepted from invite because user could not be loaded from the db")))
-  }
+    } yield updatedUser.getOrElse(
+      throw new WorkbenchExceptionWithErrorReport(
+        ErrorReport(StatusCodes.InternalServerError, s"$user could not be accepted from invite because user could not be loaded from the db")
+      )
+    )
 
-  private def validateNewWorkbenchUser(newWorkbenchUser: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
+  private def validateNewWorkbenchUser(newWorkbenchUser: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       existingUser <- newWorkbenchUser match {
         case SamUser(_, Some(googleSubjectId), _, _, _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
@@ -105,21 +112,21 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       }
 
       _ <- existingUser match {
-        case Some(_) => IO.raiseError[SamUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${newWorkbenchUser.email} already exists")))
+        case Some(_) =>
+          IO.raiseError[SamUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${newWorkbenchUser.email} already exists")))
         case None => IO.unit
       }
     } yield ()
-  }
 
-  private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
+  private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
       createdUser <- directoryDAO.createUser(user, samRequestContext)
       _ <- IO.fromFuture(IO(cloudExtensions.onUserCreate(createdUser, samRequestContext)))
     } yield createdUser
-  }
-  def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchSubject]] = directoryDAO.loadSubjectFromEmail(email, samRequestContext).unsafeToFuture()
+  def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchSubject]] =
+    directoryDAO.loadSubjectFromEmail(email, samRequestContext).unsafeToFuture()
 
-  def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): Future[Option[UserStatus]] = {
+  def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) =>
         if (userDetailsOnly)
@@ -128,7 +135,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           for {
             googleStatus <- cloudExtensions.getUserStatus(user)
             allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-            allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case _: NameNotFoundException => false }
+            allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover {
+              case _: NameNotFoundException => false
+            }
             tosAcceptedStatus <- tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
             adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
@@ -146,21 +155,18 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           }
       case None => Future.successful(None)
     }
-  }
 
-  def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
+  def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     for {
       _ <- tosService.acceptTosStatus(userId, samRequestContext)
       status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
     } yield status
-  }
 
-  def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
+  def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     for {
       _ <- tosService.rejectTosStatus(userId, samRequestContext)
       status <- IO.fromFuture(IO(getUserStatus(userId, false, samRequestContext)))
     } yield status
-  }
 
   def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] = {
     val tosStatus = tosService.isTermsOfServiceStatusAcceptable(user)
@@ -169,7 +175,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatusDiagnostics]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
-      case Some(user) => {
+      case Some(user) =>
         // pulled out of for comprehension to allow concurrent execution
         val tosAcceptedStatus = tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
         val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
@@ -189,11 +195,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           google <- googleStatus
           adminEnabled <- adminEnabledStatus
         } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted, adminEnabled))
-      }
       case None => Future.successful(None)
     }
 
-  //TODO: return type should be refactored into ADT for easier read
+  // TODO: return type should be refactored into ADT for easier read
   def getUserIdInfoFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Either[Unit, Option[UserIdInfo]]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext).unsafeToFuture().flatMap {
       // don't attempt to handle groups or service accounts - just users
@@ -223,18 +228,16 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case None => Future.successful(None)
     }
 
-  private def enableUserInternal(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = {
+  private def enableUserInternal(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user, samRequestContext)
-    } yield ()
-  }
+    } yield logger.info(s"Enabled user ${user.toUserIdInfo}")
 
   val serviceAccountDomain = "\\S+@\\S+\\.gserviceaccount\\.com".r
 
-  private def isServiceAccount(email: String) = {
+  private def isServiceAccount(email: String) =
     serviceAccountDomain.pattern.matcher(email).matches
-  }
 
   def disableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Option[UserStatus]] =
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
@@ -243,19 +246,20 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           _ <- directoryDAO.disableIdentity(user.id, samRequestContext).unsafeToFuture()
           _ <- cloudExtensions.onUserDisable(user, samRequestContext)
           userStatus <- getUserStatus(user.id, samRequestContext = samRequestContext)
-        } yield {
-          userStatus
-        }
+        } yield userStatus
       case None => Future.successful(None)
     }
 
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-      _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId, samRequestContext).unsafeToFuture()
+      _ <- directoryDAO
+        .removeGroupMember(allUsersGroup.id, userId, samRequestContext)
+        .unsafeToFuture()
+        .withInfoLogMessage(s"Removed $userId from the All Users group")
       _ <- cloudExtensions.onUserDelete(userId, samRequestContext)
-      deleteResult <- directoryDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
-    } yield deleteResult
+      _ <- directoryDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
+    } yield logger.info(s"Deleted user $userId")
 }
 
 object UserService {
@@ -282,13 +286,11 @@ object UserService {
   def genWorkbenchUserId(currentMilli: Long): WorkbenchUserId =
     WorkbenchUserId(genRandom(currentMilli))
 
-  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): IO[Unit] = {
+  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): IO[Unit] =
     email.value match {
-      case emailString if blockedEmailDomains.exists(domain => {
-        emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)
-      }) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")))
+      case emailString if blockedEmailDomains.exists(domain => emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)) =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")))
       case UserService.emailRegex() => IO.unit
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }
-  }
 }

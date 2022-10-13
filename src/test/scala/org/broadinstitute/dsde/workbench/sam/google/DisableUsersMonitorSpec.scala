@@ -19,17 +19,24 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
-class DisableUsersMonitorSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with PropertyBasedTesting
-  with TestSupport with MockitoSugar with BeforeAndAfter with BeforeAndAfterAll with Eventually {
+class DisableUsersMonitorSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
+    with Matchers
+    with PropertyBasedTesting
+    with TestSupport
+    with MockitoSugar
+    with BeforeAndAfter
+    with BeforeAndAfterAll
+    with Eventually {
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
   def this() = this(ActorSystem("DisableUsersMonitorSpec"))
 
   val topicName = "testtopic"
   val subscriptionName = "testsub"
 
-  override def beforeAll(): Unit = {
+  override def beforeAll(): Unit =
     super.beforeAll()
-  }
 
   override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
@@ -52,18 +59,22 @@ class DisableUsersMonitorSpec(_system: ActorSystem) extends TestKit(_system) wit
       assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
     }
     when(userService.disableUser(mockitoEq(userId), any[SamRequestContext]))
-      .thenReturn(Future.successful(
-        Some(UserStatus(
-          UserStatusDetails(userId, userEmail),
-          Map(userEmail.value -> false)
-        ))
-      ))
+      .thenReturn(
+        Future.successful(
+          Some(
+            UserStatus(
+              UserStatusDetails(userId, userEmail),
+              Map(userEmail.value -> false)
+            )
+          )
+        )
+      )
 
     Await.result(mockGooglePubSubDAO.publishMessages(topicName, Seq(userId.value)), Duration.Inf)
 
     eventually {
       verify(userService, atLeastOnce).disableUser(mockitoEq(userId), any[SamRequestContext])
-      assertResult(1) { mockGooglePubSubDAO.acks.size() }
+      assertResult(1)(mockGooglePubSubDAO.acks.size())
     }
   }
 
@@ -86,7 +97,7 @@ class DisableUsersMonitorSpec(_system: ActorSystem) extends TestKit(_system) wit
     mockGooglePubSubDAO.publishMessages(topicName, Seq(userId.value))
 
     eventually {
-      assertResult(1) { mockGooglePubSubDAO.acks.size() }
+      assertResult(1)(mockGooglePubSubDAO.acks.size())
     }
   }
 }

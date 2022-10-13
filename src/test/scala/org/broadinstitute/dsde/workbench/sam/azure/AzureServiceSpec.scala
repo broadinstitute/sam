@@ -4,7 +4,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.sam.ConnectedTest
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.PostgresDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, TosService, UserService}
 import org.scalatest.concurrent.ScalaFutures

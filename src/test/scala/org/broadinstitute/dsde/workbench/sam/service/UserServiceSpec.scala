@@ -23,11 +23,18 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
-/**
-  * Created by rtitle on 10/6/17.
+/** Created by rtitle on 10/6/17.
   */
-class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with MockitoSugar with PropertyBasedTesting
-  with BeforeAndAfter with BeforeAndAfterAll with ScalaFutures with OptionValues {
+class UserServiceSpec
+    extends AnyFlatSpec
+    with Matchers
+    with TestSupport
+    with MockitoSugar
+    with PropertyBasedTesting
+    with BeforeAndAfter
+    with BeforeAndAfterAll
+    with ScalaFutures
+    with OptionValues {
 
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -48,7 +55,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     clearDatabase()
 
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
-    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext])).thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
+    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
+      .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(Future.successful(true))
@@ -62,9 +70,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
   }
 
-  protected def clearDatabase(): Unit = {
+  protected def clearDatabase(): Unit =
     TestSupport.truncateAll
-  }
 
   "UserService" should "create a user" in {
     // create a user
@@ -75,7 +82,13 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
     dirDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
-      Some(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultUser.id), service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email))
+      Some(
+        BasicWorkbenchGroup(
+          CloudExtensions.allUsersGroupName,
+          Set(defaultUser.id),
+          service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email
+        )
+      )
   }
 
   it should "reject blocked domain" in {
@@ -87,7 +100,12 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   it should "acceptTermsOfService" in {
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val status = serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
-    status shouldBe Option(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("tosAccepted" -> true, "google" -> true, "ldap" -> true, "allUsersGroup" -> true, "adminEnabled" -> true)))
+    status shouldBe Option(
+      UserStatus(
+        UserStatusDetails(defaultUser.id, defaultUser.email),
+        Map("tosAccepted" -> true, "google" -> true, "ldap" -> true, "allUsersGroup" -> true, "adminEnabled" -> true)
+      )
+    )
   }
 
   it should "get user status" in {
@@ -165,38 +183,35 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
   it should "generate unique identifier properly" in {
     val current = 1534253386722L
     val res = UserService.genWorkbenchUserId(current).value
-    res.length shouldBe(21)
-    res.substring(0, current.toString.length) shouldBe("2534253386722")
+    res.length shouldBe 21
+    res.substring(0, current.toString.length) shouldBe "2534253386722"
 
     // validate when currentMillis doesn't start
     val current2 = 25342533867225L
     val res2 = UserService.genWorkbenchUserId(current2).value
-    res2.substring(0, current2.toString.length) shouldBe("25342533867225")
+    res2.substring(0, current2.toString.length) shouldBe "25342533867225"
   }
 
-  /**
-    * GoogleSubjectId    Email
-    *    no              no      ---> We've never seen this user before, create a new user
+  /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
     */
-  "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in{
+  "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in {
     val user = genWorkbenchUserGoogle.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
     val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(user)
   }
 
-  it should "create new user when there's no existing subject for a given azureB2CId and email" in{
+  it should "create new user when there's no existing subject for a given azureB2CId and email" in {
     val user = genWorkbenchUserAzure.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
     val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(user)
   }
 
-  /**
-    * GoogleSubjectId    Email
-    *      no             yes      ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId field for this user.
+  /** GoogleSubjectId Email no yes ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId
+    * field for this user.
     */
-  it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in{
+  it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
     val user = genWorkbenchUserGoogle.sample.get
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
     service.registerUser(user, samRequestContext).unsafeRunSync()
@@ -205,7 +220,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     res shouldBe Some(user.copy(id = userId))
   }
 
-  it should "update azureB2CId when there's no existing subject for a given googleSubjectId and but there is one for email" in{
+  it should "update azureB2CId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
     val user = genWorkbenchUserAzure.sample.get
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
     service.registerUser(user, samRequestContext).unsafeRunSync()
@@ -214,11 +229,10 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     res shouldBe Some(user.copy(id = userId))
   }
 
-  /**
-    * GoogleSubjectId    Email
-    *      no             yes      ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId field for this user.
+  /** GoogleSubjectId Email no yes ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId
+    * field for this user.
     */
-  it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in{
+  it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in {
     val user = genWorkbenchUserGoogle.sample.get.copy(email = genNonPetEmail.sample.get)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
     dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
@@ -228,7 +242,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     res.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
-  it should "return BadRequest when there's no existing subject for a given azureB2CId and but there is one for email, and the returned subject is not a regular user" in{
+  it should "return BadRequest when there's no existing subject for a given azureB2CId and but there is one for email, and the returned subject is not a regular user" in {
     val user = genWorkbenchUserAzure.sample.get.copy(email = genNonPetEmail.sample.get)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
     dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
@@ -238,9 +252,8 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     res.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
-  /**
-    * GoogleSubjectId    Email
-    *    different        yes     ---> The user's email has already been registered, but the googleSubjectId for the new user is different from what has already been registered. We should throw an exception to prevent the googleSubjectId from being overwritten
+  /** GoogleSubjectId Email different yes ---> The user's email has already been registered, but the googleSubjectId for the new user is different from what has
+    * already been registered. We should throw an exception to prevent the googleSubjectId from being overwritten
     */
   it should "throw an exception when trying to re-register a user with a changed googleSubjectId" in {
     val user = genWorkbenchUserGoogle.sample.get
@@ -258,11 +271,9 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     }
   }
 
-  /**
-    * GoogleSubjectId    Email
-    *      yes            skip    ---> User exists. Do nothing.
+  /** GoogleSubjectId Email yes skip ---> User exists. Do nothing.
     */
-  it should "return conflict when there's an existing subject for a given googleSubjectId" in{
+  it should "return conflict when there's an existing subject for a given googleSubjectId" in {
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -271,7 +282,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
   }
 
-  it should "return conflict when there's an existing subject for a given azureB2CId" in{
+  it should "return conflict when there's an existing subject for a given azureB2CId" in {
     val user = genWorkbenchUserAzure.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -301,7 +312,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val registeredUser = service.registerUser(registeringUser, samRequestContext).unsafeRunSync()
     registeredUser.id should {
       equal(invitedUser.id) and
-      not equal(newRegisteringUserId)
+        not equal newRegisteringUserId
     }
   }
 
@@ -319,7 +330,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
-  it should "return conflict when there's an existing subject for a given email" in{
+  it should "return conflict when there's an existing subject for a given email" in {
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
@@ -406,9 +417,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
       user <- genEmailUser
       parts <- Gen.nonEmptyListOf(genEmailServerPart)
       lastPart <- genEmailLastPart
-    } yield {
-      WorkbenchEmail(s"$user@${parts.mkString(".")}.$lastPart")
-    }
+    } yield WorkbenchEmail(s"$user@${parts.mkString(".")}.$lastPart")
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
@@ -423,9 +432,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
       user <- genEmailUser
       parts <- Gen.nonEmptyListOf(genEmailServerPart)
       lastPart <- genEmailLastPart
-    } yield {
-      WorkbenchEmail(s"$user${parts.mkString(".")}.$lastPart")
-    }
+    } yield WorkbenchEmail(s"$user${parts.mkString(".")}.$lastPart")
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
@@ -460,9 +467,7 @@ class UserServiceSpec extends AnyFlatSpec with Matchers with TestSupport with Mo
     val genEmail = for {
       user <- genEmailUser
       lastPart <- genEmailLastPart
-    } yield {
-      WorkbenchEmail(s"$user@$lastPart")
-    }
+    } yield WorkbenchEmail(s"$user@$lastPart")
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
