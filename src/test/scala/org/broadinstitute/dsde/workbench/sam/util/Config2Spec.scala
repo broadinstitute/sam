@@ -26,7 +26,6 @@ class Config2Spec extends AnyFreeSpec with Matchers {
       // Assembles a standard configuration, overriding any values set in reference.conf
       val generalConfig = ConfigFactory.load(appConfig)
       generalConfig.getString("fruits.banana") shouldBe "red"
-
     }
   }
 }

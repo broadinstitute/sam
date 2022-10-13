@@ -6,7 +6,7 @@ import cats.data.NonEmptyList
 import cats.effect
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
 import com.unboundid.ldap.sdk._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -50,13 +50,25 @@ object Boot extends IOApp with LazyLogging {
         IO.sleep(5 seconds) *> run(args)
     }
 
+  def loadSamConfig(maybeConfigFile: Option[File]): AppConfig = {
+    val file = new File("src/test/resources/sam2.conf")
+    val appConfig = if (file.exists()) {
+      val config: Config = ConfigFactory.load()
+      AppConfig.readConfig(config)
+    } else {
+      // instantiate an AppConfig from ENV variables
+
+    }
+  }
+
   private def startup(): IO[Unit] = {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
 
-    val config = ConfigFactory.load()
-    val appConfig = AppConfig.readConfig(config)
+    loadSamConfig()
+    val config: Config = ConfigFactory.load()
+    val appConfig: AppConfig = AppConfig.readConfig(config)
 
     val schemaDAO = new JndiSchemaDAO(appConfig.directoryConfig, appConfig.schemaLockConfig)
 
