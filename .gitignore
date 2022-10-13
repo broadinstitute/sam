@@ -93,3 +93,6 @@ automation/src/test/resources/
 codegen_java/*
 !codegen_java/project
 !codegen_java/templates
+
+# Ignore generated credentials from google-github-actions/auth
+gha-creds-*.json
