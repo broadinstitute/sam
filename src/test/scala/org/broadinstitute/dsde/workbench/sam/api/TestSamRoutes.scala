@@ -4,9 +4,11 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.reject
 import akka.stream.Materializer
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
+import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetricsInterpreter
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{googleServicesConfig, samRequestContext}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
@@ -23,13 +25,13 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by dvoet on 7/14/17.
   */
-class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val user: SamUser, directoryDAO: DirectoryDAO,  val cloudExtensions: CloudExtensions = NoExtensions, override val newSamUser: Option[SamUser] = None, tosService: TosService, override val azureService: Option[AzureService] = None)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+class TestSamRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val user: SamUser, directoryDAO: DirectoryDAO,  val cloudExtensions: CloudExtensions = NoExtensions, override val newSamUser: Option[SamUser] = None, tosService: TosService, override val azureService: Option[AzureService] = None)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext, override val openTelemetry: OpenTelemetryMetricsInterpreter[IO])
   extends SamRoutes(resourceService, userService, statusService, managedGroupService, TermsOfServiceConfig(false, false, "0", "app.terra.bio/#terms-of-service"), directoryDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false), FakeOpenIDConnectConfiguration, azureService) with MockSamUserDirectives with ExtensionRoutes with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
 }
 
-class TestSamTosEnabledRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val user: SamUser, directoryDAO: DirectoryDAO,  val cloudExtensions: CloudExtensions = NoExtensions, override val newSamUser: Option[SamUser] = None, tosService: TosService, override val azureService: Option[AzureService] = None)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
+class TestSamTosEnabledRoutes(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, val user: SamUser, directoryDAO: DirectoryDAO,  val cloudExtensions: CloudExtensions = NoExtensions, override val newSamUser: Option[SamUser] = None, tosService: TosService, override val azureService: Option[AzureService] = None)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext, override val openTelemetry: OpenTelemetryMetricsInterpreter[IO])
   extends SamRoutes(resourceService, userService, statusService, managedGroupService, TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"), directoryDAO, policyEvaluatorService, tosService, LiquibaseConfig("", false), FakeOpenIDConnectConfiguration, azureService) with MockSamUserDirectives with ExtensionRoutes with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
@@ -89,7 +91,7 @@ object TestSamRoutes {
             cloudExtensions: Option[CloudExtensions] = None,
             adminEmailDomains: Option[Set[String]] = None,
             crlService: Option[CrlService] = None
-           )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
+           )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetricsInterpreter[IO]) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups

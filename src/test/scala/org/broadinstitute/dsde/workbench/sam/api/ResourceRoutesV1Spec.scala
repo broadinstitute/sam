@@ -11,16 +11,15 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.AppendedClues
-import spray.json.DefaultJsonProtocol._
-import spray.json.{JsBoolean, JsValue}
-import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import spray.json.DefaultJsonProtocol._
+import spray.json.{JsBoolean, JsValue}
 
 /**
   * Created by dvoet on 6/7/17.
