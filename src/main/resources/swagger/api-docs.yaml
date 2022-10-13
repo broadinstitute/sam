@@ -879,7 +879,7 @@ paths:
     get:
       tags:
         - Google
-      summary: gets the pet service account for the specified user
+      summary: gets the pet service account for the specified project
       operationId: getPetServiceAccount
       parameters:
         - name: project
@@ -901,6 +901,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+    delete:
+      tags:
+        - Google
+      summary: deletes the pet service account for the specified project
+      operationId: deletePetServiceAccount
+      parameters:
+        - name: project
+          in: path
+          description: Google project of the pet
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: pet service account deleted
+          content: {}
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/user/petServiceAccount/key:
     get:
       tags:
@@ -910,7 +932,10 @@ paths:
       responses:
         200:
           description: json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys
-          content: {}
+          content:
+            application/json:
+              schema:
+                type: string
         500:
           description: Internal Server Error
           content:
@@ -1488,7 +1513,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: string
+                  $ref: '#/components/schemas/UserIdInfo'
         403:
           description: You do not have permission to perform this action on the resource
           content: { }
@@ -2478,6 +2503,13 @@ paths:
         - Users
       summary: create current user in the system using login credentials
       operationId: createUserV2
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
+              properties: {}
+        required: true
       responses:
         201:
           description: user successfully created
@@ -3002,15 +3034,20 @@ components:
       additionalProperties:
         type: array
         items:
-          type: object
-          properties:
-            operation:
-              type: string
-            email:
-              type: string
-            errorReport:
-              $ref: '#/components/schemas/ErrorReport'
+          $ref: '#/components/schemas/SyncReportEntry'
       description: results of an attempt to synchronize a group
+    SyncReportEntry:
+      required:
+        - email
+        - operation
+      type: object
+      properties:
+        operation:
+          type: string
+        email:
+          type: string
+        errorReport:
+          $ref: '#/components/schemas/ErrorReport'
     SyncStatus:
       required:
         - email
