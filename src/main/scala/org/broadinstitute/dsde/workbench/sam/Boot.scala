@@ -69,7 +69,7 @@ object Boot extends IOApp with LazyLogging {
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
 
-    loadSamConfig()
+    loadSamConfig(None)
     val config: Config = ConfigFactory.load()
     val appConfig: AppConfig = AppConfig.readConfig(config)
 

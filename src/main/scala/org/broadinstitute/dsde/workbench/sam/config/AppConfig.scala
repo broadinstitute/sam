@@ -166,4 +166,7 @@ object AppConfig {
       azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices")
     )
   }
+  def buildFromEnvVars(): AppConfig = {
+    ???
+  }
 }
