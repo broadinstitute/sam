@@ -1,19 +1,20 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
+import com.typesafe.config.ConfigFactory
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
 
 class AppConfigSpec extends AnyFreeSpec with Matchers {
   "AppConfig " - {
-    "loads itself from files" in {
-      val appConfig = AppConfig.load(AppConfig.CONFIG_FROM_FILES)
+    "loads itself from hocon configs" in {
+      val config = ConfigFactory.load()
+      val appConfig = AppConfig.loadFromHoconConfig(config)
       appConfig.emailDomain shouldBe "dev.test.firecloud.org"
     }
 
     "loads itself from environment variables" in {
-      // sys.env["emailDomain"] = "banana.com"
-      val foo = sys.env
-      val appConfig = AppConfig.load(AppConfig.CONFIG_FROM_ENV)
+      val env: Map[String, String] = Map("fruit" -> "banana")
+      val appConfig = AppConfig.loadFromMap(env)
       appConfig.emailDomain shouldBe "banana.com"
     }
   }

@@ -6,19 +6,11 @@ import cats.data.NonEmptyList
 import cats.effect
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
+import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google.{
-  GoogleDirectoryDAO,
-  GoogleKmsInterpreter,
-  GoogleKmsService,
-  HttpGoogleDirectoryDAO,
-  HttpGoogleIamDAO,
-  HttpGoogleProjectDAO,
-  HttpGooglePubSubDAO,
-  HttpGoogleStorageDAO
-}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
@@ -57,8 +49,7 @@ object Boot extends IOApp with LazyLogging {
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
 
-    val appConfig: AppConfig = AppConfig.load(AppConfig.CONFIG_FROM_ENV)
-
+    val appConfig: AppConfig = loadAppConfig
     val appDependencies = createAppDependencies(appConfig)
 
     val tosCheckEnabled = appConfig.termsOfServiceConfig.enabled
@@ -79,6 +70,18 @@ object Boot extends IOApp with LazyLogging {
         _ <- IO.fromFuture(IO(binding.whenTerminated))
         _ <- IO(system.terminate())
       } yield ()
+    }
+  }
+
+  private def loadAppConfig = {
+    val samConfigSource = sys.env.getOrElse("SAM_CONFIG_SOURCE", AppConfig.CONFIG_FROM_FILES)
+    samConfigSource match {
+      case AppConfig.CONFIG_FROM_FILES =>
+        val config = ConfigFactory.load()
+        AppConfig.loadFromHoconConfig(config)
+      case AppConfig.CONFIG_FROM_ENV =>
+        AppConfig.loadFromMap(sys.env)
+      case _ => throw new RuntimeException(s"Invalid SAM_CONFIG_SOURCE: $samConfigSource")
     }
   }
 

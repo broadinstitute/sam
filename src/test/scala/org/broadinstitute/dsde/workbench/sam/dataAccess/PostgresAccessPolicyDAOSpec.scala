@@ -51,7 +51,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
     "upsertResourceTypes" - {
       "creates resource types in config and is idempotent" in {
         val config = ConfigFactory.load()
-        val appConfig = AppConfig.readConfig(config)
+        val appConfig = AppConfig.loadFromHoconConfig(config)
         dao.upsertResourceTypes(appConfig.resourceTypes, samRequestContext).unsafeRunSync() should contain theSameElementsAs (appConfig.resourceTypes.map(
           _.name
         ))

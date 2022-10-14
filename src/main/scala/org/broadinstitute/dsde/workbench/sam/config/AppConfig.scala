@@ -33,15 +33,6 @@ object AppConfig {
   val CONFIG_FROM_FILES = "files"
   val CONFIG_FROM_ENV   = "env"
 
-  def load(source: String): AppConfig = {
-    if (source == CONFIG_FROM_FILES) {
-      val config: Config = ConfigFactory.load()
-      AppConfig.readConfig(config)
-    } else {
-      // instantiate an AppConfig from ENV variables
-      ???
-    }
-  }
 
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
     OidcConfig(
@@ -156,7 +147,27 @@ object AppConfig {
     )
   }
 
-  def readConfig(config: Config): AppConfig = {
+  def loadFromMap(env: Map[String, String]): AppConfig = {
+    // instantiate an AppConfig from ENV variables
+
+    val oidcConfig = OidcConfig.fromMap(env)
+
+    AppConfig(
+      emailDomain = ???,
+      distributedLockConfig = ???,
+      googleConfigOption = ???,
+      resourceTypes = ???,
+      liquibaseConfig = ???,
+      blockedEmailDomains = ???,
+      termsOfServiceConfig = ???,
+      oidcConfig = oidcConfig,
+      adminConfig = ???,
+      azureServicesConfig = ???
+    )
+  }
+
+
+  def loadFromHoconConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
     } yield GoogleConfig(googleServices, config.as[PetServiceAccountConfig]("petServiceAccount"))
@@ -178,8 +189,5 @@ object AppConfig {
       adminConfig = config.as[AdminConfig]("admin"),
       azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices")
     )
-  }
-  def buildFromEnvVars(): AppConfig = {
-    ???
   }
 }
