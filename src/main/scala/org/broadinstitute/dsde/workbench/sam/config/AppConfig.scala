@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig.googleS
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DistributedLockConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 
+import java.io.File
 import scala.concurrent.duration.Duration
 
 /** Created by dvoet on 7/18/17.
@@ -149,14 +150,15 @@ object AppConfig {
 
   def loadFromMap(env: Map[String, String]): AppConfig = {
     // instantiate an AppConfig from ENV variables
-
     val oidcConfig = OidcConfig.fromMap(env)
 
+    val resourceTypeConfig = ConfigFactory.parseFile(new File("src/main/resources/resource_types.conf"))
+
     AppConfig(
-      emailDomain = ???,
+      emailDomain = env.getOrElse("SAM_EMAIL_DOMAIN", new RuntimeException("SAM_EMAIL_DOMAIN must be set")),
       distributedLockConfig = ???,
-      googleConfigOption = ???,
-      resourceTypes = ???,
+      googleConfig = ???,
+      resourceTypes = loadResourceTypes(resourceTypeConfig),
       liquibaseConfig = ???,
       blockedEmailDomains = ???,
       termsOfServiceConfig = ???,
@@ -166,22 +168,16 @@ object AppConfig {
     )
   }
 
-
   def loadFromHoconConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
     } yield GoogleConfig(googleServices, config.as[PetServiceAccountConfig]("petServiceAccount"))
 
-    // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
-    // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
-    // fall back to getting the "googleServices.appsDomain"
-    val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
-
     AppConfig(
-      emailDomain,
+      emailDomain = config.getString("emailDomain"),
       distributedLockConfig = config.as[DistributedLockConfig]("distributedLock"),
-      googleConfigOption,
-      resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet,
+      googleConfig = googleConfigOption,
+      resourceTypes = loadResourceTypes(config),
       liquibaseConfig = config.as[LiquibaseConfig]("liquibase"),
       blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty),
       termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
@@ -190,4 +186,7 @@ object AppConfig {
       azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices")
     )
   }
+
+  def loadResourceTypes(config: Config): Set[ResourceType] =
+    config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
 }
