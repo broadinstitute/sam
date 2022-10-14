@@ -6,7 +6,6 @@ import cats.data.NonEmptyList
 import cats.effect
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
-import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
@@ -53,25 +52,12 @@ object Boot extends IOApp with LazyLogging {
       IO.sleep(5 seconds) *> run(args)
     }
 
-  def loadSamConfig(maybeConfigFile: Option[File]): AppConfig = {
-    val file = new File("src/test/resources/sam2.conf")
-    val appConfig = if (file.exists()) {
-      val config: Config = ConfigFactory.load()
-      AppConfig.readConfig(config)
-    } else {
-      // instantiate an AppConfig from ENV variables
-
-    }
-  }
-
   private def startup(): IO[Unit] = {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
 
-    loadSamConfig(None)
-    val config: Config = ConfigFactory.load()
-    val appConfig: AppConfig = AppConfig.readConfig(config)
+    val appConfig: AppConfig = AppConfig.load(AppConfig.CONFIG_FROM_ENV)
 
     val appDependencies = createAppDependencies(appConfig)
 

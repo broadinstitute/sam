@@ -30,6 +30,19 @@ final case class AppConfig(
 )
 
 object AppConfig {
+  val CONFIG_FROM_FILES = "files"
+  val CONFIG_FROM_ENV   = "env"
+
+  def load(source: String): AppConfig = {
+    if (source == CONFIG_FROM_FILES) {
+      val config: Config = ConfigFactory.load()
+      AppConfig.readConfig(config)
+    } else {
+      // instantiate an AppConfig from ENV variables
+      ???
+    }
+  }
+
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
     OidcConfig(
       config.getString("authorityEndpoint"),
