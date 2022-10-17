@@ -24,7 +24,7 @@ object Settings {
     "-encoding",
     "utf8",
     "-language:postfixOps",
-    "-target:jvm-1.11"
+    "-release:11"
   )
 
   // test parameters explanation:
