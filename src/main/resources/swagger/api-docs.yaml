@@ -2508,8 +2508,6 @@ paths:
           'application/json':
             schema:
               type: object
-              properties: {}
-        required: true
       responses:
         201:
           description: user successfully created
@@ -3070,8 +3068,9 @@ components:
           description: true if everything is ok, false if anything is amiss
         systems:
           type: object
-          properties: {}
-          description: Map[String, SubsystemStatus]
+          description: status of each subsystem
+          additionalProperties:
+            $ref: '#/components/schemas/SubsystemStatus'
       description: status of each aubsystem Sam depends on
     UserIdInfo:
       required:
