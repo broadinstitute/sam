@@ -10,6 +10,11 @@ minnie_kenny_strict=0
 minnie_kenny_modify=0
 minnie_kenny_gitconfig="minnie-kenny.gitconfig"
 
+if ! which -s say; then
+  # Sometimes github actions doesn't have the say command, or a TERM. Setting TERM=dumb seems to get around this.
+  export TERM=dumb
+fi
+
 usage() {
   if [ ${minnie_kenny_quiet} -ne 1 ]; then
     cat <<USAGE >&2
