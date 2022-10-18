@@ -18,6 +18,7 @@ object Dependencies {
   val workbenchGoogle2V = "0.24-447afa5"
   val workbenchNotificationsV = "0.3-d74ff96"
   val workbenchOauth2V = "0.2-20f9225"
+  val workbenchOpenTelemetryV = "0.3-0096bac"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.3-SNAPSHOT"
 
@@ -76,6 +77,9 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil)
   val workbenchOauth2: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V
   val workbenchOauth2Tests: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V % "test" classifier "tests"
+  val workbenchOpenTelemetry: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-opentelemetry" % workbenchOpenTelemetryV
+  val workbenchOpenTelemetryTest: ModuleID =
+    "org.broadinstitute.dsde.workbench" %% "workbench-opentelemetry" % workbenchOpenTelemetryV % "test" classifier "tests"
   // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted
   // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
   // workbench-libs dependency so exclude auto-value from there
@@ -156,6 +160,8 @@ object Dependencies {
     googleStorageLocal,
     workbenchOauth2,
     workbenchOauth2Tests,
+    workbenchOpenTelemetry,
+    workbenchOpenTelemetryTest,
     commonsCodec,
     liquibaseCore,
     circeYAML,
