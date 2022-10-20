@@ -22,3 +22,4 @@ sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
 }
 
 addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
+// need something to make a new jenkins run, well, run
