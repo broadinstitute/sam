@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, googleServicesConfig}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
@@ -72,6 +72,8 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
   }
 
   "RealAccessPolicyDao and MockAccessPolicyDao" should "return the same results for the same methods" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val real = realServicesFixture
     val mock = mockServicesFixture
 

@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.TestSupport.databaseEnabled
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -97,18 +98,24 @@ class ManagedGroupServiceSpec
 
   before {
     clearDatabase()
-    dirDAO.createUser(dummyUser, samRequestContext).unsafeRunSync()
+    if (databaseEnabled) {
+      dirDAO.createUser(dummyUser, samRequestContext).unsafeRunSync()
+    }
   }
 
   protected def clearDatabase(): Unit = TestSupport.truncateAll
 
   "ManagedGroupService create" should "create a managed group with admin and member policies" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     assertMakeGroup()
     val policies = policyDAO.listAccessPolicies(expectedResource, samRequestContext).unsafeRunSync()
     policies.map(_.id.accessPolicyName.value) should contain theSameElementsAs Set("admin", "member", "admin-notifier")
   }
 
   it should "create a workbenchGroup with the same name as the Managed Group" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     assertMakeGroup()
     val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value), samRequestContext).unsafeRunSync()
     samGroup.value.id.value shouldEqual resourceId.value
@@ -116,12 +123,16 @@ class ManagedGroupServiceSpec
   }
 
   it should "create a workbenchGroup with 2 member WorkbenchSubjects" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     assertMakeGroup()
     val samGroup: Option[BasicWorkbenchGroup] = dirDAO.loadGroup(WorkbenchGroupName(resourceId.value), samRequestContext).unsafeRunSync()
     samGroup.value.members shouldEqual Set(adminPolicy, memberPolicy)
   }
 
   it should "sync the new group with Google" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val mockGoogleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupName = WorkbenchGroupName(resourceId.value)
@@ -132,6 +143,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "fail when trying to create a group that already exists" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val groupName = "uniqueName"
     assertMakeGroup(groupName)
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -142,6 +155,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "succeed after a managed group with the same name has been deleted" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val groupId = ResourceId("uniqueName")
     managedGroupResourceType.reuseIds shouldEqual true
     assertMakeGroup(groupId.value)
@@ -150,6 +165,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "fail when the group name is too long" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val maxLen = 60
     val groupName = "a" * (maxLen + 1)
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -160,6 +177,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "fail when the group name has invalid characters" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val groupName = "Make It Rain!!! $$$$$"
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
       assertMakeGroup(groupName)
@@ -169,12 +188,16 @@ class ManagedGroupServiceSpec
   }
 
   "ManagedGroupService get" should "return the Managed Group resource" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     assertMakeGroup()
     val maybeEmail = managedGroupService.loadManagedGroup(resourceId, samRequestContext).unsafeRunSync()
     maybeEmail.value.value shouldEqual s"${resourceId.value}@$testDomain"
   }
 
   "ManagedGroupService delete" should "delete policies associated with that resource in the database and in Google" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
     val mockGoogleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
@@ -190,6 +213,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "fail if the managed group is a sub group of any other workbench group" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val managedGroup = assertMakeGroup("coolGroup")
     val managedGroupName = WorkbenchGroupName(managedGroup.resourceId.value)
     val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(managedGroupName), WorkbenchEmail("foo@foo.gov"))
@@ -208,6 +233,8 @@ class ManagedGroupServiceSpec
   }
 
   "ManagedGroupService listPolicyMemberEmails" should "return a list of email addresses for the groups admin policy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val managedGroup = assertMakeGroup()
     managedGroupService
       .listPolicyMemberEmails(managedGroup.resourceId, ManagedGroupService.adminPolicyName, samRequestContext)
@@ -218,12 +245,16 @@ class ManagedGroupServiceSpec
   }
 
   it should "throw an exception if the group does not exist" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     intercept[WorkbenchExceptionWithErrorReport] {
       managedGroupService.listPolicyMemberEmails(resourceId, ManagedGroupService.adminPolicyName, samRequestContext).unsafeRunSync()
     }
   }
 
   "ManagedGroupService.overwritePolicyMemberEmails" should "permit overwriting the admin policy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val dummyAdmin = dummyUser
     val otherAdmin = Generator.genWorkbenchUserBoth.sample.get
     val someGroupEmail = WorkbenchEmail("someGroup@some.org")
@@ -253,6 +284,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "throw an exception if the group does not exist" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(
         managedGroupService.overwritePolicyMemberEmails(expectedResource.resourceId, ManagedGroupService.adminPolicyName, Set.empty, samRequestContext)
@@ -261,6 +294,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "throw an exception if any of the email addresses do not match an existing subject" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val managedGroup = assertMakeGroup()
 
     intercept[WorkbenchExceptionWithErrorReport] {
@@ -276,6 +311,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "permit overwriting the member policy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val managedGroup = assertMakeGroup()
 
     val someUser = Generator.genWorkbenchUserBoth.sample.get
@@ -296,6 +333,8 @@ class ManagedGroupServiceSpec
   }
 
   "ManagedGroupService addSubjectToPolicy" should "successfully add the subject to the existing policy for the group" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val adminUser = dummyUser
 
     val managedGroup = assertMakeGroup()
@@ -315,6 +354,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "succeed without changing if the email address is already in the policy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val adminUser = dummyUser
 
     val managedGroup = assertMakeGroup()
@@ -329,6 +370,8 @@ class ManagedGroupServiceSpec
   }
 
   "ManagedGroupService removeSubjectFromPolicy" should "successfully remove the subject from the policy for the group" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val adminUser = dummyUser
 
     val managedGroup = assertMakeGroup()
@@ -345,6 +388,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "not do anything if the subject is not a member of the policy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val adminUser = dummyUser
 
     val managedGroup = assertMakeGroup()
@@ -367,6 +412,8 @@ class ManagedGroupServiceSpec
   )
 
   "ManagedGroupService listGroups" should "return the list of groups that passed user belongs to" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     // Setup multiple managed groups owned by different users.
     // Make the different users a member of some of the groups owned by the other user
     // Create some resources owned by different users
@@ -422,6 +469,8 @@ class ManagedGroupServiceSpec
   }
 
   "ManagedGroupService getAccessInstructions" should "return access instructions when a group has them set" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val managedGroup = assertMakeGroup()
     val instructions = "Test Instructions"
 
@@ -430,12 +479,16 @@ class ManagedGroupServiceSpec
   }
 
   it should "return None when access instructions have not been set" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val managedGroup = assertMakeGroup()
 
     managedGroupService.getAccessInstructions(managedGroup.resourceId, samRequestContext).unsafeRunSync() shouldEqual None
   }
 
   it should "throw an exception if the group is not found" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
       managedGroupService.getAccessInstructions(ResourceId("Nonexistent Group"), samRequestContext).unsafeRunSync()
     }
@@ -443,6 +496,8 @@ class ManagedGroupServiceSpec
   }
 
   "ManagedGroupService setAccessInstructions" should "set access instructions when a group has none" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val managedGroup = assertMakeGroup()
     val instructions = "Test Instructions"
 
@@ -452,6 +507,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "modify the current access instructions" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     makeResourceType(managedGroupResourceType)
 
     val instructions = "Test Instructions"
@@ -465,6 +522,8 @@ class ManagedGroupServiceSpec
   }
 
   "ManagedGroupService requestAccess" should "send notifications" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val mockCloudExtension = mock[CloudExtensions](RETURNS_SMART_NULLS)
     when(mockCloudExtension.publishGroup(ArgumentMatchers.any[WorkbenchGroupName])).thenReturn(Future.successful(()))
     val testManagedGroupService =
@@ -497,6 +556,8 @@ class ManagedGroupServiceSpec
   }
 
   it should "throw an error if access instructions exist" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     assertMakeGroup(groupId = resourceId.value)
     managedGroupService.setAccessInstructions(resourceId, "instructions", samRequestContext).unsafeRunSync()
     val error = intercept[WorkbenchExceptionWithErrorReport] {

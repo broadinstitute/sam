@@ -11,6 +11,7 @@ import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
+import org.broadinstitute.dsde.workbench.sam.TestSupport.databaseEnabled
 import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
@@ -150,7 +151,9 @@ class ResourceServiceSpec
 
   before {
     clearDatabase()
-    dirDAO.createUser(dummyUser, samRequestContext).unsafeRunSync()
+    if (databaseEnabled) {
+      dirDAO.createUser(dummyUser, samRequestContext).unsafeRunSync()
+    }
   }
 
   protected def clearDatabase(): Unit = TestSupport.truncateAll
@@ -208,6 +211,8 @@ class ResourceServiceSpec
   }
 
   "ResourceService" should "create and delete resource" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resourceName = ResourceId("resource")
     val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
 
@@ -228,6 +233,8 @@ class ResourceServiceSpec
   }
 
   it should "set public policies" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resourceName = ResourceId("resource")
     val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
 
@@ -250,6 +257,8 @@ class ResourceServiceSpec
   }
 
   it should "fail to set public policies on auth domained resources" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
     constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
 
@@ -288,6 +297,8 @@ class ResourceServiceSpec
   }
 
   "listUserResourceActions" should "list the user's actions for a resource" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val otherRoleName = ResourceRoleName("other")
     val resourceName1 = ResourceId("resource1")
     val resourceName2 = ResourceId("resource2")
@@ -342,6 +353,8 @@ class ResourceServiceSpec
   }
 
   it should "list the user's actions for a resource with nested groups" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resourceName1 = ResourceId("resource1")
 
     val user = dirDAO.createUser(Generator.genWorkbenchUserBoth.sample.get, samRequestContext).unsafeRunSync()
@@ -375,6 +388,8 @@ class ResourceServiceSpec
   }
 
   it should "list public policies" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val otherRoleName = ResourceRoleName("other")
     val resourceName2 = ResourceId("resource2")
 
@@ -411,6 +426,8 @@ class ResourceServiceSpec
   }
 
   "createResource" should "detect conflict on create" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(
       ResourceTypeName(UUID.randomUUID().toString),
@@ -431,6 +448,8 @@ class ResourceServiceSpec
   }
 
   it should "create resource with custom policies" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(
       ResourceTypeName(UUID.randomUUID().toString),
@@ -454,6 +473,8 @@ class ResourceServiceSpec
   }
 
   it should "support valid resource ids" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(
       ResourceTypeName(UUID.randomUUID().toString),
@@ -469,6 +490,8 @@ class ResourceServiceSpec
   }
 
   it should "prevent invalid resource ids" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(
       ResourceTypeName(UUID.randomUUID().toString),
@@ -490,6 +513,8 @@ class ResourceServiceSpec
   }
 
   it should "prevent ownerless resource" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(
       ResourceTypeName(UUID.randomUUID().toString),
@@ -535,6 +560,8 @@ class ResourceServiceSpec
   }
 
   it should "create ownerless resource with parent" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(ResourceTypeName(UUID.randomUUID().toString), Set.empty, Set(ResourceRole(ownerRoleName, Set.empty)), ownerRoleName)
     val parentResourceName = ResourceId("parent")
@@ -557,6 +584,8 @@ class ResourceServiceSpec
   }
 
   "Creating a resource that has at least 1 constrainable action pattern" should "succeed when no auth domain is provided" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
     constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
 
@@ -565,6 +594,8 @@ class ResourceServiceSpec
   }
 
   it should "succeed when at least 1 valid auth domain group is provided" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
     constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
 
@@ -593,6 +624,8 @@ class ResourceServiceSpec
   }
 
   it should "fail when at least 1 of the auth domain groups does not exist" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
     constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
 
@@ -619,6 +652,8 @@ class ResourceServiceSpec
   }
 
   it should "fail when user does not have access to at least 1 of the auth domain groups" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
     constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
 
@@ -649,6 +684,8 @@ class ResourceServiceSpec
   }
 
   "Loading an auth domain" should "fail when the resource does not exist" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val e = intercept[WorkbenchExceptionWithErrorReport] {
       constrainableService
         .loadResourceAuthDomain(FullyQualifiedResourceId(constrainableResourceType.name, ResourceId(UUID.randomUUID().toString)), samRequestContext)
@@ -658,6 +695,8 @@ class ResourceServiceSpec
   }
 
   "Creating a resource that has 0 constrainable action patterns" should "fail when an auth domain is provided" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     defaultResourceType.isAuthDomainConstrainable shouldEqual false
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
 
@@ -685,6 +724,8 @@ class ResourceServiceSpec
   }
 
   "listUserResourceRoles" should "list the user's role when they have at least one role" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resourceName = ResourceId("resource")
     val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
 
@@ -697,6 +738,8 @@ class ResourceServiceSpec
   }
 
   it should "return an empty set when the resource doesn't exist" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(
       ResourceTypeName(UUID.randomUUID().toString),
@@ -714,6 +757,8 @@ class ResourceServiceSpec
   }
 
   "policyDao.listAccessPolicies" should "list policies for a newly created resource" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -726,6 +771,8 @@ class ResourceServiceSpec
   }
 
   "listResourcePolicies" should "list policies for a newly created resource without member email addresses if the User does not exist" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
     val ownerRole = defaultResourceType.roles.find(_.roleName == defaultResourceType.ownerRoleName).get
     val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
@@ -743,6 +790,8 @@ class ResourceServiceSpec
   }
 
   it should "list policies for a newly created resource with the member email addresses if the User has been added" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
     val ownerRole = defaultResourceType.roles.find(_.roleName == defaultResourceType.ownerRoleName).get
     val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
@@ -760,6 +809,8 @@ class ResourceServiceSpec
   }
 
   it should "include memberPolicies in the policy list where applicable" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     // create a "side" resource; we will use its policy emails as members in the default resource
     val sideResource = FullyQualifiedResourceId(otherResourceType.name, ResourceId("side-resource"))
     service.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
@@ -797,6 +848,8 @@ class ResourceServiceSpec
   }
 
   it should "not include memberPolicies in the policy list if no member is a policy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -810,6 +863,8 @@ class ResourceServiceSpec
   }
 
   "overwritePolicy" should "succeed with a valid request" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -962,6 +1017,8 @@ class ResourceServiceSpec
   }
 
   "overwriteAdminPolicy" should "succeed with a valid request" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
     val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
     val newAdminUser = Generator.genFirecloudUser.sample.get
@@ -998,6 +1055,8 @@ class ResourceServiceSpec
   }
 
   it should "fail if any members are not test.firecloud.org accounts" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
     val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
 
@@ -1031,6 +1090,8 @@ class ResourceServiceSpec
   }
 
   "overwritePolicyMembers" should "succeed with a valid request" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -1127,6 +1188,8 @@ class ResourceServiceSpec
   }
 
   it should "succeed with a regex action" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val rt = ResourceType(
       ResourceTypeName(UUID.randomUUID().toString),
       Set(ResourceActionPattern("foo-.+-bar", "", false)),
@@ -1152,6 +1215,8 @@ class ResourceServiceSpec
   }
 
   it should "fail when given an invalid action" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -1188,6 +1253,8 @@ class ResourceServiceSpec
   }
 
   it should "fail when given an invalid regex action" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val rt = ResourceType(
       ResourceTypeName(UUID.randomUUID().toString),
       Set(ResourceActionPattern("foo-.+-bar", "", false)),
@@ -1215,6 +1282,8 @@ class ResourceServiceSpec
   }
 
   it should "fail when given an invalid role" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -1251,6 +1320,8 @@ class ResourceServiceSpec
   }
 
   it should "fail when given an invalid member email" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -1287,6 +1358,8 @@ class ResourceServiceSpec
   }
 
   it should "fail when given an invalid name" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -1323,6 +1396,8 @@ class ResourceServiceSpec
   }
 
   "deleteResource" should "delete the resource" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -1336,6 +1411,8 @@ class ResourceServiceSpec
   }
 
   it should "not allow a new resource to be created with the same name as the deleted resource if 'reuseIds' is false for the Resource Type" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
 
     defaultResourceType.reuseIds shouldEqual false
@@ -1351,6 +1428,8 @@ class ResourceServiceSpec
   }
 
   it should "allow a new resource to be created with the same name as the deleted resource if 'reuseIds' is true for the Resource Type" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val reusableResourceType = defaultResourceType.copy(reuseIds = true)
     reusableResourceType.reuseIds shouldEqual true
     val localService =
@@ -1371,6 +1450,8 @@ class ResourceServiceSpec
   }
 
   it should "allow for auth domain groups on a deleted resource to be deleted" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resourceType = constrainableResourceType.copy(reuseIds = false)
     val authDomainGroupToDelete = "fooGroup"
     val otherAuthDomainGroup = "barGroup"
@@ -1415,11 +1496,15 @@ class ResourceServiceSpec
   }
 
   it should "delete a child resource that has a parent - reuse ids is false" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     assert(!defaultResourceType.reuseIds)
     testDeleteResource(defaultResourceType)
   }
 
   it should "delete a child resource that has a parent - reuse ids is true" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     assert(managedGroupResourceType.reuseIds)
     testDeleteResource(managedGroupResourceType)
   }
@@ -1452,6 +1537,8 @@ class ResourceServiceSpec
   }
 
   it should "fail deleting a parent resource that has children" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     // create a resource with a child
     val parentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-parent"))
     val childResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource-child"))
@@ -1510,6 +1597,8 @@ class ResourceServiceSpec
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
     val policyName = AccessPolicyName(defaultResourceType.ownerRoleName.value)
     val otherUser = Generator.genWorkbenchUserBoth.sample.get
@@ -1654,6 +1743,8 @@ class ResourceServiceSpec
   }
 
   "initResourceTypes" should "do the happy path" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val adminResType = ResourceType(
       SamResourceTypes.resourceTypeAdminName,
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -1717,6 +1808,8 @@ class ResourceServiceSpec
   }
 
   it should "update effective resource tables if descendant permissions are removed" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val adminResType = ResourceType(
       SamResourceTypes.resourceTypeAdminName,
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -1775,6 +1868,8 @@ class ResourceServiceSpec
   }
 
   it should "update effective resource tables if descendant permissions are added" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val adminResType = ResourceType(
       SamResourceTypes.resourceTypeAdminName,
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -1832,6 +1927,8 @@ class ResourceServiceSpec
   }
 
   it should "leave other effective resource relationships intact if descendant permissions are added" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val adminResType = ResourceType(
       SamResourceTypes.resourceTypeAdminName,
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -1907,6 +2004,8 @@ class ResourceServiceSpec
   }
 
   "listAllFlattenedResourceUsers" should "return a flattened list of all of the users in any of a resource's policies" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId(UUID.randomUUID().toString))
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
@@ -1962,6 +2061,8 @@ class ResourceServiceSpec
   }
 
   it should "return a flattened list of all of the users in any of a resource's policies even if the users are in a managed group" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId(UUID.randomUUID().toString))
     val managedGroupName = "foo"
     val resourceOwnerUser = Generator.genWorkbenchUserBoth.sample.get
@@ -2009,6 +2110,8 @@ class ResourceServiceSpec
   }
 
   "loadAccessPolicyWithEmails" should "get emails for users, groups and policies" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val testResult = for {
       _ <- service.createResourceType(defaultResourceType, samRequestContext)
 
@@ -2047,6 +2150,8 @@ class ResourceServiceSpec
   }
 
   "setResourceParent" should "throw if the child resource has an auth domain" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val childAccessPolicies = Map(
       AccessPolicyName("constrainable") -> constrainablePolicyMembership
     )
@@ -2077,6 +2182,8 @@ class ResourceServiceSpec
   }
 
   "deletePolicy" should "delete the policy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val testResult = for {
       _ <- service.createResourceType(defaultResourceType, samRequestContext)
       resource <- service.createResource(defaultResourceType, ResourceId("resource"), dummyUser, samRequestContext)
@@ -2367,6 +2474,8 @@ class ResourceServiceSpec
   }
 
   "AuditLogger" should "be called on deleteResource" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2375,6 +2484,8 @@ class ResourceServiceSpec
   }
 
   it should "be called on createResource" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
 
@@ -2386,6 +2497,8 @@ class ResourceServiceSpec
   }
 
   it should "be called on setResourceParent" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val parent = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
@@ -2400,6 +2513,8 @@ class ResourceServiceSpec
   }
 
   it should "be called on deleteResourceParent" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val parent = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty, parent = Option(parent.fullyQualifiedId))
@@ -2410,6 +2525,8 @@ class ResourceServiceSpec
   }
 
   it should "be called on removeSubjectFromPolicy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2432,6 +2549,8 @@ class ResourceServiceSpec
   }
 
   it should "be called on addSubjectToPolicy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2454,6 +2573,8 @@ class ResourceServiceSpec
   }
 
   it should "be called on setPublic" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2476,6 +2597,8 @@ class ResourceServiceSpec
   }
 
   it should "be called on overwritePolicy" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2493,6 +2616,8 @@ class ResourceServiceSpec
   }
 
   it should "be called on overwritePolicyMembers" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     policyDAO.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()

@@ -9,7 +9,7 @@ import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.broadinstitute.dsde.workbench.sam.Generator.genLock
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.TestSupport.dbRef
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, dbRef}
 
 import scala.concurrent.duration._
 
@@ -17,13 +17,15 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
 
   val config = DistributedLockConfig(5 seconds, 5)
 
-  val lockResource: cats.effect.Resource[IO, PostgresDistributedLockDAO[IO]] = cats.effect.Resource.eval(
+  lazy val lockResource: cats.effect.Resource[IO, PostgresDistributedLockDAO[IO]] = cats.effect.Resource.eval(
     IO {
       PostgresDistributedLockDAO[IO](dbRef, dbRef, config)
     }
   )
 
   "acquireLock" should "succeed if a lock can be retrieved" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val lockDetails = genLock.sample.get
     val res = lockResource.use(lock => lock.acquireLock(lockDetails))
 
@@ -31,6 +33,8 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   }
 
   it should "fail if there's same lock has already been set within 30 seconds" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val lockDetails = genLock.sample.get
     val res = lockResource.use { lock =>
       for {
@@ -43,6 +47,8 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   }
 
   "releaseLock" should "remove lockDetails" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val lockDetails = genLock.sample.get
     val res = lockResource.use { dl =>
       for {
@@ -56,6 +62,8 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   }
 
   "withLock" should "eventually get a lock with max retry" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val lockDetails = genLock.sample.get.copy(expiresIn = 7 seconds)
     val res = lockResource.use { lock =>
       for {
@@ -72,6 +80,8 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   }
 
   it should "release the lock after it's used" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val lockDetails = genLock.sample.get.copy(expiresIn = 5 seconds)
 
     val res = lockResource.use { lock =>
@@ -92,6 +102,8 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
   }
 
   it should "fail to get a lock if max retry is reached" in {
+    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+
     val lockDetails = genLock.sample.get
 
     val config = DistributedLockConfig(1 seconds, 3)
