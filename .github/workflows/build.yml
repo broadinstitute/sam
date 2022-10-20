@@ -49,9 +49,9 @@ jobs:
 
       - name: Git secrets setup
         run: |
-          git clone https://github.com/awslabs/git-secrets.git ~/git-secrets
+          git clone https://github.com/broadinstitute/git-secrets.git ~/git-secrets
           cd ~/git-secrets
-          git checkout ad82d68ee924906a0401dfd48de5057731a9bc84
+          git checkout 2c05383d8c32c6573f5e43b0a9515cedb37c0b4c
           sudo make install
 
       - name: Secrets check
