@@ -14,8 +14,8 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import scalikejdbc.config.DBs
 import scalikejdbc.{ConnectionPool, DBSession, IsolationLevel, NamedDB}
-import sun.security.provider.certpath.SunCertPathBuilderException
 
+import java.security.cert.CertPathBuilderException
 import java.sql.Connection.TRANSACTION_READ_COMMITTED
 import java.sql.SQLTimeoutException
 import scala.jdk.CollectionConverters._
@@ -33,7 +33,7 @@ object DbReference extends LazyLogging {
       liquibase.update(new Contexts())
     } catch {
       case e: SQLTimeoutException =>
-        val isCertProblem = Throwables.getRootCause(e).isInstanceOf[SunCertPathBuilderException]
+        val isCertProblem = Throwables.getRootCause(e).isInstanceOf[CertPathBuilderException]
 
         if (isCertProblem) {
           val k = "javax.net.ssl.keyStore"

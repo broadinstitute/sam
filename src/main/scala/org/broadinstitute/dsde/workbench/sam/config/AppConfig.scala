@@ -26,7 +26,8 @@ final case class AppConfig(
     termsOfServiceConfig: TermsOfServiceConfig,
     oidcConfig: OidcConfig,
     adminConfig: AdminConfig,
-    azureServicesConfig: Option[AzureServicesConfig]
+    azureServicesConfig: Option[AzureServicesConfig],
+    prometheusConfig: PrometheusConfig
 )
 
 object AppConfig {
@@ -143,6 +144,10 @@ object AppConfig {
     )
   }
 
+  implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
+    PrometheusConfig(config.getInt("endpointPort"))
+  }
+
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
@@ -163,7 +168,8 @@ object AppConfig {
       termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
       oidcConfig = config.as[OidcConfig]("oidc"),
       adminConfig = config.as[AdminConfig]("admin"),
-      azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices")
+      azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
+      prometheusConfig = config.as[PrometheusConfig]("prometheus")
     )
   }
 }
