@@ -60,7 +60,7 @@ object Boot extends IOApp with LazyLogging {
 
     val envConfig = ConfigFactory.load("env")
     val config = ConfigFactory.load()
-    val combinedConfig = envConfig.withFallback(config);
+    val combinedConfig = envConfig.withFallback(config)
     val appConfig = AppConfig.readConfig(combinedConfig)
 
     val appDependencies = createAppDependencies(appConfig)
