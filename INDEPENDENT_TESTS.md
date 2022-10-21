@@ -27,7 +27,6 @@ DistributedLockSpec
 ResourceRoutesSpec
 GoogleExtensionRoutesSpec
 StatusRouteSpec
-ResourceRoutesV2Spec
 AdminResourcesRoutesSpec
 TermsOfServiceRouteSpec
 UserRoutesSpec
