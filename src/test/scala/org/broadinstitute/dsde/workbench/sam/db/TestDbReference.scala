@@ -24,6 +24,7 @@ object TestDbReference extends LazyLogging {
   private val config = ConfigFactory.load()
   private val databaseEnabled = config.getBoolean("db.enabled")
 
+  // This code is copied over from DbReference. We didnt want to have to refactor DbReference to be able to use it in tests.
   private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, changelogParameters: Map[String, AnyRef] = Map.empty): Unit =
     if (databaseEnabled) {
       val dbConnection = ConnectionPool.borrow(dbName.name)
@@ -75,14 +76,14 @@ class TestDbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContext
     if (databaseEnabled) {
       super.readOnly(f)
     } else {
-      throw new RuntimeException(s"No DB Access for you!")
+      throw new RuntimeException(s"No DB Access for you! You'll need to either set db.enabled=true or mock the database access.")
     }
 
   override def inLocalTransactionWithIsolationLevel[A](isolationLevel: IsolationLevel)(f: DBSession => A): A =
     if (databaseEnabled) {
       super.inLocalTransactionWithIsolationLevel(isolationLevel)(f)
     } else {
-      throw new RuntimeException(s"No DB Access for you!")
+      throw new RuntimeException(s"No DB Access for you! You'll need to either set db.enabled=true or mock the database access.")
     }
 
   override def runDatabaseIO[A](
@@ -94,6 +95,6 @@ class TestDbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContext
     if (databaseEnabled) {
       super.runDatabaseIO(dbQueryName, samRequestContext, databaseIO, spanAttributes)
     } else {
-      throw new RuntimeException(s"No DB Access for you!")
+      throw new RuntimeException(s"No DB Access for you! You'll need to either set db.enabled=true or mock the database access.")
     }
 }
