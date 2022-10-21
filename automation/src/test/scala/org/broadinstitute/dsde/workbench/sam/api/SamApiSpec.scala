@@ -65,13 +65,15 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
 
       // Register user if the user is not registered
       val tempUserInfo = Sam.user.status()(tempAuthToken) match {
-        case Some(user) =>
+        case Some(user) => {
           logger.info(s"User ${user.userInfo.userEmail} was already registered.")
           user.userInfo
-        case None =>
+        }
+        case None => {
           logger.info(s"User ${tempUser.email} does not yet exist! Registering user.")
           Sam.user.registerSelf()(tempAuthToken)
           Sam.user.status()(tempAuthToken).get.userInfo
+        }
       }
 
       tempUserInfo.userEmail shouldBe tempUser.email
@@ -173,6 +175,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       val userId = Sam.user.status()(authToken1).get.userInfo.userSubjectId
 
       val petSAEmail = ServiceAccountAuthTokenFromJson(Sam.user.arbitraryPetServiceAccountKey()(authToken1)).buildCredential().getServiceAccountId
+
 
       val proxyGroup_1 = Sam.user.proxyGroup(petSAEmail)(authToken1)
       val proxyGroup_2 = Sam.user.proxyGroup(petSAEmail)(authToken2)
@@ -278,7 +281,9 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       val authDomainPolicies = Sam.user.listResourcePolicies("managed-group", authDomainId)(inBothUserAuthToken)
       val authDomainAdminEmail = for {
         policy <- authDomainPolicies if policy.policy.memberEmails.nonEmpty
-      } yield policy.email
+      } yield {
+        policy.email
+      }
       assert(authDomainAdminEmail.size == 1)
 
       awaitAssert(
@@ -337,7 +342,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       val resourceId = UUID.randomUUID.toString
       val ownerPolicyName = "owner"
       val policies = Map(ownerPolicyName -> AccessPolicyMembership(Set(policyUser2.email), Set.empty, Set(ownerPolicyName)))
-      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty) // create constrainable resource but not actually constrained
+      val resourceRequest = CreateResourceRequest(resourceId, policies, Set.empty) //create constrainable resource but not actually constrained
 
       // Create constrainable resource
       Sam.user.createResource(resourceTypeName, resourceRequest)(policyUser2Token)
