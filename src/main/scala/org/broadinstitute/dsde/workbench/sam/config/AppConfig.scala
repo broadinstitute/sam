@@ -147,6 +147,12 @@ object AppConfig {
   implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
     PrometheusConfig(config.getInt("endpointPort"))
   }
+  def load: AppConfig = {
+    val envConfig = ConfigFactory.load("env")
+    val config = ConfigFactory.load()
+    val combinedConfig = envConfig.withFallback(config)
+    AppConfig.readConfig(combinedConfig)
+  }
 
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
