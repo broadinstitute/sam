@@ -152,7 +152,7 @@ object AppConfig {
     // ConfigFactory.load automatically pulls in the default reference.conf,
     // which then ends up overriding any conf files provided as java options.
     // We need to get _just_ the contents of env.conf so that normal overriding can occur.
-    val envConfig = ConfigFactory.parseResources("env").resolve()
+    val envConfig = ConfigFactory.parseResourcesAnySyntax("env").resolve()
     val config = ConfigFactory.load()
     val combinedConfig = envConfig.withFallback(config)
     AppConfig.readConfig(combinedConfig)
