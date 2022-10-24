@@ -53,6 +53,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     }
 
   "GET /api/google/user/petServiceAccount" should "get or create a pet service account for a user in a v2 project" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
     val resourceService = mock[ResourceService](RETURNS_SMART_NULLS)
 
@@ -82,6 +84,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   it should "200 when the user doesn't have the right permission on the google-project resource, but it is v1" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val projectName = "myproject"
 
     val (_, _, routes) = createTestUser()
@@ -176,6 +180,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   it should "return a user's proxy group from a pet service account" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (user, _, routes) = createTestUser()
 
     val petEmail = getPetServiceAccount("myproject", routes)
@@ -270,6 +276,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "GET /api/google/user/petServiceAccount/{project}/key" should "200 with a new key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
 
@@ -283,6 +291,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "DELETE /api/google/user/petServiceAccount/{project}/key/{keyId}" should "204 when deleting a key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
 
@@ -301,6 +311,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "GET /api/google/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
     val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
@@ -355,14 +367,14 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       resourceServiceOpt: Option[ResourceService] = None,
       user: SamUser = Generator.genWorkbenchUserBoth.sample.get
   ): (SamUser, SamDependencies, SamRoutes) = {
-    val samDependencies = genSamDependencies(
+    lazy val samDependencies = genSamDependencies(
       resourceTypes,
       googIamDAO,
       googleServicesConfig,
       policyEvaluatorServiceOpt = policyEvaluatorServiceOpt,
       resourceServiceOpt = resourceServiceOpt
     )
-    val createRoutes = genSamRoutes(samDependencies, user)
+    lazy val createRoutes = genSamRoutes(samDependencies, user)
 
     // create a user
     Post("/register/user/v1/") ~> createRoutes.route ~> check {

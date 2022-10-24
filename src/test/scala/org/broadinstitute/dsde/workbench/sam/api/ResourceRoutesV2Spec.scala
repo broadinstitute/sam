@@ -28,6 +28,7 @@ import spray.json.{JsBoolean, JsValue}
 
 import scala.concurrent.Future
 
+//TODO This test is flaky. It looks like the tests run too fast and cause some sort of timeout error or race condition
 class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
   implicit val errorReportSource = ErrorReportSource("sam")

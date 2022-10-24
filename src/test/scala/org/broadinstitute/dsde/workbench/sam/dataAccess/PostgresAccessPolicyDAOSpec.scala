@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, samRequestContext}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -50,6 +50,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "upsertResourceTypes" - {
       "creates resource types in config and is idempotent" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val config = ConfigFactory.load()
         val appConfig = AppConfig.readConfig(config)
         dao.upsertResourceTypes(appConfig.resourceTypes, samRequestContext).unsafeRunSync() should contain theSameElementsAs (appConfig.resourceTypes.map(
@@ -59,6 +61,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "only updates resource types that have changed" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.upsertResourceTypes(Set(resourceType, otherResourceType), samRequestContext).unsafeRunSync() should contain theSameElementsAs (Set(
           resourceType.name,
           otherResourceType.name
@@ -73,24 +77,32 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "createResourceType" - {
       "succeeds" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync() shouldEqual resourceType
         dao.loadResourceTypes(Set(resourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(resourceType)
       }
 
       "succeeds" - {
         "when there are no action patterns" in {
+          assume(databaseEnabled, databaseEnabledClue)
+
           val myResourceType = resourceType.copy(actionPatterns = Set.empty)
           dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
           dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
         }
 
         "when there are no roles" in {
+          assume(databaseEnabled, databaseEnabledClue)
+
           val myResourceType = resourceType.copy(roles = Set.empty)
           dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
           dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
         }
 
         "when there is exactly one Role that has no actions" in {
+          assume(databaseEnabled, databaseEnabledClue)
+
           val myResourceType = resourceType.copy(roles = Set(actionlessRole))
           dao.createResourceType(myResourceType, samRequestContext).unsafeRunSync() shouldEqual myResourceType
           dao.loadResourceTypes(Set(myResourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(myResourceType)
@@ -101,6 +113,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         // createResourceType could minimally return the ResourceTypePK in its results.  Or we need some way to get all
         // of the ResourceTypes from the DB and compare them to what we were trying to save.
         "and only creates 1 ResourceType when trying to create multiple identical ResourceTypes at the same time" in {
+          assume(databaseEnabled, databaseEnabledClue)
 
           pending
 
@@ -119,6 +132,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         "succeeds" - {
           "when the new ResourceType" - {
             "is identical" in {
+              assume(databaseEnabled, databaseEnabledClue)
+
               dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
               dao.createResourceType(resourceType, samRequestContext).unsafeRunSync() shouldEqual resourceType
               dao.loadResourceTypes(Set(resourceType.name), samRequestContext).unsafeRunSync() shouldEqual Set(resourceType)
@@ -126,6 +141,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
             "adds new" - {
               "ActionPatterns" in {
+                assume(databaseEnabled, databaseEnabledClue)
+
                 val myActionPatterns = actionPatterns + ResourceActionPattern("coolNewPattern", "I am the coolest pattern EVER!  Mwahaha", true)
                 val myResourceType = resourceType.copy(actionPatterns = myActionPatterns)
 
@@ -135,6 +152,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
               }
 
               "Roles" in {
+                assume(databaseEnabled, databaseEnabledClue)
+
                 val myRoles = roles + ResourceRole(ResourceRoleName("blindWriter"), Set(writeAction))
                 val myResourceType = resourceType.copy(roles = myRoles)
 
@@ -144,6 +163,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
               }
 
               "Role Actions" in {
+                assume(databaseEnabled, databaseEnabledClue)
+
                 val myReaderRole = readerRole.copy(actions = Set(readAction, writeAction))
                 val myRoles = Set(myReaderRole, ownerRole, actionlessRole)
                 val myResourceType = resourceType.copy(roles = myRoles)
@@ -155,6 +176,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
             }
 
             "has the same ActionPatterns with modified descriptions" in {
+              assume(databaseEnabled, databaseEnabledClue)
+
               val myActionPatterns = actionPatterns + ResourceActionPattern("coolNewPattern", "I am the coolest pattern EVER!  Mwahaha", true)
               val myResourceType = resourceType.copy(actionPatterns = myActionPatterns)
 
@@ -170,6 +193,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
             "is removing at least one" - {
               "ActionPattern" in {
+                assume(databaseEnabled, databaseEnabledClue)
+
                 val removeActionPattern = resourceType.copy(actionPatterns = actionPatterns.tail)
                 dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
                 dao.createResourceType(removeActionPattern, samRequestContext).unsafeRunSync() shouldEqual removeActionPattern
@@ -177,6 +202,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
               }
 
               "Role" in {
+                assume(databaseEnabled, databaseEnabledClue)
+
                 val removeRole = resourceType.copy(roles = roles.tail)
                 dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
                 dao.createResourceType(removeRole, samRequestContext).unsafeRunSync() shouldEqual removeRole
@@ -184,6 +211,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
               }
 
               "of its role's Actions" in {
+                assume(databaseEnabled, databaseEnabledClue)
+
                 val readerlessReader = readerRole.copy(actions = Set.empty)
                 val newRoles = Set(ownerRole, readerlessReader, actionlessRole)
                 val removeAction = resourceType.copy(roles = newRoles)
@@ -197,6 +226,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         "and removing a role" - {
           "doesn't affect existing policies with the role, but prevents using the role in new policies" in {
+            assume(databaseEnabled, databaseEnabledClue)
+
             val initialRoles = Set(ownerRole, readerRole, actionlessRole)
             val initialResourceType = resourceType.copy(roles = initialRoles)
 
@@ -239,6 +270,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         "and removing an action" - {
           "from all roles will not affect policies that use the action" in {
+            assume(databaseEnabled, databaseEnabledClue)
+
             val initialRoles = Set(ownerRole, readerRole, actionlessRole)
             val initialResourceType = resourceType.copy(roles = initialRoles)
 
@@ -278,6 +311,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           }
 
           "from a resource type's role will remove that action from all policies with that role" in {
+            assume(databaseEnabled, databaseEnabledClue)
+
             val initialRoles = Set(ownerRole, readerRole, actionlessRole)
             val initialResourceType = resourceType.copy(roles = initialRoles)
 
@@ -323,11 +358,15 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       val resource = Resource(resourceType.name, ResourceId("verySpecialResource"), Set.empty)
 
       "succeeds when resource type exists" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync() shouldEqual resource
       }
 
       "returns a WorkbenchExceptionWithErrorReport when a resource with the same name and type already exists" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync()
 
@@ -344,6 +383,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "can add a resource that has at least 1 Auth Domain" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
         val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
         val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
@@ -358,6 +399,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "raises an error when AuthDomain does not exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
         val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
         val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
@@ -371,6 +414,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "creates resource with parent" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val child = Resource(resourceType.name, ResourceId("child"), Set.empty, parent = Option(resource.fullyQualifiedId))
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.createResource(resource, samRequestContext).unsafeRunSync() shouldEqual resource
@@ -379,6 +424,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "raises error when parent does not exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val child = Resource(resourceType.name, ResourceId("child"), Set.empty, parent = Option(resource.fullyQualifiedId))
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val exception = intercept[WorkbenchException] {
@@ -389,6 +436,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "loadResourceAuthDomain" - {
       "ResourceNotFound" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.loadResourceAuthDomain(FullyQualifiedResourceId(resourceType.name, ResourceId("missing")), samRequestContext).unsafeRunSync() should be(
           ResourceNotFound
@@ -396,6 +445,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "NotConstrained" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("verySpecialResource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -403,6 +454,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "Constrained" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
         val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
         val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
@@ -424,6 +477,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listResourceWithAuthdomains" - {
       "loads a resource with its auth domain" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val authDomain = BasicWorkbenchGroup(WorkbenchGroupName("aufthDomain"), Set.empty, WorkbenchEmail("authDomain@groups.com"))
         dirDao.createGroup(authDomain, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -435,6 +490,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "loads a resource even if its unconstrained" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
@@ -444,6 +501,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "loads the correct resource if different resource types have a resource with a common name" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val authDomain1 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain1"), Set.empty, WorkbenchEmail("authDomain1@groups.com"))
         dirDao.createGroup(authDomain1, samRequestContext = samRequestContext).unsafeRunSync()
         val authDomain2 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain2"), Set.empty, WorkbenchEmail("authDomain2@groups.com"))
@@ -463,6 +522,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "returns None when resource isn't found" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao
           .listResourceWithAuthdomains(FullyQualifiedResourceId(resourceTypeName, ResourceId("terribleResource")), samRequestContext)
           .unsafeRunSync() shouldBe None
@@ -471,6 +532,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listResourcesWithAuthdomains" - {
       "finds the auth domains for the provided resources" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val authDomain1 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain1"), Set.empty, WorkbenchEmail("authDomain1@groups.com"))
         dirDao.createGroup(authDomain1, samRequestContext = samRequestContext).unsafeRunSync()
         val authDomain2 = BasicWorkbenchGroup(WorkbenchGroupName("authDomain2"), Set.empty, WorkbenchEmail("authDomain2@groups.com"))
@@ -491,6 +554,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "only returns actual resources" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         dao.listResourcesWithAuthdomains(resourceType.name, Set(ResourceId("reallyAwfulResource")), samRequestContext).unsafeRunSync() shouldEqual Set.empty
 
@@ -505,6 +570,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "deleteResource" - {
       "deletes a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -519,6 +586,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup" - {
       "can find all synced policies for resources with the group in its auth domain" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val secondResourceType = resourceType.copy(name = ResourceTypeName("superAwesomeResourceType"))
         dao.createResourceType(secondResourceType, samRequestContext).unsafeRunSync()
@@ -574,6 +643,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "returns an empty list if group is not used in an auth domain" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val group = BasicWorkbenchGroup(WorkbenchGroupName("boringGroup"), Set.empty, WorkbenchEmail("notAnAuthDomain@insecure.biz"))
         dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
 
@@ -581,6 +652,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "returns an empty list if group doesn't exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName("notEvenReal"), samRequestContext).unsafeRunSync() shouldEqual Set.empty
       }
     }
@@ -590,6 +663,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
     val defaultUser = Generator.genWorkbenchUserBoth.sample.get
     "createPolicy" - {
       "creates a policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -608,6 +683,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "detects duplicate policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -631,6 +708,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "can recreate a deleted policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -650,6 +729,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "creates a policy with actions that don't already exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -669,6 +750,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "creates a policy with users and groups as members and loads those members" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -690,6 +773,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "creates descendant actions and roles" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val otherResourceType = resourceType.copy(name = ResourceTypeName("otherResourceType"))
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val sameResourceTypeDescendant = AccessPolicyDescendantPermissions(resource.resourceTypeName, Set(writeAction), Set(ownerRoleName))
@@ -719,6 +804,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "loadPolicy" - {
       "returns None for a nonexistent policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.loadPolicy(FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("fakePolicy")), samRequestContext).unsafeRunSync() shouldBe None
       }
@@ -726,6 +813,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "deletePolicy" - {
       "deletes a policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -752,6 +841,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "can handle deleting a policy that has already been deleted" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -778,6 +869,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listPublicAccessPolicies" - {
       "lists the public access policies for a given resource type" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resourceId = ResourceId("resource")
         val resource = Resource(resourceType.name, resourceId, Set.empty)
@@ -828,6 +921,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listPublicAccessPoliciesWithoutMembers" - {
       "lists the public access policies on a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resourceId = ResourceId("resource")
         val resource = Resource(resourceType.name, resourceId, Set.empty)
@@ -892,6 +987,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listFlattenedPolicyMembers" - {
       "lists all members of a policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val directMember = Generator.genWorkbenchUserGoogle.sample.get
         val subGroupMember = Generator.genWorkbenchUserBoth.sample.get
         val subSubGroupMember = Generator.genWorkbenchUserGoogle.sample.get
@@ -931,6 +1028,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listAccessPoliciesForUser" - {
       "lists the access policies on a resource that a user is a member of" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -970,6 +1069,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "does not list policies on other resources the user is a member of" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
@@ -1008,6 +1109,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listUserResourceActions" - {
       "lists the actions on a resource that a user is a member of" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -1113,6 +1216,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists the actions on a resource that a user is a member of via ancestor" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -1223,6 +1328,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists actions granted by nested roles on a resource a user is a member of" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -1311,6 +1418,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists actions granted by nested roles on a resource a user is a member of via ancestor" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -1515,6 +1624,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists all a user's resources of a type" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -1588,6 +1699,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists all a user's resources of a type when granted access via nested roles" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
@@ -1745,6 +1858,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listUserResourceRoles" - {
       "lists the roles on a resource that a user is a member of" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -1817,6 +1932,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists the roles on a resource that a user is a member of via ancestor" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -1894,6 +2011,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists included and descendant roles on a resource a user is a member of" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -1983,6 +2102,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists included and descendant roles on a resource a user is a member of via ancestor" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
 
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
@@ -2076,6 +2197,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "should distinguish between descendant roles and direct roles when dealing with the same resource type" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val user = Generator.genWorkbenchUserGoogle.sample.get
         val descendantRoleResourceTypeName = ResourceTypeName("descends")
 
@@ -2107,6 +2230,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "list included role when it is included in inherited role" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         // parent_role on parent has child_role on child, child_role includes child_included_role
         // verify that user has child_included_role on child when granted parent_role on parent
         val user = Generator.genWorkbenchUserGoogle.sample.get
@@ -2174,6 +2299,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "list correct roles in grandparent, parent, child relationship" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         // create grand parent, parent, child structure where grand parent role includes
         // a parent role and parent role include a child role then assign user grandparent role
         // and verify user has correct role at each level
@@ -2254,6 +2381,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "setPolicyIsPublic" - {
       "can change whether a policy is public or private" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val policy = AccessPolicy(
           FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("private")),
@@ -2280,6 +2409,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listAccessPolicies" - {
       "lists all the access policy names with their resource names that a user is in for a given resource type" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val resource1 = Resource(resourceType.name, ResourceId("resource1"), Set.empty)
         val policy1 = AccessPolicy(
           FullyQualifiedPolicyId(resource1.fullyQualifiedId, AccessPolicyName("one")),
@@ -2315,6 +2446,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "lists the access policies for a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
@@ -2349,6 +2482,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listAccessPolicyMemberships" - {
       "lists the access policy memberships for a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
@@ -2409,6 +2544,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "loadPolicyMembership" - {
       "loads an access policy's membership" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dirDao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dirDao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
@@ -2455,6 +2592,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "overwritePolicyMembers" - {
       "overwrites a policy's members" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2488,6 +2627,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "overwrites a policy's members when starting membership is empty" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2524,6 +2665,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "overwritePolicy" - {
       "overwrites a policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2557,6 +2700,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "will not overwrite a policy if any of the new members don't exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
@@ -2591,6 +2736,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "overwrites descendant actions and roles" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val otherResourceType = resourceType.copy(name = ResourceTypeName("otherResourceType"))
         val secondUser = defaultUser.copy(
@@ -2643,6 +2790,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "getResourceParent" - {
       "gets the FullyQualifiedResourceId of the parent resource if it has been set" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val testResult = for {
           _ <- dao.createResourceType(resourceType, samRequestContext)
           childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
@@ -2658,6 +2807,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "returns None if no parent is set" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val testResult = for {
           _ <- dao.createResourceType(resourceType, samRequestContext)
           childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
@@ -2672,6 +2823,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "setResourceParent" - {
       "will not create a cyclical resource hierarchy" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
         val parentResource = Resource(resourceType.name, ResourceId("parent"), Set.empty)
         val grandparentResource = Resource(resourceType.name, ResourceId("gramgram"), Set.empty)
@@ -2707,6 +2860,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "cannot set a resource as its own parent" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val testResult = for {
           _ <- dao.createResourceType(resourceType, samRequestContext)
@@ -2722,6 +2877,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "errors if parent does not exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         val doesNotExist = Resource(resourceType.name, ResourceId("doesNotExist"), Set.empty)
         val testResult = for {
@@ -2738,6 +2895,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "deleteResourceParent" - {
       "can unset the parent of a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
         val parentResource = Resource(resourceType.name, ResourceId("parent"), Set.empty)
 
@@ -2757,6 +2916,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
       // this shouldn't actually happen but good to be tolerant
       "tolerates trying to delete a parent on a resource without a parent" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
 
         val testResult = for {
@@ -2771,6 +2932,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "listResourceChildren" - {
       "can list direct children of a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val oldestChild = Resource(resourceType.name, ResourceId("old"), Set.empty)
         val middleChild = Resource(resourceType.name, ResourceId("middle"), Set.empty)
         val youngestChild = Resource(resourceType.name, ResourceId("young"), Set.empty)
@@ -2795,6 +2958,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "does not list indirect children of a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val childResource = Resource(resourceType.name, ResourceId("child"), Set.empty)
         val grandchildResource = Resource(resourceType.name, ResourceId("grandchild"), Set.empty)
         val greatGrandchildResource = Resource(resourceType.name, ResourceId("great-grandchild"), Set.empty)
@@ -2819,6 +2984,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
 
       "can list children of different resource types" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         val parentResourceType = resourceType.copy(name = ResourceTypeName("parentRT"))
         val childResourceType1 = resourceType.copy(name = ResourceTypeName("childRT1"))
         val childResourceType2 = resourceType.copy(name = ResourceTypeName("childRT2"))
