@@ -148,7 +148,11 @@ object AppConfig {
     PrometheusConfig(config.getInt("endpointPort"))
   }
   def load: AppConfig = {
-    val envConfig = ConfigFactory.load("env")
+    // We need to manually parse and resolve the env.conf file.
+    // ConfigFactory.load automatically pulls in the default reference.conf,
+    // which then ends up overriding any conf files provided as java options.
+    // We need to get _just_ the contents of env.conf so that normal overriding can occur.
+    val envConfig = ConfigFactory.parseResources("env").resolve()
     val config = ConfigFactory.load()
     val combinedConfig = envConfig.withFallback(config)
     AppConfig.readConfig(combinedConfig)
