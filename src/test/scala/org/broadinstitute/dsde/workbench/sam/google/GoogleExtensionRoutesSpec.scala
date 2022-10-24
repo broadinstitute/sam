@@ -53,7 +53,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     }
 
   "GET /api/google/user/petServiceAccount" should "get or create a pet service account for a user in a v2 project" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
     val resourceService = mock[ResourceService](RETURNS_SMART_NULLS)
@@ -84,7 +84,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   it should "200 when the user doesn't have the right permission on the google-project resource, but it is v1" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val projectName = "myproject"
 
@@ -180,7 +180,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   it should "return a user's proxy group from a pet service account" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (user, _, routes) = createTestUser()
 
@@ -276,7 +276,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "GET /api/google/user/petServiceAccount/{project}/key" should "200 with a new key" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
@@ -291,7 +291,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "DELETE /api/google/user/petServiceAccount/{project}/key/{keyId}" should "204 when deleting a key" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
@@ -311,7 +311,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "GET /api/google/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 

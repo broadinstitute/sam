@@ -76,14 +76,14 @@ class TestDbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContext
     if (databaseEnabled) {
       super.readOnly(f)
     } else {
-      throw new RuntimeException(s"No DB Access for you! You'll need to either set db.enabled=true or mock the database access.")
+      throw new RuntimeException(s"No DB Access for you! You'll need to either set postgres.enabled=true or mock the database access.")
     }
 
   override def inLocalTransactionWithIsolationLevel[A](isolationLevel: IsolationLevel)(f: DBSession => A): A =
     if (databaseEnabled) {
       super.inLocalTransactionWithIsolationLevel(isolationLevel)(f)
     } else {
-      throw new RuntimeException(s"No DB Access for you! You'll need to either set db.enabled=true or mock the database access.")
+      throw new RuntimeException(s"No DB Access for you! You'll need to either set postgres.enabled=true or mock the database access.")
     }
 
   override def runDatabaseIO[A](
@@ -95,6 +95,6 @@ class TestDbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContext
     if (databaseEnabled) {
       super.runDatabaseIO(dbQueryName, samRequestContext, databaseIO, spanAttributes)
     } else {
-      throw new RuntimeException(s"No DB Access for you! You'll need to either set db.enabled=true or mock the database access.")
+      throw new RuntimeException(s"No DB Access for you! You'll need to either set postgres.enabled=true or mock the database access.")
     }
 }

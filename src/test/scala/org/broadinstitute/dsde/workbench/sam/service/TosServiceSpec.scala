@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.unsafe.implicits.{global => globalEc}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.databaseEnabled
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
@@ -35,7 +35,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     TestSupport.truncateAll
 
   "TosService" should "accept, get, and reject the ToS for a user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
@@ -53,7 +53,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   }
 
   it should "accept new version of ToS" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
 

@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
-import org.broadinstitute.dsde.workbench.sam.TestSupport.databaseEnabled
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -382,7 +382,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   "GoogleExtension" should "get a pet service account for a user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -469,7 +469,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   protected def newAccessPolicyDAO(): AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   it should "attach existing service account to pet" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -496,7 +496,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "recreate service account when missing for pet" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -561,7 +561,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "throw an exception with a NotFound error report when getting sync date for group that does not exist" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 
@@ -593,7 +593,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return None when getting sync date for a group that has not been synced" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 
@@ -625,7 +625,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return sync date for a group that has been synced" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 
@@ -663,7 +663,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "throw an exception with a NotFound error report when getting email for group that does not exist" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 
@@ -695,7 +695,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return email for a group" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 
@@ -728,7 +728,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return None if an email is found, but the group has not been synced" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 
@@ -761,7 +761,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return SyncState with email and last sync date if there is an email and the group has been synced" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 
@@ -1206,7 +1206,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   "GoogleKeyCache" should "create a service account key and return the same key when called again" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
@@ -1231,7 +1231,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "remove an existing key and then return a brand new one" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
@@ -1268,7 +1268,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "clean up unknown pet SA keys" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
     val (googleExtensions, service) = setupGoogleKeyCacheTests
@@ -1390,7 +1390,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   "calculateIntersectionGroup" should "find the intersection of the resource auth domain and the policy" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1448,7 +1448,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "handle nested group structures for policies and auth domains" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1535,7 +1535,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return the policy members if there is no auth domain set" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1579,7 +1579,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return an empty set if none of the policy members are in the auth domain" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1635,7 +1635,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return an empty set if both the auth domain and the policy are empty" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1680,7 +1680,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   "isConstrainable" should "return true when the policy has constrainable actions and roles" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1717,7 +1717,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return true when the policy has a constrainable role, but no constrainable actions" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1754,7 +1754,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return true when the policy has a constrainable action, but no constrainable roles" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1791,7 +1791,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return false when the policy is not constrainable" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (
       dirDAO: DirectoryDAO,
@@ -1828,7 +1828,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return false when the resource type is not constrainable" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val (dirDAO: DirectoryDAO, _, constrainableService: ResourceService, _, _, _, _) = initPrivateTest
 
@@ -1889,7 +1889,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   "createUserPetServiceAccount" should "return a failed IO when the project is not in the Terra Google Org" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 
@@ -1930,7 +1930,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   }
 
   it should "return a failed IO when google returns a 403" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val dirDAO = newDirectoryDAO()
 

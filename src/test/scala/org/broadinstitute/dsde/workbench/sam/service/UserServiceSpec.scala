@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, googleServicesConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, googleServicesConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -76,7 +76,7 @@ class UserServiceSpec
     TestSupport.truncateAll
 
   "UserService" should "create a user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
@@ -102,7 +102,7 @@ class UserServiceSpec
   }
 
   it should "acceptTermsOfService" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val status = serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
@@ -115,7 +115,7 @@ class UserServiceSpec
   }
 
   it should "get user status" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
     service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue shouldBe None
@@ -133,7 +133,7 @@ class UserServiceSpec
   }
 
   it should "get user status info" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
@@ -147,7 +147,7 @@ class UserServiceSpec
   }
 
   it should "get user status diagnostics" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
     service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
@@ -162,7 +162,7 @@ class UserServiceSpec
   }
 
   it should "enable/disable user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
     service.enableUser(defaultUser.id, samRequestContext).futureValue shouldBe None
@@ -183,7 +183,7 @@ class UserServiceSpec
   }
 
   it should "delete a user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
@@ -211,7 +211,7 @@ class UserServiceSpec
   /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
     */
   "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserGoogle.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
@@ -220,7 +220,7 @@ class UserServiceSpec
   }
 
   it should "create new user when there's no existing subject for a given azureB2CId and email" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserAzure.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
@@ -232,7 +232,7 @@ class UserServiceSpec
     * field for this user.
     */
   it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserGoogle.sample.get
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
@@ -243,7 +243,7 @@ class UserServiceSpec
   }
 
   it should "update azureB2CId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserAzure.sample.get
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
@@ -257,7 +257,7 @@ class UserServiceSpec
     * field for this user.
     */
   it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserGoogle.sample.get.copy(email = genNonPetEmail.sample.get)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
@@ -269,7 +269,7 @@ class UserServiceSpec
   }
 
   it should "return BadRequest when there's no existing subject for a given azureB2CId and but there is one for email, and the returned subject is not a regular user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserAzure.sample.get.copy(email = genNonPetEmail.sample.get)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
@@ -284,7 +284,7 @@ class UserServiceSpec
     * already been registered. We should throw an exception to prevent the googleSubjectId from being overwritten
     */
   it should "throw an exception when trying to re-register a user with a changed googleSubjectId" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserGoogle.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
@@ -294,7 +294,7 @@ class UserServiceSpec
   }
 
   it should "throw an exception when trying to re-register a user with a changed azureB2CId" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserAzure.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
@@ -306,7 +306,7 @@ class UserServiceSpec
   /** GoogleSubjectId Email yes skip ---> User exists. Do nothing.
     */
   it should "return conflict when there's an existing subject for a given googleSubjectId" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
@@ -317,7 +317,7 @@ class UserServiceSpec
   }
 
   it should "return conflict when there's an existing subject for a given azureB2CId" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserAzure.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
@@ -329,7 +329,7 @@ class UserServiceSpec
 
   // Test arose out of: https://broadworkbench.atlassian.net/browse/PROD-677
   "Register User" should "ignore the newly-created WorkbenchUserId on the request and use the previously created WorkbenchUserId for a previously-invited user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // Invite a new user
     val emailToInvite = genNonPetEmail.sample.get
@@ -355,7 +355,7 @@ class UserServiceSpec
   }
 
   "UserService inviteUser" should "create a new user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val userEmail = genNonPetEmail.sample.get
     service.inviteUser(userEmail, samRequestContext).unsafeRunSync()
@@ -371,7 +371,7 @@ class UserServiceSpec
   }
 
   it should "return conflict when there's an existing subject for a given email" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
@@ -382,7 +382,7 @@ class UserServiceSpec
   }
 
   "GetStatus for an invited user" should "return a user status that is disabled" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // Invite an email
     val emailToInvite = genNonPetEmail.sample.get
@@ -395,7 +395,7 @@ class UserServiceSpec
   }
 
   it should "return a status that is enabled after the invited user registers" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // Invite an email
     val emailToInvite = genNonPetEmail.sample.get
@@ -412,7 +412,7 @@ class UserServiceSpec
   }
 
   "invite user and then create user with same email" should "update googleSubjectId for this user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val inviteeEmail = genNonPetEmail.sample.get
     service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
@@ -431,7 +431,7 @@ class UserServiceSpec
   }
 
   it should "update azureB2CId for this user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val inviteeEmail = genNonPetEmail.sample.get
     service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
@@ -448,7 +448,7 @@ class UserServiceSpec
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
     service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None

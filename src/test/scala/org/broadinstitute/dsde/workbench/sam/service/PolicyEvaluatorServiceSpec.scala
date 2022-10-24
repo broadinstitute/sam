@@ -135,7 +135,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
     }
 
   "hasPermission" should "return true if given action is granted through membership in another policy" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val action = ResourceAction("weirdAction")
@@ -181,7 +181,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return false if given action is not allowed for a user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val samplePolicy = genPolicy.sample.get
@@ -208,7 +208,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return false if user is not a member of the resource" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val samplePolicy = genPolicy.sample.get
@@ -235,7 +235,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return true if given action is allowed for a user and resource is not constrained by auth domains" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val samplePolicy = genPolicy.sample.get
@@ -259,7 +259,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return true if given action is allowed for a user, action is constrained by auth domains, user is a member of all required auth domains" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
@@ -284,7 +284,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return true if given action is allowed for a user, action is constrained by auth domains, resource has no auth domain" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
@@ -311,7 +311,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return false if given action is NOT allowed for a user, action is constrained by auth domains, user is a member of required auth domains" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val samplePolicy = SamLenses.resourceTypeNameInAccessPolicy.modify(_ => constrainableResourceType.name)(genPolicy.sample.get)
@@ -336,7 +336,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return false if given action is allowed for a user, action is constrained by auth domains, user is NOT a member of auth domain" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val probeUser = genWorkbenchUserBoth.sample.get
@@ -363,7 +363,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return true if given action is allowed for a user, action is NOT constrained by auth domains, user is not a member of auth domain" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val probeUser = genWorkbenchUserBoth.sample.get
@@ -390,7 +390,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   "hasPermissionByUserEmail" should "return true if given action is allowed for a user, action is NOT constrained by auth domains, user is not a member of auth domain" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val probeUser = genWorkbenchUserBoth.sample.get
@@ -417,7 +417,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return false if given action is not allowed for a user" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val samplePolicy = genPolicy.sample.get
@@ -444,7 +444,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return false if user not found" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val samplePolicy = genPolicy.sample.get
     val action = ResourceAction("weirdAction")
@@ -469,7 +469,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   "listUserResources" should "list user's resources but not others" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val resource1 = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource1"))
     val resource2 = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource2"))
@@ -537,7 +537,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "return no auth domains where there is a resource in a constrainable type but does not have any auth domains" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val resource = genResource.sample.get.copy(authDomain = Set.empty)
     val policyWithConstrainable = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
@@ -581,7 +581,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "list required authDomains if constrainable" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
@@ -624,7 +624,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
   }
 
   it should "list required authDomains and authDomains user is not a member of if constrainable" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
@@ -672,7 +672,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
 @deprecated("this allows testing of deprecated functions, remove as part of CA-1783", "")
 class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
   "listUserAccessPolicies" should "list user's access policies but not others" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val resource1 = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource1"))
     val resource2 = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource2"))
@@ -727,7 +727,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
   }
 
   it should "return no auth domains where there is a resource in a constrainable type but does not have any auth domains" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val resource = genResource.sample.get.copy(authDomain = Set.empty)
     val policyWithConstrainable = SamLenses.resourceTypeNameInAccessPolicy.set(constrainableResourceType.name)(genPolicy.sample.get)
@@ -763,7 +763,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
   }
 
   it should "list required authDomains if constrainable" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)
     val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(genPolicy.sample.get)
@@ -798,7 +798,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
   }
 
   it should "list required authDomains and authDomains user is not a member of if constrainable" in {
-    assume(databaseEnabled, "-- skipping tests that talk to a real database")
+    assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserBoth.sample.get
     val resource = genResource.sample.get.copy(resourceTypeName = constrainableResourceType.name)

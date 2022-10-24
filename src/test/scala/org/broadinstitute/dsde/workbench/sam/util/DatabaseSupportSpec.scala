@@ -15,7 +15,7 @@ import java.util.concurrent.CyclicBarrier
 import scala.concurrent.Future
 import cats.effect.Temporal
 import cats.effect.unsafe.implicits.global
-import org.broadinstitute.dsde.workbench.sam.TestSupport.databaseEnabled
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 
 class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TestSupport {
   implicit val ec = scala.concurrent.ExecutionContext.global
@@ -36,13 +36,13 @@ class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterE
   "DatabaseSupport" - {
     "runInSerializableTransaction" - {
       "retry serialization failure" in {
-        assume(databaseEnabled, "-- skipping tests that talk to a real database")
+        assume(databaseEnabled, databaseEnabledClue)
         // this should run without error
         causeSerializationFailure(2)
       }
 
       "fail due to serialization failure when out of retries" in {
-        assume(databaseEnabled, "-- skipping tests that talk to a real database")
+        assume(databaseEnabled, databaseEnabledClue)
         val e = intercept[PSQLException] {
           causeSerializationFailure(1)
         }

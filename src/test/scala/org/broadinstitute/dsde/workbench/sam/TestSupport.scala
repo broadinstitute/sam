@@ -74,6 +74,7 @@ object TestSupport extends TestSupport {
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val adminConfig = config.as[AdminConfig]("admin")
   val databaseEnabled = config.getBoolean("db.enabled")
+  val databaseEnabledClue = "-- skipping tests that talk to a real database"
 
   lazy val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
