@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
+import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, TestDbReference}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, GoogleGroups}
@@ -66,7 +66,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
 
   private def failingDatabase = {
     // background database configured to connect to non existent database
-    val dbReferenceOverride = DbReference(DatabaseNames.Background, TestSupport.blockingEc)
+    val dbReferenceOverride = new TestDbReference(DatabaseNames.Background, TestSupport.blockingEc)
     val service = new StatusService(directoryDAOWithAllUsersGroup(false), NoExtensions, dbReferenceOverride, pollInterval = 10 milliseconds)
     service
   }

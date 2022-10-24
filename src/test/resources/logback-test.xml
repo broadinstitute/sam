@@ -15,13 +15,9 @@
         </encoder>
     </appender>
 
-    <appender name="Console-Stackdriver" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
-            <layout class="org.springframework.cloud.gcp.logging.StackdriverJsonLayout">
-                <includeTraceId>true</includeTraceId>
-                <includeSpanId>true</includeSpanId>
-            </layout>
-        </encoder>
+    <appender name="Console-Stackdriver" class="com.google.cloud.logging.logback.LoggingAppender">
+        <enhancer>com.google.cloud.logging.logback.TraceLoggingEventEnhancer</enhancer>
+        <redirectToStdout>true</redirectToStdout>
     </appender>
 
     <appender name="Console-Standard" class="ch.qos.logback.core.ConsoleAppender">
