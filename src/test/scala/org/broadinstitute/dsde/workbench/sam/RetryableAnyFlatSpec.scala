@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam
 
-import org.scalatest.{Canceled, Failed, Outcome, Retries}
+import org.scalatest.{Exceptional, Outcome, Retries}
 import org.scalatest.flatspec.AnyFlatSpec
 
 trait RetryableAnyFlatSpec extends AnyFlatSpec with Retries {
@@ -13,8 +13,9 @@ trait RetryableAnyFlatSpec extends AnyFlatSpec with Retries {
   def withFixture(test: NoArgTest, count: Int): Outcome = {
     val outcome = super.withFixture(test)
     outcome match {
-      case Failed(_) | Canceled(_) =>
-        println(s"Test '${test.name}' failed on try $count.")
+      case Exceptional(ex) =>
+        println(s"Test '${test.name}' ${outcome.getClass.getSimpleName} on try $count.")
+        println(s"Test '${test.name}' ${outcome.getClass.getSimpleName} with: $ex")
         if (count >= retries) super.withFixture(test) else withFixture(test, count + 1)
       case other => other
     }
