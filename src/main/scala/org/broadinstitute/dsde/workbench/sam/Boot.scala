@@ -7,6 +7,7 @@ import cats.effect._
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
+import io.sentry.{Sentry, SentryOptions}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{
@@ -47,11 +48,20 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
-  def run(args: List[String]): IO[ExitCode] =
+  val sentryDsn: Option[String] = sys.env.get("SENTRY_DSN")
+
+  private def initSentry(): Unit = sentryDsn.fold(logger.warn("No SENTRY_DSN found, not initializing Sentry.")) { dsn =>
+    val options = new SentryOptions()
+    options.setDsn(dsn)
+    Sentry.init()
+  }
+  def run(args: List[String]): IO[ExitCode] = {
+    initSentry()
     (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
       logger.error("sam failed to start, trying again in 5s", t)
       IO.sleep(5 seconds) *> run(args)
     }
+  }
 
   private def startup(): IO[Unit] = {
 

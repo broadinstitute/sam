@@ -10,6 +10,7 @@ object Dependencies {
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.3.4"
   val http4sVersion = "0.21.13"
+  val sentryVersion = "6.6.0"
 
   val workbenchUtilV = "0.6-74c9fc2"
   val workbenchUtil2V = "0.2-447afa5"
@@ -32,6 +33,8 @@ object Dependencies {
   val excludeGoogleCloudResourceManager = ExclusionRule(organization = "com.google.apis", name = "google-api-services-cloudresourcemanager")
   val excludeJerseyCore = ExclusionRule(organization = "org.glassfish.jersey.core", name = "*")
   val excludeJerseyMedia = ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
+
+  val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID = "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV
@@ -127,6 +130,7 @@ object Dependencies {
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
+    sentry,
     ioGrpc,
     logbackClassic,
     logstashLogback,
