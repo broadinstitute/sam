@@ -5,7 +5,6 @@ import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
-import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import io.sentry.{Sentry, SentryOptions}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
@@ -68,8 +67,7 @@ object Boot extends IOApp with LazyLogging {
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
 
-    val config = ConfigFactory.load()
-    val appConfig = AppConfig.readConfig(config)
+    val appConfig = AppConfig.load
 
     val appDependencies = createAppDependencies(appConfig)
 

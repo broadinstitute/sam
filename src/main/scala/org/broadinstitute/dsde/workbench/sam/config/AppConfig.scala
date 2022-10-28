@@ -147,6 +147,16 @@ object AppConfig {
   implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
     PrometheusConfig(config.getInt("endpointPort"))
   }
+  def load: AppConfig = {
+    // We need to manually parse and resolve the env.conf file.
+    // ConfigFactory.load automatically pulls in the default reference.conf,
+    // which then ends up overriding any conf files provided as java options.
+    // We need to get _just_ the contents of env.conf so that normal overriding can occur.
+    val envConfig = ConfigFactory.parseResourcesAnySyntax("env").resolve()
+    val config = ConfigFactory.load()
+    val combinedConfig = envConfig.withFallback(config)
+    AppConfig.readConfig(combinedConfig)
+  }
 
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {

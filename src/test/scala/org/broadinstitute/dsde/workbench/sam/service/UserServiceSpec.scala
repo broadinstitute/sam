@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, googleServicesConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -55,8 +55,10 @@ class UserServiceSpec
     clearDatabase()
 
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
-    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
-      .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
+    if (databaseEnabled) {
+      when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
+        .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
+    }
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(Future.successful(true))
@@ -74,6 +76,8 @@ class UserServiceSpec
     TestSupport.truncateAll
 
   "UserService" should "create a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -98,6 +102,8 @@ class UserServiceSpec
   }
 
   it should "acceptTermsOfService" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
     val status = serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
     status shouldBe Option(
@@ -109,6 +115,8 @@ class UserServiceSpec
   }
 
   it should "get user status" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // user doesn't exist yet
     service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue shouldBe None
 
@@ -125,6 +133,8 @@ class UserServiceSpec
   }
 
   it should "get user status info" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -137,6 +147,8 @@ class UserServiceSpec
   }
 
   it should "get user status diagnostics" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // user doesn't exist yet
     service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
 
@@ -150,6 +162,8 @@ class UserServiceSpec
   }
 
   it should "enable/disable user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // user doesn't exist yet
     service.enableUser(defaultUser.id, samRequestContext).futureValue shouldBe None
     service.disableUser(defaultUser.id, samRequestContext).futureValue shouldBe None
@@ -169,6 +183,8 @@ class UserServiceSpec
   }
 
   it should "delete a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // create a user
     val newUser = service.createUser(defaultUser, samRequestContext).futureValue
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
@@ -195,6 +211,8 @@ class UserServiceSpec
   /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
     */
   "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserGoogle.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
     val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
@@ -202,6 +220,8 @@ class UserServiceSpec
   }
 
   it should "create new user when there's no existing subject for a given azureB2CId and email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserAzure.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
     val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
@@ -212,6 +232,8 @@ class UserServiceSpec
     * field for this user.
     */
   it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserGoogle.sample.get
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
     service.registerUser(user, samRequestContext).unsafeRunSync()
@@ -221,6 +243,8 @@ class UserServiceSpec
   }
 
   it should "update azureB2CId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserAzure.sample.get
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
     service.registerUser(user, samRequestContext).unsafeRunSync()
@@ -233,6 +257,8 @@ class UserServiceSpec
     * field for this user.
     */
   it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserGoogle.sample.get.copy(email = genNonPetEmail.sample.get)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
     dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
@@ -243,6 +269,8 @@ class UserServiceSpec
   }
 
   it should "return BadRequest when there's no existing subject for a given azureB2CId and but there is one for email, and the returned subject is not a regular user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserAzure.sample.get.copy(email = genNonPetEmail.sample.get)
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
     dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
@@ -256,6 +284,8 @@ class UserServiceSpec
     * already been registered. We should throw an exception to prevent the googleSubjectId from being overwritten
     */
   it should "throw an exception when trying to re-register a user with a changed googleSubjectId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserGoogle.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
     assertThrows[WorkbenchException] {
@@ -264,6 +294,8 @@ class UserServiceSpec
   }
 
   it should "throw an exception when trying to re-register a user with a changed azureB2CId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserAzure.sample.get
     service.registerUser(user, samRequestContext).unsafeRunSync()
     assertThrows[WorkbenchException] {
@@ -274,6 +306,8 @@ class UserServiceSpec
   /** GoogleSubjectId Email yes skip ---> User exists. Do nothing.
     */
   it should "return conflict when there's an existing subject for a given googleSubjectId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -283,6 +317,8 @@ class UserServiceSpec
   }
 
   it should "return conflict when there's an existing subject for a given azureB2CId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserAzure.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -293,6 +329,8 @@ class UserServiceSpec
 
   // Test arose out of: https://broadworkbench.atlassian.net/browse/PROD-677
   "Register User" should "ignore the newly-created WorkbenchUserId on the request and use the previously created WorkbenchUserId for a previously-invited user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // Invite a new user
     val emailToInvite = genNonPetEmail.sample.get
     service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
@@ -317,6 +355,8 @@ class UserServiceSpec
   }
 
   "UserService inviteUser" should "create a new user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val userEmail = genNonPetEmail.sample.get
     service.inviteUser(userEmail, samRequestContext).unsafeRunSync()
     val userId = dirDAO.loadSubjectFromEmail(userEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
@@ -331,6 +371,8 @@ class UserServiceSpec
   }
 
   it should "return conflict when there's an existing subject for a given email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
@@ -340,6 +382,8 @@ class UserServiceSpec
   }
 
   "GetStatus for an invited user" should "return a user status that is disabled" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // Invite an email
     val emailToInvite = genNonPetEmail.sample.get
     val invitedUserDetails = service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
@@ -351,6 +395,8 @@ class UserServiceSpec
   }
 
   it should "return a status that is enabled after the invited user registers" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // Invite an email
     val emailToInvite = genNonPetEmail.sample.get
     val invitedUserDetails = service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
@@ -366,6 +412,8 @@ class UserServiceSpec
   }
 
   "invite user and then create user with same email" should "update googleSubjectId for this user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val inviteeEmail = genNonPetEmail.sample.get
     service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
     val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
@@ -383,6 +431,8 @@ class UserServiceSpec
   }
 
   it should "update azureB2CId for this user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val inviteeEmail = genNonPetEmail.sample.get
     service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
     val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
@@ -398,6 +448,8 @@ class UserServiceSpec
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     // user doesn't exist yet
     service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
 
