@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.config
 final case class SamDatabaseConfig(samRead: DatabaseConfig, samWrite: DatabaseConfig, samBackground: DatabaseConfig)
 
 final case class DatabaseConfig(
-                                 dbName: String,
+                                 dbName: Symbol,
                                  poolInitialSize: Int,
                                  poolMaxSize: Int,
                                  poolConnectionTimeoutMillis: Int,

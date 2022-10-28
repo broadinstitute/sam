@@ -129,6 +129,7 @@ object AppConfig {
 
   implicit val databaseConfigReader: ValueReader[DatabaseConfig] = ValueReader.relative { config =>
     DatabaseConfig(
+      Symbol(config.getString("poolName")),
       config.getInt("poolInitialSize"),
       config.getInt("poolMaxSize"),
       config.getInt("poolConnectionTimeoutMillis"),
