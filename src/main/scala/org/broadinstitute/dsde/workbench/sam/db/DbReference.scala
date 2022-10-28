@@ -7,8 +7,8 @@ import io.opencensus.trace.AttributeValue
 import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
-import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
+import org.broadinstitute.dsde.workbench.sam.config.{DatabaseConfig, LiquibaseConfig}
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabasePoolName
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithContext
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
@@ -22,7 +22,7 @@ import scala.jdk.CollectionConverters._
 import scala.concurrent.ExecutionContext
 
 object DbReference extends LazyLogging {
-  private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
+  private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: DatabasePoolName, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
     val dbConnection = ConnectionPool.borrow(dbName.name)
     try {
       val liquibaseConnection = new JdbcConnection(dbConnection)
@@ -48,7 +48,7 @@ object DbReference extends LazyLogging {
       dbConnection.close()
   }
 
-  def init(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, dbExecutionContext: ExecutionContext): DbReference = {
+  def init(liquibaseConfig: LiquibaseConfig, dbName: DatabasePoolName, dbExecutionContext: ExecutionContext): DbReference = {
     DBs.setup(dbName.name)
     DBs.loadGlobalSettings()
     if (liquibaseConfig.initWithLiquibase) {
@@ -58,7 +58,7 @@ object DbReference extends LazyLogging {
     DbReference(dbName, dbExecutionContext)
   }
 
-  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): Resource[IO, DbReference] =
+  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabasePoolName): Resource[IO, DbReference] =
     for {
       dbExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
       dbRef <- Resource.make(
@@ -73,21 +73,21 @@ object DbReference extends LazyLogging {
   * and writes.
   */
 object DatabaseNames {
-  sealed trait DatabaseName {
+  sealed trait DatabasePoolName {
     val name: Symbol
   }
-  case object Read extends DatabaseName {
+  case object Read extends DatabasePoolName {
     val name: Symbol = Symbol("sam_read")
   }
-  case object Write extends DatabaseName {
+  case object Write extends DatabasePoolName {
     val name: Symbol = Symbol("sam_write")
   }
-  case object Background extends DatabaseName {
+  case object Background extends DatabasePoolName {
     val name: Symbol = Symbol("sam_background")
   }
 }
 
-case class DbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContext) extends LazyLogging {
+case class DbReference(dbName: DatabasePoolName, dbExecutionContext: ExecutionContext) extends LazyLogging {
   def readOnly[A](f: DBSession => A): A = {
     val db = NamedDB(dbName.name)
     // https://github.com/scalikejdbc/scalikejdbc/issues/1143

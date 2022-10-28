@@ -8,16 +8,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google.{
-  GoogleDirectoryDAO,
-  GoogleKmsInterpreter,
-  GoogleKmsService,
-  HttpGoogleDirectoryDAO,
-  HttpGoogleIamDAO,
-  HttpGoogleProjectDAO,
-  HttpGooglePubSubDAO,
-  HttpGoogleStorageDAO
-}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
@@ -25,9 +16,9 @@ import org.broadinstitute.dsde.workbench.openTelemetry.{OpenTelemetryMetrics, Op
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DatabaseConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabasePoolName
 import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -165,13 +156,13 @@ object Boot extends IOApp with LazyLogging {
     }
 
   private def createDAOs(
-      appConfig: AppConfig,
-      writeDbName: DatabaseName,
-      readDbName: DatabaseName
+                          appConfig: AppConfig,
+                          writeDbConfig: DatabaseConfig,
+                          readDbConfig: DatabaseConfig
   ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO])] =
     for {
-      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbName)
-      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbName)
+      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbConfig)
+      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbConfig)
 
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
       accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)

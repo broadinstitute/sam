@@ -22,6 +22,7 @@ final case class AppConfig(
     googleConfig: Option[GoogleConfig],
     resourceTypes: Set[ResourceType],
     liquibaseConfig: LiquibaseConfig,
+    samDatabaseConfig: SamDatabaseConfig,
     blockedEmailDomains: Seq[String],
     termsOfServiceConfig: TermsOfServiceConfig,
     oidcConfig: OidcConfig,
@@ -126,6 +127,25 @@ object AppConfig {
     LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
   }
 
+  implicit val databaseConfigReader: ValueReader[DatabaseConfig] = ValueReader.relative { config =>
+    DatabaseConfig(
+      config.getInt("poolInitialSize"),
+      config.getInt("poolMaxSize"),
+      config.getInt("poolConnectionTimeoutMillis"),
+      config.getString("driver"),
+      config.getString("url"),
+      config.getString("user"),
+      config.getString("password")
+    )
+  }
+
+  implicit val samDatabaseConfigReader: ValueReader[SamDatabaseConfig] = ValueReader.relative {
+    config =>
+      SamDatabaseConfig(config.as[DatabaseConfig]("sam_read"),
+        config.as[DatabaseConfig]("sam_write"),
+        config.as[DatabaseConfig]("sam_background"))
+  }
+
   final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String])
 
   implicit val adminConfigReader: ValueReader[AdminConfig] = ValueReader.relative { config =>
@@ -174,6 +194,7 @@ object AppConfig {
       googleConfigOption,
       resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet,
       liquibaseConfig = config.as[LiquibaseConfig]("liquibase"),
+      samDatabaseConfig = config.as[SamDatabaseConfig]("db"),
       blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty),
       termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
       oidcConfig = config.as[OidcConfig]("oidc"),

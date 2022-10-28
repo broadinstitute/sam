@@ -9,7 +9,7 @@ import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
+import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabasePoolName
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference.databaseEnabled
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
@@ -25,7 +25,7 @@ object TestDbReference extends LazyLogging {
   private val databaseEnabled = config.getBoolean("db.enabled")
 
   // This code is copied over from DbReference. We didnt want to have to refactor DbReference to be able to use it in tests.
-  private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, changelogParameters: Map[String, AnyRef] = Map.empty): Unit =
+  private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: DatabasePoolName, changelogParameters: Map[String, AnyRef] = Map.empty): Unit =
     if (databaseEnabled) {
       val dbConnection = ConnectionPool.borrow(dbName.name)
       try {
@@ -52,7 +52,7 @@ object TestDbReference extends LazyLogging {
         dbConnection.close()
     }
 
-  def init(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, dbExecutionContext: ExecutionContext): TestDbReference = {
+  def init(liquibaseConfig: LiquibaseConfig, dbName: DatabasePoolName, dbExecutionContext: ExecutionContext): TestDbReference = {
     DBs.setup(dbName.name)
     DBs.loadGlobalSettings()
     if (liquibaseConfig.initWithLiquibase) {
@@ -62,7 +62,7 @@ object TestDbReference extends LazyLogging {
     new TestDbReference(dbName, dbExecutionContext)
   }
 
-  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): Resource[IO, TestDbReference] =
+  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabasePoolName): Resource[IO, TestDbReference] =
     for {
       dbExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
       dbRef <- Resource.make(
@@ -71,7 +71,7 @@ object TestDbReference extends LazyLogging {
     } yield dbRef
 }
 
-class TestDbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContext) extends DbReference(dbName, dbExecutionContext) {
+class TestDbReference(dbName: DatabasePoolName, dbExecutionContext: ExecutionContext) extends DbReference(dbName, dbExecutionContext) {
   override def readOnly[A](f: DBSession => A): A =
     if (databaseEnabled) {
       super.readOnly(f)
