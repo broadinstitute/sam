@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFlatSpec, TestSupport}
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -670,7 +670,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
 }
 
 @deprecated("this allows testing of deprecated functions, remove as part of CA-1783", "")
-class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec {
+class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec with RetryableAnyFlatSpec {
   "listUserAccessPolicies" should "list user's access policies but not others" in {
     assume(databaseEnabled, databaseEnabledClue)
 
