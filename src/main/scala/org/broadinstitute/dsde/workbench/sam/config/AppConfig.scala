@@ -155,6 +155,7 @@ object AppConfig {
 
   implicit val azureServicesConfigReader: ValueReader[AzureServicesConfig] = ValueReader.relative { config =>
     AzureServicesConfig(
+      config.as[Option[Boolean]]("azureEnabled"),
       config.getString("managedAppClientId"),
       config.getString("managedAppClientSecret"),
       config.getString("managedAppTenantId"),
