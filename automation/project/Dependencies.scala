@@ -39,7 +39,7 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-testkit" % akkaV % "test",
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
     "org.scalatest" %% "scalatest" % "3.2.3" % Test,
-    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     "org.scalatest" %% "scalatest" % "3.2.12" % Test,
     "org.scalatestplus" %% "scalacheck-1-15" % "3.2.11.0" % Test,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
