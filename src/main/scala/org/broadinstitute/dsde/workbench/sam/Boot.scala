@@ -26,10 +26,9 @@ import org.broadinstitute.dsde.workbench.openTelemetry.{OpenTelemetryMetrics, Op
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DatabaseConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
-import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
+import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -94,11 +93,19 @@ object Boot extends IOApp with LazyLogging {
 
   private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
     for {
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO) <- createDAOs(appConfig, DatabaseNames.Write, DatabaseNames.Read)
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO) <- createDAOs(
+        appConfig,
+        appConfig.samDatabaseConfig.samWrite,
+        appConfig.samDatabaseConfig.samRead
+      )
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _) <- createDAOs(appConfig, DatabaseNames.Background, DatabaseNames.Background)
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _) <- createDAOs(
+        appConfig,
+        appConfig.samDatabaseConfig.samBackground,
+        appConfig.samDatabaseConfig.samBackground
+      )
 
       googleSynchronizerExecutionContext <- ExecutionContexts.fixedThreadPool[IO](24)
 
@@ -176,12 +183,12 @@ object Boot extends IOApp with LazyLogging {
 
   private def createDAOs(
       appConfig: AppConfig,
-      writeDbName: DatabaseName,
-      readDbName: DatabaseName
+      writeDbConfig: DatabaseConfig,
+      readDbConfig: DatabaseConfig
   ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO])] =
     for {
-      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbName)
-      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbName)
+      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbConfig)
+      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbConfig)
 
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
       accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)
@@ -313,7 +320,8 @@ object Boot extends IOApp with LazyLogging {
     )
     val tosService = new TosService(directoryDAO, config.googleConfig.get.googleServicesConfig.appsDomain, config.termsOfServiceConfig)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService)
-    val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
+    val statusService =
+      new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(config.samDatabaseConfig.samRead.dbName, implicitly), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(
         resourceService,

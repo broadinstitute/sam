@@ -20,8 +20,8 @@ import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, TestDbReference}
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -216,7 +216,7 @@ object TestSupport extends TestSupport {
   (i.e. I don't want to add a new database name just for tests).
   So, just use the DatabaseNames.Read connection pool for tests.
    */
-  lazy val dbRef = TestDbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Read, TestSupport.blockingEc)
+  lazy val dbRef = TestDbReference.init(config.as[LiquibaseConfig]("liquibase"), appConfig.samDatabaseConfig.samRead.dbName, TestSupport.blockingEc)
 
   def truncateAll: Int =
     if (databaseEnabled) {
