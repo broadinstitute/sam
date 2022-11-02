@@ -6,12 +6,12 @@ object Version {
   val baseModelVersion = "0.1"
 
   def getVersionString = {
-    def getLastModelCommitFromGit = { s"""git rev-parse --short HEAD""".!! }
+    def getLastModelCommitFromGit = s"""git rev-parse --short HEAD""".!!
 
     // either specify git model hash as an env var or derive it
     // if building from the hseeberger/scala-sbt docker image use env var
     // (scala-sbt doesn't have git in it)
-    val lastModelCommit = sys.env.getOrElse("GIT_MODEL_HASH", getLastModelCommitFromGit ).trim()
+    val lastModelCommit = sys.env.getOrElse("GIT_MODEL_HASH", getLastModelCommitFromGit).trim()
     val version = baseModelVersion + "-" + lastModelCommit
 
     // The project isSnapshot string passed in via command line settings, if desired.

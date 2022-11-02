@@ -31,25 +31,23 @@ object Dependencies {
       ExclusionRule("com.google.guava", "guava-jdk5"),
       ExclusionRule("org.apache.httpcomponents", "httpclient")
     ),
-    "com.google.api-client" % "google-api-client" % "1.22.0" excludeAll (
-      ExclusionRule("com.google.guava", "guava-jdk5"),
-      ExclusionRule("org.apache.httpcomponents", "httpclient")),
-    "com.typesafe.akka"   %%  "akka-http-core"     % akkaHttpV,
-    "com.typesafe.akka"   %%  "akka-stream-testkit" % akkaV,
-    "com.typesafe.akka"   %%  "akka-http"           % akkaHttpV,
-    "com.typesafe.akka"   %%  "akka-testkit"        % akkaV     % "test",
-    "com.typesafe.akka"   %%  "akka-slf4j"          % akkaV,
-    "org.scalatest"       %%  "scalatest"     % "3.2.3"   % Test,
+    "com.google.api-client" % "google-api-client" % "1.22.0" excludeAll (ExclusionRule("com.google.guava", "guava-jdk5"),
+    ExclusionRule("org.apache.httpcomponents", "httpclient")),
+    "com.typesafe.akka" %% "akka-http-core" % akkaHttpV,
+    "com.typesafe.akka" %% "akka-stream-testkit" % akkaV,
+    "com.typesafe.akka" %% "akka-http" % akkaHttpV,
+    "com.typesafe.akka" %% "akka-testkit" % akkaV % "test",
+    "com.typesafe.akka" %% "akka-slf4j" % akkaV,
+    "org.scalatest" %% "scalatest" % "3.2.3" % Test,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
-    "org.scalatest"       %%  "scalatest"     % "3.2.12"   % Test,
+    "org.scalatest" %% "scalatest" % "3.2.12" % Test,
     "org.scalatestplus" %% "scalacheck-1-15" % "3.2.11.0" % Test,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
-
     workbenchServiceTest,
     workbenchGoogle,
     workbenchGoogle2,
 
-  // required by workbenchGoogle
+    // required by workbenchGoogle
     "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpV % "provided"
   )
 }

@@ -6,36 +6,6 @@ import sbt.util.Logger
 import scala.sys.process._
 
 object Testing {
-  val validDirectoryUrl = taskKey[Unit]("Determine if directory.url is provided.")
-  val validDirectoryPassword = taskKey[Unit]("Determine if directory.password is provided.")
-
-  val validDirectoryUrlSetting = validDirectoryUrl := {
-    val setting = sys.props.getOrElse("directory.url", "")
-    if (setting.length == 0) {
-      Def.taskDyn{
-        streams.map{
-          str =>
-            str.log.error("directory.url not set")
-        }
-      }
-
-      sys.exit()
-    }
-  }
-
-  val validDirectoryPasswordSetting = validDirectoryPassword := {
-    val setting = sys.props.getOrElse("directory.password", "")
-    if (setting.length == 0) {
-      Def.taskDyn{
-        streams.map{
-          str =>
-            str.log.error("directory.password not set")
-        }
-      }
-      sys.exit()
-    }
-  }
-
   val minnieKenny = inputKey[Unit]("Run minnie-kenny.")
 
   def isIntegrationTest(name: String) = name contains "integrationtest"
@@ -48,7 +18,7 @@ object Testing {
     private var resultOption: Option[Int] = None
 
     /** Run using the logger, throwing an exception only on the first failure. */
-    def runOnce(log: Logger, args: Seq[String]): Unit = {
+    def runOnce(log: Logger, args: Seq[String]): Unit =
       mutex synchronized {
         if (resultOption.isEmpty) {
           log.debug(s"Running minnie-kenny.sh${args.mkString(" ", " ", "")}")
@@ -60,14 +30,12 @@ object Testing {
             sys.error("Running minnie-kenny.sh failed. Please double check for errors above.")
         }
       }
-    }
   }
 
   // Only run one minnie-kenny.sh at a time!
   private lazy val minnieKennySingleRunner = new MinnieKennySingleRunner
-  
-  val commonTestSettings: Seq[Setting[_]] = List(
 
+  val commonTestSettings: Seq[Setting[_]] = List(
     // SLF4J initializes itself upon the first logging call.  Because sbt
     // runs tests in parallel it is likely that a second thread will
     // invoke a second logging call before SLF4J has completed
@@ -86,37 +54,28 @@ object Testing {
     //   http://stackoverflow.com/a/12095245
     //   http://jira.qos.ch/browse/SLF4J-167
     //   http://jira.qos.ch/browse/SLF4J-97
-    testOptions in Test += Tests.Setup(classLoader =>
+    Test / testOptions += Tests.Setup(classLoader =>
       classLoader
         .loadClass("org.slf4j.LoggerFactory")
         .getMethod("getLogger", classLoader.loadClass("java.lang.String"))
         .invoke(null, "ROOT")
     ),
-    testOptions in Test ++= Seq(Tests.Filter(s => !isIntegrationTest(s))),
-    testOptions in IntegrationTest := Seq(Tests.Filter(s => isIntegrationTest(s))),
-
-    validDirectoryUrlSetting,
-    validDirectoryPasswordSetting,
-
+    Test / testOptions ++= Seq(Tests.Filter(s => !isIntegrationTest(s))),
+    IntegrationTest / testOptions := Seq(Tests.Filter(s => isIntegrationTest(s))),
     minnieKenny := {
       val log = streams.value.log
       val args = spaceDelimited("<arg>").parsed
       minnieKennySingleRunner.runOnce(log, args)
     },
-
-    parallelExecution in Test := false,
-	
-    (test in Test) := {
+    Test / parallelExecution := false,
+    Test / test := {
       minnieKenny.toTask("").value
-      ((test in Test).dependsOn(validDirectoryUrl, validDirectoryPassword)).value
-    },
-    (testOnly in Test) := ((testOnly in Test) dependsOn(validDirectoryUrl, validDirectoryPassword)).inputTaskValue.evaluated
-
+    }
   )
 
   implicit class ProjectTestSettings(val project: Project) extends AnyVal {
     def withTestSettings: Project = project
-      .configs(IntegrationTest).settings(inConfig(IntegrationTest)(Defaults.testTasks): _*)
+      .configs(IntegrationTest)
+      .settings(inConfig(IntegrationTest)(Defaults.testTasks): _*)
   }
 }
-

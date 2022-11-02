@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, _}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockRegistrationDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -29,38 +28,51 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-/**
-  * Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
+/** Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
   */
-class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with ScalaFutures{
-  implicit val timeout = RouteTestTimeout(5 seconds) //after using com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper, tests seems to run a bit longer
+class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with ScalaFutures {
+  implicit val timeout = RouteTestTimeout(
+    5 seconds
+  ) // after using com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper, tests seems to run a bit longer
   val workspaceResourceId = "workspace"
   val v2GoogleProjectResourceId = "v2project"
 
-  private def getPetServiceAccount(projectName: String, routes: SamRoutes) = {
+  private def getPetServiceAccount(projectName: String, routes: SamRoutes) =
     Get(s"/api/google/user/petServiceAccount/${projectName}") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response.value should endWith (s"@${projectName}.iam.gserviceaccount.com")
+      response.value should endWith(s"@${projectName}.iam.gserviceaccount.com")
       response.value
     }
-  }
 
-  private def getPetServiceAccountKey(projectName: String, expectedJson: String, routes: SamRoutes) = {
+  private def getPetServiceAccountKey(projectName: String, expectedJson: String, routes: SamRoutes) =
     Get(s"/api/google/user/petServiceAccount/${projectName}/key") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[String]
-      response shouldEqual(expectedJson)
+      response shouldEqual expectedJson
     }
-  }
 
   "GET /api/google/user/petServiceAccount" should "get or create a pet service account for a user in a v2 project" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
     val resourceService = mock[ResourceService](RETURNS_SMART_NULLS)
 
-    when(resourceService.getResourceParent(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))), any[SamRequestContext]))
+    when(
+      resourceService.getResourceParent(
+        mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))),
+        any[SamRequestContext]
+      )
+    )
       .thenReturn(IO(Option(FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(workspaceResourceId)))))
-    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))), mockitoEq(Set(SamResourceActions.createPet)), any[WorkbenchUserId], any[SamRequestContext]))
+    when(
+      policyEvaluatorService.hasPermissionOneOf(
+        mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))),
+        mockitoEq(Set(SamResourceActions.createPet)),
+        any[WorkbenchUserId],
+        any[SamRequestContext]
+      )
+    )
       .thenReturn(IO(true))
     val (_, _, routes) = createTestUser(policyEvaluatorServiceOpt = Option(policyEvaluatorService), resourceServiceOpt = Option(resourceService))
 
@@ -72,6 +84,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   it should "200 when the user doesn't have the right permission on the google-project resource, but it is v1" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val projectName = "myproject"
 
     val (_, _, routes) = createTestUser()
@@ -84,11 +98,29 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
     val resourceService = mock[ResourceService](RETURNS_SMART_NULLS)
 
-    when(resourceService.getResourceParent(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))), any[SamRequestContext]))
+    when(
+      resourceService.getResourceParent(
+        mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))),
+        any[SamRequestContext]
+      )
+    )
       .thenReturn(IO(Option(FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(workspaceResourceId)))))
-    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))), mockitoEq(Set(SamResourceActions.createPet)), any[WorkbenchUserId], any[SamRequestContext]))
+    when(
+      policyEvaluatorService.hasPermissionOneOf(
+        mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))),
+        mockitoEq(Set(SamResourceActions.createPet)),
+        any[WorkbenchUserId],
+        any[SamRequestContext]
+      )
+    )
       .thenReturn(IO(false))
-    when(policyEvaluatorService.listUserResourceActions(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))), any[WorkbenchUserId], any[SamRequestContext]))
+    when(
+      policyEvaluatorService.listUserResourceActions(
+        mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))),
+        any[WorkbenchUserId],
+        any[SamRequestContext]
+      )
+    )
       .thenReturn(IO(Set(SamResourceActions.readPolicies)))
 
     val (_, _, routes) = createTestUser(policyEvaluatorServiceOpt = Option(policyEvaluatorService), resourceServiceOpt = Option(resourceService))
@@ -101,15 +133,32 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
 
   it should "404 when the user doesn't have any permission on the google-project resource" in {
 
-
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
     val resourceService = mock[ResourceService](RETURNS_SMART_NULLS)
 
-    when(resourceService.getResourceParent(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))), any[SamRequestContext]))
+    when(
+      resourceService.getResourceParent(
+        mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))),
+        any[SamRequestContext]
+      )
+    )
       .thenReturn(IO(Option(FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(workspaceResourceId)))))
-    when(policyEvaluatorService.hasPermissionOneOf(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))), mockitoEq(Set(SamResourceActions.createPet)), any[WorkbenchUserId], any[SamRequestContext]))
+    when(
+      policyEvaluatorService.hasPermissionOneOf(
+        mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))),
+        mockitoEq(Set(SamResourceActions.createPet)),
+        any[WorkbenchUserId],
+        any[SamRequestContext]
+      )
+    )
       .thenReturn(IO(false))
-    when(policyEvaluatorService.listUserResourceActions(mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))), any[WorkbenchUserId], any[SamRequestContext]))
+    when(
+      policyEvaluatorService.listUserResourceActions(
+        mockitoEq(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(v2GoogleProjectResourceId))),
+        any[WorkbenchUserId],
+        any[SamRequestContext]
+      )
+    )
       .thenReturn(IO(Set.empty))
 
     val (_, _, routes) = createTestUser(policyEvaluatorServiceOpt = Option(policyEvaluatorService), resourceServiceOpt = Option(resourceService))
@@ -131,8 +180,9 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   it should "return a user's proxy group from a pet service account" in {
-    val (user, _, routes) = createTestUser()
+    assume(databaseEnabled, databaseEnabledClue)
 
+    val (user, _, routes) = createTestUser()
 
     val petEmail = getPetServiceAccount("myproject", routes)
 
@@ -152,8 +202,18 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
   }
 
-  private val name = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
-  private val resourceType = ResourceType(ResourceTypeName("rt"), Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false), SamResourceActionPatterns.readPolicies), Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))), ResourceRoleName("owner"))
+  private val name = ResourceType(
+    ResourceTypeName("rt"),
+    Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false), SamResourceActionPatterns.readPolicies),
+    Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))),
+    ResourceRoleName("owner")
+  )
+  private val resourceType = ResourceType(
+    ResourceTypeName("rt"),
+    Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false), SamResourceActionPatterns.readPolicies),
+    Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("alter_policies"), ResourceAction("read_policies")))),
+    ResourceRoleName("owner")
+  )
 
   "POST /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "204 Create Google group for policy" in {
     val resourceTypes = Map(resourceType.name -> resourceType)
@@ -166,7 +226,9 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     import spray.json.DefaultJsonProtocol._
     val createdPolicy = Get(s"/api/resource/${resourceType.name}/foo/policies") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[Seq[AccessPolicyResponseEntry]].find(_.policyName == AccessPolicyName(resourceType.ownerRoleName.value)).getOrElse(fail("created policy not returned by get request"))
+      responseAs[Seq[AccessPolicyResponseEntry]]
+        .find(_.policyName == AccessPolicyName(resourceType.ownerRoleName.value))
+        .getOrElse(fail("created policy not returned by get request"))
     }
 
     import SamGoogleModelJsonSupport._
@@ -200,7 +262,12 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
       status shouldEqual StatusCodes.OK
     }
 
-    samDep.directoryDAO.createGroup(BasicWorkbenchGroup(WorkbenchGroupName(resourceType.ownerRoleName.value + ".foo." + resourceType.name), Set.empty, WorkbenchEmail("foo@bar.com")), samRequestContext = samRequestContext).unsafeRunSync()
+    samDep.directoryDAO
+      .createGroup(
+        BasicWorkbenchGroup(WorkbenchGroupName(resourceType.ownerRoleName.value + ".foo." + resourceType.name), Set.empty, WorkbenchEmail("foo@bar.com")),
+        samRequestContext = samRequestContext
+      )
+      .unsafeRunSync()
 
     Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -209,6 +276,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "GET /api/google/user/petServiceAccount/{project}/key" should "200 with a new key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
 
@@ -222,6 +291,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "DELETE /api/google/user/petServiceAccount/{project}/key/{keyId}" should "204 when deleting a key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
 
@@ -240,6 +311,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 
   "GET /api/google/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
     val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
@@ -251,7 +324,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     Get(s"/api/google/petServiceAccount/myproject/${defaultUserInfo.email.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[String]
-      response shouldEqual(expectedJson)
+      response shouldEqual expectedJson
     }
   }
 
@@ -279,22 +352,29 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   }
 }
 
-trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar{
+trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar {
   val defaultUserId = genWorkbenchUserId.sample.get
   val defaultUserEmail = genNonPetEmail.sample.get
   val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_$defaultUserId@${googleServicesConfig.appsDomain}")
 
   val configResourceTypes = TestSupport.configResourceTypes
 
-  def createTestUser(resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty[ResourceTypeName, ResourceType],
-                     googIamDAO: Option[GoogleIamDAO] = None,
-                     googleServicesConfig: GoogleServicesConfig = TestSupport.googleServicesConfig,
-                     policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-                     resourceServiceOpt: Option[ResourceService] = None,
-                     user: SamUser = Generator.genWorkbenchUserBoth.sample.get
-                    ): (SamUser, SamDependencies, SamRoutes) = {
-    val samDependencies = genSamDependencies(resourceTypes, googIamDAO, googleServicesConfig, policyEvaluatorServiceOpt = policyEvaluatorServiceOpt, resourceServiceOpt = resourceServiceOpt)
-    val createRoutes = genSamRoutes(samDependencies, user)
+  def createTestUser(
+      resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty[ResourceTypeName, ResourceType],
+      googIamDAO: Option[GoogleIamDAO] = None,
+      googleServicesConfig: GoogleServicesConfig = TestSupport.googleServicesConfig,
+      policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
+      resourceServiceOpt: Option[ResourceService] = None,
+      user: SamUser = Generator.genWorkbenchUserBoth.sample.get
+  ): (SamUser, SamDependencies, SamRoutes) = {
+    lazy val samDependencies = genSamDependencies(
+      resourceTypes,
+      googIamDAO,
+      googleServicesConfig,
+      policyEvaluatorServiceOpt = policyEvaluatorServiceOpt,
+      resourceServiceOpt = resourceServiceOpt
+    )
+    lazy val createRoutes = genSamRoutes(samDependencies, user)
 
     // create a user
     Post("/register/user/v1/") ~> createRoutes.route ~> check {
@@ -311,8 +391,16 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     val googleIamDAO = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
     val expectedJson = """{"json":"yes I am"}"""
     when(googleIamDAO.findServiceAccount(any[GoogleProject], any[ServiceAccountName])).thenReturn(Future.successful(None))
-    when(googleIamDAO.createServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])).thenReturn(Future.successful(ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))))
-    when(googleIamDAO.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(ServiceAccountKey(ServiceAccountKeyId("foo"), ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(expectedJson).encode), None, None)))
+    when(googleIamDAO.createServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])).thenReturn(
+      Future.successful(
+        ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))
+      )
+    )
+    when(googleIamDAO.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])).thenReturn(
+      Future.successful(
+        ServiceAccountKey(ServiceAccountKeyId("foo"), ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(expectedJson).encode), None, None)
+      )
+    )
     when(googleIamDAO.removeServiceAccountKey(any[GoogleProject], any[WorkbenchEmail], any[ServiceAccountKeyId])).thenReturn(Future.successful(()))
     when(googleIamDAO.listUserManagedServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(Seq.empty))
     when(googleIamDAO.addServiceAccountUserRoleForUser(any[GoogleProject], any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
@@ -329,10 +417,17 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       user = samUser
     )
 
-    val regDAO = new MockRegistrationDAO
-
-    samDeps.cloudExtensions.asInstanceOf[GoogleExtensions].onBoot(SamApplication(samDeps.userService,
-      samDeps.resourceService, samDeps.statusService, new TosService(samDeps.directoryDAO, regDAO, "example.com", TestSupport.tosConfig))).unsafeRunSync()
+    samDeps.cloudExtensions
+      .asInstanceOf[GoogleExtensions]
+      .onBoot(
+        SamApplication(
+          samDeps.userService,
+          samDeps.resourceService,
+          samDeps.statusService,
+          new TosService(samDeps.directoryDAO, "example.com", TestSupport.tosConfig)
+        )
+      )
+      .unsafeRunSync()
     (user, routes, expectedJson)
   }
 }

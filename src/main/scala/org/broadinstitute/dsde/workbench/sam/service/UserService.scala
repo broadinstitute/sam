@@ -11,9 +11,10 @@ import com.typesafe.scalalogging.LazyLogging
 import javax.naming.NameNotFoundException
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, RegistrationDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -21,14 +22,9 @@ import scala.util.matching.Regex
 
 /** Created by dvoet on 7/14/17.
   */
-class UserService(
-    val directoryDAO: DirectoryDAO,
-    val cloudExtensions: CloudExtensions,
-    val registrationDAO: RegistrationDAO,
-    blockedEmailDomains: Seq[String],
-    tosService: TosService
-)(implicit val executionContext: ExecutionContext)
-    extends LazyLogging {
+class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, blockedEmailDomains: Seq[String], tosService: TosService)(implicit
+    val executionContext: ExecutionContext
+) extends LazyLogging {
 
   def createUser(user: SamUser, samRequestContext: SamRequestContext): Future[UserStatus] =
     for {
@@ -37,14 +33,18 @@ class UserService(
       _ <- enableUserInternal(createdUser, samRequestContext)
       _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
       userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
-      res <- userStatus.toRight(new WorkbenchException("getUserStatus returned None after user was created")).fold(Future.failed, Future.successful)
+      res <- userStatus
+        .toRight(new WorkbenchException("getUserStatus returned None after user was created"))
+        .fold(Future.failed, Future.successful)
+        .withInfoLogMessage(s"New user ${createdUser.toUserIdInfo} was successfully created")
     } yield res
 
   def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
+
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext).unsafeToFuture()
-    } yield ()
+    } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
 
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
@@ -69,9 +69,11 @@ class UserService(
       updated <- subjectWithEmail match {
         case Some(uid: WorkbenchUserId) =>
           acceptInvitedUser(user, samRequestContext, uid)
+            .withInfoLogMessage(s"Accepted invited user ${user.email} with uid ${uid.value}")
 
         case None =>
           createUserInternal(user, samRequestContext)
+            .withComputedInfoLogMessage(u => s"Created user ${u.email} with uid ${u.id}")
 
         case Some(_) =>
           // We don't support inviting a group account or pet service account
@@ -88,13 +90,10 @@ class UserService(
       _ <- user.googleSubjectId.traverse { googleSubjectId =>
         for {
           _ <- directoryDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
-          // Note: we need to store the user's Google Subject Id in LDAP
-          _ <- registrationDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
         } yield ()
       }
       _ <- user.azureB2CId.traverse { azureB2CId =>
         directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
-      // Note: we do not store the user's AzureB2CId in LDAP, only in the database
       }
       _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
       updatedUser <- directoryDAO.loadUser(uid, samRequestContext)
@@ -122,7 +121,6 @@ class UserService(
   private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
       createdUser <- directoryDAO.createUser(user, samRequestContext)
-      _ <- registrationDAO.createUser(user, samRequestContext)
       _ <- IO.fromFuture(IO(cloudExtensions.onUserCreate(createdUser, samRequestContext)))
     } yield createdUser
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchSubject]] =
@@ -141,12 +139,13 @@ class UserService(
               case _: NameNotFoundException => false
             }
             tosAcceptedStatus <- tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
-            ldapStatus <- directoryDAO
-              .isEnabled(user.id, samRequestContext)
-              .unsafeToFuture() // calling postgres instead of opendj here as a temporary measure as we work toward eliminating opendj
             adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
           } yield {
-            val enabledMap = Map("ldap" -> ldapStatus, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
+            // We are removing references to LDAP but this will require an API version change here, so we are leaving
+            // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
+            // leaving that logic unchanged for now.
+            // ticket: https://broadworkbench.atlassian.net/browse/ID-266
+            val enabledMap = Map("ldap" -> adminEnabled, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
             val enabledStatuses = tosAcceptedStatus match {
               case Some(status) => enabledMap + ("tosAccepted" -> status) + ("adminEnabled" -> adminEnabled)
               case None => enabledMap
@@ -178,10 +177,6 @@ class UserService(
     directoryDAO.loadUser(userId, samRequestContext).unsafeToFuture().flatMap {
       case Some(user) =>
         // pulled out of for comprehension to allow concurrent execution
-        val ldapStatus =
-          directoryDAO
-            .isEnabled(user.id, samRequestContext)
-            .unsafeToFuture() // calling postgres instead of opendj here as a temporary measure as we work toward eliminating opendj
         val tosAcceptedStatus = tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
         val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
@@ -190,7 +185,11 @@ class UserService(
         val googleStatus = cloudExtensions.getUserStatus(user)
 
         for {
-          ldap <- ldapStatus
+          // We are removing references to LDAP but this will require an API version change here, so we are leaving
+          // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
+          // leaving that logic unchanged for now.
+          // ticket: https://broadworkbench.atlassian.net/browse/ID-266
+          ldap <- adminEnabledStatus
           allUsers <- allUsersStatus
           tosAccepted <- tosAcceptedStatus
           google <- googleStatus
@@ -232,9 +231,8 @@ class UserService(
   private def enableUserInternal(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       _ <- directoryDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
-      _ <- registrationDAO.enableIdentity(user.id, samRequestContext).unsafeToFuture()
       _ <- cloudExtensions.onUserEnable(user, samRequestContext)
-    } yield ()
+    } yield logger.info(s"Enabled user ${user.toUserIdInfo}")
 
   val serviceAccountDomain = "\\S+@\\S+\\.gserviceaccount\\.com".r
 
@@ -246,7 +244,6 @@ class UserService(
       case Some(user) =>
         for {
           _ <- directoryDAO.disableIdentity(user.id, samRequestContext).unsafeToFuture()
-          _ <- registrationDAO.disableIdentity(user.id, samRequestContext).unsafeToFuture()
           _ <- cloudExtensions.onUserDisable(user, samRequestContext)
           userStatus <- getUserStatus(user.id, samRequestContext = samRequestContext)
         } yield userStatus
@@ -256,11 +253,13 @@ class UserService(
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-      _ <- directoryDAO.removeGroupMember(allUsersGroup.id, userId, samRequestContext).unsafeToFuture()
+      _ <- directoryDAO
+        .removeGroupMember(allUsersGroup.id, userId, samRequestContext)
+        .unsafeToFuture()
+        .withInfoLogMessage(s"Removed $userId from the All Users group")
       _ <- cloudExtensions.onUserDelete(userId, samRequestContext)
-      _ <- registrationDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
-      deleteResult <- directoryDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
-    } yield deleteResult
+      _ <- directoryDAO.deleteUser(userId, samRequestContext).unsafeToFuture()
+    } yield logger.info(s"Deleted user $userId")
 }
 
 object UserService {

@@ -15,7 +15,6 @@ jobs:
       SBT_OPTS: >-
         -Xmx3g
         -Denv.type=test
-        -Ddirectory.url=ldap://localhost:3389 -Ddirectory.password=testtesttest
         -Dpostgres.host=localhost -Dpostgres.port=5432
       ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
       ARTIFACTORY_PASSWORD: ${{secrets.ARTIFACTORY_PASSWORD}}
@@ -42,10 +41,6 @@ jobs:
       - name: coursier-cache-action
         uses: coursier/cache-action@v5
 
-      - name: Set up opendj
-        run: |
-          sh docker/run-opendj.sh start
-
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -61,20 +56,17 @@ jobs:
 
       - name: Secrets check
         run: |
+          sudo ln -s "$(which echo)" /usr/local/bin/say
           ./minnie-kenny.sh --force
           git secrets --scan-history
 
-      - name: Run JndiSchemaInit tests
-        id: tests
-        run: sbt clean "testOnly -- -n org.broadinstitute.tags.SchemaInit"
+      - name: Run Scalafmt Check
+        id: scalafmtCheck
+        run: sbt scalafmtCheckAll scalafmtSbtCheck
 
       - name: Run unit tests and generate coverage report
         id: coverageReport
-        run: sbt coverage "testOnly -- -l org.broadinstitute.tags.SchemaInit" coverageReport
-
-      - name: Shut down opendj
-        run: |
-          sh docker/run-opendj.sh stop
+        run: sbt coverage "testOnly --" coverageReport
 
   generateAndPublishClient:
     runs-on: ubuntu-20.04
