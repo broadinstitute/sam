@@ -1,32 +1,34 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google._
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
+import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig.googleServicesConfigReader
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DistributedLockConfig
 import org.broadinstitute.dsde.workbench.sam.model._
-import GoogleServicesConfig.googleServicesConfigReader
-import com.google.api.client.json.gson.GsonFactory
-import org.broadinstitute.dsde.workbench.google2.util.DistributedLockConfig
 
 import scala.concurrent.duration.Duration
 
-/**
-  * Created by dvoet on 7/18/17.
+/** Created by dvoet on 7/18/17.
   */
 final case class AppConfig(
-                            emailDomain: String,
-                            directoryConfig: DirectoryConfig,
-                            schemaLockConfig: SchemaLockConfig,
-                            distributedLockConfig: DistributedLockConfig,
-                            googleConfig: Option[GoogleConfig],
-                            resourceTypes: Set[ResourceType],
-                            liquibaseConfig: LiquibaseConfig,
-                            blockedEmailDomains: Seq[String],
-                            termsOfServiceConfig: TermsOfServiceConfig,
-                            oidcConfig: OidcConfig)
+    emailDomain: String,
+    distributedLockConfig: DistributedLockConfig,
+    googleConfig: Option[GoogleConfig],
+    resourceTypes: Set[ResourceType],
+    liquibaseConfig: LiquibaseConfig,
+    blockedEmailDomains: Seq[String],
+    termsOfServiceConfig: TermsOfServiceConfig,
+    oidcConfig: OidcConfig,
+    adminConfig: AdminConfig,
+    azureServicesConfig: Option[AzureServicesConfig],
+    prometheusConfig: PrometheusConfig
+)
 
 object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
@@ -47,7 +49,9 @@ object AppConfig {
         ResourceRoleName(uqPath),
         config.as[Set[String]](s"$uqPath.roleActions").map(ResourceAction.apply),
         config.as[Option[Set[String]]](s"$uqPath.includedRoles").getOrElse(Set.empty).map(ResourceRoleName.apply),
-        config.as[Option[Map[String, Set[String]]]](s"$uqPath.descendantRoles").getOrElse(Map.empty)
+        config
+          .as[Option[Map[String, Set[String]]]](s"$uqPath.descendantRoles")
+          .getOrElse(Map.empty)
           .map { case (resourceTypeName, roleNames) =>
             (ResourceTypeName(resourceTypeName), roleNames.map(ResourceRoleName.apply))
           }
@@ -75,27 +79,10 @@ object AppConfig {
         config.as[Map[String, ResourceActionPattern]](s"$uqPath.actionPatterns").values.toSet,
         config.as[Map[String, ResourceRole]](s"$uqPath.roles").values.toSet,
         ResourceRoleName(config.getString(s"$uqPath.ownerRoleName")),
-        config.getBoolean(s"$uqPath.reuseIds")
+        config.getBoolean(s"$uqPath.reuseIds"),
+        config.as[Option[Boolean]](s"$uqPath.allowLeaving").getOrElse(false)
       )
     }
-  }
-
-  implicit val cacheConfigReader: ValueReader[CacheConfig] = ValueReader.relative { config =>
-    CacheConfig(config.getLong("maxEntries"), config.getDuration("timeToLive"))
-  }
-
-  implicit val directoryConfigReader: ValueReader[DirectoryConfig] = ValueReader.relative { config =>
-    DirectoryConfig(
-      config.getString("url"),
-      config.getString("user"),
-      config.getString("password"),
-      config.getString("baseDn"),
-      config.getString("enabledUsersGroupDn"),
-      config.as[Option[Int]]("connectionPoolSize").getOrElse(15),
-      config.as[Option[Int]]("backgroundConnectionPoolSize").getOrElse(5),
-      config.as[Option[CacheConfig]]("memberOfCache").getOrElse(CacheConfig(100, java.time.Duration.ofMinutes(1))),
-      config.as[Option[CacheConfig]]("resourceCache").getOrElse(CacheConfig(10000, java.time.Duration.ofHours(1)))
-    )
   }
 
   val jsonFactory = GsonFactory.getDefaultInstance
@@ -114,15 +101,6 @@ object AppConfig {
     PetServiceAccountConfig(
       GoogleProject(config.getString("googleProject")),
       config.as[Set[String]]("serviceAccountUsers").map(WorkbenchEmail)
-    )
-  }
-
-  implicit val schemaLockConfigReader: ValueReader[SchemaLockConfig] = ValueReader.relative { config =>
-    SchemaLockConfig(
-      config.getBoolean("lockSchemaOnBoot"),
-      config.getInt("recheckTimeInterval"),
-      config.getInt("maxTimeToWait"),
-      config.getString("instanceId")
     )
   }
 
@@ -148,25 +126,60 @@ object AppConfig {
     LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
   }
 
+  final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String])
+
+  implicit val adminConfigReader: ValueReader[AdminConfig] = ValueReader.relative { config =>
+    AdminConfig(
+      superAdminsGroup = WorkbenchEmail(config.getString("superAdminsGroup")),
+      allowedEmailDomains = config.as[Set[String]]("allowedAdminEmailDomains")
+    )
+  }
+
+  implicit val azureServicesConfigReader: ValueReader[AzureServicesConfig] = ValueReader.relative { config =>
+    AzureServicesConfig(
+      config.getString("managedAppClientId"),
+      config.getString("managedAppClientSecret"),
+      config.getString("managedAppTenantId"),
+      config.as[Seq[String]]("managedAppPlanIds")
+    )
+  }
+
+  implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
+    PrometheusConfig(config.getInt("endpointPort"))
+  }
+  def load: AppConfig = {
+    // We need to manually parse and resolve the env.conf file.
+    // ConfigFactory.load automatically pulls in the default reference.conf,
+    // which then ends up overriding any conf files provided as java options.
+    // We need to get _just_ the contents of env.conf so that normal overriding can occur.
+    val envConfig = ConfigFactory.parseResourcesAnySyntax("env").resolve()
+    val config = ConfigFactory.load()
+    val combinedConfig = envConfig.withFallback(config)
+    AppConfig.readConfig(combinedConfig)
+  }
+
   def readConfig(config: Config): AppConfig = {
-    val directoryConfig = config.as[DirectoryConfig]("directory")
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
     } yield GoogleConfig(googleServices, config.as[PetServiceAccountConfig]("petServiceAccount"))
 
-    val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
-    val distributedLockConfig = config.as[DistributedLockConfig]("distributedLock")
-    val termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
     // fall back to getting the "googleServices.appsDomain"
     val emailDomain = config.as[Option[String]]("emailDomain").getOrElse(config.getString("googleServices.appsDomain"))
-    val resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet
-    val liquibaseConfig = config.as[LiquibaseConfig]("liquibase")
 
-    val blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty)
-    val oidcConfig = config.as[OidcConfig]("oidc")
-
-    AppConfig(emailDomain, directoryConfig, schemaLockConfig, distributedLockConfig, googleConfigOption, resourceTypes, liquibaseConfig, blockedEmailDomains, termsOfServiceConfig, oidcConfig)
+    AppConfig(
+      emailDomain,
+      distributedLockConfig = config.as[DistributedLockConfig]("distributedLock"),
+      googleConfigOption,
+      resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet,
+      liquibaseConfig = config.as[LiquibaseConfig]("liquibase"),
+      blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty),
+      termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
+      oidcConfig = config.as[OidcConfig]("oidc"),
+      adminConfig = config.as[AdminConfig]("admin"),
+      azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
+      prometheusConfig = config.as[PrometheusConfig]("prometheus")
+    )
   }
 }

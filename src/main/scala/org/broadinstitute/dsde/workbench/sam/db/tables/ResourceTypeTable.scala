@@ -6,10 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory.SqlInt
 import scalikejdbc._
 
 final case class ResourceTypePK(value: Long) extends DatabaseKey
-final case class ResourceTypeRecord(id: ResourceTypePK,
-                                    name: ResourceTypeName,
-                                    ownerRoleName: ResourceRoleName,
-                                    reuseIds: Boolean)
+final case class ResourceTypeRecord(id: ResourceTypePK, name: ResourceTypeName, ownerRoleName: ResourceRoleName, reuseIds: Boolean, allowLeaving: Boolean)
 
 object ResourceTypeTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceTypeRecord] {
   override def tableName: String = "SAM_RESOURCE_TYPE"
@@ -19,7 +16,8 @@ object ResourceTypeTable extends SQLSyntaxSupportWithDefaultSamDB[ResourceTypeRe
     rs.get(e.id),
     rs.get(e.name),
     rs.get(e.ownerRoleName),
-    rs.get(e.reuseIds)
+    rs.get(e.reuseIds),
+    rs.get(e.allowLeaving)
   )
 
   def pkQuery(resourceTypeName: ResourceTypeName, resourceTypeTableAlias: String = "rtt"): SQLSyntax = {

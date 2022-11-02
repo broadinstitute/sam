@@ -14,8 +14,8 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import scalikejdbc.config.DBs
 import scalikejdbc.{ConnectionPool, DBSession, IsolationLevel, NamedDB}
-import sun.security.provider.certpath.SunCertPathBuilderException
 
+import java.security.cert.CertPathBuilderException
 import java.sql.Connection.TRANSACTION_READ_COMMITTED
 import java.sql.SQLTimeoutException
 import scala.jdk.CollectionConverters._
@@ -33,7 +33,7 @@ object DbReference extends LazyLogging {
       liquibase.update(new Contexts())
     } catch {
       case e: SQLTimeoutException =>
-        val isCertProblem = Throwables.getRootCause(e).isInstanceOf[SunCertPathBuilderException]
+        val isCertProblem = Throwables.getRootCause(e).isInstanceOf[CertPathBuilderException]
 
         if (isCertProblem) {
           val k = "javax.net.ssl.keyStore"
@@ -44,9 +44,8 @@ object DbReference extends LazyLogging {
           }
         }
         throw e
-    } finally {
+    } finally
       dbConnection.close()
-    }
   }
 
   def init(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, dbExecutionContext: ExecutionContext): DbReference = {
@@ -59,22 +58,19 @@ object DbReference extends LazyLogging {
     DbReference(dbName, dbExecutionContext)
   }
 
-  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): Resource[IO, DbReference] = {
+  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): Resource[IO, DbReference] =
     for {
       dbExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
       dbRef <- Resource.make(
         IO(init(liquibaseConfig, dbName, dbExecutionContext))
       )(_ => IO(DBs.close(dbName.name)))
     } yield dbRef
-  }
 }
 
-/**
-  * Sam uses 3 database connection pools. The Read pool is the largest and should be used by read-only
-  * transactions in the direct servicing api calls. This is the most important traffic. The Write pool
-  * is small to keep the concurrency of serializable write transactions down and thus reduce the number
-  * of retries required due to serialization failures. A heavy load of writes should not crowd out reads.
-  * The Background pool handles low priority background process reads and writes.
+/** Sam uses 3 database connection pools. The Read pool is the largest and should be used by read-only transactions in the direct servicing api calls. This is
+  * the most important traffic. The Write pool is small to keep the concurrency of serializable write transactions down and thus reduce the number of retries
+  * required due to serialization failures. A heavy load of writes should not crowd out reads. The Background pool handles low priority background process reads
+  * and writes.
   */
 object DatabaseNames {
   sealed trait DatabaseName {
@@ -102,19 +98,22 @@ case class DbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContex
   def inLocalTransaction[A](f: DBSession => A): A =
     inLocalTransactionWithIsolationLevel(IsolationLevel.ReadCommitted)(f)
 
-  def inLocalTransactionWithIsolationLevel[A](isolationLevel: IsolationLevel)(f: DBSession => A): A = {
+  def inLocalTransactionWithIsolationLevel[A](isolationLevel: IsolationLevel)(f: DBSession => A): A =
     NamedDB(dbName.name).isolationLevel(isolationLevel).localTx[A] { implicit session =>
       f(session)
     }
-  }
 
-  def runDatabaseIO[A](dbQueryName: String, samRequestContext: SamRequestContext, databaseIO: IO[A], spanAttributes: Map[String, AttributeValue] = Map.empty): IO[A] =
+  def runDatabaseIO[A](
+      dbQueryName: String,
+      samRequestContext: SamRequestContext,
+      databaseIO: IO[A],
+      spanAttributes: Map[String, AttributeValue] = Map.empty
+  ): IO[A] =
     Async[IO].evalOnK(dbExecutionContext) {
       traceIOWithContext("postgres-" + dbQueryName, samRequestContext) { samCxt =>
         samCxt.parentSpan.foreach(_.putAttributes(spanAttributes.asJava))
         databaseIO
       }
-  }
+    }
 
 }
-

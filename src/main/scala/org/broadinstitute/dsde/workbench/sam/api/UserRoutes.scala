@@ -6,7 +6,6 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
-import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
@@ -16,16 +15,14 @@ import spray.json.JsBoolean
 
 import scala.concurrent.ExecutionContext
 
-/**
-  * Created by mbemis on 5/22/17.
+/** Created by mbemis on 5/22/17.
   */
 trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val userService: UserService
 
-  /**
-    * Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where
-    * a user is not found. In most routes that is appropriate but in the user routes it should be a 404.
+  /** Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where a user is not found. In most routes that is appropriate
+    * but in the user routes it should be a 404.
     */
   private val changeForbiddenToNotFound: Directive0 = {
     import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
@@ -127,13 +124,7 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
               path("info") {
                 get {
                   complete {
-                    userService.getUserStatusInfo(user.id, samRequestContext).map { statusOption =>
-                      statusOption
-                        .map { status =>
-                          StatusCodes.OK -> Option(status)
-                        }
-                        .getOrElse(StatusCodes.NotFound -> None)
-                    }
+                    userService.getUserStatusInfo(user, samRequestContext)
                   }
                 }
               } ~
@@ -146,86 +137,6 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
                             StatusCodes.OK -> Option(status)
                           }
                           .getOrElse(StatusCodes.NotFound -> None)
-                      }
-                    }
-                  }
-                }
-            }
-        }
-      }
-    }
-
-  def adminUserRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("admin") {
-      withWorkbenchAdmin(samUser) {
-        pathPrefix("user") {
-          path("email" / Segment) { email =>
-            complete {
-              userService.getUserStatusFromEmail(WorkbenchEmail(email), samRequestContext).map { statusOption =>
-                statusOption
-                  .map { status =>
-                    StatusCodes.OK -> Option(status)
-                  }
-                  .getOrElse(StatusCodes.NotFound -> None)
-              }
-            }
-          } ~
-            pathPrefix(Segment) { userId =>
-              pathEnd {
-                delete {
-                  complete {
-                    userService.deleteUser(WorkbenchUserId(userId), samRequestContext).map(_ => StatusCodes.OK)
-                  }
-                } ~
-                  get {
-                    complete {
-                      userService.getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext).map { statusOption =>
-                        statusOption
-                          .map { status =>
-                            StatusCodes.OK -> Option(status)
-                          }
-                          .getOrElse(StatusCodes.NotFound -> None)
-                      }
-                    }
-                  }
-              } ~
-                pathPrefix("enable") {
-                  pathEndOrSingleSlash {
-                    put {
-                      complete {
-                        userService.enableUser(WorkbenchUserId(userId), samRequestContext).map { statusOption =>
-                          statusOption
-                            .map { status =>
-                              StatusCodes.OK -> Option(status)
-                            }
-                            .getOrElse(StatusCodes.NotFound -> None)
-                        }
-                      }
-                    }
-                  }
-                } ~
-                pathPrefix("disable") {
-                  pathEndOrSingleSlash {
-                    put {
-                      complete {
-                        userService.disableUser(WorkbenchUserId(userId), samRequestContext).map { statusOption =>
-                          statusOption
-                            .map { status =>
-                              StatusCodes.OK -> Option(status)
-                            }
-                            .getOrElse(StatusCodes.NotFound -> None)
-                        }
-                      }
-                    }
-                  }
-                } ~
-                pathPrefix("petServiceAccount") {
-                  path(Segment) { project =>
-                    delete {
-                      complete {
-                        cloudExtensions
-                          .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), samRequestContext)
-                          .map(_ => StatusCodes.NoContent)
                       }
                     }
                   }

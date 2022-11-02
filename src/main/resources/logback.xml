@@ -1,10 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+
+    <if condition='!isDefined("SAM_LOG_APPENDER")'>
+        <then>
+            <variable name="SAM_LOG_APPENDER" value="Console-Stackdriver" />
+        </then>
+    </if>
 
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <fieldNames>
                 <level>severity</level>
             </fieldNames>
+        </encoder>
+    </appender>
+
+    <appender name="Console-Stackdriver" class="com.google.cloud.logging.logback.LoggingAppender">
+        <enhancer>com.google.cloud.logging.logback.TraceLoggingEventEnhancer</enhancer>
+        <redirectToStdout>true</redirectToStdout>
+    </appender>
+
+    <appender name="Console-Standard" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <Pattern>%date %-5level [%thread] %logger{36}: %message%n</Pattern>
         </encoder>
     </appender>
 
@@ -40,7 +58,7 @@
 
     <logger name="org.broadinstitute.dsde" level="info" additivity="false">
         <appender-ref ref="file"/>
-        <appender-ref ref="console"/>
+        <appender-ref ref="${SAM_LOG_APPENDER}"/>
         <appender-ref ref="SYSLOG"/>
         <appender-ref ref="Sentry" />
     </logger>
@@ -48,14 +66,14 @@
 
     <logger name="akka" level="info" additivity="false">
         <appender-ref ref="file"/>
-        <appender-ref ref="console"/>
+        <appender-ref ref="${SAM_LOG_APPENDER}"/>
         <appender-ref ref="SYSLOG"/>
         <appender-ref ref="Sentry" />
     </logger>
 
     <logger name="org.broadinstitute.dsde.workbench.google" level="debug" additivity="false">
         <appender-ref ref="file"/>
-        <appender-ref ref="console"/>
+        <appender-ref ref="${SAM_LOG_APPENDER}"/>
         <appender-ref ref="SYSLOG"/>
         <appender-ref ref="Sentry" />
     </logger>
@@ -63,14 +81,14 @@
     <!-- publishing messages can be too verbose logging -->
     <logger name="org.broadinstitute.dsde.workbench.google.HttpGooglePubSubDAO" level="info" additivity="false">
         <appender-ref ref="file"/>
-        <appender-ref ref="console"/>
+        <appender-ref ref="${SAM_LOG_APPENDER}"/>
         <appender-ref ref="SYSLOG"/>
         <appender-ref ref="Sentry" />
     </logger>
 
     <root level="warn">
         <appender-ref ref="file"/>
-        <appender-ref ref="console"/>
+        <appender-ref ref="${SAM_LOG_APPENDER}"/>
         <appender-ref ref="SYSLOG"/>
         <appender-ref ref="Sentry" />
     </root>

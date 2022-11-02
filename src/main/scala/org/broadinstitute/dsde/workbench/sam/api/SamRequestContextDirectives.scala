@@ -15,33 +15,34 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.util.control.NonFatal
 
-/**
-  * Created by ajang on 2020-05-28
+/** Created by ajang on 2020-05-28
   */
 trait SamRequestContextDirectives {
   val userService: UserService
 
-  /**
-    * Provides a new SamRequestContext with a root tracing span.
+  /** Provides a new SamRequestContext with a root tracing span.
     */
   def withSamRequestContext: Directive1[SamRequestContext] =
-    traceRequest.map { span => SamRequestContext(Option(span)) }
+    for {
+      clientIP <- extractClientIP
+      span <- traceRequest
+    } yield SamRequestContext(Option(span), clientIP.toOption)
 
-  /**
-    * Provides a new SamRequestContext with a tracing span that is a child of the existing SamRequestContext's
-    * `parentSpan`. If a parentSpan does not exist, this will NOT create a new one.
+  /** Provides a new SamRequestContext with a tracing span that is a child of the existing SamRequestContext's `parentSpan`. If a parentSpan does not exist,
+    * this will NOT create a new one.
     *
-    * @param spanName name of the new parentSpan in the new SamRequestContext. This span is a child of the existing
-    *                 parentSpan.
-    * @param samRequestContext the existing samRequestContext.
+    * @param spanName
+    *   name of the new parentSpan in the new SamRequestContext. This span is a child of the existing parentSpan.
+    * @param samRequestContext
+    *   the existing samRequestContext.
     */
   def withChildTraceSpan(spanName: String, samRequestContext: SamRequestContext): Directive1[SamRequestContext] =
     samRequestContext.parentSpan match {
-      case Some (parentSpan) =>
+      case Some(parentSpan) =>
         val newSpan = startSpanWithParent(spanName, parentSpan)
         val newSamRequestContext = samRequestContext.copy(parentSpan = Option(newSpan))
         recordSuccess(newSpan) & recordException(newSpan) & provide(newSamRequestContext)
-      case None => provide(SamRequestContext(None))
+      case None => provide(samRequestContext)
     }
 
   // The private methods and objects below are copied wholesale from io/opencensus/scala/akka/http/TracingDirective
@@ -50,33 +51,32 @@ trait SamRequestContextDirectives {
   private def recordSuccess(span: Span) =
     mapResponse(EndSpanResponse.forServer(tracing, _, span))
   private def recordException(span: Span) =
-    handleExceptions(ExceptionHandler {
-      case NonFatal(ex) =>
-        tracing.endSpan(span, Status.INTERNAL)
-        throw ex
+    handleExceptions(ExceptionHandler { case NonFatal(ex) =>
+      tracing.endSpan(span, Status.INTERNAL)
+      throw ex
     })
   private object EndSpanResponse {
 
     def forServer(
-                   tracing: Tracing,
-                   response: HttpResponse,
-                   span: Span
-                 ): HttpResponse =
+        tracing: Tracing,
+        response: HttpResponse,
+        span: Span
+    ): HttpResponse =
       end(tracing, response, span, "response sent")
 
     def forClient(
-                   tracing: Tracing,
-                   response: HttpResponse,
-                   span: Span
-                 ): HttpResponse =
+        tracing: Tracing,
+        response: HttpResponse,
+        span: Span
+    ): HttpResponse =
       end(tracing, response, span, "response received")
 
     private def end(
-                     tracing: Tracing,
-                     response: HttpResponse,
-                     span: Span,
-                     responseAnnotation: String
-                   ): HttpResponse = {
+        tracing: Tracing,
+        response: HttpResponse,
+        span: Span,
+        responseAnnotation: String
+    ): HttpResponse = {
       HttpAttributes.setAttributesForResponse(span, response)
       span.addAnnotation(responseAnnotation)
       tracing.setStatus(

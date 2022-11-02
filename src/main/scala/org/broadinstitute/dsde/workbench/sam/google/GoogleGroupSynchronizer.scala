@@ -9,23 +9,21 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-/**
-  * This class makes sure that our google groups have the right members.
+/** This class makes sure that our google groups have the right members.
   *
-  * For the simple case it merely compares
-  * group membership given by directoryDAO against group membership given by googleDirectoryDAO and does the
-  * appropriate adds and removes to google so that they look the same.
+  * For the simple case it merely compares group membership given by directoryDAO against group membership given by googleDirectoryDAO and does the appropriate
+  * adds and removes to google so that they look the same.
   *
-  * The more complicated case involves resources contsrained by an auth domain. If a resource is constrained by an
-  * auth domain AND the policy being synchronized has actions or roles configured as contstrainable then we need to
-  * synchronize the *intersection* of the members of all the groups in the auth domain and the access policy. These
-  * are called intersection groups. In order to do this accurately all the groups must be unrolled (flattened).
+  * The more complicated case involves resources contsrained by an auth domain. If a resource is constrained by an auth domain AND the policy being synchronized
+  * has actions or roles configured as contstrainable then we need to synchronize the *intersection* of the members of all the groups in the auth domain and the
+  * access policy. These are called intersection groups. In order to do this accurately all the groups must be unrolled (flattened).
   *
   * @param directoryDAO
   * @param accessPolicyDAO
@@ -34,17 +32,24 @@ import scala.util.{Failure, Success, Try}
   * @param resourceTypes
   * @param executionContext
   */
-class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
-                              accessPolicyDAO: AccessPolicyDAO,
-                              googleDirectoryDAO: GoogleDirectoryDAO,
-                              googleExtensions: GoogleExtensions,
-                              resourceTypes: Map[ResourceTypeName, ResourceType])(implicit executionContext: ExecutionContext)
-  extends LazyLogging with FutureSupport {
+class GoogleGroupSynchronizer(
+    directoryDAO: DirectoryDAO,
+    accessPolicyDAO: AccessPolicyDAO,
+    googleDirectoryDAO: GoogleDirectoryDAO,
+    googleExtensions: GoogleExtensions,
+    resourceTypes: Map[ResourceTypeName, ResourceType]
+)(implicit executionContext: ExecutionContext)
+    extends LazyLogging
+    with FutureSupport {
 
   def init(): IO[Set[ResourceTypeName]] =
-    accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, SamRequestContext(None))
+    accessPolicyDAO.upsertResourceTypes(resourceTypes.values.toSet, SamRequestContext())
 
-  def synchronizeGroupMembers(groupId: WorkbenchGroupIdentity, visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
+  def synchronizeGroupMembers(
+      groupId: WorkbenchGroupIdentity,
+      visitedGroups: Set[WorkbenchGroupIdentity] = Set.empty[WorkbenchGroupIdentity],
+      samRequestContext: SamRequestContext
+  ): Future[Map[WorkbenchEmail, Seq[SyncReportItem]]] = {
     def toSyncReportItem(operation: String, email: String, result: Try[Unit]) =
       SyncReportItem(
         operation,
@@ -68,7 +73,7 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
               .map(_.map { loadedPolicy =>
                 if (loadedPolicy.public) {
                   // include all users group when synchronizing a public policy
-                  AccessPolicy.members.modify(_ + googleExtensions.allUsersGroupName)(loadedPolicy)
+                  AccessPolicy.members.modify(_ + CloudExtensions.allUsersGroupName)(loadedPolicy)
                 } else {
                   loadedPolicy
                 }
@@ -124,15 +129,12 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
         }
 
         _ <- directoryDAO.updateSynchronizedDate(groupId, samRequestContext).unsafeToFuture()
-      } yield {
-        Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
-      }
+      } yield Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
     }
   }
 
-  /**
-    * An access policy is constrainable if it contains an action or a role that contains an action that is
-    * configured as constrainable in the resource type definition.
+  /** An access policy is constrainable if it contains an action or a role that contains an action that is configured as constrainable in the resource type
+    * definition.
     *
     * @param resource
     * @param accessPolicy
@@ -143,19 +145,23 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
       case Some(resourceType) =>
         resourceType.actionPatterns.exists { actionPattern =>
           actionPattern.authDomainConstrainable &&
-            (accessPolicy.actions.exists(actionPattern.matches) ||
-              accessPolicy.roles.exists { accessPolicyRole =>
-                resourceType.roles.exists {
-                  case resourceTypeRole @ ResourceRole(`accessPolicyRole`, _, _, _) => resourceTypeRole.actions.exists(actionPattern.matches)
-                  case _ => false
-                }
-              })
+          (accessPolicy.actions.exists(actionPattern.matches) ||
+            accessPolicy.roles.exists { accessPolicyRole =>
+              resourceType.roles.exists {
+                case resourceTypeRole @ ResourceRole(`accessPolicyRole`, _, _, _) => resourceTypeRole.actions.exists(actionPattern.matches)
+                case _ => false
+              }
+            })
         }
       case None =>
         throw new WorkbenchException(s"Invalid resource type specified. ${resource.resourceTypeName} is not a recognized resource type.")
     }
 
-  private[google] def calculateIntersectionGroup(resource: FullyQualifiedResourceId, policy: AccessPolicy, samRequestContext: SamRequestContext): IO[Set[WorkbenchSubject]] = {
+  private[google] def calculateIntersectionGroup(
+      resource: FullyQualifiedResourceId,
+      policy: AccessPolicy,
+      samRequestContext: SamRequestContext
+  ): IO[Set[WorkbenchSubject]] =
     // if the policy has no members, the intersection will be empty so short circuit here
     if (policy.members.isEmpty) {
       IO.pure(Set())
@@ -166,12 +172,13 @@ class GoogleGroupSynchronizer(directoryDAO: DirectoryDAO,
           case LoadResourceAuthDomainResult.Constrained(groups) =>
             // auth domain exists, need to calculate intersection
             val groupsIdentity: Set[WorkbenchGroupIdentity] = groups.toList.toSet
-            directoryDAO.listIntersectionGroupUsers(groupsIdentity + policy.id, samRequestContext).map(_.map(_.asInstanceOf[WorkbenchSubject])) //Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
+            directoryDAO
+              .listIntersectionGroupUsers(groupsIdentity + policy.id, samRequestContext)
+              .map(_.map(_.asInstanceOf[WorkbenchSubject])) // Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
           case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
             // auth domain does not exist, return policy members as is
             IO.pure(policy.members)
         }
       } yield members
     }
-  }
 }

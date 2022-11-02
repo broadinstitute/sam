@@ -1,9 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.db
 
 import java.sql.ResultSet
-
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityDisplayName, ManagedIdentityObjectId, ManagedResourceGroupName, SubscriptionId, TenantId}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
 import scalikejdbc.TypeBinder
@@ -130,11 +130,34 @@ object SamTypeBinders {
   }
 
   implicit val flatGroupMembershipPathPKTypeBinder: TypeBinder[GroupMembershipPath] = new TypeBinder[GroupMembershipPath] {
-    def apply(rs: ResultSet, label: String): GroupMembershipPath = {
+    def apply(rs: ResultSet, label: String): GroupMembershipPath =
       GroupMembershipPath(rs.getArray(label).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
-    }
-    def apply(rs: ResultSet, index: Int): GroupMembershipPath = {
+    def apply(rs: ResultSet, index: Int): GroupMembershipPath =
       GroupMembershipPath(rs.getArray(index).getArray.asInstanceOf[Array[java.lang.Long]].map(_.longValue()).toList.map(GroupPK))
-    }
+  }
+
+  implicit val tenantIdTypeBinder: TypeBinder[TenantId] = new TypeBinder[TenantId] {
+    def apply(rs: ResultSet, label: String): TenantId = TenantId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): TenantId = TenantId(rs.getString(index))
+  }
+
+  implicit val subscriptionIdTypeBinder: TypeBinder[SubscriptionId] = new TypeBinder[SubscriptionId] {
+    def apply(rs: ResultSet, label: String): SubscriptionId = SubscriptionId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): SubscriptionId = SubscriptionId(rs.getString(index))
+  }
+
+  implicit val managedResourceGroupNameTypeBinder: TypeBinder[ManagedResourceGroupName] = new TypeBinder[ManagedResourceGroupName] {
+    def apply(rs: ResultSet, label: String): ManagedResourceGroupName = ManagedResourceGroupName(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): ManagedResourceGroupName = ManagedResourceGroupName(rs.getString(index))
+  }
+
+  implicit val managedIdentityObjectIdTypeBinder: TypeBinder[ManagedIdentityObjectId] = new TypeBinder[ManagedIdentityObjectId] {
+    def apply(rs: ResultSet, label: String): ManagedIdentityObjectId = ManagedIdentityObjectId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): ManagedIdentityObjectId = ManagedIdentityObjectId(rs.getString(index))
+  }
+
+  implicit val managedIdentityDisplayNameTypeBinder: TypeBinder[ManagedIdentityDisplayName] = new TypeBinder[ManagedIdentityDisplayName] {
+    def apply(rs: ResultSet, label: String): ManagedIdentityDisplayName = ManagedIdentityDisplayName(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): ManagedIdentityDisplayName = ManagedIdentityDisplayName(rs.getString(index))
   }
 }

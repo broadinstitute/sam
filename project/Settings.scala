@@ -3,9 +3,9 @@ import Merging._
 import Testing._
 import Version._
 import sbt.Keys.{scalacOptions, _}
-import sbt._
-import sbtassembly.AssemblyPlugin.autoImport._
-import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmtOnCompile
+import sbt.{Compile, Test, _}
+import sbtassembly.AssemblyPlugin.autoImport.{assembly, _}
+import org.scalafmt.sbt.ScalafmtPlugin.autoImport.{scalafmt, scalafmtAll, scalafmtCheck, scalafmtCheckAll, scalafmtOnCompile, scalafmtSbt, scalafmtSbtCheck}
 
 object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
@@ -15,17 +15,17 @@ object Settings {
     "artifactory-snapshots" at artifactory + "libs-snapshot"
   )
 
-  //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
+  // coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
   lazy val commonBuildSettings = Defaults.coreDefaultSettings ++ Defaults.defaultConfigs ++ Seq(
     javaOptions += "-Xmx2G",
-    javacOptions ++= Seq("--release", "11"),
+    javacOptions ++= Seq("--release", "17"),
     scalacOptions in (Compile, console) --= Seq("-Ywarn-unused:imports", "-Xfatal-warnings"),
     scalacOptions in Test -= "-Ywarn-dead-code" // due to https://github.com/mockito/mockito-scala#notes
   )
 
   // recommended scalac options by https://tpolecat.github.io/2017/04/25/scalac-flags.html
   lazy val commonCompilerSettings = Seq(
-    "-target:jvm-1.11",
+    "-release:11",
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
     "-encoding",
     "utf-8", // Specify character encoding used by source files.
@@ -54,28 +54,28 @@ object Settings {
     "-Ymacro-annotations"
   )
 
-  //sbt assembly settings
+  // sbt assembly settings
   lazy val commonAssemblySettings = Seq(
     assemblyMergeStrategy in assembly := customMergeStrategy((assemblyMergeStrategy in assembly).value),
     test in assembly := {}
   )
 
-  //common settings for all sbt subprojects
+  // common settings for all sbt subprojects
   lazy val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
-    organization  := "org.broadinstitute.dsde.workbench",
-    scalaVersion  := "2.13.5",
-    resolvers ++= commonResolvers,
-    scalacOptions ++= commonCompilerSettings
-  )
+      organization := "org.broadinstitute.dsde.workbench",
+      scalaVersion := "2.13.10",
+      resolvers ++= commonResolvers,
+      scalacOptions ++= commonCompilerSettings,
+      Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtAll).value,
+      Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtSbt).value
+    )
 
-  val scalafmtSettings = List(scalafmtOnCompile := true)
-
-  //the full list of settings for the root project that's ultimately the one we build into a fat JAR and run
-  //coreDefaultSettings (inside commonSettings) sets the project name, which we want to override, so ordering is important.
-  //thus commonSettings needs to be added first.
+  // the full list of settings for the root project that's ultimately the one we build into a fat JAR and run
+  // coreDefaultSettings (inside commonSettings) sets the project name, which we want to override, so ordering is important.
+  // thus commonSettings needs to be added first.
   lazy val rootSettings = commonSettings ++ List(
     name := "sam",
     libraryDependencies ++= rootDependencies
-  ) ++ commonAssemblySettings ++ rootVersionSettings ++ scalafmtSettings
+  ) ++ commonAssemblySettings ++ rootVersionSettings
 }
