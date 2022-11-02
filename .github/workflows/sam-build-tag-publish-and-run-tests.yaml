@@ -1,3 +1,5 @@
+# Github action to Build Sam artifact, add/promote semantic tagging and then run tests
+
 name: sam-build-tag-publish-and-run-tests
 
 on:
@@ -25,7 +27,7 @@ jobs:
         env:
           DEFAULT_BUMP: patch
           GITHUB_TOKEN: ${{ secrets.BROADBOT_TOKEN }}
-          RELEASE_BRANCHES: main
+          RELEASE_BRANCHES: develop
           WITH_V: true
 
       - name: Extract branch
@@ -43,8 +45,8 @@ jobs:
             exit 1
           fi
 
-          echo ::set-output name=ref::$GITHUB_REF
-          echo ::set-output name=sha::$GITHUB_SHA
+          echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
+          echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
 
       - name: dispatch build to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
@@ -61,7 +63,7 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "$GITHUB_CONTEXT"
-          echo ::set-output name=custom-version-json::"{\\\"sam\\\":{\\\"appVersion\\\":\\\"${{ steps.tag.outputs.tag }}\\\"}}"
+          echo 'custom-version-json={\"sam\":{\"appVersion\":\"${{ steps.tag.outputs.tag }}\"}}' >> $GITHUB_OUTPUT
 
   create-bee-workflow:
     strategy:
