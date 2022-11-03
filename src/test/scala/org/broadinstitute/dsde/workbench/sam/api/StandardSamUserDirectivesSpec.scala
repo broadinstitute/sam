@@ -272,9 +272,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       "foo@bar.iam.gserviceaccount.com",
       "foo@developer.gserviceaccount.com"
     )
-    emails.foreach( email =>
-      email should fullyMatch regex StandardSamUserDirectives.SAdomain
-    )
+    emails.foreach(email => email should fullyMatch regex StandardSamUserDirectives.SAdomain)
   }
 
   it should "not match email addresses that do not end in 'gserviceaccount.com'" in {
@@ -282,11 +280,9 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       "foo@iam.google.com",
       "foo@gserviceaccount.google.com",
       "foo@gserviceaccount.org",
-      "foo@   .gserviceaccount.com",
+      "foo@   .gserviceaccount.com"
     )
-    emails.foreach(email =>
-      email shouldNot fullyMatch regex StandardSamUserDirectives.SAdomain
-    )
+    emails.foreach(email => email shouldNot fullyMatch regex StandardSamUserDirectives.SAdomain)
   }
 
   private def createRequiredHeaders(
