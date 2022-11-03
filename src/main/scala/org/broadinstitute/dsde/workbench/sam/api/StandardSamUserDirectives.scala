@@ -66,7 +66,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 }
 
 object StandardSamUserDirectives {
-  val SAdomain: Regex = "(\\S+@\\S+\\.iam\\.gserviceaccount\\.com$)".r
+  val SAdomain: Regex = "\\S+@((\\S+\\.)|)gserviceaccount.com".r
   // UAMI == "User Assigned Managed Identity" in Azure
   val UamiPattern: Regex = "(^/subscriptions/\\S+/resourcegroups/\\S+/providers/Microsoft\\.ManagedIdentity/userAssignedIdentities/\\S+$)".r
   val accessTokenHeader = "OIDC_access_token"
