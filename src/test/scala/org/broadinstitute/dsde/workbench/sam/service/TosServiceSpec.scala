@@ -52,6 +52,14 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assertResult(expected = false, s"getTosStatus(${defaultUser.id}) should have returned false")(actual = getTosStatusResultRejected.get)
   }
 
+  it should "exclude service accounts from ToS checks" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    dirDAO.createUser(serviceAccountUser, samRequestContext).unsafeRunSync()
+
+    tosServiceEnabledV0.isTermsOfServiceStatusAcceptable(serviceAccountUser) should be(true)
+  }
+
   it should "accept new version of ToS" in {
     assume(databaseEnabled, databaseEnabledClue)
 
