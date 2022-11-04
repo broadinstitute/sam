@@ -143,7 +143,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                       }
                     }
                   } ~
-                    delete { // NOTE: This endpoint is not visible in Swagger
+                    delete {
                       complete {
                         googleExtensions.deleteUserPetServiceAccount(samUser.id, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
                       }

@@ -33,7 +33,7 @@ object SamParameterBinderFactory {
         case v: ValueObject => valueObjectPbf(v)
         case pk: DatabaseKey => databaseKeyPbf(pk)
         case pa: DatabaseArray => databaseArrayPbf(pa)
-        case t: Traversable[Any] => addParameterBinders(t.toSeq)
+        case t: Iterable[Any] => addParameterBinders(t.toSeq)
         case opt: Option[Any] => opt.flatMap(value => addParameterBinders(Seq(value)).headOption)
         case a => a
       }

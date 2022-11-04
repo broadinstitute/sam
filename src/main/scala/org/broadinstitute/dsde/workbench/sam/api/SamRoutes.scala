@@ -12,9 +12,11 @@ import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, Logg
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
+import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
+import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetricsInterpreter
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
@@ -38,8 +40,12 @@ abstract class SamRoutes(
     val liquibaseConfig: LiquibaseConfig,
     val oidcConfig: OpenIDConnectConfiguration,
     val azureService: Option[AzureService]
-)(implicit val system: ActorSystem, val materializer: Materializer, val executionContext: ExecutionContext)
-    extends LazyLogging
+)(implicit
+    val system: ActorSystem,
+    val materializer: Materializer,
+    val executionContext: ExecutionContext,
+    val openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+) extends LazyLogging
     with ResourceRoutes
     with UserRoutes
     with StatusRoutes

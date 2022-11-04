@@ -1,0 +1,1 @@
+vault read .* > \$\{SERVICE_OUTPUT_LOCATION\}.*
