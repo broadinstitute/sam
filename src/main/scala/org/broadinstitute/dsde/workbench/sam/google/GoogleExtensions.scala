@@ -429,6 +429,16 @@ class GoogleExtensions(
       getAccessTokenUsingJson(key, scopes)
     }
 
+  def getArbitraryPetServiceAccountKey(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[String]] =
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
+      key <- subject match {
+        case Some(userId: WorkbenchUserId) =>
+          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), samRequestContext))).map(Option(_))
+        case _ => IO.none
+      }
+    } yield key
+
   def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): Future[String] =
     getDefaultServiceAccountForShellProject(user, samRequestContext)
 
