@@ -263,6 +263,28 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     }
   }
 
+  "SADomain regex" should "match email addresses that end in 'gserviceaccount.com'" in {
+    val emails = List(
+      "foo@iam.gserviceaccount.com",
+      "foo@gserviceaccount.com",
+      "foo@appspot.gserviceaccount.com",
+      "foo@gserviceaccount.gserviceaccount.com",
+      "foo@bar.iam.gserviceaccount.com",
+      "foo@developer.gserviceaccount.com"
+    )
+    emails.foreach(email => email should fullyMatch regex StandardSamUserDirectives.SAdomain)
+  }
+
+  it should "not match email addresses that do not end in 'gserviceaccount.com'" in {
+    val emails = List(
+      "foo@iam.google.com",
+      "foo@gserviceaccount.google.com",
+      "foo@gserviceaccount.org",
+      "foo@   .gserviceaccount.com"
+    )
+    emails.foreach(email => email shouldNot fullyMatch regex StandardSamUserDirectives.SAdomain)
+  }
+
   private def createRequiredHeaders(
       externalId: Either[GoogleSubjectId, AzureB2CId],
       email: WorkbenchEmail,

@@ -14,14 +14,13 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.AppendedClues
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 
 /** Created by dvoet on 6/7/17.
   */
-class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
+class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = TestSamRoutes.defaultUserInfo
 

@@ -56,6 +56,7 @@ jobs:
 
       - name: Secrets check
         run: |
+          sudo ln -s "$(which echo)" /usr/local/bin/say
           ./minnie-kenny.sh --force
           git secrets --scan-history
 
@@ -65,7 +66,7 @@ jobs:
 
       - name: Run unit tests and generate coverage report
         id: coverageReport
-        run: sbt coverage "testOnly --" coverageReport
+        run: source env/test.env; sbt coverage "testOnly --" coverageReport
 
   generateAndPublishClient:
     runs-on: ubuntu-20.04

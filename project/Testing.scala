@@ -54,21 +54,21 @@ object Testing {
     //   http://stackoverflow.com/a/12095245
     //   http://jira.qos.ch/browse/SLF4J-167
     //   http://jira.qos.ch/browse/SLF4J-97
-    testOptions in Test += Tests.Setup(classLoader =>
+    Test / testOptions += Tests.Setup(classLoader =>
       classLoader
         .loadClass("org.slf4j.LoggerFactory")
         .getMethod("getLogger", classLoader.loadClass("java.lang.String"))
         .invoke(null, "ROOT")
     ),
-    testOptions in Test ++= Seq(Tests.Filter(s => !isIntegrationTest(s))),
-    testOptions in IntegrationTest := Seq(Tests.Filter(s => isIntegrationTest(s))),
+    Test / testOptions ++= Seq(Tests.Filter(s => !isIntegrationTest(s))),
+    IntegrationTest / testOptions := Seq(Tests.Filter(s => isIntegrationTest(s))),
     minnieKenny := {
       val log = streams.value.log
       val args = spaceDelimited("<arg>").parsed
       minnieKennySingleRunner.runOnce(log, args)
     },
-    parallelExecution in Test := false,
-    (test in Test) := {
+    Test / parallelExecution := false,
+    Test / test := {
       minnieKenny.toTask("").value
     }
   )

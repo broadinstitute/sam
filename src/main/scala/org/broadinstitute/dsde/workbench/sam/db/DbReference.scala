@@ -7,8 +7,7 @@ import io.opencensus.trace.AttributeValue
 import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
-import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
+import org.broadinstitute.dsde.workbench.sam.config.{DatabaseConfig, LiquibaseConfig}
 import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithContext
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
@@ -18,12 +17,12 @@ import scalikejdbc.{ConnectionPool, DBSession, IsolationLevel, NamedDB}
 import java.security.cert.CertPathBuilderException
 import java.sql.Connection.TRANSACTION_READ_COMMITTED
 import java.sql.SQLTimeoutException
-import scala.jdk.CollectionConverters._
 import scala.concurrent.ExecutionContext
+import scala.jdk.CollectionConverters._
 
 object DbReference extends LazyLogging {
-  private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
-    val dbConnection = ConnectionPool.borrow(dbName.name)
+  private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: Symbol, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
+    val dbConnection = ConnectionPool.borrow(dbName)
     try {
       val liquibaseConnection = new JdbcConnection(dbConnection)
       val resourceAccessor: ResourceAccessor = new ClassLoaderResourceAccessor()
@@ -48,8 +47,8 @@ object DbReference extends LazyLogging {
       dbConnection.close()
   }
 
-  def init(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName, dbExecutionContext: ExecutionContext): DbReference = {
-    DBs.setup(dbName.name)
+  def init(liquibaseConfig: LiquibaseConfig, dbName: Symbol, dbExecutionContext: ExecutionContext): DbReference = {
+    DBs.setup(dbName)
     DBs.loadGlobalSettings()
     if (liquibaseConfig.initWithLiquibase) {
       initWithLiquibase(liquibaseConfig, dbName)
@@ -58,12 +57,12 @@ object DbReference extends LazyLogging {
     DbReference(dbName, dbExecutionContext)
   }
 
-  def resource(liquibaseConfig: LiquibaseConfig, dbName: DatabaseName): Resource[IO, DbReference] =
+  def resource(liquibaseConfig: LiquibaseConfig, databaseConfig: DatabaseConfig): Resource[IO, DbReference] =
     for {
-      dbExecutionContext <- ExecutionContexts.fixedThreadPool[IO](DBs.config.getInt(s"db.${dbName.name.name}.poolMaxSize"))
+      dbExecutionContext <- ExecutionContexts.fixedThreadPool[IO](databaseConfig.poolMaxSize)
       dbRef <- Resource.make(
-        IO(init(liquibaseConfig, dbName, dbExecutionContext))
-      )(_ => IO(DBs.close(dbName.name)))
+        IO(init(liquibaseConfig, databaseConfig.dbName, dbExecutionContext))
+      )(_ => IO(DBs.close(databaseConfig.dbName)))
     } yield dbRef
 }
 
@@ -73,23 +72,23 @@ object DbReference extends LazyLogging {
   * and writes.
   */
 object DatabaseNames {
-  sealed trait DatabaseName {
+  sealed trait DatabasePoolName {
     val name: Symbol
   }
-  case object Read extends DatabaseName {
+  case object Read extends DatabasePoolName {
     val name: Symbol = Symbol("sam_read")
   }
-  case object Write extends DatabaseName {
+  case object Write extends DatabasePoolName {
     val name: Symbol = Symbol("sam_write")
   }
-  case object Background extends DatabaseName {
+  case object Background extends DatabasePoolName {
     val name: Symbol = Symbol("sam_background")
   }
 }
 
-case class DbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContext) extends LazyLogging {
+case class DbReference(dbName: Symbol, dbExecutionContext: ExecutionContext) extends LazyLogging {
   def readOnly[A](f: DBSession => A): A = {
-    val db = NamedDB(dbName.name)
+    val db = NamedDB(dbName)
     // https://github.com/scalikejdbc/scalikejdbc/issues/1143
     db.conn.setTransactionIsolation(TRANSACTION_READ_COMMITTED)
     db.readOnly(f)
@@ -99,7 +98,7 @@ case class DbReference(dbName: DatabaseName, dbExecutionContext: ExecutionContex
     inLocalTransactionWithIsolationLevel(IsolationLevel.ReadCommitted)(f)
 
   def inLocalTransactionWithIsolationLevel[A](isolationLevel: IsolationLevel)(f: DBSession => A): A =
-    NamedDB(dbName.name).isolationLevel(isolationLevel).localTx[A] { implicit session =>
+    NamedDB(dbName).isolationLevel(isolationLevel).localTx[A] { implicit session =>
       f(session)
     }
 

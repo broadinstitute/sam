@@ -22,6 +22,7 @@ final case class AppConfig(
     googleConfig: Option[GoogleConfig],
     resourceTypes: Set[ResourceType],
     liquibaseConfig: LiquibaseConfig,
+    samDatabaseConfig: SamDatabaseConfig,
     blockedEmailDomains: Seq[String],
     termsOfServiceConfig: TermsOfServiceConfig,
     oidcConfig: OidcConfig,
@@ -126,6 +127,23 @@ object AppConfig {
     LiquibaseConfig(config.getString("changelog"), config.getBoolean("initWithLiquibase"))
   }
 
+  implicit val databaseConfigReader: ValueReader[DatabaseConfig] = ValueReader.relative { config =>
+    DatabaseConfig(
+      Symbol(config.getString("poolName")),
+      config.getInt("poolInitialSize"),
+      config.getInt("poolMaxSize"),
+      config.getInt("poolConnectionTimeoutMillis"),
+      config.getString("driver"),
+      config.getString("url"),
+      config.getString("user"),
+      config.getString("password")
+    )
+  }
+
+  implicit val samDatabaseConfigReader: ValueReader[SamDatabaseConfig] = ValueReader.relative { config =>
+    SamDatabaseConfig(config.as[DatabaseConfig]("sam_read"), config.as[DatabaseConfig]("sam_write"), config.as[DatabaseConfig]("sam_background"))
+  }
+
   final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String])
 
   implicit val adminConfigReader: ValueReader[AdminConfig] = ValueReader.relative { config =>
@@ -137,6 +155,7 @@ object AppConfig {
 
   implicit val azureServicesConfigReader: ValueReader[AzureServicesConfig] = ValueReader.relative { config =>
     AzureServicesConfig(
+      config.as[Option[Boolean]]("azureEnabled"),
       config.getString("managedAppClientId"),
       config.getString("managedAppClientSecret"),
       config.getString("managedAppTenantId"),
@@ -146,6 +165,16 @@ object AppConfig {
 
   implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
     PrometheusConfig(config.getInt("endpointPort"))
+  }
+  def load: AppConfig = {
+    // We need to manually parse and resolve the env.conf file.
+    // ConfigFactory.load automatically pulls in the default reference.conf,
+    // which then ends up overriding any conf files provided as java options.
+    // We need to get _just_ the contents of env.conf so that normal overriding can occur.
+    val samConfig = ConfigFactory.parseResourcesAnySyntax("sam").resolve()
+    val config = ConfigFactory.load()
+    val combinedConfig = samConfig.withFallback(config)
+    AppConfig.readConfig(combinedConfig)
   }
 
   def readConfig(config: Config): AppConfig = {
@@ -164,6 +193,7 @@ object AppConfig {
       googleConfigOption,
       resourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.toSet,
       liquibaseConfig = config.as[LiquibaseConfig]("liquibase"),
+      samDatabaseConfig = config.as[SamDatabaseConfig]("db"),
       blockedEmailDomains = config.as[Option[Seq[String]]]("blockedEmailDomains").getOrElse(Seq.empty),
       termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
       oidcConfig = config.as[OidcConfig]("oidc"),
