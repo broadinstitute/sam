@@ -4,6 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -37,10 +38,12 @@ class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tos
       directoryDao.loadUser(userId, samRequestContext).map(_.map(_.acceptedTosVersion.contains(tosConfig.version)))
     } else IO.none
 
-  /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS
+  /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS, or is a service account
     */
   def isTermsOfServiceStatusAcceptable(user: SamUser): Boolean =
-    tosConfig.isGracePeriodEnabled || !tosConfig.enabled || user.acceptedTosVersion.contains(tosConfig.version)
+    tosConfig.isGracePeriodEnabled || !tosConfig.enabled || user.acceptedTosVersion.contains(tosConfig.version) || StandardSamUserDirectives.SAdomain.matches(
+      user.email.value
+    )
 
   /** Get the terms of service text and send it to the caller
     * @return

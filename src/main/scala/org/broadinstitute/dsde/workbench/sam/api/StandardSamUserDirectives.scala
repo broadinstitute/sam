@@ -103,7 +103,7 @@ object StandardSamUserDirectives {
       user <- getSamUser(oidcHeaders, directoryDAO, samRequestContext)
     } yield {
       // service account users do not need to accept ToS
-      val tosStatusAcceptable = tosService.isTermsOfServiceStatusAcceptable(user) || SAdomain.matches(user.email.value)
+      val tosStatusAcceptable = tosService.isTermsOfServiceStatusAcceptable(user)
       if (!tosStatusAcceptable) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User has not accepted the terms of service."))
       }
