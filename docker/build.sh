@@ -96,9 +96,9 @@ function make_jar()
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
 
     # make jar.  cache sbt dependencies.
-    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 hseeberger/scala-sbt:eclipse-temurin-17.0.2_1.6.2_2.13.8 /working/docker/init_schema.sh /working
+    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 sbtscala/scala-sbt:openjdk-17.0.2_1.7.2_2.13.10 /working/docker/init_schema.sh /working
     sleep 40
-    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 hseeberger/scala-sbt:eclipse-temurin-17.0.2_1.6.2_2.13.8 /working/docker/install.sh /working
+    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 sbtscala/scala-sbt:openjdk-17.0.2_1.7.2_2.13.10 /working/docker/install.sh /working
     EXIT_CODE=$?
     set -e # Turn error detection back on for the rest of the script
 
@@ -138,8 +138,10 @@ function docker_cmd()
             docker push $DOCKERHUB_TESTS_REGISTRY:${DOCKERTAG_SAFE_NAME}
 
             if [[ -n $GCR_REGISTRY ]]; then
+                echo "pushing $GCR_REGISTRY:${HASH_TAG}..."
                 docker tag $DOCKERHUB_REGISTRY:${HASH_TAG} $GCR_REGISTRY:${HASH_TAG}
                 gcloud docker -- push $GCR_REGISTRY:${HASH_TAG}
+                gcloud container images add-tag $GCR_REGISTRY:${HASH_TAG} $GCR_REGISTRY:${DOCKERTAG_SAFE_NAME}
             fi
         fi
     else

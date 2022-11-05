@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.unsafe.implicits.{global => globalEc}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
@@ -34,6 +35,8 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     TestSupport.truncateAll
 
   "TosService" should "accept, get, and reject the ToS for a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
     // accept and get ToS status
@@ -49,7 +52,17 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assertResult(expected = false, s"getTosStatus(${defaultUser.id}) should have returned false")(actual = getTosStatusResultRejected.get)
   }
 
+  it should "exclude service accounts from ToS checks" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    dirDAO.createUser(serviceAccountUser, samRequestContext).unsafeRunSync()
+
+    tosServiceEnabledV0.isTermsOfServiceStatusAcceptable(serviceAccountUser) should be(true)
+  }
+
   it should "accept new version of ToS" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
     tosServiceEnabledV0.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(false)

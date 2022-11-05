@@ -23,6 +23,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   ) // after using com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper, tests seems to run a bit longer
 
   "GET /api/google/v1/user/petServiceAccount" should "get or create a pet service account for a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (user, _, routes) = createTestUser()
 
     // create a pet service account
@@ -50,6 +52,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   it should "return a user's proxy group from a pet service account" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (user, _, routes) = createTestUser()
 
     val petEmail = Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
@@ -152,6 +156,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   "GET /api/google/v1/user/petServiceAccount/{project}/key" should "200 with a new key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
 
@@ -173,6 +179,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   "DELETE /api/google/v1/user/petServiceAccount/{project}/key/{keyId}" should "204 when deleting a key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
 
@@ -199,6 +207,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   "GET /api/google/v1/petServiceAccount/{project}/{userEmail}" should "200 with a key" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
     val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)

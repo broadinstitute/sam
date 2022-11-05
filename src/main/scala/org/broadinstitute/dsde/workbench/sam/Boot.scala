@@ -3,11 +3,10 @@ package org.broadinstitute.dsde.workbench.sam
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
-import cats.effect
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect._
 import cats.implicits._
-import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
+import io.sentry.{Sentry, SentryOptions}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{
@@ -23,13 +22,13 @@ import org.broadinstitute.dsde.workbench.google.{
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
+import org.broadinstitute.dsde.workbench.openTelemetry.{OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
 import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, GoogleConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DatabaseConfig, GoogleConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
-import org.broadinstitute.dsde.workbench.sam.db.DatabaseNames.DatabaseName
-import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
+import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -47,19 +46,27 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
-  def run(args: List[String]): IO[ExitCode] =
+  val sentryDsn: Option[String] = sys.env.get("SENTRY_DSN")
+
+  private def initSentry(): Unit = sentryDsn.fold(logger.warn("No SENTRY_DSN found, not initializing Sentry.")) { dsn =>
+    val options = new SentryOptions()
+    options.setDsn(dsn)
+    Sentry.init()
+  }
+  def run(args: List[String]): IO[ExitCode] = {
+    initSentry()
     (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
       logger.error("sam failed to start, trying again in 5s", t)
       IO.sleep(5 seconds) *> run(args)
     }
+  }
 
   private def startup(): IO[Unit] = {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
 
-    val config = ConfigFactory.load()
-    val appConfig = AppConfig.readConfig(config)
+    val appConfig = AppConfig.load
 
     val appDependencies = createAppDependencies(appConfig)
 
@@ -86,13 +93,26 @@ object Boot extends IOApp with LazyLogging {
 
   private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
     for {
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO) <- createDAOs(appConfig, DatabaseNames.Write, DatabaseNames.Read)
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO) <- createDAOs(
+        appConfig,
+        appConfig.samDatabaseConfig.samWrite,
+        appConfig.samDatabaseConfig.samRead
+      )
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _) <- createDAOs(appConfig, DatabaseNames.Background, DatabaseNames.Background)
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _) <- createDAOs(
+        appConfig,
+        appConfig.samDatabaseConfig.samBackground,
+        appConfig.samDatabaseConfig.samBackground
+      )
 
       googleSynchronizerExecutionContext <- ExecutionContexts.fixedThreadPool[IO](24)
+
+      // This is for sending custom metrics to stackdriver. all custom metrics starts with `OpenCensus/sam/`.
+      // Typing in `sam` in metrics explorer will show all sam custom metrics.
+      // As best practice, we should have all related metrics under same prefix separated by `/`
+      implicit0(openTelemetry: OpenTelemetryMetrics[IO]) <- OpenTelemetryMetrics.resource[IO]("sam", appConfig.prometheusConfig.endpointPort)
 
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
@@ -113,7 +133,10 @@ object Boot extends IOApp with LazyLogging {
           extraAuthParams = Some("prompt=login")
         )
       )
-    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, oauth2Config)
+    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, oauth2Config)(
+      actorSystem,
+      openTelemetry
+    )
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
@@ -123,7 +146,7 @@ object Boot extends IOApp with LazyLogging {
       backgroundAccessPolicyDAO: AccessPolicyDAO,
       postgresDistributedLockDAO: PostgresDistributedLockDAO[IO],
       googleSynchronizerExecutionContext: ExecutionContext
-  )(implicit actorSystem: ActorSystem): effect.Resource[IO, CloudExtensionsInitializer] =
+  )(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
         for {
@@ -160,12 +183,12 @@ object Boot extends IOApp with LazyLogging {
 
   private def createDAOs(
       appConfig: AppConfig,
-      writeDbName: DatabaseName,
-      readDbName: DatabaseName
+      writeDbConfig: DatabaseConfig,
+      readDbConfig: DatabaseConfig
   ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO])] =
     for {
-      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbName)
-      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbName)
+      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbConfig)
+      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbConfig)
 
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
       accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)
@@ -283,7 +306,7 @@ object Boot extends IOApp with LazyLogging {
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: PostgresDirectoryDAO,
       oauth2Config: OpenIDConnectConfiguration
-  )(implicit actorSystem: ActorSystem): AppDependencies = {
+  )(implicit actorSystem: ActorSystem, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(
@@ -297,7 +320,8 @@ object Boot extends IOApp with LazyLogging {
     )
     val tosService = new TosService(directoryDAO, config.googleConfig.get.googleServicesConfig.appsDomain, config.termsOfServiceConfig)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService)
-    val statusService = new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(DatabaseNames.Read, implicitly), 10 seconds)
+    val statusService =
+      new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(config.samDatabaseConfig.samRead.dbName, implicitly), 10 seconds)
     val managedGroupService =
       new ManagedGroupService(
         resourceService,

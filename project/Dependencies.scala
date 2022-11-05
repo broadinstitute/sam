@@ -8,8 +8,9 @@ object Dependencies {
   val scalaTestV = "3.2.12"
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
-  val postgresDriverVersion = "42.3.4"
+  val postgresDriverVersion = "42.5.0"
   val http4sVersion = "0.21.13"
+  val sentryVersion = "6.6.0"
 
   val workbenchUtilV = "0.6-74c9fc2"
   val workbenchUtil2V = "0.2-447afa5"
@@ -18,8 +19,9 @@ object Dependencies {
   val workbenchGoogle2V = "0.24-447afa5"
   val workbenchNotificationsV = "0.3-d74ff96"
   val workbenchOauth2V = "0.2-20f9225"
+  val workbenchOpenTelemetryV = "0.3-0096bac"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.3-SNAPSHOT"
+  val crlVersion = "1.2.4-SNAPSHOT"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 = ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
@@ -28,10 +30,12 @@ object Dependencies {
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
-  val excludeSpringJcl = ExclusionRule(organization = "org.springframework", name = "spring-jcl")
   val excludeGoogleCloudResourceManager = ExclusionRule(organization = "com.google.apis", name = "google-api-services-cloudresourcemanager")
+  val excludeSLF4J = ExclusionRule(organization = "org.slf4j")
   val excludeJerseyCore = ExclusionRule(organization = "org.glassfish.jersey.core", name = "*")
   val excludeJerseyMedia = ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
+
+  val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID = "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV
@@ -42,7 +46,8 @@ object Dependencies {
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
-  val stackdriverLogging: ModuleID = "org.springframework.cloud" % "spring-cloud-gcp-logging" % "1.2.8.RELEASE" excludeAll excludeSpringJcl
+//  val stackdriverLogging: ModuleID = "org.springframework.cloud" % "spring-cloud-gcp-logging" % "1.2.8.RELEASE" excludeAll(excludeSpring, excludeSpringBoot)
+  val stackdriverLogging: ModuleID = "com.google.cloud" % "google-cloud-logging-logback" % "0.127.11-alpha"
   val janino: ModuleID = "org.codehaus.janino" % "janino" % "3.1.7" // For if-else logic in logging config
 
   val akkaActor: ModuleID = "com.typesafe.akka" %% "akka-actor" % akkaV
@@ -76,6 +81,9 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil)
   val workbenchOauth2: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V
   val workbenchOauth2Tests: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V % "test" classifier "tests"
+  val workbenchOpenTelemetry: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-opentelemetry" % workbenchOpenTelemetryV
+  val workbenchOpenTelemetryTest: ModuleID =
+    "org.broadinstitute.dsde.workbench" %% "workbench-opentelemetry" % workbenchOpenTelemetryV % "test" classifier "tests"
   // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted
   // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
   // workbench-libs dependency so exclude auto-value from there
@@ -115,7 +123,7 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
 
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
@@ -123,6 +131,7 @@ object Dependencies {
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
+    sentry,
     ioGrpc,
     logbackClassic,
     logstashLogback,
@@ -156,6 +165,8 @@ object Dependencies {
     googleStorageLocal,
     workbenchOauth2,
     workbenchOauth2Tests,
+    workbenchOpenTelemetry,
+    workbenchOpenTelemetryTest,
     commonsCodec,
     liquibaseCore,
     circeYAML,

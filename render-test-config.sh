@@ -23,6 +23,7 @@ AZURE_MANAGED_APP_TENANT_ID=$(jq -r '."tenant-id"' ${AZURE_MANAGED_APP_CLIENT_OU
 # Note: the managed app plan id is hardcoded for now but should be updated once the Managed App
 # definition is in Terraform. See: https://broadworkbench.atlassian.net/browse/TOAZ-28
 cat > ${AZURE_PROPERTIES_OUTPUT_FILE_PATH} <<EOF
+azureServices.azureEnabled="true"
 azureServices.managedAppClientId=${AZURE_MANAGED_APP_CLIENT_ID}
 azureServices.managedAppClientSecret=${AZURE_MANAGED_APP_CLIENT_SECRET}
 azureServices.managedAppTenantId=${AZURE_MANAGED_APP_TENANT_ID}
