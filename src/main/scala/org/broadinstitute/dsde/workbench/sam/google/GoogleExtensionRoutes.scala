@@ -32,26 +32,39 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
 
   override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
-      path("petServiceAccount" / Segment / Segment) { (project, userEmail) =>
-        get {
-          requireAction(
-            FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
-            GoogleExtensions.getPetPrivateKeyAction,
-            samUser.id,
-            samRequestContext
-          ) {
+      // "Admin" routes, requires permission on cloud-extension/google resource
+      pathPrefix("petServiceAccount") {
+        requireAction(
+          FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
+          GoogleExtensions.getPetPrivateKeyAction,
+          samUser.id,
+          samRequestContext
+        ) {
+          path(Segment / "key") { userEmail =>
             complete {
               import spray.json._
-              googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project), samRequestContext) map {
+              googleExtensions.getArbitraryPetServiceAccountKey(WorkbenchEmail(userEmail), samRequestContext) map {
                 // parse json to ensure it is json and tells akka http the right content-type
                 case Some(key) => StatusCodes.OK -> key.parseJson
                 case None =>
                   throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
               }
             }
-          }
+          } ~
+            path(Segment / Segment) { (project, userEmail) =>
+              complete {
+                import spray.json._
+                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project), samRequestContext) map {
+                  // parse json to ensure it is json and tells akka http the right content-type
+                  case Some(key) => StatusCodes.OK -> key.parseJson
+                  case None =>
+                    throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
+                }
+              }
+            }
         }
       } ~
+        // "User" routes, acts on caller's identity
         pathPrefix("user" / "petServiceAccount") {
           pathPrefix("key") {
             pathEndOrSingleSlash {

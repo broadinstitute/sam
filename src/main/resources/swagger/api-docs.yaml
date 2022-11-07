@@ -875,6 +875,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v1/petServiceAccount/{userEmail}/key:
+    get:
+      tags:
+        - Google
+      summary: gets a key for the user's arbitrary pet service account, get_pet_private_key action on cloud-extension/google required
+      operationId: getUserArbitraryPetServiceAccountKey
+      parameters:
+        - name: userEmail
+          in: path
+          description: User's email address
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys
+          content:
+            application/json:
+              schema:
+                type: string
+        403:
+          description: caller has some access to cloud-extension/google but not to
+            the get_pet_private_key action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: user does not exist or caller does not have any access to cloud-extension/google
+            resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/user/petServiceAccount/{project}:
     get:
       tags:
