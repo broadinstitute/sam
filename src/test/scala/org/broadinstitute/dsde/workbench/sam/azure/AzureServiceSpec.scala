@@ -20,7 +20,7 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
   "AzureService" should "create a pet managed identity" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
 
-    assume(azureServicesConfig.flatMap(_.azureEnabled).exists(identity), "-- skipping Azure test")
+    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
 
     // create dependencies
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
@@ -91,7 +91,7 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
   it should "get the billing profile id from the managed resource group" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
 
-    assume(azureServicesConfig.flatMap(_.azureEnabled).exists(identity), "-- skipping Azure test")
+    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
 
     // create dependencies
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)

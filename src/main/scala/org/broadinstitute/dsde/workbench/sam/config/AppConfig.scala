@@ -153,14 +153,23 @@ object AppConfig {
     )
   }
 
-  implicit val azureServicesConfigReader: ValueReader[AzureServicesConfig] = ValueReader.relative { config =>
-    AzureServicesConfig(
-      config.as[Option[Boolean]]("azureEnabled"),
-      config.getString("managedAppClientId"),
-      config.getString("managedAppClientSecret"),
-      config.getString("managedAppTenantId"),
-      config.as[Seq[String]]("managedAppPlanIds")
-    )
+  implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
+    config
+      .getAs[Boolean]("azureEnabled")
+      .flatMap(azureEnabled =>
+        if (azureEnabled) {
+          Option(
+            AzureServicesConfig(
+              config.getString("managedAppClientId"),
+              config.getString("managedAppClientSecret"),
+              config.getString("managedAppTenantId"),
+              config.as[Seq[String]]("managedAppPlanIds")
+            )
+          )
+        } else {
+          None
+        }
+      )
   }
 
   implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
@@ -198,7 +207,7 @@ object AppConfig {
       termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
       oidcConfig = config.as[OidcConfig]("oidc"),
       adminConfig = config.as[AdminConfig]("admin"),
-      azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
+      azureServicesConfig = config.as[Option[AzureServicesConfig]]("azureServices"),
       prometheusConfig = config.as[PrometheusConfig]("prometheus")
     )
   }
