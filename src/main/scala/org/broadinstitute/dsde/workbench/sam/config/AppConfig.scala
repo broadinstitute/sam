@@ -207,7 +207,7 @@ object AppConfig {
       termsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService"),
       oidcConfig = config.as[OidcConfig]("oidc"),
       adminConfig = config.as[AdminConfig]("admin"),
-      azureServicesConfig = config.as[Option[AzureServicesConfig]]("azureServices"),
+      azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
       prometheusConfig = config.as[PrometheusConfig]("prometheus")
     )
   }
