@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam
 package service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
@@ -75,27 +76,35 @@ class UserServiceSpec
   protected def clearDatabase(): Unit =
     TestSupport.truncateAll
 
-  "UserService" should "create a user" in {
-    assume(databaseEnabled, databaseEnabledClue)
+  "UserService createUser" should "call DirectoryDAO.createUser" in {
+    // 1. validate email
+    // 2. registerUser (creates user)
+    // 3. enable user
+    // 4. Add to all users group
+    // 5. load user status
 
-    // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-    verify(googleExtensions).onUserCreate(defaultUser, samRequestContext)
+    val mockDirDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val allUsersGroup = BasicWorkbenchGroup(WorkbenchGroupName("All_Users"), Set(), WorkbenchEmail("all_users@fake.com"))
+    val enabledUser = defaultUser.copy(enabled = true)
 
-    dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
-    dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
-    dirDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync() shouldBe
-      Some(
-        BasicWorkbenchGroup(
-          CloudExtensions.allUsersGroupName,
-          Set(defaultUser.id),
-          service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email
-        )
-      )
+    when(mockDirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(Some(enabledUser)))
+    when(mockDirDAO.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(None))
+    when(mockDirDAO.loadSubjectFromEmail(defaultUser.email, samRequestContext)).thenReturn(IO(None))
+    when(mockDirDAO.createUser(defaultUser, samRequestContext)).thenReturn(IO(enabledUser))
+    when(mockDirDAO.enableIdentity(defaultUser.id, samRequestContext)).thenReturn(IO(()))
+    when(mockDirDAO.addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
+    when(mockDirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
+    when(mockDirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(true))
+
+    when(googleExtensions.getOrCreateAllUsersGroup(mockDirDAO, samRequestContext))
+      .thenReturn(Future.successful(allUsersGroup))
+
+    val userService = new UserService(mockDirDAO, googleExtensions, Seq(), tos)
+    userService.createUser(defaultUser, samRequestContext).futureValue
+    verify(mockDirDAO).createUser(defaultUser, samRequestContext)
   }
 
-  it should "reject blocked domain" in {
+  "UserService" should "reject blocked domain" in {
     intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.createUser(defaultUser.copy(email = WorkbenchEmail(s"user@$blockedDomain")), samRequestContext))
     }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
