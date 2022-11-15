@@ -1,6 +1,6 @@
 Ticket: <Link to Jira ticket>
 
-  \<Don't forget to include the ticket number in the PR title.\>
+  \<Don't forget to include the ticket number in the PR title!\>
 
 What:
 
