@@ -7,8 +7,17 @@ import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalacheck._
 import SamResourceActions._
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  BillingProfileId,
+  ManagedResourceGroup,
+  ManagedResourceGroupCoordinates,
+  ManagedResourceGroupName,
+  SubscriptionId,
+  TenantId
+}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LockDetails
 import org.broadinstitute.dsde.workbench.sam.service.UserService
+
 import scala.concurrent.duration._
 
 object Generator {
@@ -21,6 +30,21 @@ object Generator {
   val genExternalId: Gen[Either[GoogleSubjectId, AzureB2CId]] = Gen.either(genGoogleSubjectId, genAzureB2CId)
   val genServiceAccountSubjectId: Gen[ServiceAccountSubjectId] = genGoogleSubjectId.map(x => ServiceAccountSubjectId(x.value))
   val genOAuth2BearerToken: Gen[OAuth2BearerToken] = Gen.alphaStr.map(x => OAuth2BearerToken("s" + x))
+  val genTenantId: Gen[TenantId] = Gen.alphaStr.map(TenantId)
+  val genSubscriptionId: Gen[SubscriptionId] = Gen.alphaStr.map(SubscriptionId)
+  val genManagedResourceGroupName: Gen[ManagedResourceGroupName] = Gen.alphaStr.map(ManagedResourceGroupName)
+  val genBillingProfileId: Gen[BillingProfileId] = Gen.alphaStr.map(BillingProfileId)
+
+  val genManagedResourceGroupCoordinates: Gen[ManagedResourceGroupCoordinates] = for {
+    tenantId <- genTenantId
+    subscriptionId <- genSubscriptionId
+    mrgName <- genManagedResourceGroupName
+  } yield ManagedResourceGroupCoordinates(tenantId, subscriptionId, mrgName)
+
+  val genManagedResourceGroup: Gen[ManagedResourceGroup] = for {
+    mrgCoords <- genManagedResourceGroupCoordinates
+    billingProfileId <- genBillingProfileId
+  } yield ManagedResourceGroup(mrgCoords, billingProfileId)
 
   // normally the current time in millis is used to create a WorkbenchUserId but too many users are created
   // during tests that collisions happen despite randomness built into UserService.genWorkbenchUserId

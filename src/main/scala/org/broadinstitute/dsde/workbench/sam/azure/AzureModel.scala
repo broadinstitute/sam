@@ -28,6 +28,16 @@ final case class SubscriptionId(value: String) extends ValueObject
 final case class ManagedResourceGroupName(value: String) extends ValueObject
 final case class ManagedIdentityObjectId(value: String) extends ValueObject
 final case class ManagedIdentityDisplayName(value: String) extends ValueObject
+final case class BillingProfileId(value: String) extends ValueObject
+final case class ManagedResourceGroupCoordinates(
+    tenantId: TenantId,
+    subscriptionId: SubscriptionId,
+    managedResourceGroupName: ManagedResourceGroupName
+)
+final case class ManagedResourceGroup(
+    managedResourceGroupCoordinates: ManagedResourceGroupCoordinates,
+    billingProfileId: BillingProfileId
+)
 
 final case class GetOrCreatePetManagedIdentityRequest(tenantId: TenantId, subscriptionId: SubscriptionId, managedResourceGroupName: ManagedResourceGroupName)
 

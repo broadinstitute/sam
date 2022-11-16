@@ -236,6 +236,7 @@ object TestSupport extends TestSupport {
           GroupMemberTable,
           GroupMemberFlatTable,
           PetServiceAccountTable,
+          AzureManagedResourceGroupTable,
           PetManagedIdentityTable,
           UserTable,
           AccessInstructionsTable,
