@@ -176,15 +176,12 @@ object AppConfig {
     PrometheusConfig(config.getInt("endpointPort"))
   }
 
-  /**
-    * Loads all the configs for the Sam App.  All values defined in `src/main/resources/sam.conf` will take precedence
-    * over any other configs.  In this way, we can still use configs rendered by `firecloud-develop` that render to
-    * `config/sam.conf` if we want.  To do so, you must render `config/sam.conf` and then do not populate ENV variables
-    * for `src/main/resources/sam.conf`.
+  /** Loads all the configs for the Sam App. All values defined in `src/main/resources/sam.conf` will take precedence over any other configs. In this way, we
+    * can still use configs rendered by `firecloud-develop` that render to `config/sam.conf` if we want. To do so, you must render `config/sam.conf` and then do
+    * not populate ENV variables for `src/main/resources/sam.conf`.
     *
-    * The ENV variables that you need to populate can be found in `src/main/resources/sam.conf` variable substitutions.
-    * To run Sam locally, you can `source env/local.env` and all required ENV variables will be populated with with
-    * default values.
+    * The ENV variables that you need to populate can be found in `src/main/resources/sam.conf` variable substitutions. To run Sam locally, you can `source
+    * env/local.env` and all required ENV variables will be populated with with default values.
     */
   def load: AppConfig = {
     // Start by parsing sam config files (like 'sam.conf') from wherever they live on the classpath
