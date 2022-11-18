@@ -16,7 +16,6 @@ import org.mockito.Mockito
 import org.mockito.Mockito._
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.exceptions.TestFailedException
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
@@ -93,13 +92,6 @@ class UserServiceSpec
     verify(dirDAO).createUser(defaultUser, samRequestContext)
   }
 
-  it should "make sure the user email is valid" in {
-    // .futureValue wraps the actually-thrown exception
-    intercept[TestFailedException] {
-      service.createUser(defaultUser.copy(email = WorkbenchEmail(s"foo@$blockedDomain")), samRequestContext).futureValue
-    }.getCause.asInstanceOf[WorkbenchExceptionWithErrorReport].errorReport.message should be(s"email domain not permitted [foo@$blockedDomain]")
-  }
-
   it should "validate the email address of the new user" in {
     service.createUser(defaultUser, samRequestContext).futureValue
     verify(service).validateEmailAddress(defaultUser.email, Seq(blockedDomain))
@@ -132,21 +124,35 @@ class UserServiceSpec
     verify(dirDAO).addGroupMember(allUsersGroup.id, enabledUser.id, samRequestContext)
   }
 
-  "UserService.getUserStatus" should "get user status for a user that exists" in {
+  "UserService.getUserStatus" should "get user status for a user that exists and is enabled" in {
     // get previously mocked user
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
   }
 
-  it should "return userDetailsOnly status when told to" in {
-    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).futureValue
-    statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
+  it should "set UserStatus.ldap and UserStatus.adminEnabled to false if user is disabled" in {
+    val mockTos = mock[TosService](RETURNS_SMART_NULLS)
+    val localMockUserService = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTos))
+
+    // TODO: This setup is a little wonky, some of these variables can change and some need to be specifically set.  Can we make this easier to grok?
+    when(mockTos.getTosStatus(defaultUser.id, samRequestContext)).thenReturn(IO(Option(false)))
+    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(Some(defaultUser)))
+    when(dirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(false))
+
+    val status = localMockUserService.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
+    status shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("tosAccepted" -> false, "google" -> true, "ldap" -> false, "allUsersGroup" -> true, "adminEnabled" -> false)))
   }
 
   it should "return no status for a user that does not exist" in {
     // user doesn't exist yet
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
     service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue shouldBe None
+  }
+
+
+  it should "return userDetailsOnly status when told to" in {
+    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).futureValue
+    statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
   }
 
   "UserService" should "reject blocked domain" in {
