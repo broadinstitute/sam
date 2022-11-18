@@ -6,16 +6,20 @@ import bio.terra.cloudres.azure.resourcemanager.msi.data.CreateUserAssignedManag
 import cats.effect.IO
 import com.azure.core.management.Region
 import com.azure.core.util.Context
-import com.azure.resourcemanager.resources.models.{GenericResource, ResourceGroup}
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
+import com.azure.resourcemanager.managedapplications.models.Application
+import com.azure.resourcemanager.resources.ResourceManager
+import com.azure.resourcemanager.resources.models.ResourceGroup
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.jdk.CollectionConverters._
 
-class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO) {
+class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO) {
 
   // Static region in which to create all managed identities.
   // Managed identities are regional resources in Azure but they can be used across
@@ -25,6 +29,28 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO) {
 
   // Tag on the MRG to specify the Sam billing-profile id
   private val billingProfileTag = "terra.billingProfileId"
+
+  private val managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden,
+    "Specified manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
+      "associated to an application, the application's plan is not supported or the user is not listed as authorized."))
+
+  def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] = {
+    for {
+      _ <- validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+
+      existingByCoords <- azureManagedResourceGroupDAO.getManagedResourceGroupByCoordinates(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+      _ <- IO.raiseWhen(existingByCoords.isDefined)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"managed resource group ${managedResourceGroup.managedResourceGroupCoordinates} already exists"))
+      )
+
+      existingByBillingProfile <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(managedResourceGroup.billingProfileId, samRequestContext)
+      _ <- IO.raiseWhen(existingByBillingProfile.isDefined)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"managed resource group for ${managedResourceGroup.billingProfileId} already exists"))
+      )
+
+      _ <- azureManagedResourceGroupDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext)
+    } yield ()
+  }
 
   /** Looks up a pet managed identity from the database, or creates it if one does not exist.
     */
@@ -54,7 +80,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO) {
       samRequestContext: SamRequestContext
   ): IO[(PetManagedIdentity, Boolean)] =
     for {
-      _ <- validateManagedResourceGroup(request)
+      _ <- validateManagedResourceGroup(request.toManagedResourceGroupCoordinates, samRequestContext, false)
       manager <- crlService.buildMsiManager(request.tenantId, request.subscriptionId)
       petName = toManagedIdentityNameFromUser(user)
       context = managedIdentityContext(request, petName)
@@ -90,43 +116,71 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO) {
       mrg <- IO(resourceManager.resourceGroups().getByName(request.managedResourceGroupName.value)).attempt
     } yield mrg.toOption.flatMap(getBillingProfileFromTag)
 
-  /** Validates a managed resource group. This is only called at managed identity creation time. Algorithm:
-    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app as the publisher 4. Get the managed app "plan" id 4.
-    *      Validate the plan id matches the configured value
+  /** Validates a managed resource group. Algorithm:
+    *   1. Resolve the MRG in Azure
+    *   2. Get the managed app id from the MRG
+    *   3. Resolve the managed app
+    *   4. Get the managed app "plan" name and publisher
+    *   5. Validate the plan name and publisher matches a configured value
+    *   6. Validate that the caller is on the list of authorized users for the app
     */
-  private def validateManagedResourceGroup(request: GetOrCreatePetManagedIdentityRequest): IO[Unit] =
+  private def validateManagedResourceGroup(mrgCoords: ManagedResourceGroupCoordinates, samRequestContext: SamRequestContext, validateUser: Boolean = true): IO[Unit] = {
+    traceIOWithContext("validateManagedResourceGroup", samRequestContext) { _ =>
+      for {
+        resourceManager <- crlService.buildResourceManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
+        mrg <- lookupMrg(mrgCoords, resourceManager)
+        appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
+        appsInSubscription <- IO(appManager.applications().list().asScala)
+        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
+        plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
+        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
+      } yield ()
+    }
+  }
+
+  /**
+    * The users authorized to setup a managed application are stored as a comma separated list of email addresses
+    * in the parameters of the application. The azure api is java so this code needs to deal with possible nulls
+    * and java Maps. Also the application parameters are untyped, fun.
+    * @param app
+    * @param plan
+    * @param samRequestContext
+    * @return
+    */
+  private def validateAuthorizedAppUser(app: Application, plan: ManagedAppPlan, samRequestContext: SamRequestContext): IO[Unit] = {
+    val authorizedUsersValue = for {
+      parametersObj <- Option(app.parameters()) if parametersObj.isInstanceOf[java.util.Map[_, _]]
+      parametersMap = parametersObj.asInstanceOf[java.util.Map[_, _]]
+      paramValuesObj <- Option(parametersMap.get(plan.authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
+      paramValues = paramValuesObj.asInstanceOf[java.util.Map[_, _]]
+      authorizedUsersValue <- Option(paramValues.get("value"))
+    } yield authorizedUsersValue.toString
+
     for {
-      resourceManager <- crlService.buildResourceManager(request.tenantId, request.subscriptionId)
-      mrg <- IO(resourceManager.resourceGroups().getByName(request.managedResourceGroupName.value)).attempt
-      managedByOpt = mrg.toOption.flatMap(getManagedBy)
-      managedBy <- IO.fromOption(managedByOpt)(
-        new WorkbenchExceptionWithErrorReport(
-          ErrorReport(
-            StatusCodes.Forbidden,
-            s"Validation failed: could not retrieve managed app for managed resource group ${request.managedResourceGroupName.value}"
-          )
-        )
+      authorizedUsersString <- IO.fromOption(authorizedUsersValue)(managedAppValidationFailure)
+      user <- IO.fromOption(samRequestContext.samUser)(
+        // this exception is different from the others because it is a coding bug, the user should always be present here
+        new WorkbenchException("user is missing in call to validateAuthorizedAppUser")
       )
-      managedApp <- IO(resourceManager.genericResources().getById(managedBy)).attempt
-      planIdOpt = managedApp.toOption.flatMap(getPlanId)
-      planId <- IO.fromOption(planIdOpt)(
-        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "Validation failed: could not retrieve plan for managed app"))
-      )
-      _ <- IO.raiseUnless(crlService.getManagedAppPlanIds.contains(planId))(
-        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "Validation failed: wrong managed app plan"))
-      )
+      authorizedUsers = authorizedUsersString.split(",").map(_.trim.toLowerCase)
+      _ <- IO.raiseUnless(authorizedUsers.contains(user.email.value.toLowerCase))(managedAppValidationFailure)
     } yield ()
+  }
 
-  /** Null-safe get managedBy field from a ResourceGroup. */
-  private def getManagedBy(mrg: ResourceGroup): Option[String] =
-    for {
-      im <- Option(mrg.innerModel())
-      mb <- Option(im.managedBy())
-    } yield mb
+  private def validatePlan(managedApp: Application, allPlans: Seq[ManagedAppPlan]) = {
+    val maybePlan = for {
+      applicationPlan <- Option(managedApp.plan())
+      matchingPlan <- allPlans.find(p => p.name == applicationPlan.name() && p.publisher == applicationPlan.publisher())
+    } yield matchingPlan
 
-  /** Null-safe get planId from a resource. */
-  private def getPlanId(resource: GenericResource): Option[String] =
-    Option(resource.plan()).map(_.name())
+    IO.fromOption(maybePlan)(managedAppValidationFailure)
+  }
+
+  private def lookupMrg(mrgCoords: ManagedResourceGroupCoordinates, resourceManager: ResourceManager) = {
+    IO(resourceManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value)).handleErrorWith {
+      case t: Throwable => IO.raiseError(managedAppValidationFailure)
+    }
+  }
 
   /** Null-safe get billing profile tag from a ResourceGroup. */
   private def getBillingProfileFromTag(mrg: ResourceGroup): Option[ResourceId] =

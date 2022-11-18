@@ -39,7 +39,9 @@ final case class ManagedResourceGroup(
     billingProfileId: BillingProfileId
 )
 
-final case class GetOrCreatePetManagedIdentityRequest(tenantId: TenantId, subscriptionId: SubscriptionId, managedResourceGroupName: ManagedResourceGroupName)
+final case class GetOrCreatePetManagedIdentityRequest(tenantId: TenantId, subscriptionId: SubscriptionId, managedResourceGroupName: ManagedResourceGroupName) {
+  def toManagedResourceGroupCoordinates = ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName)
+}
 
 final case class PetManagedIdentityId(
     user: WorkbenchUserId,

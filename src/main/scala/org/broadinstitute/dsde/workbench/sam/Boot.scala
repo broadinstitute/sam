@@ -93,7 +93,7 @@ object Boot extends IOApp with LazyLogging {
 
   private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
     for {
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO) <- createDAOs(
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO, azureManagedResourceGroupDAO) <- createDAOs(
         appConfig,
         appConfig.samDatabaseConfig.samWrite,
         appConfig.samDatabaseConfig.samRead
@@ -101,7 +101,7 @@ object Boot extends IOApp with LazyLogging {
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _) <- createDAOs(
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _, _) <- createDAOs(
         appConfig,
         appConfig.samDatabaseConfig.samBackground,
         appConfig.samDatabaseConfig.samBackground
@@ -133,7 +133,7 @@ object Boot extends IOApp with LazyLogging {
           extraAuthParams = Some("prompt=login")
         )
       )
-    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, oauth2Config)(
+    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, azureManagedResourceGroupDAO, oauth2Config)(
       actorSystem,
       openTelemetry
     )
@@ -185,7 +185,7 @@ object Boot extends IOApp with LazyLogging {
       appConfig: AppConfig,
       writeDbConfig: DatabaseConfig,
       readDbConfig: DatabaseConfig
-  ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO])] =
+  ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO], AzureManagedResourceGroupDAO)] =
     for {
       writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbConfig)
       readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbConfig)
@@ -193,7 +193,8 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
       accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)
       postgresDistributedLockDAO = new PostgresDistributedLockDAO[IO](writeDbRef, readDbRef, appConfig.distributedLockConfig)
-    } yield (directoryDAO, accessPolicyDAO, postgresDistributedLockDAO)
+      azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(writeDbRef, readDbRef)
+    } yield (directoryDAO, accessPolicyDAO, postgresDistributedLockDAO, azureManagedResourceGroupDAO)
 
   private[sam] def createGoogleCloudExt(
       accessPolicyDAO: AccessPolicyDAO,
@@ -305,6 +306,7 @@ object Boot extends IOApp with LazyLogging {
       cloudExtensionsInitializer: CloudExtensionsInitializer,
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: PostgresDirectoryDAO,
+      azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO,
       oauth2Config: OpenIDConnectConfiguration
   )(implicit actorSystem: ActorSystem, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
@@ -334,7 +336,7 @@ object Boot extends IOApp with LazyLogging {
       )
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
     val azureService = config.azureServicesConfig.map { config =>
-      new AzureService(new CrlService(config), directoryDAO)
+      new AzureService(new CrlService(config), directoryDAO, azureManagedResourceGroupDAO)
     }
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>

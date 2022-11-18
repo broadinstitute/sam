@@ -9,6 +9,7 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicyMembership, SamResourceTypes, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
@@ -70,8 +71,8 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   it should "return 403 if user has access to the billing profile but the MRG could not be validated" in {
     // Change the managed app plan
     val mockCrlService = MockCrlService()
-    when(mockCrlService.getManagedAppPlanIds)
-      .thenReturn(Seq("some-other-plan", "yet-another-plan"))
+    when(mockCrlService.getManagedAppPlans)
+      .thenReturn(Seq(ManagedAppPlan("some-other-plan", "publisher", "auth"), ManagedAppPlan("yet-another-plan", "publisher", "auth")))
     val samRoutes = genSamRoutes(crlService = Some(mockCrlService))
 
     // User has no access

@@ -124,6 +124,8 @@ object Dependencies {
 
   val cloudResourceLib: ModuleID =
     "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
+  val azureManagedApplications: ModuleID =
+    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
@@ -174,6 +176,7 @@ object Dependencies {
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres,
-    cloudResourceLib
+    cloudResourceLib,
+    azureManagedApplications
   ) ++ openCensusDependencies
 }

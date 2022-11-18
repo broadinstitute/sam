@@ -30,10 +30,10 @@ object Generator {
   val genExternalId: Gen[Either[GoogleSubjectId, AzureB2CId]] = Gen.either(genGoogleSubjectId, genAzureB2CId)
   val genServiceAccountSubjectId: Gen[ServiceAccountSubjectId] = genGoogleSubjectId.map(x => ServiceAccountSubjectId(x.value))
   val genOAuth2BearerToken: Gen[OAuth2BearerToken] = Gen.alphaStr.map(x => OAuth2BearerToken("s" + x))
-  val genTenantId: Gen[TenantId] = Gen.alphaStr.map(TenantId)
-  val genSubscriptionId: Gen[SubscriptionId] = Gen.alphaStr.map(SubscriptionId)
+  val genTenantId: Gen[TenantId] = Gen.uuid.map(_.toString).map(TenantId)
+  val genSubscriptionId: Gen[SubscriptionId] = Gen.uuid.map(_.toString).map(SubscriptionId)
   val genManagedResourceGroupName: Gen[ManagedResourceGroupName] = Gen.alphaStr.map(ManagedResourceGroupName)
-  val genBillingProfileId: Gen[BillingProfileId] = Gen.alphaStr.map(BillingProfileId)
+  val genBillingProfileId: Gen[BillingProfileId] = Gen.uuid.map(_.toString).map(BillingProfileId)
 
   val genManagedResourceGroupCoordinates: Gen[ManagedResourceGroupCoordinates] = for {
     tenantId <- genTenantId
