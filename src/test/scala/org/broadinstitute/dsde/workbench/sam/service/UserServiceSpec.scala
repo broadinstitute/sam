@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito
 import org.mockito.Mockito._
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
@@ -50,6 +51,7 @@ class UserServiceSpec
   var serviceTosEnabled: UserService = _
   var tosServiceEnabled: TosService = _
   var googleExtensions: GoogleExtensions = _
+  var mockDirDAO: DirectoryDAO = _
   val blockedDomain = "blocked.domain.com"
 
   before {
@@ -71,19 +73,8 @@ class UserServiceSpec
     service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)
     tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
-  }
 
-  protected def clearDatabase(): Unit =
-    TestSupport.truncateAll
-
-  "UserService createUser" should "call DirectoryDAO.createUser" in {
-    // 1. validate email
-    // 2. registerUser (creates user)
-    // 3. enable user
-    // 4. Add to all users group
-    // 5. load user status
-
-    val mockDirDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    mockDirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val allUsersGroup = BasicWorkbenchGroup(WorkbenchGroupName("All_Users"), Set(), WorkbenchEmail("all_users@fake.com"))
     val enabledUser = defaultUser.copy(enabled = true)
 
@@ -98,10 +89,34 @@ class UserServiceSpec
 
     when(googleExtensions.getOrCreateAllUsersGroup(mockDirDAO, samRequestContext))
       .thenReturn(Future.successful(allUsersGroup))
+  }
 
+  protected def clearDatabase(): Unit =
+    TestSupport.truncateAll
+
+  "UserService createUser" should "create a new user record in the database" in {
+    // 1. validate email
+    // 2. registerUser (creates user)
+    // 3. enable user
+    // 4. Add to all users group
+    // 5. load user status
     val userService = new UserService(mockDirDAO, googleExtensions, Seq(), tos)
     userService.createUser(defaultUser, samRequestContext).futureValue
     verify(mockDirDAO).createUser(defaultUser, samRequestContext)
+  }
+
+  it should "throw a runtime exception if an exception is thrown when creating a new user record in the database" in {
+    when(mockDirDAO.createUser(defaultUser, samRequestContext)).thenThrow(new RuntimeException("bummer"))
+    val userService = new UserService(mockDirDAO, googleExtensions, Seq(), tos)
+    intercept[RuntimeException] {
+      userService.createUser(defaultUser, samRequestContext).futureValue
+    }
+  }
+
+  it should "make sure new users are registered" in {
+    val userService = Mockito.spy(new UserService(mockDirDAO, googleExtensions, Seq(), tos))
+    userService.createUser(defaultUser, samRequestContext).futureValue
+    verify(userService).registerUser(defaultUser, samRequestContext)
   }
 
   "UserService" should "reject blocked domain" in {
