@@ -52,10 +52,10 @@ class UserServiceSpec
   var googleExtensions: GoogleExtensions = _
   var dirDAO: DirectoryDAO = _
   val blockedDomain = "blocked.domain.com"
+  val enabledUser: SamUser = defaultUser.copy(enabled = true)
 
   before {
     dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
-    val enabledUser = defaultUser.copy(enabled = true)
     val allUsersGroup = BasicWorkbenchGroup(WorkbenchGroupName("All_Users"), Set(), WorkbenchEmail("all_users@fake.com"))
 
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(Some(enabledUser)))
@@ -79,7 +79,7 @@ class UserServiceSpec
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
     tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)
+    service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos))
     tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
   }
@@ -106,10 +106,19 @@ class UserServiceSpec
     }
   }
 
-  it should "make sure new users are registered" in {
-    val userService = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(), tos))
-    userService.createUser(defaultUser, samRequestContext).futureValue
-    verify(userService).registerUser(defaultUser, samRequestContext)
+  it should "register the new user" in {
+    service.createUser(defaultUser, samRequestContext).futureValue
+    verify(service).registerUser(defaultUser, samRequestContext)
+  }
+
+  it should "enable the new user in the Sam database" in {
+    service.createUser(defaultUser, samRequestContext).futureValue
+    verify(dirDAO).enableIdentity(defaultUser.id, samRequestContext)
+  }
+
+  it should "enable the new user on Google" in {
+    service.createUser(defaultUser, samRequestContext).futureValue
+    verify(googleExtensions).onUserEnable(enabledUser, samRequestContext)
   }
 
   "UserService.getUserStatus" should "get user status for a user that exists" in {
