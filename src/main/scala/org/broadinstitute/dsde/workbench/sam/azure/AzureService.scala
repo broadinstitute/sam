@@ -30,27 +30,43 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   // Tag on the MRG to specify the Sam billing-profile id
   private val billingProfileTag = "terra.billingProfileId"
 
-  private val managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden,
-    "Specified manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
-      "associated to an application, the application's plan is not supported or the user is not listed as authorized."))
+  /** This is specifically a val so that the stack trace does not leak information about why this error was thrown. Because it is a val, the stack trace is
+    * constant. If it were a def, the stack trace would include the line number where the error was thrown.
+    */
+  private val managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "Specified manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
+        "associated to an application, the application's plan is not supported or the user is not listed as authorized."
+    )
+  )
 
-  def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] = {
+  def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
 
-      existingByCoords <- azureManagedResourceGroupDAO.getManagedResourceGroupByCoordinates(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+      existingByCoords <- azureManagedResourceGroupDAO.getManagedResourceGroupByCoordinates(
+        managedResourceGroup.managedResourceGroupCoordinates,
+        samRequestContext
+      )
       _ <- IO.raiseWhen(existingByCoords.isDefined)(
-        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"managed resource group ${managedResourceGroup.managedResourceGroupCoordinates} already exists"))
+        new WorkbenchExceptionWithErrorReport(
+          ErrorReport(StatusCodes.Conflict, s"managed resource group ${managedResourceGroup.managedResourceGroupCoordinates} already exists")
+        )
       )
 
-      existingByBillingProfile <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(managedResourceGroup.billingProfileId, samRequestContext)
+      existingByBillingProfile <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(
+        managedResourceGroup.billingProfileId,
+        samRequestContext
+      )
       _ <- IO.raiseWhen(existingByBillingProfile.isDefined)(
-        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"managed resource group for ${managedResourceGroup.billingProfileId} already exists"))
+        new WorkbenchExceptionWithErrorReport(
+          ErrorReport(StatusCodes.Conflict, s"managed resource group for ${managedResourceGroup.billingProfileId} already exists")
+        )
       )
 
       _ <- azureManagedResourceGroupDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext)
     } yield ()
-  }
 
   /** Looks up a pet managed identity from the database, or creates it if one does not exist.
     */
@@ -117,14 +133,14 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
     } yield mrg.toOption.flatMap(getBillingProfileFromTag)
 
   /** Validates a managed resource group. Algorithm:
-    *   1. Resolve the MRG in Azure
-    *   2. Get the managed app id from the MRG
-    *   3. Resolve the managed app
-    *   4. Get the managed app "plan" name and publisher
-    *   5. Validate the plan name and publisher matches a configured value
-    *   6. Validate that the caller is on the list of authorized users for the app
+    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Get the managed app "plan" name and publisher 5.
+    *      Validate the plan name and publisher matches a configured value 6. Validate that the caller is on the list of authorized users for the app
     */
-  private def validateManagedResourceGroup(mrgCoords: ManagedResourceGroupCoordinates, samRequestContext: SamRequestContext, validateUser: Boolean = true): IO[Unit] = {
+  private def validateManagedResourceGroup(
+      mrgCoords: ManagedResourceGroupCoordinates,
+      samRequestContext: SamRequestContext,
+      validateUser: Boolean = true
+  ): IO[Unit] =
     traceIOWithContext("validateManagedResourceGroup", samRequestContext) { _ =>
       for {
         resourceManager <- crlService.buildResourceManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
@@ -136,12 +152,9 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
       } yield ()
     }
-  }
 
-  /**
-    * The users authorized to setup a managed application are stored as a comma separated list of email addresses
-    * in the parameters of the application. The azure api is java so this code needs to deal with possible nulls
-    * and java Maps. Also the application parameters are untyped, fun.
+  /** The users authorized to setup a managed application are stored as a comma separated list of email addresses in the parameters of the application. The
+    * azure api is java so this code needs to deal with possible nulls and java Maps. Also the application parameters are untyped, fun.
     * @param app
     * @param plan
     * @param samRequestContext
@@ -176,11 +189,10 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
     IO.fromOption(maybePlan)(managedAppValidationFailure)
   }
 
-  private def lookupMrg(mrgCoords: ManagedResourceGroupCoordinates, resourceManager: ResourceManager) = {
-    IO(resourceManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value)).handleErrorWith {
-      case t: Throwable => IO.raiseError(managedAppValidationFailure)
+  private def lookupMrg(mrgCoords: ManagedResourceGroupCoordinates, resourceManager: ResourceManager) =
+    IO(resourceManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value)).handleErrorWith { case t: Throwable =>
+      IO.raiseError(managedAppValidationFailure)
     }
-  }
 
   /** Null-safe get billing profile tag from a ResourceGroup. */
   private def getBillingProfileFromTag(mrg: ResourceGroup): Option[ResourceId] =

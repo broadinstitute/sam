@@ -10,7 +10,6 @@ import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.msi.models.{Identities, Identity}
 import com.azure.resourcemanager.msi.models.Identity.DefinitionStages
 import com.azure.resourcemanager.resources.ResourceManager
-import com.azure.resourcemanager.resources.fluent.models.ResourceGroupInner
 import com.azure.resourcemanager.resources.models.{ResourceGroup, ResourceGroups}
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, SamResourceTypes, SamUser}
@@ -24,12 +23,12 @@ import scala.jdk.CollectionConverters._
 object MockCrlService extends MockitoSugar {
   val mockMrgName = ManagedResourceGroupName("test-mrg")
   val mockSamSpendProfileResource = FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId("test-spend-profile"))
-  val mockPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
+  val defaultManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
 
-  def apply(user: Option[SamUser] = None) = {
+  def apply(user: Option[SamUser] = None, mrgName: ManagedResourceGroupName = mockMrgName, managedAppPlan: ManagedAppPlan = defaultManagedAppPlan) = {
     val mockCrlService = mock[CrlService](RETURNS_SMART_NULLS)
-    val mockRm = mockResourceManager
-    val mockAppMgr = mockApplicationManager(user)
+    val mockRm = mockResourceManager(mrgName)
+    val mockAppMgr = mockApplicationManager(user, mrgName, managedAppPlan)
 
     when(mockCrlService.buildResourceManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockRm))
@@ -39,7 +38,7 @@ object MockCrlService extends MockitoSugar {
       .thenReturn(IO.pure(mockMsi))
 
     when(mockCrlService.getManagedAppPlans)
-      .thenReturn(Seq(mockPlan))
+      .thenReturn(Seq(managedAppPlan))
 
     when(mockCrlService.buildApplicationManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockAppMgr))
@@ -47,24 +46,18 @@ object MockCrlService extends MockitoSugar {
     mockCrlService
   }
 
-  private def mockResourceManager: ResourceManager = {
+  private def mockResourceManager(mrgName: ManagedResourceGroupName): ResourceManager = {
     // Mock get resource group
-    val mockResourceGroupInner = mock[ResourceGroupInner](RETURNS_SMART_NULLS)
-    when(mockResourceGroupInner.managedBy())
-      .thenReturn("terra")
-
     val mockResourceGroup = mock[ResourceGroup](RETURNS_SMART_NULLS)
     when(mockResourceGroup.tags())
       .thenReturn(Map("terra.billingProfileId" -> mockSamSpendProfileResource.resourceId.value).asJava)
-    when(mockResourceGroup.innerModel())
-      .thenReturn(mockResourceGroupInner)
     when(mockResourceGroup.id())
-      .thenReturn(mockMrgName.value)
+      .thenReturn(mrgName.value)
 
     val mockResourceGroups = mock[ResourceGroups](RETURNS_SMART_NULLS)
     when(mockResourceGroups.getByName(anyString))
       .thenThrow(new RuntimeException("resource group not found"))
-    when(mockResourceGroups.getByName(ArgumentMatchers.eq(mockMrgName.value)))
+    when(mockResourceGroups.getByName(ArgumentMatchers.eq(mrgName.value)))
       .thenReturn(mockResourceGroup)
 
     // Mock resource manager
@@ -109,13 +102,14 @@ object MockCrlService extends MockitoSugar {
     mockMsiManager
   }
 
-  private def mockApplicationManager(user: Option[SamUser]): ApplicationManager = {
-    val appParameters = user.map(u => Map[String, Map[String, String]](mockPlan.authorizedUserKey -> Map("value" -> u.email.value)).view.mapValues(_.asJava).toMap.asJava)
+  private def mockApplicationManager(user: Option[SamUser], mrgName: ManagedResourceGroupName, managedAppPlan: ManagedAppPlan): ApplicationManager = {
+    val appParameters =
+      user.map(u => Map[String, Map[String, String]](managedAppPlan.authorizedUserKey -> Map("value" -> u.email.value)).view.mapValues(_.asJava).toMap.asJava)
     val mockApplication = mock[Application](RETURNS_SMART_NULLS)
     when(mockApplication.managedResourceGroupId())
-      .thenReturn(mockMrgName.value)
+      .thenReturn(mrgName.value)
     when(mockApplication.plan())
-      .thenReturn(new Plan().withName(mockPlan.name).withPublisher(mockPlan.publisher))
+      .thenReturn(new Plan().withName(managedAppPlan.name).withPublisher(managedAppPlan.publisher))
     when(mockApplication.parameters())
       .thenReturn(appParameters.orNull)
 

@@ -133,7 +133,14 @@ object Boot extends IOApp with LazyLogging {
           extraAuthParams = Some("prompt=login")
         )
       )
-    } yield createAppDependenciesWithSamRoutes(appConfig, cloudExtensionsInitializer, foregroundAccessPolicyDAO, foregroundDirectoryDAO, azureManagedResourceGroupDAO, oauth2Config)(
+    } yield createAppDependenciesWithSamRoutes(
+      appConfig,
+      cloudExtensionsInitializer,
+      foregroundAccessPolicyDAO,
+      foregroundDirectoryDAO,
+      azureManagedResourceGroupDAO,
+      oauth2Config
+    )(
       actorSystem,
       openTelemetry
     )
