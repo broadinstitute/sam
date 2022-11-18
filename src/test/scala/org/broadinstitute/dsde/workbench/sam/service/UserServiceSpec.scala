@@ -16,6 +16,7 @@ import org.mockito.Mockito
 import org.mockito.Mockito._
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.exceptions.TestFailedException
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
@@ -53,10 +54,10 @@ class UserServiceSpec
   var dirDAO: DirectoryDAO = _
   val blockedDomain = "blocked.domain.com"
   val enabledUser: SamUser = defaultUser.copy(enabled = true)
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(WorkbenchGroupName("All_Users"), Set(), WorkbenchEmail("all_users@fake.com"))
 
   before {
     dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
-    val allUsersGroup = BasicWorkbenchGroup(WorkbenchGroupName("All_Users"), Set(), WorkbenchEmail("all_users@fake.com"))
 
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(Some(enabledUser)))
     when(dirDAO.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(None))
@@ -87,7 +88,7 @@ class UserServiceSpec
   protected def clearDatabase(): Unit =
     TestSupport.truncateAll
 
-  "UserService createUser" should "create a new user record in the database" in {
+  "UserService.createUser" should "create a new user record in the database" in {
     // 1. validate email
     // 2. registerUser (creates user)
     // 3. enable user
@@ -96,6 +97,13 @@ class UserServiceSpec
     val userService = new UserService(dirDAO, googleExtensions, Seq(), tos)
     userService.createUser(defaultUser, samRequestContext).futureValue
     verify(dirDAO).createUser(defaultUser, samRequestContext)
+  }
+
+  it should "make sure the user email is valid" in {
+    // .futureValue wraps the actually-thrown exception
+    intercept[TestFailedException] {
+      service.createUser(defaultUser.copy(email = WorkbenchEmail(s"foo@$blockedDomain")), samRequestContext).futureValue
+    }.getCause.asInstanceOf[WorkbenchExceptionWithErrorReport].errorReport.message should be(s"email domain not permitted [foo@$blockedDomain]")
   }
 
   it should "throw a runtime exception if an exception is thrown when creating a new user record in the database" in {
@@ -119,6 +127,11 @@ class UserServiceSpec
   it should "enable the new user on Google" in {
     service.createUser(defaultUser, samRequestContext).futureValue
     verify(googleExtensions).onUserEnable(enabledUser, samRequestContext)
+  }
+
+  it should "add the new user the All_Users group in the Sam database" in {
+    service.createUser(defaultUser, samRequestContext).futureValue
+    verify(dirDAO).addGroupMember(allUsersGroup.id, enabledUser.id, samRequestContext)
   }
 
   "UserService.getUserStatus" should "get user status for a user that exists" in {
