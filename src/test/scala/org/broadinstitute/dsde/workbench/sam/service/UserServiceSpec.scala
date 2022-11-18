@@ -89,13 +89,7 @@ class UserServiceSpec
     TestSupport.truncateAll
 
   "UserService.createUser" should "create a new user record in the database" in {
-    // 1. validate email
-    // 2. registerUser (creates user)
-    // 3. enable user
-    // 4. Add to all users group
-    // 5. load user status
-    val userService = new UserService(dirDAO, googleExtensions, Seq(), tos)
-    userService.createUser(defaultUser, samRequestContext).futureValue
+    service.createUser(defaultUser, samRequestContext).futureValue
     verify(dirDAO).createUser(defaultUser, samRequestContext)
   }
 
@@ -106,11 +100,15 @@ class UserServiceSpec
     }.getCause.asInstanceOf[WorkbenchExceptionWithErrorReport].errorReport.message should be(s"email domain not permitted [foo@$blockedDomain]")
   }
 
+  it should "validate the email address of the new user" in {
+    service.createUser(defaultUser, samRequestContext).futureValue
+    verify(service).validateEmailAddress(defaultUser.email, Seq(blockedDomain))
+  }
+
   it should "throw a runtime exception if an exception is thrown when creating a new user record in the database" in {
     when(dirDAO.createUser(defaultUser, samRequestContext)).thenThrow(new RuntimeException("bummer"))
-    val userService = new UserService(dirDAO, googleExtensions, Seq(), tos)
     intercept[RuntimeException] {
-      userService.createUser(defaultUser, samRequestContext).futureValue
+      service.createUser(defaultUser, samRequestContext).futureValue
     }
   }
 
@@ -498,7 +496,7 @@ class UserServiceSpec
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(UserService.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isRight)
+      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isRight)
     }
   }
 
@@ -513,7 +511,7 @@ class UserServiceSpec
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(UserService.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
@@ -534,7 +532,7 @@ class UserServiceSpec
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(UserService.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
@@ -548,13 +546,13 @@ class UserServiceSpec
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(UserService.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
   it should "reject blocked email domain" in {
-    assert(UserService.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
-    assert(UserService.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
   }
 }
 
