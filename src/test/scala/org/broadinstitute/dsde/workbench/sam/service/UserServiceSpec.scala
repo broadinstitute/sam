@@ -62,9 +62,11 @@ class UserServiceSpec
     when(dirDAO.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(None))
     when(dirDAO.loadSubjectFromEmail(defaultUser.email, samRequestContext)).thenReturn(IO(None))
     when(dirDAO.createUser(defaultUser, samRequestContext)).thenReturn(IO(enabledUser))
+    when(dirDAO.deleteUser(defaultUser.id, samRequestContext)).thenReturn(IO(()))
     when(dirDAO.enableIdentity(defaultUser.id, samRequestContext)).thenReturn(IO(()))
     when(dirDAO.disableIdentity(defaultUser.id, samRequestContext)).thenReturn(IO(()))
     when(dirDAO.addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
+    when(dirDAO.removeGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
     when(dirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
     when(dirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(true))
 
@@ -271,27 +273,22 @@ class UserServiceSpec
     status shouldBe None
   }
 
-  "UserService" should "reject blocked domain" in {
-    intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createUser(defaultUser.copy(email = WorkbenchEmail(s"user@$blockedDomain")), samRequestContext))
-    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
-  }
-
-  it should "delete a user" in {
-    // assume(databaseEnabled, databaseEnabledClue)
-
-    // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-
-    // delete the user
+  "deleteUser" should "remove the user from the All_Users group" in {
     service.deleteUser(defaultUser.id, samRequestContext).futureValue
-
-    // check
-    dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
+    verify(dirDAO).removeGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)
   }
 
-  it should "generate unique identifier properly" in {
+  it should "delete the user on google" in {
+    service.deleteUser(defaultUser.id, samRequestContext).futureValue
+    verify(googleExtensions).onUserDelete(defaultUser.id, samRequestContext)
+  }
+
+  it should "delete the user from the database" in {
+    service.deleteUser(defaultUser.id, samRequestContext).futureValue
+    verify(dirDAO).deleteUser(defaultUser.id, samRequestContext)
+  }
+
+  "UserService" should "generate unique identifier properly" in {
     val current = 1534253386722L
     val res = UserService.genWorkbenchUserId(current).value
     res.length shouldBe 21
@@ -570,6 +567,12 @@ class UserServiceSpec
     forAll { email: WorkbenchEmail =>
       assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isRight)
     }
+  }
+
+  it should "reject blocked domain" in {
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createUser(defaultUser.copy(email = WorkbenchEmail(s"user@$blockedDomain")), samRequestContext))
+    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
   it should "reject email addresses missing @" in {
