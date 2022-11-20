@@ -158,6 +158,13 @@ class UserServiceSpec
     status.value.enabled shouldNot contain("adminEnabled")
   }
 
+  it should "not return UserStatus.tosAccepted or UserStatus.adminEnabled if user's TOS status is None" in {
+    when(mockTosService.getTosStatus(enabledUser.id, samRequestContext)).thenReturn(IO(None))
+    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).futureValue
+    status.value.enabled shouldNot contain("tosAccepted")
+    status.value.enabled shouldNot contain("adminEnabled")
+  }
+
   it should "return no status for a user that does not exist" in {
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
     service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue shouldBe None
@@ -180,33 +187,45 @@ class UserServiceSpec
     }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
-  it should "get user status info" in {
-    // assume(databaseEnabled, databaseEnabledClue)
-
-    // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-
-    val savedUser = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().value
-
-    // get user status info
-    val info = service.getUserStatusInfo(savedUser, samRequestContext).unsafeRunSync()
-    info shouldBe UserStatusInfo(savedUser.id.value, savedUser.email.value, true, true)
+  "UserService.getUserStatusDiagnostics" should "return UserStatusDiagnostics for a user that exists and is enabled" in {
+    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
+    status shouldBe Some(UserStatusDiagnostics(true, true, true, Some(true), true))
   }
 
-  it should "get user status diagnostics" in {
-    // assume(databaseEnabled, databaseEnabledClue)
+  it should "return UserStatusDiagnostics.enabled and UserStatusDiagnostics.adminEnabled as false if user is disabled" in {
+    when(dirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(false))
+    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
+    status.value.enabled shouldBe false
+    status.value.adminEnabled shouldBe false
+  }
 
-    // user doesn't exist yet
+  it should "return UserStatusDiagnostics.inAllUsersGroup as false if user is not in the All_Users group" in {
+    when(dirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(false))
+    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
+    status.value.inAllUsersGroup shouldBe false
+  }
+
+  it should "return UserStatusDiagnostics.inGoogleProxyGroup as false if user is not a member of their proxy group on Google" in {
+    when(googleExtensions.getUserStatus(enabledUser)).thenReturn(Future.successful(false))
+    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).futureValue
+    status.value.inGoogleProxyGroup shouldBe false
+  }
+
+  it should "return UserStatusDiagnostics.tosAccepted as false if user's TOS status is false" in {
+    when(mockTosService.getTosStatus(enabledUser.id, samRequestContext)).thenReturn(IO(Option(false)))
+    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).futureValue
+    status.value.tosAccepted.value shouldBe false
+  }
+
+  it should "return UserStatusDiagnostics.tosAccepted as None if user's TOS status is None" in {
+    when(mockTosService.getTosStatus(enabledUser.id, samRequestContext)).thenReturn(IO(None))
+    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).futureValue
+    status.value.tosAccepted shouldBe None
+  }
+
+  it should "return no UserStatusDiagnostics for a user that does not exist" in {
+    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
     service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
-
-    // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
-
-    // get user status diagnostics
-    val diagnostics = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
-    diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true, None, true))
   }
 
   it should "enable/disable user" in {
