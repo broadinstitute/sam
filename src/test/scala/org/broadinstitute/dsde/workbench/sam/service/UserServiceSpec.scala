@@ -228,7 +228,32 @@ class UserServiceSpec
     service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
   }
 
-  it should "enable/disable user" in {
+  // Tests describing the shared behavior of a user that is being enabled
+  def successfullyEnabledUser(user: SamUser) = {
+    it should "set the user as enable the user in the database" in {
+      when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
+      service.enableUser(defaultUser.id, samRequestContext).futureValue
+      verify(dirDAO).enableIdentity(user.id, samRequestContext)
+    }
+
+    it should "enable the user on google" in {
+      when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
+      service.enableUser(defaultUser.id, samRequestContext).futureValue
+      verify(googleExtensions).onUserEnable(user, samRequestContext)
+    }
+  }
+
+  "UserServiceSpec.enableUser for an already enabled user" should behave like successfullyEnabledUser(enabledUser)
+  "UserServiceSpec.enableUser for disabled user" should behave like successfullyEnabledUser(defaultUser)
+
+  "UserServiceSpec.enableUser for a non-existent user" should "return None" in {
+    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
+    val status = service.enableUser(defaultUser.id, samRequestContext).futureValue
+    status shouldBe None
+  }
+
+
+  "UserService" should "enable/disable user" in {
     // assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
