@@ -50,6 +50,7 @@ class UserServiceSpec
 //  var tosServiceEnabled: TosService = _
   var googleExtensions: GoogleExtensions = _
   var dirDAO: DirectoryDAO = _
+  var mockTosService: TosService = _
   val blockedDomain = "blocked.domain.com"
   val enabledUser: SamUser = defaultUser.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(WorkbenchGroupName("All_Users"), Set(), WorkbenchEmail("all_users@fake.com"))
@@ -77,12 +78,10 @@ class UserServiceSpec
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    val mockAcceptedTos = mock[TosService](RETURNS_SMART_NULLS)
-    when(mockAcceptedTos.getTosStatus(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(Option(true)))
+    mockTosService = mock[TosService](RETURNS_SMART_NULLS)
+    when(mockTosService.getTosStatus(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(Option(true)))
 
-    service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockAcceptedTos))
-//    tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
-//    serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
+    service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
   }
 
   protected def clearDatabase(): Unit =
@@ -133,11 +132,30 @@ class UserServiceSpec
     ))
   }
 
-  it should "set UserStatus.ldap and UserStatus.adminEnabled to false if user is disabled" in {
+  it should "return UserStatus.ldap and UserStatus.adminEnabled as false if user is disabled" in {
     when(dirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(false))
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
     status.value.enabled("ldap") shouldBe false
     status.value.enabled("adminEnabled") shouldBe false
+  }
+
+  it should "return UserStatus.allUsersGroup as false if user is not in the All_Users group" in {
+    when(dirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(false))
+    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
+    status.value.enabled("allUsersGroup") shouldBe false
+  }
+
+  it should "return UserStatus.google as false if user is not a member of their proxy group on Google" in {
+    when(googleExtensions.getUserStatus(enabledUser)).thenReturn(Future.successful(false))
+    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).futureValue
+    status.value.enabled("google") shouldBe false
+  }
+
+  it should "not return UserStatus.tosAccepted or UserStatus.adminEnabled if user's TOS status is false" in {
+    when(mockTosService.getTosStatus(enabledUser.id, samRequestContext)).thenReturn(IO(Option(false)))
+    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).futureValue
+    status.value.enabled shouldNot contain("tosAccepted")
+    status.value.enabled shouldNot contain("adminEnabled")
   }
 
   it should "return no status for a user that does not exist" in {
@@ -146,6 +164,12 @@ class UserServiceSpec
   }
 
   it should "return userDetailsOnly status when told to" in {
+    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).futureValue
+    statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
+  }
+
+  it should "return userDetailsOnly status for a disabled user" in {
+    when(dirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(false))
     val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).futureValue
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
   }
