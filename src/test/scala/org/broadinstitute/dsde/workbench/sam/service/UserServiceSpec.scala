@@ -63,6 +63,7 @@ class UserServiceSpec
     when(dirDAO.loadSubjectFromEmail(defaultUser.email, samRequestContext)).thenReturn(IO(None))
     when(dirDAO.createUser(defaultUser, samRequestContext)).thenReturn(IO(enabledUser))
     when(dirDAO.enableIdentity(defaultUser.id, samRequestContext)).thenReturn(IO(()))
+    when(dirDAO.disableIdentity(defaultUser.id, samRequestContext)).thenReturn(IO(()))
     when(dirDAO.addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
     when(dirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
     when(dirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(true))
@@ -87,7 +88,7 @@ class UserServiceSpec
   protected def clearDatabase(): Unit =
     TestSupport.truncateAll
 
-  "UserService.createUser" should "create a new user record in the database" in {
+  "createUser" should "create a new user record in the database" in {
     service.createUser(defaultUser, samRequestContext).futureValue
     verify(dirDAO).createUser(defaultUser, samRequestContext)
   }
@@ -124,7 +125,7 @@ class UserServiceSpec
     verify(dirDAO).addGroupMember(allUsersGroup.id, enabledUser.id, samRequestContext)
   }
 
-  "UserService.getUserStatus" should "get user status for a user that exists and is enabled" in {
+  "getUserStatus" should "get user status for a user that exists and is enabled" in {
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
     status shouldBe Some(UserStatus(
       UserStatusDetails(defaultUser.id, defaultUser.email),
@@ -181,13 +182,7 @@ class UserServiceSpec
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
   }
 
-  "UserService" should "reject blocked domain" in {
-    intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.createUser(defaultUser.copy(email = WorkbenchEmail(s"user@$blockedDomain")), samRequestContext))
-    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
-  }
-
-  "UserService.getUserStatusDiagnostics" should "return UserStatusDiagnostics for a user that exists and is enabled" in {
+  "getUserStatusDiagnostics" should "return UserStatusDiagnostics for a user that exists and is enabled" in {
     val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
     status shouldBe Some(UserStatusDiagnostics(true, true, true, Some(true), true))
   }
@@ -229,8 +224,8 @@ class UserServiceSpec
   }
 
   // Tests describing the shared behavior of a user that is being enabled
-  def successfullyEnabledUser(user: SamUser) = {
-    it should "set the user as enable the user in the database" in {
+  def successfullyEnabledUser(user: SamUser): Unit = {
+    it should "enable the user in the database" in {
       when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
       service.enableUser(defaultUser.id, samRequestContext).futureValue
       verify(dirDAO).enableIdentity(user.id, samRequestContext)
@@ -243,35 +238,43 @@ class UserServiceSpec
     }
   }
 
-  "UserServiceSpec.enableUser for an already enabled user" should behave like successfullyEnabledUser(enabledUser)
-  "UserServiceSpec.enableUser for disabled user" should behave like successfullyEnabledUser(defaultUser)
+  "enableUser for an already enabled user" should behave like successfullyEnabledUser(enabledUser)
+  "enableUser for disabled user" should behave like successfullyEnabledUser(defaultUser)
 
-  "UserServiceSpec.enableUser for a non-existent user" should "return None" in {
+  "enableUser for a non-existent user" should "return None" in {
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
     val status = service.enableUser(defaultUser.id, samRequestContext).futureValue
     status shouldBe None
   }
 
+  // Tests describing the shared behavior of a user that is being disabled
+  def successfullyDisabledUser(user: SamUser): Unit = {
+    it should "disable the user in the database" in {
+      when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
+      service.disableUser(defaultUser.id, samRequestContext).futureValue
+      verify(dirDAO).disableIdentity(user.id, samRequestContext)
+    }
 
-  "UserService" should "enable/disable user" in {
-    // assume(databaseEnabled, databaseEnabledClue)
+    it should "disable the user on google" in {
+      when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
+      service.disableUser(defaultUser.id, samRequestContext).futureValue
+      verify(googleExtensions).onUserDisable(user, samRequestContext)
+    }
+  }
 
-    // user doesn't exist yet
-    service.enableUser(defaultUser.id, samRequestContext).futureValue shouldBe None
-    service.disableUser(defaultUser.id, samRequestContext).futureValue shouldBe None
+  "disableUser for an enabled user" should behave like successfullyDisabledUser(enabledUser)
+  "disableUser for an already disabled user" should behave like successfullyDisabledUser(defaultUser)
 
-    // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+  "disableUser for a non-existent user" should "return None" in {
+    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
+    val status = service.disableUser(defaultUser.id, samRequestContext).futureValue
+    status shouldBe None
+  }
 
-    // it should be enabled
-    dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
-
-    // disable the user
-    val response = service.disableUser(defaultUser.id, samRequestContext).futureValue
-    response shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
-
-    dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
+  "UserService" should "reject blocked domain" in {
+    intercept[WorkbenchExceptionWithErrorReport] {
+      runAndWait(service.createUser(defaultUser.copy(email = WorkbenchEmail(s"user@$blockedDomain")), samRequestContext))
+    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
   it should "delete a user" in {
