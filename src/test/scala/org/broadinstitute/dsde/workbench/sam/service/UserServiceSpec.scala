@@ -6,7 +6,6 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -47,8 +46,8 @@ class UserServiceSpec
 
   var service: UserService = _
   var tos: TosService = _
-  var serviceTosEnabled: UserService = _
-  var tosServiceEnabled: TosService = _
+//  var serviceTosEnabled: UserService = _
+//  var tosServiceEnabled: TosService = _
   var googleExtensions: GoogleExtensions = _
   var dirDAO: DirectoryDAO = _
   val blockedDomain = "blocked.domain.com"
@@ -78,10 +77,12 @@ class UserServiceSpec
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
-    tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos))
-    tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
-    serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
+    val mockAcceptedTos = mock[TosService](RETURNS_SMART_NULLS)
+    when(mockAcceptedTos.getTosStatus(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(Option(true)))
+
+    service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockAcceptedTos))
+//    tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
+//    serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
   }
 
   protected def clearDatabase(): Unit =
@@ -125,30 +126,24 @@ class UserServiceSpec
   }
 
   "UserService.getUserStatus" should "get user status for a user that exists and is enabled" in {
-    // get previously mocked user
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
-    status shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
+    status shouldBe Some(UserStatus(
+      UserStatusDetails(defaultUser.id, defaultUser.email),
+      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+    ))
   }
 
   it should "set UserStatus.ldap and UserStatus.adminEnabled to false if user is disabled" in {
-    val mockTos = mock[TosService](RETURNS_SMART_NULLS)
-    val localMockUserService = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTos))
-
-    // TODO: This setup is a little wonky, some of these variables can change and some need to be specifically set.  Can we make this easier to grok?
-    when(mockTos.getTosStatus(defaultUser.id, samRequestContext)).thenReturn(IO(Option(false)))
-    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(Some(defaultUser)))
     when(dirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(false))
-
-    val status = localMockUserService.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
-    status shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("tosAccepted" -> false, "google" -> true, "ldap" -> false, "allUsersGroup" -> true, "adminEnabled" -> false)))
+    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
+    status.value.enabled("ldap") shouldBe false
+    status.value.enabled("adminEnabled") shouldBe false
   }
 
   it should "return no status for a user that does not exist" in {
-    // user doesn't exist yet
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
     service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue shouldBe None
   }
-
 
   it should "return userDetailsOnly status when told to" in {
     val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).futureValue
