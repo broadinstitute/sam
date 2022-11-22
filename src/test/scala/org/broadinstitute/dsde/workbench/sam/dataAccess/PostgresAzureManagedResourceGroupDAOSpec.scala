@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.WorkbenchExceptionWithErrorReport
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.azure.{BillingProfileId, TenantId}
 import org.scalatest.BeforeAndAfterEach
@@ -17,6 +18,8 @@ class PostgresAzureManagedResourceGroupDAOSpec extends AnyFreeSpec with Matchers
 
   "PostgresAzureManagedResourceGroupDAO" - {
     "insert, query and delete" in forAll(Generator.genManagedResourceGroup) { mrg =>
+      assume(databaseEnabled, databaseEnabledClue)
+
       val backgroundMrg = mrg.copy(
         mrg.managedResourceGroupCoordinates.copy(tenantId = TenantId(mrg.managedResourceGroupCoordinates.tenantId.value + "_other")),
         BillingProfileId(mrg.billingProfileId.value + "other")
@@ -53,6 +56,8 @@ class PostgresAzureManagedResourceGroupDAOSpec extends AnyFreeSpec with Matchers
 
     "insertManagedResourceGroup" - {
       "detect duplicate coordinates" in forAll(Generator.genManagedResourceGroup) { mrg =>
+        assume(databaseEnabled, databaseEnabledClue)
+
         val dupCoords = mrg.copy(billingProfileId = BillingProfileId(mrg.billingProfileId.value + "other"))
         dao.insertManagedResourceGroup(mrg, samRequestContext).unsafeRunSync() shouldBe 1
         val error = intercept[WorkbenchExceptionWithErrorReport] {
@@ -62,6 +67,8 @@ class PostgresAzureManagedResourceGroupDAOSpec extends AnyFreeSpec with Matchers
       }
 
       "detect duplicate billing profile" in forAll(Generator.genManagedResourceGroup) { mrg =>
+        assume(databaseEnabled, databaseEnabledClue)
+
         val dupBilling = mrg.copy(managedResourceGroupCoordinates =
           mrg.managedResourceGroupCoordinates.copy(tenantId = TenantId(mrg.managedResourceGroupCoordinates.tenantId.value + "_other"))
         )
