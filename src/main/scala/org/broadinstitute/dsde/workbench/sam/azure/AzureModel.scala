@@ -21,6 +21,8 @@ object AzureJsonSupport {
   implicit val petManagedIdentityIdFormat = jsonFormat4(PetManagedIdentityId.apply)
 
   implicit val petManagedIdentityFormat = jsonFormat3(PetManagedIdentity.apply)
+
+  implicit val managedResourceGroupCoordinatesFormat = jsonFormat3(ManagedResourceGroupCoordinates.apply)
 }
 
 final case class TenantId(value: String) extends ValueObject

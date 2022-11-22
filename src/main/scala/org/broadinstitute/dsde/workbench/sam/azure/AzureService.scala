@@ -72,6 +72,38 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
     */
   def getOrCreateUserPetManagedIdentity(
       user: SamUser,
+      billingProfileId: BillingProfileId,
+      samRequestContext: SamRequestContext
+  ): IO[(PetManagedIdentity, Boolean)] =
+    for {
+      maybeMrg <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(
+        billingProfileId,
+        samRequestContext
+      )
+      mrg <- IO.fromOption(maybeMrg)(
+        new WorkbenchExceptionWithErrorReport(
+          ErrorReport(StatusCodes.BadRequest, s"Billing profile $billingProfileId does not have an associated managed resource group.")
+        )
+      )
+      id = PetManagedIdentityId(
+        user.id,
+        mrg.managedResourceGroupCoordinates.tenantId,
+        mrg.managedResourceGroupCoordinates.subscriptionId,
+        mrg.managedResourceGroupCoordinates.managedResourceGroupName
+      )
+      existingPetOpt <- directoryDAO.loadPetManagedIdentity(id, samRequestContext)
+      pet <- existingPetOpt match {
+        // pet exists in Sam DB - return it
+        case Some(p) => IO.pure((p, false))
+        // pet does not exist in Sam DB - create it
+        case None => createUserPetManagedIdentity(id, user, mrg.managedResourceGroupCoordinates, samRequestContext)
+      }
+    } yield pet
+
+  /** Looks up a pet managed identity from the database, or creates it if one does not exist.
+    */
+  def getOrCreateUserPetManagedIdentity(
+      user: SamUser,
       request: GetOrCreatePetManagedIdentityRequest,
       samRequestContext: SamRequestContext
   ): IO[(PetManagedIdentity, Boolean)] = {
@@ -82,7 +114,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         // pet exists in Sam DB - return it
         case Some(p) => IO.pure((p, false))
         // pet does not exist in Sam DB - create it
-        case None => createUserPetManagedIdentity(id, user, request, samRequestContext)
+        case None => createUserPetManagedIdentity(id, user, request.toManagedResourceGroupCoordinates, samRequestContext)
       }
     } yield pet
   }
@@ -92,23 +124,26 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   private def createUserPetManagedIdentity(
       id: PetManagedIdentityId,
       user: SamUser,
-      request: GetOrCreatePetManagedIdentityRequest,
+      mrgCoords: ManagedResourceGroupCoordinates,
       samRequestContext: SamRequestContext
   ): IO[(PetManagedIdentity, Boolean)] =
     for {
-      _ <- validateManagedResourceGroup(request.toManagedResourceGroupCoordinates, samRequestContext, false)
-      manager <- crlService.buildMsiManager(request.tenantId, request.subscriptionId)
+      _ <- validateManagedResourceGroup(mrgCoords, samRequestContext, false)
+      manager <- crlService.buildMsiManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
       petName = toManagedIdentityNameFromUser(user)
-      context = managedIdentityContext(request, petName)
-      azureUami <- IO(
-        manager
-          .identities()
-          .define(petName.value)
-          .withRegion(managedIdentityRegion)
-          .withExistingResourceGroup(request.managedResourceGroupName.value)
-          .withTags(managedIdentityTags(user).asJava)
-          .create(context)
-      )
+      context = managedIdentityContext(mrgCoords, petName)
+      azureUami <- traceIOWithContext("createUAMI", samRequestContext) { _ =>
+        IO(
+          // note that this will not fail when the UAMI already exists
+          manager
+            .identities()
+            .define(petName.value)
+            .withRegion(managedIdentityRegion)
+            .withExistingResourceGroup(mrgCoords.managedResourceGroupName.value)
+            .withTags(managedIdentityTags(user).asJava)
+            .create(context)
+        )
+      }
       petToCreate = PetManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()))
       createdPet <- directoryDAO.createPetManagedIdentity(petToCreate, samRequestContext)
     } yield (createdPet, true)
@@ -201,13 +236,13 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   private def managedIdentityTags(user: SamUser): Map[String, String] =
     Map("samUserId" -> user.id.value, "samUserEmail" -> user.email.value)
 
-  private def managedIdentityContext(request: GetOrCreatePetManagedIdentityRequest, petName: ManagedIdentityDisplayName): Context =
+  private def managedIdentityContext(mrgCoords: ManagedResourceGroupCoordinates, petName: ManagedIdentityDisplayName): Context =
     Defaults.buildContext(
       CreateUserAssignedManagedIdentityRequestData
         .builder()
-        .setTenantId(request.tenantId.value)
-        .setSubscriptionId(request.subscriptionId.value)
-        .setResourceGroupName(request.managedResourceGroupName.value)
+        .setTenantId(mrgCoords.tenantId.value)
+        .setSubscriptionId(mrgCoords.subscriptionId.value)
+        .setResourceGroupName(mrgCoords.managedResourceGroupName.value)
         .setName(petName.value)
         .setRegion(managedIdentityRegion)
         .build()

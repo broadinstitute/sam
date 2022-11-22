@@ -53,10 +53,57 @@ trait AzureRoutes extends SecurityDirectives {
                   }
                 }
               }
+            } ~
+            path("billingProfile" / Segment / "managedResourceGroup") { billingProfileId =>
+              post {
+                entity(as[ManagedResourceGroupCoordinates]) { mrgCoords =>
+                  requireAction(
+                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+                    SamResourceActions.setManagedResourceGroup,
+                    samUser.id,
+                    samRequestContext
+                  ) {
+                    complete {
+                      service
+                        .createManagedResourceGroup(ManagedResourceGroup(mrgCoords, BillingProfileId(billingProfileId)), samRequestContext)
+                        .map(_ => StatusCodes.Created)
+                    }
+                  }
+                }
+              }
+            } ~
+            path("user" / "petManagedIdentity" / Segment) { billingProfileId =>
+              post {
+                postGetOrCreateUserPetManagedIdentity(samUser, billingProfileId, service, samRequestContext)
+              }
+            } ~
+            path("user" / "petManagedIdentity" / Segment / Segment) { (billingProfileId, userEmail) =>
+              post {
+                requireCloudExtensionCreatePetAction(samUser, samRequestContext) {
+                  loadSamUser(WorkbenchEmail(userEmail), samRequestContext) { targetSamUser =>
+                    postGetOrCreateUserPetManagedIdentity(targetSamUser, billingProfileId, service, samRequestContext)
+                  }
+                }
+              }
             }
         }
       }
       .getOrElse(reject)
+
+  private def postGetOrCreateUserPetManagedIdentity(samUser: SamUser, billingProfileId: String, service: AzureService, samRequestContext: SamRequestContext) =
+    requireAction(
+      FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+      SamResourceActions.link,
+      samUser.id,
+      samRequestContext
+    ) {
+      complete {
+        service.getOrCreateUserPetManagedIdentity(samUser, BillingProfileId(billingProfileId), samRequestContext).map { case (pet, created) =>
+          val status = if (created) StatusCodes.Created else StatusCodes.OK
+          status -> JsString(pet.objectId.value)
+        }
+      }
+    }
 
   // Validates the provided SamUser has 'link' permission on the spend-profile resource represented by the
   // GetOrCreatePetManagedIdentityRequest
