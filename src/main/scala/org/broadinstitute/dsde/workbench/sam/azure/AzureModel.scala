@@ -30,7 +30,9 @@ final case class SubscriptionId(value: String) extends ValueObject
 final case class ManagedResourceGroupName(value: String) extends ValueObject
 final case class ManagedIdentityObjectId(value: String) extends ValueObject
 final case class ManagedIdentityDisplayName(value: String) extends ValueObject
-final case class BillingProfileId(value: String) extends ValueObject
+final case class BillingProfileId(value: String) extends ValueObject {
+  def asResourceId = ResourceId(value)
+}
 final case class ManagedResourceGroupCoordinates(
     tenantId: TenantId,
     subscriptionId: SubscriptionId,

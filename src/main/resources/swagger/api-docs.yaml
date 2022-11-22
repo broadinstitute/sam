@@ -1261,114 +1261,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/azure/v1/user/petManagedIdentity/{billingProfileId}:
-    post:
-      tags:
-        - Azure
-      summary: gets or creates a pet managed identity for the calling user
-      operationId: getPetManagedIdentityInBillingProfile
-      parameters:
-        - name: billingProfileId
-          in: path
-          description: billing profile id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          'application/json':
-            schema:
-              type: object
-      responses:
-        200:
-          description: Successfully retrieved resource without creating it
-          content:
-            application/json:
-              schema:
-                type: string
-        201:
-          description: Successfully created resource
-          content:
-            application/json:
-              schema:
-                type: string
-        400:
-          description: billing profile is not associated to managed resource group, call createManagedResourceGroup
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
-        404:
-          description: Caller does not have access to billing profile or it does not exist
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
-        500:
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
-  /api/azure/v1/petManagedIdentity/{billingProfileId}/{userEmail}:
-    post:
-      tags:
-        - Azure
-      summary: gets or creates a pet managed identity for the specified user, get_pet_managed_identity
-        action on cloud-extension/azure required
-      operationId: getPetManagedIdentityInBillingProfileForUser
-      parameters:
-        - name: billingProfileId
-          in: path
-          description: billing profile id
-          required: true
-          schema:
-            type: string
-        - name: userEmail
-          in: path
-          description: User's email address
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          'application/json':
-            schema:
-              type: object
-      responses:
-        200:
-          description: Successfully retrieved resource without creating it
-          content:
-            application/json:
-              schema:
-                type: string
-        201:
-          description: Successfully created resource
-          content:
-            application/json:
-              schema:
-                type: string
-        400:
-          description: billing profile is not associated to managed resource group, call createManagedResourceGroup
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
-        404:
-          description: User does not have access to billing profile or it does not exist or caller does not have get_pet_managed_identity permission on cloud-extension/azure
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
-        500:
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
   /api/azure/v1/user/petManagedIdentity:
     post:
-      deprecated: true
       tags:
         - Azure
       summary: gets or creates a pet managed identity for the calling user
@@ -1398,10 +1292,10 @@ paths:
           content: { }
         403:
           description: Caller does not have permission to create a pet managed identity in the given managed resource group
-          content: { }
-        404:
-          description: Managed resource group does not exist
-          content: { }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         500:
           description: Internal Server Error
           content:
@@ -1410,7 +1304,6 @@ paths:
                 $ref: '#/components/schemas/ErrorReport'
   /api/azure/v1/petManagedIdentity/{userEmail}:
     post:
-      deprecated: true
       tags:
         - Azure
       summary: gets or creates a pet managed identity for the specified user, get_pet_managed_identity

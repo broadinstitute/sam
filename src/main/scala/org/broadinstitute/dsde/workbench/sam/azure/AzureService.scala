@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.azure
 import akka.http.scaladsl.model.StatusCodes
 import bio.terra.cloudres.azure.resourcemanager.common.Defaults
 import bio.terra.cloudres.azure.resourcemanager.msi.data.CreateUserAssignedManagedIdentityRequestData
+import cats.data.OptionT
 import cats.effect.IO
 import com.azure.core.management.Region
 import com.azure.core.util.Context
@@ -33,7 +34,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   /** This is specifically a val so that the stack trace does not leak information about why this error was thrown. Because it is a val, the stack trace is
     * constant. If it were a def, the stack trace would include the line number where the error was thrown.
     */
-  private val managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
+  private def managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
     ErrorReport(
       StatusCodes.Forbidden,
       "Specified manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
@@ -67,38 +68,6 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
 
       _ <- azureManagedResourceGroupDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext)
     } yield ()
-
-  /** Looks up a pet managed identity from the database, or creates it if one does not exist.
-    */
-  def getOrCreateUserPetManagedIdentity(
-      user: SamUser,
-      billingProfileId: BillingProfileId,
-      samRequestContext: SamRequestContext
-  ): IO[(PetManagedIdentity, Boolean)] =
-    for {
-      maybeMrg <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(
-        billingProfileId,
-        samRequestContext
-      )
-      mrg <- IO.fromOption(maybeMrg)(
-        new WorkbenchExceptionWithErrorReport(
-          ErrorReport(StatusCodes.BadRequest, s"Billing profile $billingProfileId does not have an associated managed resource group.")
-        )
-      )
-      id = PetManagedIdentityId(
-        user.id,
-        mrg.managedResourceGroupCoordinates.tenantId,
-        mrg.managedResourceGroupCoordinates.subscriptionId,
-        mrg.managedResourceGroupCoordinates.managedResourceGroupName
-      )
-      existingPetOpt <- directoryDAO.loadPetManagedIdentity(id, samRequestContext)
-      pet <- existingPetOpt match {
-        // pet exists in Sam DB - return it
-        case Some(p) => IO.pure((p, false))
-        // pet does not exist in Sam DB - create it
-        case None => createUserPetManagedIdentity(id, user, mrg.managedResourceGroupCoordinates, samRequestContext)
-      }
-    } yield pet
 
   /** Looks up a pet managed identity from the database, or creates it if one does not exist.
     */
@@ -161,11 +130,28 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
 
   /** Resolves a managed resource group in Azure and returns the terra.billingProfileId tag value. This is used for access control checks during route handling.
     */
-  def getBillingProfileId(request: GetOrCreatePetManagedIdentityRequest): IO[Option[ResourceId]] =
+  def getBillingProfileId(request: GetOrCreatePetManagedIdentityRequest, samRequestContext: SamRequestContext): IO[Option[BillingProfileId]] =
+    // get the billing profile id from the database
+    // if not there, for backwards compatibility, get the billing profile id from a tag on the Azure resource
+    OptionT(getBillingProfileIdFromSamDb(request, samRequestContext))
+      .orElseF(getBillingProfileIdFromAzureTag(request, samRequestContext))
+      .value
+
+  private def getBillingProfileIdFromSamDb(request: GetOrCreatePetManagedIdentityRequest, samRequestContext: SamRequestContext): IO[Option[BillingProfileId]] =
+    for {
+      maybeMrg <- azureManagedResourceGroupDAO.getManagedResourceGroupByCoordinates(request.toManagedResourceGroupCoordinates, samRequestContext)
+    } yield maybeMrg.map(_.billingProfileId)
+
+  private def getBillingProfileIdFromAzureTag(
+      request: GetOrCreatePetManagedIdentityRequest,
+      samRequestContext: SamRequestContext
+  ): IO[Option[BillingProfileId]] = traceIOWithContext("getBillingProfileIdFromAzureTag", samRequestContext) { _ =>
     for {
       resourceManager <- crlService.buildResourceManager(request.tenantId, request.subscriptionId)
+      _ <- validateManagedResourceGroup(request.toManagedResourceGroupCoordinates, samRequestContext, false)
       mrg <- IO(resourceManager.resourceGroups().getByName(request.managedResourceGroupName.value)).attempt
     } yield mrg.toOption.flatMap(getBillingProfileFromTag)
+  }
 
   /** Validates a managed resource group. Algorithm:
     *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Get the managed app "plan" name and publisher 5.
@@ -175,7 +161,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       mrgCoords: ManagedResourceGroupCoordinates,
       samRequestContext: SamRequestContext,
       validateUser: Boolean = true
-  ): IO[Unit] =
+  ): IO[ResourceGroup] =
     traceIOWithContext("validateManagedResourceGroup", samRequestContext) { _ =>
       for {
         resourceManager <- crlService.buildResourceManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
@@ -185,7 +171,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
         _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
-      } yield ()
+      } yield mrg
     }
 
   /** The users authorized to setup a managed application are stored as a comma separated list of email addresses in the parameters of the application. The
@@ -230,8 +216,8 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
     }
 
   /** Null-safe get billing profile tag from a ResourceGroup. */
-  private def getBillingProfileFromTag(mrg: ResourceGroup): Option[ResourceId] =
-    mrg.tags().asScala.get(billingProfileTag).map(ResourceId(_))
+  private def getBillingProfileFromTag(mrg: ResourceGroup): Option[BillingProfileId] =
+    mrg.tags().asScala.get(billingProfileTag).map(BillingProfileId(_))
 
   private def managedIdentityTags(user: SamUser): Map[String, String] =
     Map("samUserId" -> user.id.value, "samUserEmail" -> user.email.value)

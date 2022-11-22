@@ -25,9 +25,14 @@ object MockCrlService extends MockitoSugar {
   val mockSamSpendProfileResource = FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId("test-spend-profile"))
   val defaultManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
 
-  def apply(user: Option[SamUser] = None, mrgName: ManagedResourceGroupName = mockMrgName, managedAppPlan: ManagedAppPlan = defaultManagedAppPlan) = {
+  def apply(
+      user: Option[SamUser] = None,
+      mrgName: ManagedResourceGroupName = mockMrgName,
+      managedAppPlan: ManagedAppPlan = defaultManagedAppPlan,
+      includeBillingProfileTag: Boolean = false
+  ) = {
     val mockCrlService = mock[CrlService](RETURNS_SMART_NULLS)
-    val mockRm = mockResourceManager(mrgName)
+    val mockRm = mockResourceManager(mrgName, includeBillingProfileTag)
     val mockAppMgr = mockApplicationManager(user, mrgName, managedAppPlan)
 
     when(mockCrlService.buildResourceManager(any[TenantId], any[SubscriptionId]))
@@ -46,11 +51,13 @@ object MockCrlService extends MockitoSugar {
     mockCrlService
   }
 
-  private def mockResourceManager(mrgName: ManagedResourceGroupName): ResourceManager = {
+  private def mockResourceManager(mrgName: ManagedResourceGroupName, includeBillingProfileTag: Boolean): ResourceManager = {
     // Mock get resource group
     val mockResourceGroup = mock[ResourceGroup](RETURNS_SMART_NULLS)
-    when(mockResourceGroup.tags())
-      .thenReturn(Map("terra.billingProfileId" -> mockSamSpendProfileResource.resourceId.value).asJava)
+    if (includeBillingProfileTag) {
+      when(mockResourceGroup.tags())
+        .thenReturn(Map("terra.billingProfileId" -> mockSamSpendProfileResource.resourceId.value).asJava)
+    }
     when(mockResourceGroup.id())
       .thenReturn(mrgName.value)
 
@@ -114,8 +121,10 @@ object MockCrlService extends MockitoSugar {
       .thenReturn(appParameters.orNull)
 
     val mockApplicationIterator = mock[PagedIterable[Application]](RETURNS_SMART_NULLS)
+    // use thenAnswer instead of thenReturn so we get a new iterator ever time
+    // otherwise you get something like an up-only elevator, you only get 1 ride
     when(mockApplicationIterator.iterator())
-      .thenReturn(List(mockApplication).iterator.asJava)
+      .thenAnswer(_ => List(mockApplication).iterator.asJava)
 
     val mockApplications = mock[Applications](RETURNS_SMART_NULLS)
     when(mockApplications.list())

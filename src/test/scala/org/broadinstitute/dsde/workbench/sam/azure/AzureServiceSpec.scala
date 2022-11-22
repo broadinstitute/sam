@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAzureManagedResourceGroupDAO, MockDirectoryDAO, PostgresDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, TosService, UserService}
 import org.mockito.Mockito.when
 import org.scalatest.concurrent.ScalaFutures
@@ -110,11 +110,11 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     val request = GetOrCreatePetManagedIdentityRequest(tenantId, subscriptionId, managedResourceGroupName)
 
     // call getBillingProfileId
-    val res = azureService.getBillingProfileId(request).unsafeRunSync()
+    val res = azureService.getBillingProfileId(request, samRequestContext).unsafeRunSync()
 
     // should return a billing profile id
     res shouldBe defined
-    res.get shouldBe ResourceId("de38969d-f41b-4b80-99ba-db481e6db1cf")
+    res.get shouldBe BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
   }
 
   "createManagedResourceGroup" should "create a managed resource group" in {
