@@ -34,7 +34,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   /** This is specifically a val so that the stack trace does not leak information about why this error was thrown. Because it is a val, the stack trace is
     * constant. If it were a def, the stack trace would include the line number where the error was thrown.
     */
-  private def managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
+  private val managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
     ErrorReport(
       StatusCodes.Forbidden,
       "Specified manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
@@ -97,7 +97,6 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       samRequestContext: SamRequestContext
   ): IO[(PetManagedIdentity, Boolean)] =
     for {
-      _ <- validateManagedResourceGroup(mrgCoords, samRequestContext, false)
       manager <- crlService.buildMsiManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
       petName = toManagedIdentityNameFromUser(user)
       context = managedIdentityContext(mrgCoords, petName)
@@ -147,10 +146,8 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       samRequestContext: SamRequestContext
   ): IO[Option[BillingProfileId]] = traceIOWithContext("getBillingProfileIdFromAzureTag", samRequestContext) { _ =>
     for {
-      resourceManager <- crlService.buildResourceManager(request.tenantId, request.subscriptionId)
-      _ <- validateManagedResourceGroup(request.toManagedResourceGroupCoordinates, samRequestContext, false)
-      mrg <- IO(resourceManager.resourceGroups().getByName(request.managedResourceGroupName.value)).attempt
-    } yield mrg.toOption.flatMap(getBillingProfileFromTag)
+      mrg <- validateManagedResourceGroup(request.toManagedResourceGroupCoordinates, samRequestContext, false)
+    } yield getBillingProfileFromTag(mrg)
   }
 
   /** Validates a managed resource group. Algorithm:
