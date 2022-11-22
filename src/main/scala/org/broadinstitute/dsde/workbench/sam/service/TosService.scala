@@ -17,7 +17,7 @@ import scala.io.Source
 
 class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
-  val termsOfServiceFile = "termsOfService.md"
+  val termsOfServiceFile = s"tos/termsOfService-${tosConfig.version}.md"
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
