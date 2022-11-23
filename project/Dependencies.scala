@@ -9,7 +9,7 @@ object Dependencies {
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.5.0"
-  val http4sVersion = "0.21.13"
+  val http4sVersion = "1.0.0-M32"
   val sentryVersion = "6.6.0"
 
   val workbenchUtilV = "0.6-74c9fc2"
@@ -115,6 +115,21 @@ object Dependencies {
     "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
 
+  // pact deps
+  val munitCatsEffectV = "1.0.7"
+  val pact4sV = "0.6.0"
+  val typelevelCat = "org.typelevel" %% "munit-cats-effect-3" % munitCatsEffectV % Test
+  val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
+  val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
+  val http4sBlazeServer = "org.http4s" %% "http4s-blaze-server" % http4sVersion
+  val http4sPrometheus = "org.http4s" %% "http4s-prometheus-metrics" % http4sVersion
+  val http4sDsl = "org.http4s" %% "http4s-dsl" % http4sVersion
+  val http4sEmberClient = "org.http4s" %% "http4s-ember-client" % http4sVersion
+  val http4sEmberServer = "org.http4s" %% "http4s-ember-server" % http4sVersion
+  val http4sCirce = "org.http4s" %% "http4s-circe" % http4sVersion
+  val circeCore =         "io.circe"          %% "circe-core"           % "0.14.3"
+
+
   val openCensusDependencies = Seq(
     opencensusScalaCode,
     opencensusAkkaHttp,
@@ -176,4 +191,16 @@ object Dependencies {
     postgres,
     cloudResourceLib
   ) ++ openCensusDependencies
+
+  val pact4sDependencies = Seq(
+    pact4sScalaTest,
+    pact4sCirce,
+    http4sEmberClient,
+    http4sDsl,
+    http4sEmberServer,
+    http4sCirce,
+    circeCore,
+    typelevelCat,
+    scalaTest
+  )
 }
