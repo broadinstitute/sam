@@ -86,7 +86,6 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
 
     val maskNotFound = handleExceptions(ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport if withErrorReport.errorReport.statusCode.contains(StatusCodes.NotFound) =>
-        logger.error("foo", withErrorReport)
         failWithForbidden
     })
 
