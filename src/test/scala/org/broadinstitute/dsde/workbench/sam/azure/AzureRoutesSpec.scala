@@ -203,7 +203,10 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   "POST /api/azure/v1/billingProfile/{billingProfileId}/managedResourceGroup" should "successfully create a managed resource group" in {
     val samRoutes = genSamRoutes()
     val request = ManagedResourceGroupCoordinates(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
-    Post(s"/api/azure/v1/billingProfile/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/managedResourceGroup", request) ~> samRoutes.route ~> check {
+    Post(
+      s"/api/azure/v1/billingProfile/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/managedResourceGroup",
+      request
+    ) ~> samRoutes.route ~> check {
       handled shouldBe true
       status shouldEqual StatusCodes.Created
     }
@@ -212,7 +215,10 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   it should "return 404 if the user does not have access to the billing profile" in {
     val samRoutes = genSamRoutes(createSpendProfile = false)
     val request = ManagedResourceGroupCoordinates(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
-    Post(s"/api/azure/v1/billingProfile/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/managedResourceGroup", request) ~> samRoutes.route ~> check {
+    Post(
+      s"/api/azure/v1/billingProfile/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/managedResourceGroup",
+      request
+    ) ~> samRoutes.route ~> check {
       handled shouldBe true
       status shouldEqual StatusCodes.NotFound
       contentType shouldEqual ContentTypes.`application/json`
