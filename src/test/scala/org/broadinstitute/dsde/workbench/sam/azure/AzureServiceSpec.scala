@@ -230,6 +230,33 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     mockMrgDAO.mrgs should not contain managedResourceGroup
   }
 
+  it should "Forbidden when an Application has a null Plan" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+
+    val mockApplication = crlService
+      .buildApplicationManager(
+        managedResourceGroup.managedResourceGroupCoordinates.tenantId,
+        managedResourceGroup.managedResourceGroupCoordinates.subscriptionId
+      )
+      .unsafeRunSync()
+      .applications()
+      .list()
+      .asScala
+      .head
+    when(mockApplication.plan())
+      .thenReturn(null)
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
   it should "Forbidden when an Application does not have an accepted Plan name" in {
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
@@ -298,5 +325,43 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     }
     err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
     mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Forbidden when an Application has invalid parameters" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+
+    val mockApplication = crlService
+      .buildApplicationManager(
+        managedResourceGroup.managedResourceGroupCoordinates.tenantId,
+        managedResourceGroup.managedResourceGroupCoordinates.subscriptionId
+      )
+      .unsafeRunSync()
+      .applications()
+      .list()
+      .asScala
+      .head
+
+    val invalidParameters = List(
+      null,
+      Map.empty.asJava,
+      "I am a not a map",
+      Map("value" -> "I am not a map").asJava,
+      Map("value" -> Map.empty.asJava).asJava,
+      Map("value" -> Map(MockCrlService.defaultManagedAppPlan.authorizedUserKey -> 5).asJava).asJava
+    )
+    invalidParameters.foreach { parameters =>
+      when(mockApplication.parameters())
+        .thenReturn(parameters)
+
+      val err = intercept[WorkbenchExceptionWithErrorReport] {
+        svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+      }
+      err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+      mockMrgDAO.mrgs should not contain managedResourceGroup
+    }
   }
 }
