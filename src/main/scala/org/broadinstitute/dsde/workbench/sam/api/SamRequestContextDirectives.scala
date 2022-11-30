@@ -10,7 +10,6 @@ import io.opencensus.scala.akka.http.trace.HttpExtractors._
 import io.opencensus.scala.akka.http.utils.ExecuteAfterResponse
 import io.opencensus.scala.http.{HttpAttributes, StatusTranslator}
 import io.opencensus.trace.{Span, Status}
-import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.util.control.NonFatal
@@ -18,7 +17,7 @@ import scala.util.control.NonFatal
 /** Created by ajang on 2020-05-28
   */
 trait SamRequestContextDirectives {
-  val userService: UserService
+//  val userService: UserService
 
   /** Provides a new SamRequestContext with a root tracing span.
     */
