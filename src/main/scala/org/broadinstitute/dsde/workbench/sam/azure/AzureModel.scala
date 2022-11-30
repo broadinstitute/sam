@@ -21,6 +21,8 @@ object AzureJsonSupport {
   implicit val petManagedIdentityIdFormat = jsonFormat4(PetManagedIdentityId.apply)
 
   implicit val petManagedIdentityFormat = jsonFormat3(PetManagedIdentity.apply)
+
+  implicit val managedResourceGroupCoordinatesFormat = jsonFormat3(ManagedResourceGroupCoordinates.apply)
 }
 
 final case class TenantId(value: String) extends ValueObject
@@ -28,8 +30,22 @@ final case class SubscriptionId(value: String) extends ValueObject
 final case class ManagedResourceGroupName(value: String) extends ValueObject
 final case class ManagedIdentityObjectId(value: String) extends ValueObject
 final case class ManagedIdentityDisplayName(value: String) extends ValueObject
+final case class BillingProfileId(value: String) extends ValueObject {
+  def asResourceId = ResourceId(value)
+}
+final case class ManagedResourceGroupCoordinates(
+    tenantId: TenantId,
+    subscriptionId: SubscriptionId,
+    managedResourceGroupName: ManagedResourceGroupName
+)
+final case class ManagedResourceGroup(
+    managedResourceGroupCoordinates: ManagedResourceGroupCoordinates,
+    billingProfileId: BillingProfileId
+)
 
-final case class GetOrCreatePetManagedIdentityRequest(tenantId: TenantId, subscriptionId: SubscriptionId, managedResourceGroupName: ManagedResourceGroupName)
+final case class GetOrCreatePetManagedIdentityRequest(tenantId: TenantId, subscriptionId: SubscriptionId, managedResourceGroupName: ManagedResourceGroupName) {
+  def toManagedResourceGroupCoordinates = ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName)
+}
 
 final case class PetManagedIdentityId(
     user: WorkbenchUserId,
