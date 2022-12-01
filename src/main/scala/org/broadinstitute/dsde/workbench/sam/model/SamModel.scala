@@ -97,6 +97,7 @@ object SamResourceActions {
   val adminAddMember = ResourceAction("admin_add_member")
   val adminRemoveMember = ResourceAction("admin_remove_member")
   val link = ResourceAction("link")
+  val setManagedResourceGroup = ResourceAction("set_managed_resource_group")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")

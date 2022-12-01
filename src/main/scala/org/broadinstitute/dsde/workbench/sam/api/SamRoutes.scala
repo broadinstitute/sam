@@ -72,7 +72,7 @@ abstract class SamRoutes(
                   extensionRoutes(samUser, samRequestContextWithUser) ~
                   groupRoutes(samUser, samRequestContextWithUser) ~
                   apiUserRoutes(samUser, samRequestContextWithUser) ~
-                  azureRoutes(samUser, samRequestContext)
+                  azureRoutes(samUser, samRequestContextWithUser)
               }
             }
         }

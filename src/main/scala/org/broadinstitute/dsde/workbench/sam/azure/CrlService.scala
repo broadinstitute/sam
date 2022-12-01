@@ -6,9 +6,10 @@ import cats.effect.IO
 import com.azure.core.management.AzureEnvironment
 import com.azure.core.management.profile.AzureProfile
 import com.azure.identity.{ClientSecretCredential, ClientSecretCredentialBuilder}
+import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
-import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
+import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, ManagedAppPlan}
 
 /** Service class for interacting with Terra Cloud Resource Library (CRL). See: https://github.com/DataBiosphere/terra-cloud-resource-lib
   *
@@ -29,7 +30,12 @@ class CrlService(config: AzureServicesConfig) {
     IO(Defaults.crlConfigure(clientConfig, ResourceManager.configure()).authenticate(credential, profile).withSubscription(subscriptionId.value))
   }
 
-  def getManagedAppPlanIds: Seq[String] = config.managedAppPlanIds
+  def buildApplicationManager(tenantId: TenantId, subscriptionId: SubscriptionId): IO[ApplicationManager] = {
+    val (credential, profile) = getCredentialAndProfile(tenantId, subscriptionId)
+    IO(ApplicationManager.authenticate(credential, profile))
+  }
+
+  def getManagedAppPlans: Seq[ManagedAppPlan] = config.managedAppPlans
 
   private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (ClientSecretCredential, AzureProfile) = {
     val credential = new ClientSecretCredentialBuilder()
