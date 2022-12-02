@@ -70,11 +70,9 @@ class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tos
       fileStream.close
   }
 
-  def getPrivacyText: String = {
+  def getPrivacyText: String =
     getText(privacyPolicyFile, "Privacy Policy")
-  }
 
-  def getTosText: String = {
+  def getTosText: String =
     getText(termsOfServiceFile, "Terms of Service")
-  }
 }
