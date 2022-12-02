@@ -69,6 +69,20 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       _ <- azureManagedResourceGroupDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext)
     } yield ()
 
+  /** Delete the managed resource group for a given billing profile
+    */
+  def deleteManagedResourceGroup(billingProfileId: BillingProfileId, samRequestContext: SamRequestContext): IO[Unit] =
+    for {
+      existing <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(billingProfileId, samRequestContext)
+      _ <- IO.raiseWhen(existing.isEmpty)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"managed resource group for profile ${billingProfileId} not found"))
+      )
+      _ <- azureManagedResourceGroupDAO.deleteManagedResourceGroup(
+        billingProfileId,
+        samRequestContext
+      )
+    } yield {}
+
   /** Looks up a pet managed identity from the database, or creates it if one does not exist.
     */
   def getOrCreateUserPetManagedIdentity(

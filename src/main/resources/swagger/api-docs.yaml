@@ -1261,6 +1261,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+    delete:
+      tags:
+        - Azure
+      summary: Deletes the managed resource group coordinates associated with the billing profile id
+      operationId: deleteManagedResourceGroup
+      parameters:
+        - name: billingProfileId
+          in: path
+          description: billing profile id
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Successfully deleted managed resource group
+          content: { }
+        403:
+          description: You do not have permission to perform this action on the resource
+          content: { }
+        404:
+          description: Resource does not exist
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+
   /api/azure/v1/user/petManagedIdentity:
     post:
       tags:

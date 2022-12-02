@@ -225,7 +225,50 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  private def genSamRoutes(createSpendProfile: Boolean = true, createAzurePolicy: Boolean = true, crlService: Option[CrlService] = None): TestSamRoutes = {
+  "DELETE /api/azure/v1/billingProfile/{billingProfileId}/managedResourceGroup" should "successfully delete a managed resource group" in {
+    val samRoutes = genSamRoutes(createMrg = true)
+
+    Delete(
+      s"/api/azure/v1/billingProfile/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/managedResourceGroup"
+    ) ~> samRoutes.route ~> check {
+      handled shouldBe true
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "return 404 if the MRG does not exist" in {
+    val samRoutes = genSamRoutes()
+    Delete(
+      s"/api/azure/v1/billingProfile/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/managedResourceGroup"
+    ) ~> samRoutes.route ~> check {
+      handled shouldBe true
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "return 404 when a user does not have access to the parent spend profile" in {
+    val samRoutes = genSamRoutes(createMrg = true)
+
+    Delete(
+      s"/api/resources/v2/${SamResourceTypes.spendProfile.value}/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/policies/owner/memberEmails/${samRoutes.user.email.value}"
+    ) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Delete(
+      s"/api/azure/v1/billingProfile/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/managedResourceGroup"
+    ) ~> samRoutes.route ~> check {
+      handled shouldBe true
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  private def genSamRoutes(
+      createSpendProfile: Boolean = true,
+      createAzurePolicy: Boolean = true,
+      crlService: Option[CrlService] = None,
+      createMrg: Boolean = false
+  ): TestSamRoutes = {
     val resourceTypes = configResourceTypes.view.filterKeys(k => k == SamResourceTypes.spendProfile || k == CloudExtensions.resourceTypeName)
     val samRoutes = TestSamRoutes(resourceTypes.toMap, crlService = crlService)
 
@@ -249,6 +292,16 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
       Put(
         s"/api/resources/v2/${CloudExtensions.resourceTypeName.value}/${AzureExtensions.resourceId.value}/policies/azure",
         cloudExtensionMembers
+      ) ~> samRoutes.route ~> check {
+        status shouldEqual StatusCodes.Created
+      }
+    }
+
+    if (createMrg) {
+      val request = ManagedResourceGroupCoordinates(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
+      Post(
+        s"/api/azure/v1/billingProfile/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/managedResourceGroup",
+        request
       ) ~> samRoutes.route ~> check {
         status shouldEqual StatusCodes.Created
       }

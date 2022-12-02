@@ -364,4 +364,29 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
       mockMrgDAO.mrgs should not contain managedResourceGroup
     }
   }
+
+  "deleteManagedResourceGroup" should "delete a managed resource group" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val svc =
+      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+
+    mockMrgDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext).unsafeRunSync()
+    svc.deleteManagedResourceGroup(managedResourceGroup.billingProfileId, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    mockMrgDAO.mrgs shouldNot contain(managedResourceGroup)
+  }
+
+  it should "NotFound when MRG does not exist" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val svc =
+      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.deleteManagedResourceGroup(managedResourceGroup.billingProfileId, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
+  }
 }
