@@ -500,7 +500,7 @@ Terms will be effective immediately upon our posting notice unless we
 state otherwise. You should look at the Terms regularly. We’ll post
 notice of modifications or additions to the Terms in Terra and will post
 prior notice of material changes to the Terms to you at
-\[[●](https://app.terra.bio/#privacy)\] or such other location as we may
+<https://support.terra.bio/hc/en-us/sections/4408251025563> or such other location as we may
 notify you of.
 
 These Terms control the relationship between us and you. Microsoft,
@@ -555,7 +555,7 @@ Requirements available at
 location as we may notify you of.
 
 “Data Protection Addendum” means our Data Processing Terms available at
-\[[●](https://app.terra.bio/#privacy)\] or such other location as we may
+<https://support.terra.bio/hc/en-us/articles/10860018891291> or such other location as we may
 notify you of.
 
 “For-Profit Entity” means any individual, entity or organization other
@@ -622,7 +622,7 @@ not-for-profit business.
 notify you of.
 
 “Public Dataset” means those datasets listed at
-\[[●](https://app.terra.bio/#privacy)\] or such other location as we may
+<https://support.terra.bio/hc/en-us/articles/10859572748827> or such other location as we may
 notify you of.
 
 “Remove” means to cause Content to not be Connected to Terra.
