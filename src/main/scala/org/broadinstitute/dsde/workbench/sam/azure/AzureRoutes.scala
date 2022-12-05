@@ -71,7 +71,19 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
                     }
                   }
                 }
-              }
+              } ~
+                delete {
+                  requireAction(
+                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+                    SamResourceActions.delete,
+                    samUser.id,
+                    samRequestContext
+                  ) {
+                    complete {
+                      service.deleteManagedResourceGroup(BillingProfileId(billingProfileId), samRequestContext).map(_ => StatusCodes.NoContent)
+                    }
+                  }
+                }
             }
         }
       }
