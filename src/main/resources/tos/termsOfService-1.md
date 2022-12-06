@@ -291,7 +291,7 @@ Our Privacy Policy explains how we treat your personal data and protect
 your privacy when you use Terra. Any information submitted on Terra is
 subject to our Privacy Policy, the terms of which are incorporated
 herein by this reference. Please review our [Privacy
-Policy](https://terra.bio/about/privacy/) to understand our practices.
+Policy](https://app.terra.bio/#privacy) to understand our practices.
 By using Terra, you have read, understood, and agree to the terms of the
 Privacy Policy, and you agree that we may retrieve, use, and disclose
 your personal data in accordance with the Privacy Policy.
@@ -618,7 +618,7 @@ not-for-profit business.
 “PHI” means protected health information, as defined in HIPAA.
 
 “Privacy Policy” means our Privacy Policy, available at
-<https://terra.bio/about/privacy/> or such other location as we may
+<https://app.terra.bio/#privacy> or such other location as we may
 notify you of.
 
 “Public Dataset” means those datasets listed at
