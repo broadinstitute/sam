@@ -402,7 +402,7 @@ available through Terra, its reliability, availability, or ability to
 meet your needs. We may change the form, features, or functionality of
 Terra at any time in our sole discretion.
 
-**9. Liability for Terra; Disclaimers and Limitations**
+## 9. Liability for Terra; Disclaimers and Limitations
 
 You expressly understand and agree that your use of Terra, or any
 Content Connected to Terra, is at your own risk. We do not warrant that
@@ -450,7 +450,7 @@ direct, incidental, indirect, special, punitive, exemplary, or
 consequential damages, arising out of your use of or inability to use
 Terra.
 
-**10. Indemnification**
+## 10. Indemnification
 
 To the extent permitted by Law, you agree to fully defend, indemnify and
 hold us, Microsoft, and Verily harmless from any third party claims
@@ -458,7 +458,7 @@ arising from your use of Terra, including any claim arising from the
 Connecting or accessing of Content. Neither we, nor Microsoft or Verily,
 agree to indemnify you.
 
-**11. Laws Governing these Terms.**
+## 11. Laws Governing these Terms.
 
 The laws of the Commonwealth of Massachusetts, U.S.A., excluding
 Massachusetts’s conflict of laws rules, will apply to any disputes
@@ -490,7 +490,7 @@ disputes arising from these Terms in court, including waiver of any
 right to a jury trial or to participate in a class action suit against
 us.
 
-**12. About these Terms**
+## 12. About these Terms
 
 We may modify these Terms, the Acceptable Use Policy, the Customer
 Security Requirements or any additional terms that apply to Terra or
@@ -500,7 +500,7 @@ Terms will be effective immediately upon our posting notice unless we
 state otherwise. You should look at the Terms regularly. We’ll post
 notice of modifications or additions to the Terms in Terra and will post
 prior notice of material changes to the Terms to you at
-<https://support.terra.bio/hc/en-us/sections/4408251025563> or such other location as we may
+<https://app.terra.bio/#terms-of-service> or such other location as we may
 notify you of.
 
 These Terms control the relationship between us and you. Microsoft,
@@ -516,7 +516,7 @@ away, this doesn’t mean that we are waiving or giving up any rights that
 we may have (such as taking action in the future). If a particular term
 is not enforceable, this will not affect any other term.
 
-**13. Definitions**
+## 13. Definitions
 
 “Acceptable Use Policy” means our Acceptable Use Policy, available at
 <https://terra.bio/about/acceptable-use-policy/> or such other location
@@ -546,7 +546,7 @@ that you Connect to Terra. For clarity, Content will not include other
 copies of the same information that is not Connected to Terra.
 
 “Copyright Policies & Procedures” means our Copyright Policies &
-Procedures available at \[[●](https://app.terra.bio/#privacy)\] or such
+Procedures available at <https://support.terra.bio/hc/en-us/sections/4408251025563> or such
 other location as we may notify you of.
 
 “Customer Security Requirements” means our Customer Security
