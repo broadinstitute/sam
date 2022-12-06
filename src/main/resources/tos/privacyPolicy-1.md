@@ -366,6 +366,6 @@ We share Personal Data with the following categories of recipients:
 - If you have any questions about our privacy practices, you may contact
   us using the following email address: [privacy@broadinstitute.org](mailto:privacy@broadinstitute.org).
 
-- You may contact our Data Protection Officer at: \[ADD AS APPLICABLE\].
+- You may contact our Data Protection Officer at: [whedglon@broadinstitute.org](mailto:whedglon@broadinstitute.org).
 
-- You may contact our EU/UK Representative at: \[ADD AS APPLICABLE\].
+- You may contact our EU/UK Representative at: [whedglon@broadinstitute.org](mailto:whedglon@broadinstitute.org).
