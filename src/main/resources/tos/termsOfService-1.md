@@ -2,7 +2,7 @@
 
 Last Modified: October 13, 2022
 
-Effective Date: \[●\]
+Effective Date: December 7th, 2022
 
 Certain terms (including capitalized terms) are defined in Section 13
 (Definitions).
