@@ -18,6 +18,7 @@ import scala.io.Source
 class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
   val termsOfServiceFile = s"tos/termsOfService-${tosConfig.version}.md"
+  val privacyPolicyFile = s"tos/privacyPolicy-${tosConfig.version}.md"
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
@@ -49,23 +50,29 @@ class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tos
     * @return
     *   terms of service text
     */
-  def getText: String = {
-    val tosFileStream =
+  def getText(file: String, prettyTitle: String): String = {
+    val fileStream =
       try {
-        logger.debug("Reading terms of service")
-        Source.fromResource(termsOfServiceFile)
+        logger.debug(s"Reading $prettyTitle")
+        Source.fromResource(file)
       } catch {
         case e: FileNotFoundException =>
-          logger.error("Terms Of Service file not found", e)
+          logger.error(s"$prettyTitle file not found", e)
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, e))
         case e: IOException =>
-          logger.error("Failed to read Terms of Service fail due to IO exception", e)
+          logger.error(s"Failed to read $prettyTitle file due to IO exception", e)
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, e))
       }
-    logger.debug("Terms of service file found")
+    logger.debug(s"$prettyTitle file found")
     try
-      tosFileStream.mkString
+      fileStream.mkString
     finally
-      tosFileStream.close
+      fileStream.close
   }
+
+  def getPrivacyText: String =
+    getText(privacyPolicyFile, "Privacy Policy")
+
+  def getTosText: String =
+    getText(termsOfServiceFile, "Terms of Service")
 }
