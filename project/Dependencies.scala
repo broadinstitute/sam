@@ -59,6 +59,8 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.85.Final"
+
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.1"
 
@@ -101,7 +103,7 @@ object Dependencies {
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
   val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.2"
-  val snakeYAML: ModuleID = "org.yaml" %% "snakeyaml" % "1.32"
+  val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "1.33"
 
   val scalikeCore = "org.scalikejdbc" %% "scalikejdbc" % scalikejdbcVersion
   val scalikeCoreConfig = "org.scalikejdbc" %% "scalikejdbc-config" % scalikejdbcVersion
@@ -173,11 +175,13 @@ object Dependencies {
     commonsCodec,
     liquibaseCore,
     circeYAML,
+    snakeYAML,
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres,
     cloudResourceLib,
+    nettyAll,
     azureManagedApplications
   ) ++ openCensusDependencies
 }
