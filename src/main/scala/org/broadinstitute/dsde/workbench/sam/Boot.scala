@@ -23,7 +23,7 @@ import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, Goog
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.openTelemetry.{OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
-import org.broadinstitute.dsde.workbench.sam.api.{SamRoutes, StandardSamUserDirectives}
+import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, DatabaseConfig, GoogleConfig}
@@ -39,7 +39,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import java.io.File
 import java.nio.file.{Files, Paths}
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
@@ -65,6 +65,23 @@ object Boot extends IOApp with LazyLogging {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
+
+    val livenessRoutes = new LivenessRoutes
+
+    logger
+      .info("Liveness server has been created, starting...")
+
+    Http()
+      .newServerAt("0.0.0.0", 9000)
+      .bindFlow(livenessRoutes.route)
+      .onError { case t: Throwable =>
+        Future(
+          logger
+            .error("FATAL - failure starting liveness http server", t)
+        )
+      }
+
+    logger.info("Liveness server has been started")
 
     val appConfig = AppConfig.load
 
