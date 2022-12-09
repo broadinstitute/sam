@@ -65,20 +65,19 @@ object Boot extends IOApp with LazyLogging {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
+    val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
     val livenessRoutes = new LivenessRoutes
 
-    logger
+    loggerIO
       .info("Liveness server has been created, starting...")
-
-    Http()
+      .unsafeToFuture()(cats.effect.unsafe.IORuntime.global) >> Http()
       .newServerAt("0.0.0.0", 9000)
       .bindFlow(livenessRoutes.route)
       .onError { case t: Throwable =>
-        Future(
-          logger
-            .error("FATAL - failure starting liveness http server", t)
-        )
+        loggerIO
+          .error(t)("FATAL - failure starting liveness http server")
+          .unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
       }
 
     logger.info("Liveness server has been started")
