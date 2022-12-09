@@ -130,14 +130,25 @@ object Dependencies {
   val http4sEmberClient = "org.http4s" %% "http4s-ember-client" % http4sVersion
   val http4sEmberServer = "org.http4s" %% "http4s-ember-server" % http4sVersion
   val http4sCirce = "org.http4s" %% "http4s-circe" % http4sVersion
-  val circeCore =         "io.circe"          %% "circe-core"           % "0.14.3"
-
+  val circeCore = "io.circe" %% "circe-core" % "0.14.3"
 
   val openCensusDependencies = Seq(
     opencensusScalaCode,
     opencensusAkkaHttp,
     opencensusStackDriverExporter,
     opencensusLoggingExporter
+  )
+
+  val pact4sDependencies = Seq(
+    pact4sScalaTest,
+    pact4sCirce,
+    http4sEmberClient,
+    http4sDsl,
+    http4sEmberServer,
+    http4sCirce,
+    circeCore,
+    typelevelCat,
+    scalaTest
   )
 
   val cloudResourceLib: ModuleID =
@@ -198,17 +209,5 @@ object Dependencies {
     cloudResourceLib,
     nettyAll,
     azureManagedApplications
-  ) ++ openCensusDependencies
-
-  val pact4sDependencies = Seq(
-    pact4sScalaTest,
-    pact4sCirce,
-    http4sEmberClient,
-    http4sDsl,
-    http4sEmberServer,
-    http4sCirce,
-    circeCore,
-    typelevelCat,
-    scalaTest
-  )
+  ) ++ openCensusDependencies ++ pact4sDependencies
 }
