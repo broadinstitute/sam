@@ -21,6 +21,7 @@ import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{
   AccessPolicyDAO,
+  DirectoryDAO,
   MockAccessPolicyDAO,
   MockAzureManagedResourceGroupDAO,
   MockDirectoryDAO,
@@ -269,7 +270,7 @@ final case class SamDependencies(
     userService: UserService,
     statusService: StatusService,
     managedGroupService: ManagedGroupService,
-    directoryDAO: MockDirectoryDAO,
+    directoryDAO: DirectoryDAO,
     policyDao: AccessPolicyDAO,
     cloudExtensions: CloudExtensions,
     oauth2Config: OpenIDConnectConfiguration,
