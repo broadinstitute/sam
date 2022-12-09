@@ -3,8 +3,9 @@ package org.broadinstitute.dsde.workbench.sam.azure
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Directive0, Directive1, Route}
+import akka.http.scaladsl.server.{Directive0, Directive1, ExceptionHandler, Route}
 import cats.syntax.all._
+import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
@@ -15,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsString
 
-trait AzureRoutes extends SecurityDirectives {
+trait AzureRoutes extends SecurityDirectives with LazyLogging {
   val azureService: Option[AzureService]
 
   def azureRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
@@ -53,6 +54,36 @@ trait AzureRoutes extends SecurityDirectives {
                   }
                 }
               }
+            } ~
+            path("billingProfile" / Segment / "managedResourceGroup") { billingProfileId =>
+              post {
+                entity(as[ManagedResourceGroupCoordinates]) { mrgCoords =>
+                  requireAction(
+                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+                    SamResourceActions.setManagedResourceGroup,
+                    samUser.id,
+                    samRequestContext
+                  ) {
+                    complete {
+                      service
+                        .createManagedResourceGroup(ManagedResourceGroup(mrgCoords, BillingProfileId(billingProfileId)), samRequestContext)
+                        .map(_ => StatusCodes.Created)
+                    }
+                  }
+                }
+              } ~
+                delete {
+                  requireAction(
+                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+                    SamResourceActions.delete,
+                    samUser.id,
+                    samRequestContext
+                  ) {
+                    complete {
+                      service.deleteManagedResourceGroup(BillingProfileId(billingProfileId), samRequestContext).map(_ => StatusCodes.NoContent)
+                    }
+                  }
+                }
             }
         }
       }
@@ -60,18 +91,27 @@ trait AzureRoutes extends SecurityDirectives {
 
   // Validates the provided SamUser has 'link' permission on the spend-profile resource represented by the
   // GetOrCreatePetManagedIdentityRequest
-  private def requireUserCreatePetAction(request: GetOrCreatePetManagedIdentityRequest, samUser: SamUser, samRequestContext: SamRequestContext): Directive0 =
-    onSuccess(azureService.flatTraverse(_.getBillingProfileId(request))).flatMap {
-      case Some(resourceId) =>
-        requireAction(FullyQualifiedResourceId(SamResourceTypes.spendProfile, resourceId), SamResourceActions.link, samUser.id, samRequestContext)
-      case None =>
-        failWith(
-          new WorkbenchExceptionWithErrorReport(
-            ErrorReport(StatusCodes.NotFound, s"Managed resource group ${request.managedResourceGroupName.value} not found")
-          )
-        )
+  private def requireUserCreatePetAction(request: GetOrCreatePetManagedIdentityRequest, samUser: SamUser, samRequestContext: SamRequestContext): Directive0 = {
+    val failWithForbidden = failWith(
+      new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "User is not permitted to create pet identity in resource group."))
+    )
 
+    val maskNotFound = handleExceptions(ExceptionHandler {
+      case withErrorReport: WorkbenchExceptionWithErrorReport if withErrorReport.errorReport.statusCode.contains(StatusCodes.NotFound) =>
+        failWithForbidden
+    })
+
+    onSuccess(azureService.flatTraverse(_.getBillingProfileId(request, samRequestContext))).flatMap {
+      case Some(resourceId) =>
+        maskNotFound & requireAction(
+          FullyQualifiedResourceId(SamResourceTypes.spendProfile, resourceId.asResourceId),
+          SamResourceActions.link,
+          samUser.id,
+          samRequestContext
+        )
+      case None => failWithForbidden
     }
+  }
 
   // Validates the provided SamUser has 'getPetManagedIdentityAction' on the 'azure' cloud-extension resource.
   private def requireCloudExtensionCreatePetAction(samUser: SamUser, samRequestContext: SamRequestContext): Directive0 =

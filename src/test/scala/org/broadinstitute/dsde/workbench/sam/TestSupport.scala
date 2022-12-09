@@ -19,7 +19,13 @@ import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{
+  AccessPolicyDAO,
+  MockAccessPolicyDAO,
+  MockAzureManagedResourceGroupDAO,
+  MockDirectoryDAO,
+  PostgresDistributedLockDAO
+}
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -148,7 +154,7 @@ object TestSupport extends TestSupport {
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
-    val azureService = new AzureService(MockCrlService(), directoryDAO)
+    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     SamDependencies(
       mockResourceService,
       policyEvaluatorService,
@@ -236,6 +242,7 @@ object TestSupport extends TestSupport {
           GroupMemberTable,
           GroupMemberFlatTable,
           PetServiceAccountTable,
+          AzureManagedResourceGroupTable,
           PetManagedIdentityTable,
           UserTable,
           AccessInstructionsTable,

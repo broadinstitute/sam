@@ -1,4 +1,4 @@
-addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.9.2")
+addDependencyTreePlugin
 
 addSbtPlugin("ch.epfl.scala" % "sbt-bloop" % "1.1.1")
 

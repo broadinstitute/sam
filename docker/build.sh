@@ -66,7 +66,7 @@ while [ "$1" != "" ]; do
             PRINT_HELP=true
             ;;
         *)
-            echo "Urecognized argument '${1}'."
+            echo "Unrecognized argument '${1}'."
             echo "run '${0} -h' to see available arguments."
             exit 1
             ;;
