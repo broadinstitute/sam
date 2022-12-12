@@ -273,6 +273,14 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 )
 
 @Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
+object BasicWorkbenchGroup {
+  def apply(workbenchGroup: WorkbenchGroup): BasicWorkbenchGroup = {
+    workbenchGroup.id match {
+      case wbg: WorkbenchGroupName => BasicWorkbenchGroup(wbg, workbenchGroup.members, workbenchGroup.email)
+      case _ => throw new WorkbenchException(s"WorkbenchGroup ${workbenchGroup} cannot be converted to a BasicWorkbenchGroup")
+    }
+  }
+}
 
 @Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
 @Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)

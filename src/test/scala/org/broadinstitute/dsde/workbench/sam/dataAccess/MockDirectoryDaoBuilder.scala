@@ -1,9 +1,8 @@
-package org.broadinstitute.dsde.workbench.sam.api
+package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
@@ -44,6 +43,10 @@ class MockDirectoryDaoBuilder() {
 
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): MockDirectoryDaoBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
+
+    when(mockedDirectoryDAO.loadGroup(ArgumentMatchers.eq(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext]))
+      .thenReturn(IO(Some(BasicWorkbenchGroup(allUsersGroup))))
+
     doReturn(IO(true))
       .when(mockedDirectoryDAO).addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), any[WorkbenchSubject], any[SamRequestContext])
     this
