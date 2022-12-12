@@ -112,7 +112,12 @@ object SamResourceTypes {
   val spendProfile = ResourceTypeName("spend-profile")
 }
 
-@Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
+//for backwards compatibility to old API
+@Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail)
+object UserStatusDetails {
+  def apply(samUser: SamUser): UserStatusDetails = UserStatusDetails(samUser.id, samUser.email)
+}
+
 @Lenses final case class UserIdInfo(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail, googleSubjectId: Option[GoogleSubjectId])
 @Lenses final case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 @Lenses final case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean, adminEnabled: Boolean)
@@ -274,12 +279,11 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 
 @Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
 object BasicWorkbenchGroup {
-  def apply(workbenchGroup: WorkbenchGroup): BasicWorkbenchGroup = {
+  def apply(workbenchGroup: WorkbenchGroup): BasicWorkbenchGroup =
     workbenchGroup.id match {
       case wbg: WorkbenchGroupName => BasicWorkbenchGroup(wbg, workbenchGroup.members, workbenchGroup.email)
       case _ => throw new WorkbenchException(s"WorkbenchGroup ${workbenchGroup} cannot be converted to a BasicWorkbenchGroup")
     }
-  }
 }
 
 @Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)

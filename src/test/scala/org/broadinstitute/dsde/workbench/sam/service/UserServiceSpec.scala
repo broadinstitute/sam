@@ -40,7 +40,10 @@ class UserServiceSpec
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
   val defaultUser = genWorkbenchUserBoth.sample.get
-  val enabledDefaultUserStatus = UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("tosAccepted" -> true, "google" -> true, "ldap" -> true, "allUsersGroup" -> true, "adminEnabled" -> true))
+  val enabledDefaultUserStatus = UserStatus(
+    UserStatusDetails(defaultUser.id, defaultUser.email),
+    Map("tosAccepted" -> true, "google" -> true, "ldap" -> true, "allUsersGroup" -> true, "adminEnabled" -> true)
+  )
 
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
 
@@ -129,10 +132,12 @@ class UserServiceSpec
 
   "getUserStatus" should "get user status for a user that exists and is enabled" in {
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
-    status shouldBe Some(UserStatus(
-      UserStatusDetails(defaultUser.id, defaultUser.email),
-      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
-    ))
+    status shouldBe Some(
+      UserStatus(
+        UserStatusDetails(defaultUser.id, defaultUser.email),
+        Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+      )
+    )
   }
 
   it should "return UserStatus.ldap and UserStatus.adminEnabled as false if user is disabled" in {

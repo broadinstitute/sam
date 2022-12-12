@@ -18,14 +18,16 @@ class MockDirectoryDaoBuilder() {
     .thenReturn(IO(None))
   when(mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext]))
     .thenReturn(IO(None))
+  when(mockedDirectoryDAO.loadUserByAzureB2CId(any[AzureB2CId], any[SamRequestContext]))
+    .thenReturn(IO(None))
   when(mockedDirectoryDAO.loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext]))
     .thenReturn(IO(None))
   when(mockedDirectoryDAO.createUser(any[SamUser], any[SamRequestContext]))
-    .thenAnswer((invocation: InvocationOnMock) => {
+    .thenAnswer { (invocation: InvocationOnMock) =>
       val samUser = invocation.getArgument[SamUser](0)
       makeUserExist(samUser)
       IO(samUser)
-    })
+    }
 
   // Intended to have `enableIdentity` throw an exception, but because GoogleExtensions calls `enableIdentity` for
   // petServiceAccounts it causes problems.  So this is how it is for now.
@@ -48,13 +50,15 @@ class MockDirectoryDaoBuilder() {
       .thenReturn(IO(Some(BasicWorkbenchGroup(allUsersGroup))))
 
     doReturn(IO(true))
-      .when(mockedDirectoryDAO).addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), any[WorkbenchSubject], any[SamRequestContext])
+      .when(mockedDirectoryDAO)
+      .addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), any[WorkbenchSubject], any[SamRequestContext])
     this
   }
 
   private def makeUserExist(samUser: SamUser): Unit = {
     doThrow(new RuntimeException(s"User ${samUser} is mocked to already exist"))
-      .when(mockedDirectoryDAO).createUser(ArgumentMatchers.eq(samUser), any[SamRequestContext])
+      .when(mockedDirectoryDAO)
+      .createUser(ArgumentMatchers.eq(samUser), any[SamRequestContext])
     when(mockedDirectoryDAO.loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])).thenReturn(IO(Option(samUser)))
     // Syntax needs to be slightly different here to properly take precedence over the default `.thenThrow` behavior.  Not sure why...Mockito
     doReturn(IO.unit).when(mockedDirectoryDAO).enableIdentity(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
@@ -62,14 +66,19 @@ class MockDirectoryDaoBuilder() {
       .thenReturn(IO(Option(samUser.id)))
 
     when(mockedDirectoryDAO.enableIdentity(ArgumentMatchers.eq(samUser.id), any[SamRequestContext]))
-      .thenAnswer(_ => {
+      .thenAnswer { _ =>
         makeUserAppearEnabled(samUser)
         IO.unit
-      })
+      }
 
     if (samUser.googleSubjectId.nonEmpty) {
       when(mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext]))
         .thenReturn(IO(Option(samUser.id)))
+    }
+
+    if (samUser.azureB2CId.nonEmpty) {
+      when(mockedDirectoryDAO.loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext]))
+        .thenReturn(IO(Option(samUser)))
     }
   }
 

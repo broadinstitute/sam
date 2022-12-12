@@ -19,31 +19,32 @@ class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
   val mockedCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
 
-  /**
-    * Constructor logic mocks up CloudExtensions as if in an "empty" state
+  /** Constructor logic mocks up CloudExtensions as if in an "empty" state
     */
 
   // Surprisingly, the implementation will try to create the All Users group in the Sam database if it does not
   // already exist.  It probably shouldn't do that, but it does.  Mocking similar behavior here.
   when(mockedCloudExtensions.getOrCreateAllUsersGroup(ArgumentMatchers.eq(directoryDAO), any[SamRequestContext])(any[ExecutionContext]))
-    .thenAnswer((invocation: InvocationOnMock) => {
+    .thenAnswer { (invocation: InvocationOnMock) =>
       val samRequestContext = invocation.getArgument[SamRequestContext](1)
       val maybeGroup = directoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync()
       maybeGroup match {
         case Some(group) => Future.successful(group)
         case None =>
-          throw new RuntimeException("Mocked exception.  Make sure the `directoryDAO` used to construct this " +
-            s"MockCloudExtensionsBuilder has an '${CloudExtensions.allUsersGroupName}' group in it.  If using a " +
-            s"mock `directoryDAO`, try building it with `MockDirectoryDaoBuilder.withAllUsersGroup()`")
+          throw new RuntimeException(
+            "Mocked exception.  Make sure the `directoryDAO` used to construct this " +
+              s"MockCloudExtensionsBuilder has an '${CloudExtensions.allUsersGroupName}' group in it.  If using a " +
+              s"mock `directoryDAO`, try building it with `MockDirectoryDaoBuilder.withAllUsersGroup()`"
+          )
       }
-    })
+    }
 
   when(mockedCloudExtensions.onUserCreate(any[SamUser], any[SamRequestContext]))
-    .thenAnswer((invocation: InvocationOnMock) => {
+    .thenAnswer { (invocation: InvocationOnMock) =>
       val samUser = invocation.getArgument[SamUser](0)
       makeUserExist(samUser)
       Future.successful(())
-    })
+    }
 
   when(mockedCloudExtensions.getUserStatus(any[SamUser]))
     .thenReturn(Future.successful(false))
@@ -54,11 +55,14 @@ class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
   private def makeUserExist(samUser: SamUser): Unit = {
     // Real implementation just returns unit if the user already exists
     doReturn(Future.successful(()))
-      .when(mockedCloudExtensions).onUserCreate(ArgumentMatchers.eq(samUser), any[SamRequestContext])
+      .when(mockedCloudExtensions)
+      .onUserCreate(ArgumentMatchers.eq(samUser), any[SamRequestContext])
     doReturn(Future.successful(true))
-      .when(mockedCloudExtensions).getUserStatus(argThat(IsSameUserAs(samUser)))
+      .when(mockedCloudExtensions)
+      .getUserStatus(argThat(IsSameUserAs(samUser)))
     doReturn(Future.successful(()))
-      .when(mockedCloudExtensions).onUserEnable(ArgumentMatchers.eq(samUser), any[SamRequestContext])
+      .when(mockedCloudExtensions)
+      .onUserEnable(ArgumentMatchers.eq(samUser), any[SamRequestContext])
   }
 
   def build(): CloudExtensions = mockedCloudExtensions
