@@ -65,22 +65,7 @@ object Boot extends IOApp with LazyLogging {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
-    val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
-
-    val livenessRoutes = new LivenessRoutes
-
-    loggerIO
-      .info("Liveness server has been created, starting...")
-      .unsafeToFuture()(cats.effect.unsafe.IORuntime.global) >> Http()
-      .newServerAt("0.0.0.0", 9000)
-      .bindFlow(livenessRoutes.route)
-      .onError { case t: Throwable =>
-        loggerIO
-          .error(t)("FATAL - failure starting liveness http server")
-          .unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
-      }
-
-    logger.info("Liveness server has been started")
+    livenessServerStartup()
 
     val appConfig = AppConfig.load
 
@@ -105,6 +90,25 @@ object Boot extends IOApp with LazyLogging {
         _ <- IO(system.terminate())
       } yield ()
     }
+  }
+
+  private def livenessServerStartup()(implicit actorSystem: ActorSystem): Unit = {
+    val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
+
+    val livenessRoutes = new LivenessRoutes
+
+    loggerIO
+      .info("Liveness server has been created, starting...")
+      .unsafeToFuture()(cats.effect.unsafe.IORuntime.global) >> Http()
+      .newServerAt("0.0.0.0", 9000)
+      .bindFlow(livenessRoutes.route)
+      .onError { case t: Throwable =>
+        loggerIO
+          .error(t)("FATAL - failure starting liveness http server")
+          .unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
+      }
+
+    loggerIO.info("Liveness server has been started").unsafeRunSync()(cats.effect.unsafe.IORuntime.global)
   }
 
   private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
