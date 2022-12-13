@@ -5,7 +5,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -86,20 +86,6 @@ class UserServiceSpec
     when(mockTosService.getTosStatus(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(Option(true)))
 
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
-  }
-
-  "Greg" should "validate the email address of the new user" in {
-    val mockedDirectoryDao = new MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build()
-    val userService = Mockito.spy(new UserService(mockedDirectoryDao, googleExtensions, Seq(blockedDomain), mockTosService))
-    userService.createUser(defaultUser, samRequestContext).futureValue
-    verify(userService).validateEmailAddress(defaultUser.email, Seq(blockedDomain))
-  }
-
-  it should "register the new user" in {
-    val mockedDirectoryDao = new MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build()
-    val userService = Mockito.spy(new UserService(mockedDirectoryDao, googleExtensions, Seq(blockedDomain), mockTosService))
-    userService.createUser(defaultUser, samRequestContext).futureValue
-    verify(userService).registerUser(defaultUser, samRequestContext)
   }
 
   "createUser" should "validate the email address of the new user" in {
