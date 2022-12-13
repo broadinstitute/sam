@@ -65,19 +65,10 @@ case class MockDirectoryDaoBuilder() {
     .when(mockedDirectoryDAO)
     .setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext])
 
-  def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = {
-    makeUserExist(samUser)
-    this
-  }
+  def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = withInvitedUser(samUser)
 
   def withInvitedUser(samUser: SamUser): MockDirectoryDaoBuilder = {
-    doReturn(IO(Option(samUser.id)))
-      .when(mockedDirectoryDAO)
-      .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
-
-    doReturn(IO(Option(samUser)))
-      .when(mockedDirectoryDAO)
-      .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+    makeUserExist(samUser)
     this
   }
 
@@ -103,7 +94,7 @@ case class MockDirectoryDaoBuilder() {
 
   // Bare minimum existing user has an ID and an email, but no googleSubjectId or azureB2CId
   private def makeUserExist(samUser: SamUser): Unit = {
-    doThrow(new RuntimeException(s"User ${samUser} is mocked to already exist"))
+    doThrow(new RuntimeException(s"User $samUser is mocked to already exist"))
       .when(mockedDirectoryDAO)
       .createUser(ArgumentMatchers.eq(samUser), any[SamRequestContext])
 
@@ -113,7 +104,8 @@ case class MockDirectoryDaoBuilder() {
       .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 
     doReturn(IO(Option(samUser.id)))
-      .when(mockedDirectoryDAO).loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
+      .when(mockedDirectoryDAO)
+      .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
   }
 
   private def makeUserAppearEnabled(samUser: SamUser): Unit = {
