@@ -7,7 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, doAnswer, doReturn, doThrow, when}
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, doAnswer, doReturn, doThrow}
 import org.mockito.invocation.InvocationOnMock
 import org.scalatestplus.mockito.MockitoSugar.mock
 
@@ -15,20 +15,29 @@ case class MockDirectoryDaoBuilder() {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
 
   val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
-  when(mockedDirectoryDAO.loadUser(any[WorkbenchUserId], any[SamRequestContext]))
-    .thenReturn(IO(None))
-  when(mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext]))
-    .thenReturn(IO(None))
-  when(mockedDirectoryDAO.loadUserByAzureB2CId(any[AzureB2CId], any[SamRequestContext]))
-    .thenReturn(IO(None))
-  when(mockedDirectoryDAO.loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext]))
-    .thenReturn(IO(None))
-  when(mockedDirectoryDAO.createUser(any[SamUser], any[SamRequestContext]))
-    .thenAnswer { (invocation: InvocationOnMock) =>
-      val samUser = invocation.getArgument[SamUser](0)
-      makeUserExist(samUser)
-      IO(samUser)
-    }
+
+  doReturn(IO(None))
+    .when(mockedDirectoryDAO)
+    .loadUser(any[WorkbenchUserId], any[SamRequestContext])
+
+  doReturn(IO(None))
+    .when(mockedDirectoryDAO)
+    .loadSubjectFromGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
+
+  doReturn(IO(None))
+    .when(mockedDirectoryDAO)
+    .loadUserByAzureB2CId(any[AzureB2CId], any[SamRequestContext])
+
+  doReturn(IO(None))
+    .when(mockedDirectoryDAO)
+    .loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext])
+
+  doAnswer { (invocation: InvocationOnMock) =>
+    val samUser = invocation.getArgument[SamUser](0)
+    makeUserExist(samUser)
+    IO(samUser)
+  }.when(mockedDirectoryDAO)
+   .createUser(any[SamUser], any[SamRequestContext])
 
   doAnswer { (invocation: InvocationOnMock) =>
     val samUserId = invocation.getArgument[WorkbenchUserId](0)
@@ -38,14 +47,14 @@ case class MockDirectoryDaoBuilder() {
       case Some(samUser) => makeUserAppearEnabled(samUser)
       case None => throw new RuntimeException("Mocking error when trying to enable a user that does not exist")
     }
-    IO(())
-  }.when(mockedDirectoryDAO).enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
+    IO.unit
+  }.when(mockedDirectoryDAO)
+   .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
 
-  when(mockedDirectoryDAO.addGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]))
-    .thenThrow(new RuntimeException("Mocked exception.  Use `MockDirectoryDaoBuilder.withAllUsersGroup()`"))
 
-  when(mockedDirectoryDAO.listUserDirectMemberships(any[WorkbenchUserId], any[SamRequestContext]))
-    .thenReturn(IO(LazyList.empty))
+  doReturn(IO(LazyList.empty))
+    .when(mockedDirectoryDAO)
+    .listUserDirectMemberships(any[WorkbenchUserId], any[SamRequestContext])
 
   // Note, these methods don't actually set any "state" in the mocked DAO.  If you need some sort of coordinated
   // state in your mocks, you should mock these methods yourself in your tests
@@ -81,12 +90,14 @@ case class MockDirectoryDaoBuilder() {
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): MockDirectoryDaoBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
 
-    when(mockedDirectoryDAO.loadGroup(ArgumentMatchers.eq(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext]))
-      .thenReturn(IO(Some(BasicWorkbenchGroup(allUsersGroup))))
+    doReturn(IO(Some(BasicWorkbenchGroup(allUsersGroup))))
+      .when(mockedDirectoryDAO)
+      .loadGroup(ArgumentMatchers.eq(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext])
 
     doReturn(IO(true))
       .when(mockedDirectoryDAO)
       .addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), any[WorkbenchSubject], any[SamRequestContext])
+
     this
   }
 
@@ -106,28 +117,31 @@ case class MockDirectoryDaoBuilder() {
   }
 
   private def makeUserAppearEnabled(samUser: SamUser): Unit = {
-    when(mockedDirectoryDAO.isEnabled(ArgumentMatchers.eq(samUser.id), any[SamRequestContext]))
-      .thenReturn(IO(true))
+    doReturn(IO(true))
+      .when(mockedDirectoryDAO)
+      .isEnabled(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 
-    when(mockedDirectoryDAO.loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext]))
-      .thenReturn(IO(Option(samUser.copy(enabled = true))))
+    doReturn(IO(Option(samUser.copy(enabled = true))))
+      .when(mockedDirectoryDAO)
+      .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 
     if (samUser.azureB2CId.nonEmpty) {
-      when(mockedDirectoryDAO.loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext]))
-        .thenReturn(IO(Option(samUser.copy(enabled = true))))
+      doReturn(IO(Option(samUser.copy(enabled = true))))
+        .when(mockedDirectoryDAO)
+        .loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext])
     }
 
     if (samUser.googleSubjectId.nonEmpty) {
-      when(mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext]))
-        .thenReturn(IO(Option(samUser.id)))
+      doReturn(IO(Option(samUser.id)))
+        .when(mockedDirectoryDAO).loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext])
     }
 
     if (maybeAllUsersGroup.nonEmpty) {
-      when(mockedDirectoryDAO.isGroupMember(ArgumentMatchers.eq(maybeAllUsersGroup.get.id), ArgumentMatchers.eq(samUser.id), any[SamRequestContext]))
-        .thenReturn(IO(true))
+      doReturn(IO(true))
+        .when(mockedDirectoryDAO).isGroupMember(ArgumentMatchers.eq(maybeAllUsersGroup.get.id), ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 
-      when(mockedDirectoryDAO.listUserDirectMemberships(ArgumentMatchers.eq(samUser.id), any[SamRequestContext]))
-        .thenReturn(IO(LazyList(maybeAllUsersGroup.get.id)))
+      doReturn(IO(LazyList(maybeAllUsersGroup.get.id)))
+        .when(mockedDirectoryDAO).listUserDirectMemberships(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
     }
   }
 
