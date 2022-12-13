@@ -26,8 +26,8 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
 
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
-  val baseMockedDirectoryDao: DirectoryDAO = new MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build()
-  val baseMockedCloudExtensions: CloudExtensions = new MockCloudExtensionsBuilder(baseMockedDirectoryDao).build()
+  val baseMockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build()
+  val baseMockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(baseMockedDirectoryDao).build()
 
   val baseMockTosService: TosService = mock[TosService](RETURNS_SMART_NULLS)
   when(baseMockTosService.getTosStatus(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(Option(true)))
@@ -63,6 +63,24 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
 
         userStatus shouldBe expectedUserStatus
       }
+
+      it("when called for an already invited user") {
+        // Setup
+        val invitedUser = genWorkbenchUserBoth.sample.get
+        val mockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder()
+          .withAllUsersGroup(allUsersGroup)
+          .withInvitedUser(invitedUser)
+          .build()
+        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build()
+        val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq.empty, baseMockTosService)
+        val expectedUserStatus = new UserStatusBuilder(invitedUser).build
+
+        // Act
+        val userStatus = runAndWait(userService.createUser(invitedUser, samRequestContext))
+
+        // Assert
+        userStatus shouldBe expectedUserStatus
+      }
     }
 
     describe("fails") {
@@ -87,16 +105,16 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
         }
       }
 
-      it("when a user already exists with the same AzureB2CId") {
+      it("when an enabled user already exists with the same AzureB2CId") {
         // Setup
-        val existingAzureUser = genWorkbenchUserAzure.sample.get
-        val mockedDirectoryDao: DirectoryDAO = new MockDirectoryDaoBuilder()
+        val enabledAzureUser = genWorkbenchUserAzure.sample.get
+        val mockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withExistingUser(existingAzureUser)
+          .withEnabledUser(enabledAzureUser)
           .build()
-        val mockedCloudExtensions: CloudExtensions = new MockCloudExtensionsBuilder(mockedDirectoryDao).build()
+        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build()
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
-        val newUser = genWorkbenchUserAzure.sample.get.copy(azureB2CId = existingAzureUser.azureB2CId)
+        val newUser = genWorkbenchUserAzure.sample.get.copy(azureB2CId = enabledAzureUser.azureB2CId)
 
         // Act and Assert
         assertThrows[WorkbenchExceptionWithErrorReport] {
@@ -104,16 +122,16 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
         }
       }
 
-      it("when a user already exists with the same GoogleSubjectId") {
+      it("when an enabled user already exists with the same GoogleSubjectId") {
         // Setup
-        val existingGoogleUser = genWorkbenchUserGoogle.sample.get
-        val mockedDirectoryDao: DirectoryDAO = new MockDirectoryDaoBuilder()
+        val enabledGoogleUser = genWorkbenchUserGoogle.sample.get
+        val mockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withExistingUser(existingGoogleUser)
+          .withEnabledUser(enabledGoogleUser)
           .build()
-        val mockedCloudExtensions: CloudExtensions = new MockCloudExtensionsBuilder(mockedDirectoryDao).build()
+        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build()
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
-        val newUser = genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = existingGoogleUser.googleSubjectId)
+        val newUser = genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = enabledGoogleUser.googleSubjectId)
 
         // Act and Assert
         assertThrows[WorkbenchExceptionWithErrorReport] {

@@ -1,19 +1,20 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, doReturn, doThrow, when}
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, doAnswer, doReturn, doThrow, when}
 import org.mockito.invocation.InvocationOnMock
 import org.scalatestplus.mockito.MockitoSugar.mock
 
-class MockDirectoryDaoBuilder() {
+case class MockDirectoryDaoBuilder() {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
 
-  val mockedDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+  val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
   when(mockedDirectoryDAO.loadUser(any[WorkbenchUserId], any[SamRequestContext]))
     .thenReturn(IO(None))
   when(mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext]))
@@ -26,20 +27,55 @@ class MockDirectoryDaoBuilder() {
     .thenAnswer { (invocation: InvocationOnMock) =>
       val samUser = invocation.getArgument[SamUser](0)
       makeUserExist(samUser)
+      makeUserAppearEnabled(samUser)
       IO(samUser)
     }
 
-  // Intended to have `enableIdentity` throw an exception, but because GoogleExtensions calls `enableIdentity` for
-  // petServiceAccounts it causes problems.  So this is how it is for now.
-  when(mockedDirectoryDAO.enableIdentity(any[WorkbenchUserId], any[SamRequestContext]))
-    // .thenThrow(new RuntimeException("Mocked exception because no users exist to enable"))
-    .thenReturn(IO.unit)
+  doAnswer { (invocation: InvocationOnMock) =>
+    val samUserId = invocation.getArgument[WorkbenchUserId](0)
+    val samRequestContext = invocation.getArgument[SamRequestContext](1)
+    val maybeUser = mockedDirectoryDAO.loadUser(samUserId, samRequestContext).unsafeRunSync()
+    maybeUser match {
+      case Some(samUser) => makeUserAppearEnabled(samUser)
+      case None => throw new RuntimeException("Mocking error when trying to enable a user that does not exist")
+    }
+    IO(())
+  }.when(mockedDirectoryDAO).enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
 
   when(mockedDirectoryDAO.addGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]))
     .thenThrow(new RuntimeException("Mocked exception.  Use `MockDirectoryDaoBuilder.withAllUsersGroup()`"))
 
+  when(mockedDirectoryDAO.listUserDirectMemberships(any[WorkbenchUserId], any[SamRequestContext]))
+    .thenReturn(IO(LazyList.empty))
+
+  // Note, these methods don't actually set any "state" in the mocked DAO.  If you need some sort of coordinated
+  // state in your mocks, you should mock these methods yourself in your tests
+  doReturn(IO.unit)
+    .when(mockedDirectoryDAO)
+    .setGoogleSubjectId(any[WorkbenchUserId], any[GoogleSubjectId], any[SamRequestContext])
+  doReturn(IO.unit)
+    .when(mockedDirectoryDAO)
+    .setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext])
+
   def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = {
     makeUserExist(samUser)
+    this
+  }
+
+  def withInvitedUser(samUser: SamUser): MockDirectoryDaoBuilder = {
+    doReturn(IO(Option(samUser.id)))
+      .when(mockedDirectoryDAO)
+      .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
+
+    doReturn(IO(Option(samUser)))
+      .when(mockedDirectoryDAO)
+      .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+    this
+  }
+
+  def withEnabledUser(samUser: SamUser): MockDirectoryDaoBuilder = {
+    makeUserExist(samUser)
+    makeUserAppearEnabled(samUser)
     this
   }
 
@@ -55,31 +91,19 @@ class MockDirectoryDaoBuilder() {
     this
   }
 
+  // Bare minimum existing user has an ID and an email, but no googleSubjectId or azureB2CId
   private def makeUserExist(samUser: SamUser): Unit = {
     doThrow(new RuntimeException(s"User ${samUser} is mocked to already exist"))
       .when(mockedDirectoryDAO)
       .createUser(ArgumentMatchers.eq(samUser), any[SamRequestContext])
-    when(mockedDirectoryDAO.loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])).thenReturn(IO(Option(samUser)))
-    // Syntax needs to be slightly different here to properly take precedence over the default `.thenThrow` behavior.  Not sure why...Mockito
-    doReturn(IO.unit).when(mockedDirectoryDAO).enableIdentity(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
-    when(mockedDirectoryDAO.loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext]))
-      .thenReturn(IO(Option(samUser.id)))
 
-    when(mockedDirectoryDAO.enableIdentity(ArgumentMatchers.eq(samUser.id), any[SamRequestContext]))
-      .thenAnswer { _ =>
-        makeUserAppearEnabled(samUser)
-        IO.unit
-      }
+    // A user that only "exists" but isn't enabled or anything also does not have a Cloud Identifier
+    doReturn(IO(Option(samUser.copy(googleSubjectId = None, azureB2CId = None))))
+      .when(mockedDirectoryDAO)
+      .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 
-    if (samUser.googleSubjectId.nonEmpty) {
-      when(mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext]))
-        .thenReturn(IO(Option(samUser.id)))
-    }
-
-    if (samUser.azureB2CId.nonEmpty) {
-      when(mockedDirectoryDAO.loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext]))
-        .thenReturn(IO(Option(samUser)))
-    }
+    doReturn(IO(Option(samUser.id)))
+      .when(mockedDirectoryDAO).loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
   }
 
   private def makeUserAppearEnabled(samUser: SamUser): Unit = {
@@ -94,30 +118,19 @@ class MockDirectoryDaoBuilder() {
         .thenReturn(IO(Option(samUser.copy(enabled = true))))
     }
 
-    if (maybeAllUsersGroup.nonEmpty) {
-      when(mockedDirectoryDAO.isGroupMember(
-        ArgumentMatchers.eq(maybeAllUsersGroup.get.id),
-        ArgumentMatchers.eq(samUser.id),
-        any[SamRequestContext])
-      ).thenReturn(IO(true))
+    if (samUser.googleSubjectId.nonEmpty) {
+      when(mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext]))
+        .thenReturn(IO(Option(samUser.id)))
+    }
 
+    if (maybeAllUsersGroup.nonEmpty) {
+      when(mockedDirectoryDAO.isGroupMember(ArgumentMatchers.eq(maybeAllUsersGroup.get.id), ArgumentMatchers.eq(samUser.id), any[SamRequestContext]))
+        .thenReturn(IO(true))
+
+      when(mockedDirectoryDAO.listUserDirectMemberships(ArgumentMatchers.eq(samUser.id), any[SamRequestContext]))
+        .thenReturn(IO(LazyList(maybeAllUsersGroup.get.id)))
     }
   }
 
   def build(): DirectoryDAO = mockedDirectoryDAO
 }
-
-//    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(Some(enabledUser)))
-//    when(dirDAO.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(None))
-//    when(dirDAO.loadSubjectFromEmail(defaultUser.email, samRequestContext)).thenReturn(IO(Option(defaultUser.id)))
-//    when(dirDAO.createUser(defaultUser, samRequestContext)).thenReturn(IO(disabledUser))
-//    when(dirDAO.deleteUser(defaultUser.id, samRequestContext)).thenReturn(IO(()))
-//    when(dirDAO.enableIdentity(defaultUser.id, samRequestContext)).thenReturn(IO(()))
-//    when(dirDAO.disableIdentity(defaultUser.id, samRequestContext)).thenReturn(IO(()))
-//    when(dirDAO.addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
-//    when(dirDAO.removeGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
-//    when(dirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(true))
-//    when(dirDAO.isEnabled(defaultUser.id, samRequestContext)).thenReturn(IO(true))
-//    when(dirDAO.listUserDirectMemberships(defaultUser.id, samRequestContext)).thenReturn(IO(LazyList(allUsersGroup.id)))
-//    when(dirDAO.setGoogleSubjectId(defaultUser.id, defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(()))
-//    when(dirDAO.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext)).thenReturn(IO(()))
