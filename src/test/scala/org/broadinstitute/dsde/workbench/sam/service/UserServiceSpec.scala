@@ -88,30 +88,10 @@ class UserServiceSpec
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
   }
 
-  "createUser" should "validate the email address of the new user" in {
-    service.createUser(defaultUser, samRequestContext).futureValue
-    verify(service).validateEmailAddress(defaultUser.email, Seq(blockedDomain))
-  }
-
-  it should "register the new user" in {
-    service.createUser(defaultUser, samRequestContext).futureValue
-    verify(service).registerUser(defaultUser, samRequestContext)
-  }
-
-  it should "enable the new user in the Sam database" in {
-    service.createUser(defaultUser, samRequestContext).futureValue
-    verify(dirDAO).enableIdentity(defaultUser.id, samRequestContext)
-  }
-
-  it should "enable the new user on Google" in {
-    service.createUser(defaultUser, samRequestContext).futureValue
-    verify(googleExtensions).onUserEnable(enabledUser, samRequestContext)
-  }
-
-  it should "add the new user the All_Users group in the Sam database" in {
-    service.createUser(defaultUser, samRequestContext).futureValue
-    verify(dirDAO).addGroupMember(allUsersGroup.id, enabledUser.id, samRequestContext)
-  }
+  /*************************************************************************************************************
+  * UserService.createUser is tested in:
+  * src/test/scala/org/broadinstitute/dsde/workbench/sam/service/UserServiceSpecs/CreateUserSpec.scala
+  *************************************************************************************************************/
 
   "getUserStatus" should "get user status for a user that exists and is enabled" in {
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
