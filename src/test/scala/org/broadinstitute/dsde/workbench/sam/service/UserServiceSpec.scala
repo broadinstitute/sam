@@ -88,6 +88,9 @@ class UserServiceSpec
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
   }
 
+  // TODO: Add nested suites for each of the component test suites:
+  // https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
+
   /*************************************************************************************************************
   * UserService.createUser is tested in:
   * src/test/scala/org/broadinstitute/dsde/workbench/sam/service/UserServiceSpecs/CreateUserSpec.scala

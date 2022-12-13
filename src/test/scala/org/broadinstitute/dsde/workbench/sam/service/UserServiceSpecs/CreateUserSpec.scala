@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genPetServiceAccount, genPolicy, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
-import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, TosService, UserService}
@@ -11,15 +10,10 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.should.Matchers
-import org.scalatest.{Inside, OptionValues}
-import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContextExecutor
 
-class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with MockitoSugar with ScalaFutures with Inside with OptionValues {
+class CreateUserSpec extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
   // Setup test vals
