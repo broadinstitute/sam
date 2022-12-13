@@ -23,8 +23,6 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
 
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
-  val defaultUser: SamUser = genWorkbenchUserBoth.sample.get
-
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
   val baseMockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build()
@@ -85,35 +83,46 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
     }
 
     describe("enables the user on Google") {
-      it("calls the cloudExtensions.onUserEnable method") {
+      it("by calling the cloudExtensions.onUserEnable method") {
         // This is not a great test as it is testing implementation, not functionality.  But due to the way the
         // interactions with Google are implemented, I think this is the best we can do for now.  With some refactoring,
         // we can probably test the logic of what it means to enable a user on Google without actually calling Google.
         // For now, this is where we need to mock for our test to work without actually calling Google and our
         // integration test for GoogleCloudExtensions will need to test the business logic for what it means to enable
         // a user, yuck.
-        runAndWait(baseUserService.createUser(defaultUser, samRequestContext))
-        verify(baseMockedCloudExtensions).onUserEnable(ArgumentMatchers.eq(defaultUser), any[SamRequestContext])
+        val samUser: SamUser = genWorkbenchUserBoth.sample.get
+        runAndWait(baseUserService.createUser(samUser, samRequestContext))
+        verify(baseMockedCloudExtensions)
+          .onUserEnable(ArgumentMatchers.eq(samUser), any[SamRequestContext])
+      }
+    }
+
+    describe("adds the new user to the `All_Users` group") {
+      it("by calling the directoryDAO.addGroupMember method") {
+        val samUser: SamUser = genWorkbenchUserBoth.sample.get
+        runAndWait(baseUserService.createUser(samUser, samRequestContext))
+        verify(baseMockedDirectoryDao)
+          .addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
       }
     }
 
     describe("fails") {
       it("when user's email is in a blocked domain") {
-        val userWithBadEmail = defaultUser.copy(email = WorkbenchEmail(s"foo@${blockedDomain}"))
+        val userWithBadEmail = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail(s"foo@${blockedDomain}"))
         assertThrows[WorkbenchExceptionWithErrorReport] {
           runAndWait(baseUserService.createUser(userWithBadEmail, samRequestContext))
         }
       }
 
       it("when user's email is not a properly formatted email address") {
-        val userWithBadEmail = defaultUser.copy(email = WorkbenchEmail("foo"))
+        val userWithBadEmail = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail("foo"))
         assertThrows[WorkbenchExceptionWithErrorReport] {
           runAndWait(baseUserService.createUser(userWithBadEmail, samRequestContext))
         }
       }
 
       it("when user has neither an AzureB2CId nor a GoogleSubjectId") {
-        val userWithoutIds = defaultUser.copy(googleSubjectId = None, azureB2CId = None)
+        val userWithoutIds = genWorkbenchUserBoth.sample.get.copy(googleSubjectId = None, azureB2CId = None)
         assertThrows[WorkbenchException] {
           runAndWait(baseUserService.createUser(userWithoutIds, samRequestContext))
         }
