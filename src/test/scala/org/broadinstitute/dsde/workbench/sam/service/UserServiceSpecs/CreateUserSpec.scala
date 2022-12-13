@@ -2,12 +2,13 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genPetServiceAccount, genPolicy, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalatest.concurrent.ScalaFutures
@@ -136,6 +137,47 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
         // Act and Assert
         assertThrows[WorkbenchExceptionWithErrorReport] {
           runAndWait(userService.createUser(newUser, samRequestContext))
+        }
+      }
+
+      describe("when new user has the same email address with an existing") {
+        it("FullyQualifiedPolicyId") {
+          // Setup
+          val somePolicy: AccessPolicy = genPolicy.sample.get
+          val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = somePolicy.email)
+          when(baseMockedDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(somePolicy.email), any[SamRequestContext]))
+            .thenReturn(IO(Option(somePolicy.id)))
+
+          // Act and Assert
+          assertThrows[WorkbenchExceptionWithErrorReport] {
+            runAndWait(baseUserService.createUser(newUser, samRequestContext))
+          }
+        }
+
+        it("PetServiceAccountId") {
+          // Setup
+          val existingPetSA = genPetServiceAccount.sample.get
+          val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = existingPetSA.serviceAccount.email)
+          when(baseMockedDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(existingPetSA.serviceAccount.email), any[SamRequestContext]))
+            .thenReturn(IO(Option(existingPetSA.id)))
+
+          // Act and Assert
+          assertThrows[WorkbenchExceptionWithErrorReport] {
+            runAndWait(baseUserService.createUser(newUser, samRequestContext))
+          }
+        }
+
+        it("WorkbenchGroupName") {
+          // Setup
+          val existingGroup = genBasicWorkbenchGroup.sample.get
+          val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = existingGroup.email)
+          when(baseMockedDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(existingGroup.email), any[SamRequestContext]))
+            .thenReturn(IO(Option(existingGroup.id)))
+
+          // Act and Assert
+          assertThrows[WorkbenchExceptionWithErrorReport] {
+            runAndWait(baseUserService.createUser(newUser, samRequestContext))
+          }
         }
       }
     }
