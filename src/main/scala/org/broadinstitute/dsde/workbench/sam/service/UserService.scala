@@ -123,6 +123,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       createdUser <- directoryDAO.createUser(user, samRequestContext)
       _ <- IO.fromFuture(IO(cloudExtensions.onUserCreate(createdUser, samRequestContext)))
     } yield createdUser
+
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchSubject]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext).unsafeToFuture()
 

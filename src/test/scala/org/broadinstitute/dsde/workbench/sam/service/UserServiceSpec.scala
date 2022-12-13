@@ -20,8 +20,8 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 /** Created by rtitle on 10/6/17.
   */
@@ -40,6 +40,7 @@ class UserServiceSpec
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
   val defaultUser = genWorkbenchUserBoth.sample.get
+  val enabledDefaultUserStatus = UserStatusBuilder(defaultUser).build
 
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
 
@@ -71,7 +72,7 @@ class UserServiceSpec
     when(dirDAO.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext)).thenReturn(IO(()))
 
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
-    when(googleExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
+    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
       .thenReturn(Future.successful(allUsersGroup))
 
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
@@ -114,10 +115,7 @@ class UserServiceSpec
 
   "getUserStatus" should "get user status for a user that exists and is enabled" in {
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
-    status shouldBe Some(UserStatus(
-      UserStatusDetails(defaultUser.id, defaultUser.email),
-      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
-    ))
+    status.value shouldBe enabledDefaultUserStatus
   }
 
   it should "return UserStatus.ldap and UserStatus.adminEnabled as false if user is disabled" in {
