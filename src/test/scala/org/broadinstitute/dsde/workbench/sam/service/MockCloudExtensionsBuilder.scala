@@ -61,6 +61,11 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
     .when(mockedCloudExtensions)
     .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
 
+  def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = {
+    makeUserAppearEnabled(samUser)
+    this
+  }
+
   private def makeUserAppearEnabled(samUser: SamUser): Unit = {
     // Real implementation just returns unit if the user already exists
     doReturn(Future.successful(()))

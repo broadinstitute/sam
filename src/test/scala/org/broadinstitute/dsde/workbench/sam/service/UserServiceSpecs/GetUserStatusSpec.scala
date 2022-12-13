@@ -31,10 +31,11 @@ class GetUserStatusSpec extends UserServiceTestTraits {
 
   def makeUserService(withUsers: List[SamUser]): UserService = {
     val mockDirectoryDaoBuilder = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup)
-    withUsers.map(mockDirectoryDaoBuilder.withEnabledUser(_))
+    withUsers.map(mockDirectoryDaoBuilder.withEnabledUser)
     val mockDirectoryDao = mockDirectoryDaoBuilder.build()
-    val mockCloudExtensions = MockCloudExtensionsBuilder(mockDirectoryDao).build()
-    new UserService(mockDirectoryDao, mockCloudExtensions, Seq.empty, baseMockTosService)
+    val mockCloudExtensionsBuilder = MockCloudExtensionsBuilder(mockDirectoryDao)
+    withUsers.map(mockCloudExtensionsBuilder.withEnabledUser)
+    new UserService(mockDirectoryDao, mockCloudExtensionsBuilder.build(), Seq.empty, baseMockTosService)
   }
 
   describe("UserService.getUserStatus") {
