@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers.{any, argThat}
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, doReturn, when}
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, doAnswer, doReturn}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.{ArgumentMatcher, ArgumentMatchers}
 import org.scalatestplus.mockito.MockitoSugar.mock
@@ -24,40 +24,42 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
 
   // Surprisingly, the implementation will try to create the 'All Users' group in the Sam database if it does not
   // already exist.  It probably shouldn't do that, but it does.  Mocking similar behavior here.
-  when(mockedCloudExtensions.getOrCreateAllUsersGroup(ArgumentMatchers.eq(directoryDAO), any[SamRequestContext])(any[ExecutionContext]))
-    .thenAnswer { (invocation: InvocationOnMock) =>
-      val samRequestContext = invocation.getArgument[SamRequestContext](1)
-      val maybeGroup = directoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync()
-      maybeGroup match {
-        case Some(group) => Future.successful(group)
-        case None =>
-          throw new RuntimeException(
-            "Mocked exception.  Make sure the `directoryDAO` used to construct this " +
-              s"MockCloudExtensionsBuilder has an '${CloudExtensions.allUsersGroupName}' group in it.  If using a " +
-              s"mock `directoryDAO`, try building it with `MockDirectoryDaoBuilder.withAllUsersGroup()`"
-          )
+  doAnswer { (invocation: InvocationOnMock) =>
+    val samRequestContext = invocation.getArgument[SamRequestContext](1)
+    val maybeGroup = directoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync()
+    maybeGroup match {
+      case Some(group) => Future.successful(group)
+      case None =>
+        throw new RuntimeException(
+          "Mocked exception.  Make sure the `directoryDAO` used to construct this " +
+            s"MockCloudExtensionsBuilder has an '${CloudExtensions.allUsersGroupName}' group in it.  If using a " +
+            s"mock `directoryDAO`, try building it with `MockDirectoryDaoBuilder.withAllUsersGroup()`"
+        )
       }
-    }
+    }.when(mockedCloudExtensions)
+     .getOrCreateAllUsersGroup(ArgumentMatchers.eq(directoryDAO), any[SamRequestContext])(any[ExecutionContext])
 
-  when(mockedCloudExtensions.onUserCreate(any[SamUser], any[SamRequestContext]))
-    .thenAnswer { (invocation: InvocationOnMock) =>
-      val samUser = invocation.getArgument[SamUser](0)
-      makeUserAppearEnabled(samUser)
-      Future.successful(())
-    }
+  doAnswer { (invocation: InvocationOnMock) =>
+    val samUser = invocation.getArgument[SamUser](0)
+    makeUserAppearEnabled(samUser)
+    Future.successful(())
+  }.when(mockedCloudExtensions)
+   .onUserCreate(any[SamUser], any[SamRequestContext])
 
-  when(mockedCloudExtensions.getUserStatus(any[SamUser]))
-    .thenReturn(Future.successful(false))
+  doReturn(Future.successful(false))
+    .when(mockedCloudExtensions)
+    .getUserStatus(any[SamUser])
 
-  when(mockedCloudExtensions.onUserEnable(any[SamUser], any[SamRequestContext]))
-    .thenAnswer { (invocation: InvocationOnMock) =>
-      val samUser = invocation.getArgument[SamUser](0)
-      makeUserAppearEnabled(samUser)
-      Future.successful(())
-    }
+  doAnswer { (invocation: InvocationOnMock) =>
+    val samUser = invocation.getArgument[SamUser](0)
+    makeUserAppearEnabled(samUser)
+    Future.successful(())
+  }.when(mockedCloudExtensions)
+   .onUserEnable(any[SamUser], any[SamRequestContext])
 
-  when(mockedCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext]))
-   .thenReturn(Future.successful(()))
+  doReturn(Future.successful(()))
+    .when(mockedCloudExtensions)
+    .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
 
   private def makeUserAppearEnabled(samUser: SamUser): Unit = {
     // Real implementation just returns unit if the user already exists
