@@ -38,7 +38,7 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
     describe("returns a fully enabled UserStatus") {
       it("when user has an AzureB2CId and a GoogleSubjectId") {
         val userWithBothIds = genWorkbenchUserBoth.sample.get
-        val expectedUserStatus = new UserStatusBuilder(userWithBothIds).build
+        val expectedUserStatus = UserStatusBuilder(userWithBothIds).build
 
         val userStatus = runAndWait(baseUserService.createUser(userWithBothIds, samRequestContext))
 
@@ -47,7 +47,7 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
 
       it("when user has an AzureB2CId but no GoogleSubjectId") {
         val userWithOnlyB2CId = genWorkbenchUserAzure.sample.get
-        val expectedUserStatus = new UserStatusBuilder(userWithOnlyB2CId).build
+        val expectedUserStatus = UserStatusBuilder(userWithOnlyB2CId).build
 
         val userStatus = runAndWait(baseUserService.createUser(userWithOnlyB2CId, samRequestContext))
 
@@ -56,7 +56,7 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
 
       it("when user has GoogleSubjectId but no AzureB2CId") {
         val userWithOnlyGoogleId = genWorkbenchUserGoogle.sample.get
-        val expectedUserStatus = new UserStatusBuilder(userWithOnlyGoogleId).build
+        val expectedUserStatus = UserStatusBuilder(userWithOnlyGoogleId).build
 
         val userStatus = runAndWait(baseUserService.createUser(userWithOnlyGoogleId, samRequestContext))
 
@@ -72,7 +72,7 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
           .build()
         val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build()
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq.empty, baseMockTosService)
-        val expectedUserStatus = new UserStatusBuilder(invitedUser).build
+        val expectedUserStatus = UserStatusBuilder(invitedUser).build
 
         // Act
         val userStatus = runAndWait(userService.createUser(invitedUser, samRequestContext))
