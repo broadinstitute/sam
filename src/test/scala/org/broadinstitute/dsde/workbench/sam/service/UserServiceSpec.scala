@@ -115,12 +115,7 @@ class UserServiceSpec
 
   "getUserStatus" should "get user status for a user that exists and is enabled" in {
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
-    status shouldBe Some(
-      UserStatus(
-        UserStatusDetails(defaultUser.id, defaultUser.email),
-        Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
-      )
-    )
+    status.value shouldBe enabledDefaultUserStatus
   }
 
   it should "return UserStatus.ldap and UserStatus.adminEnabled as false if user is disabled" in {
