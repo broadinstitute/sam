@@ -84,6 +84,19 @@ class CreateUserSpec extends AnyFunSpec with Matchers with TestSupport with Mock
       }
     }
 
+    describe("enables the user on Google") {
+      it("calls the cloudExtensions.onUserEnable method") {
+        // This is not a great test as it is testing implementation, not functionality.  But due to the way the
+        // interactions with Google are implemented, I think this is the best we can do for now.  With some refactoring,
+        // we can probably test the logic of what it means to enable a user on Google without actually calling Google.
+        // For now, this is where we need to mock for our test to work without actually calling Google and our
+        // integration test for GoogleCloudExtensions will need to test the business logic for what it means to enable
+        // a user, yuck.
+        runAndWait(baseUserService.createUser(defaultUser, samRequestContext))
+        verify(baseMockedCloudExtensions).onUserEnable(ArgumentMatchers.eq(defaultUser), any[SamRequestContext])
+      }
+    }
+
     describe("fails") {
       it("when user's email is in a blocked domain") {
         val userWithBadEmail = defaultUser.copy(email = WorkbenchEmail(s"foo@${blockedDomain}"))
