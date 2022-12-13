@@ -27,7 +27,6 @@ case class MockDirectoryDaoBuilder() {
     .thenAnswer { (invocation: InvocationOnMock) =>
       val samUser = invocation.getArgument[SamUser](0)
       makeUserExist(samUser)
-      makeUserAppearEnabled(samUser)
       IO(samUser)
     }
 
