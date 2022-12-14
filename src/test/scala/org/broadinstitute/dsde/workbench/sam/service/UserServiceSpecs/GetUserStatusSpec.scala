@@ -4,7 +4,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser, UserStatus}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers.any
@@ -29,45 +29,67 @@ class GetUserStatusSpec extends UserServiceTestTraits {
   // Setup a UserService that can be used in most of the tests
   val baseUserService = new UserService(baseMockedDirectoryDao, baseMockedCloudExtensions, Seq.empty, baseMockTosService)
 
-  def makeUserService(withUsers: List[SamUser]): UserService = {
+  private def makeUserService(withEnabledUsers: List[SamUser] = List.empty,
+                              withExistingUsers: List[SamUser] = List.empty): UserService = {
     val mockDirectoryDaoBuilder = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup)
-    withUsers.map(mockDirectoryDaoBuilder.withEnabledUser)
+    withEnabledUsers.map(mockDirectoryDaoBuilder.withEnabledUser)
+    withExistingUsers.map(mockDirectoryDaoBuilder.withExistingUser)
     val mockDirectoryDao = mockDirectoryDaoBuilder.build()
+
     val mockCloudExtensionsBuilder = MockCloudExtensionsBuilder(mockDirectoryDao)
-    withUsers.map(mockCloudExtensionsBuilder.withEnabledUser)
+    (withEnabledUsers ::: withExistingUsers).map(mockCloudExtensionsBuilder.withEnabledUser)
+
     new UserService(mockDirectoryDao, mockCloudExtensionsBuilder.build(), Seq.empty, baseMockTosService)
   }
 
   describe("UserService.getUserStatus") {
-    describe("for an existing user") {
-      describe("that is fully enabled") {
-        it("returns a status with all components enabled when userDetailsOnly is false") {
+    describe("for a user that is fully enabled") {
+      describe("when `userDetailsOnly` is false") {
+        it("returns a status with all components enabled") {
           // Setup
           val samUser = genWorkbenchUserBoth.sample.get
-          val userService = makeUserService(withUsers = List(samUser))
+          val userService = makeUserService(withEnabledUsers = List(samUser))
 
           // Act
           val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
 
           // Assert
-          inside(resultingStatus.value) { case UserStatus(_, componentStatuses) =>
-            inside(componentStatuses) { statuses =>
-              statuses.keys.foreach { component =>
-                inside(component) { k =>
-                  componentStatuses.get(k).value shouldBe true
-                }
-              }
+          inside(resultingStatus.value) { status =>
+            status should beForUser(samUser)
+            "google" should beEnabledIn(status)
+            "ldap" should beEnabledIn(status)
+            "allUsersGroup" should beEnabledIn(status)
+            "adminEnabled" should beEnabledIn(status)
+            "tosAccepted" should beEnabledIn(status)
+          }
+        }
+
+        describe("for a user that is disabled") {
+          // TODO:  Currently ignored because the expected functionality is kind of ambiguous.
+          // Need to run some manual tests against a live env to understand what the intended behavior should be
+          ignore("returns a status with `ldap` and `adminEnabled` as false") {
+            // Setup
+            val samUser = genWorkbenchUserBoth.sample.get
+            val userService = makeUserService(withExistingUsers = List(samUser))
+
+            // Act
+            val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
+
+            // Assert
+            inside(resultingStatus.value) { status =>
+              status should beForUser(samUser)
+              "google" should beEnabledIn(status)
+              "ldap" shouldNot beEnabledIn(status)
+              "allUsersGroup" should beEnabledIn(status)
+              "adminEnabled" shouldNot beEnabledIn(status)
+              "tosAccepted" should beEnabledIn(status)
             }
           }
         }
       }
     }
   }
-//  "getUserStatus" should "get user status for a user that exists and is enabled" in {
-//    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
-//    status.value shouldBe enabledDefaultUserStatus
-//  }
-//
+
 //  it should "return UserStatus.ldap and UserStatus.adminEnabled as false if user is disabled" in {
 //    when(dirDAO.isEnabled(disabledUser.id, samRequestContext)).thenReturn(IO(false))
 //    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue

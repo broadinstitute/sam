@@ -51,6 +51,13 @@ case class MockDirectoryDaoBuilder() {
   }.when(mockedDirectoryDAO)
    .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
 
+  doReturn(IO(false))
+    .when(mockedDirectoryDAO)
+    .isEnabled(any[WorkbenchSubject], any[SamRequestContext])
+
+  doReturn(IO(false))
+    .when(mockedDirectoryDAO)
+    .isGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext])
 
   doReturn(IO(LazyList.empty))
     .when(mockedDirectoryDAO)
@@ -125,15 +132,18 @@ case class MockDirectoryDaoBuilder() {
 
     if (samUser.googleSubjectId.nonEmpty) {
       doReturn(IO(Option(samUser.id)))
-        .when(mockedDirectoryDAO).loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext])
+        .when(mockedDirectoryDAO)
+        .loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext])
     }
 
     if (maybeAllUsersGroup.nonEmpty) {
       doReturn(IO(true))
-        .when(mockedDirectoryDAO).isGroupMember(ArgumentMatchers.eq(maybeAllUsersGroup.get.id), ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+        .when(mockedDirectoryDAO)
+        .isGroupMember(ArgumentMatchers.eq(maybeAllUsersGroup.get.id), ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 
       doReturn(IO(LazyList(maybeAllUsersGroup.get.id)))
-        .when(mockedDirectoryDAO).listUserDirectMemberships(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+        .when(mockedDirectoryDAO)
+        .listUserDirectMemberships(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
     }
   }
 

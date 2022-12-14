@@ -40,7 +40,13 @@ class UserServiceSpec
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
   val defaultUser = genWorkbenchUserBoth.sample.get
-  val enabledDefaultUserStatus = UserStatusBuilder(defaultUser).build
+  val enabledDefaultUserStatus = UserStatusBuilder(defaultUser)
+    .withAllUsersGroup(true)
+    .withLdap(true)
+    .withGoogle(true)
+    .withTosAccepted(true)
+    .withAdminEnabled(true)
+    .build
 
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
 
