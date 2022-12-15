@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam
 import akka.actor.ActorSystem
 import akka.stream.Materializer
 import cats.ApplicativeError
-import cats.effect.{IO, Temporal}
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Temporal}
 import cats.kernel.Eq
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
@@ -20,13 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{
-  AccessPolicyDAO,
-  MockAccessPolicyDAO,
-  MockAzureManagedResourceGroupDAO,
-  MockDirectoryDAO,
-  PostgresDistributedLockDAO
-}
+import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -34,7 +28,7 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers.{any, anyList, anyLong, anyString}
+import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, when}
 import org.scalatest.Tag
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
@@ -63,7 +57,7 @@ trait TestSupport {
 
   when(
     openTelemetry.time(anyString(), any[List[FiniteDuration]], any[Map[String, String]])(any[IO[_]])(any[Temporal[IO]], any[ApplicativeError[IO, Throwable]])
-  ).thenReturn(IO.unit)
+  ).thenReturn(IO.pure(()))
 
   val samRequestContext = SamRequestContext()
 
