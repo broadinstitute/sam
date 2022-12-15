@@ -28,13 +28,13 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   private val fullyActivatedUsers: mutable.Set[SamUser] = mutable.Set.empty
 
   private var maybeAllUsersGroup: Option[WorkbenchGroup] = None
-  private val blockedEmailDomains: mutable.Seq[String] = mutable.Seq.empty
+  private val blockedEmailDomains: mutable.Set[String] = mutable.Set.empty
   private var haveAllAcceptedToS: Boolean = false
   private val tosStatesForUsers: mutable.Map[WorkbenchUserId, Boolean] = mutable.Map.empty
 
   def withExistingUser(samUser: SamUser): TestUserServiceBuilder = withExistingUsers(List(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = {
-    existingUsers ++ samUsers
+    existingUsers.addAll(samUsers)
     this
   }
 
@@ -43,7 +43,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
 
   def withFullyActivatedUser(samUser: SamUser): TestUserServiceBuilder = withFullyActivatedUsers(List(samUser))
   def withFullyActivatedUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = {
-    fullyActivatedUsers ++ samUsers
+    fullyActivatedUsers.addAll(samUsers)
     this
   }
 
@@ -52,24 +52,24 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
     this
   }
 
-  def withAllAccepted(): TestUserServiceBuilder = {
+  def withAllUsersHavingAcceptedTos(): TestUserServiceBuilder = {
     haveAllAcceptedToS = true
     this
   }
 
-  def withNoneAccepted(): TestUserServiceBuilder = {
+  def withNoUsersHavingAcceptedTos(): TestUserServiceBuilder = {
     haveAllAcceptedToS = false
     this
   }
 
-  def withAcceptedStateForUser(samUser: SamUser, isAccepted: Boolean): TestUserServiceBuilder = {
+  def withToSAcceptanceStateForUser(samUser: SamUser, isAccepted: Boolean): TestUserServiceBuilder = {
     tosStatesForUsers.update(samUser.id, isAccepted)
     this
   }
 
   def withBlockedEmailDomain(blockedDomain: String): TestUserServiceBuilder = withBlockedEmailDomains(Seq(blockedDomain))
   def withBlockedEmailDomains(blockedDomains: Iterable[String]): TestUserServiceBuilder = {
-    blockedEmailDomains ++ blockedDomains
+    blockedEmailDomains.addAll(blockedDomains)
     this
   }
 

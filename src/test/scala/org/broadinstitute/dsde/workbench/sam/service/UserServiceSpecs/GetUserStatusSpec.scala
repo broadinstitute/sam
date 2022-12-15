@@ -1,9 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genWorkbenchUserBoth}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service._
 
 import scala.concurrent.ExecutionContextExecutor
@@ -12,47 +11,17 @@ class GetUserStatusSpec extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
   // Setup test vals
-  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-
-  // Setup mocks
-  val baseMockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
-  val baseMockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(baseMockedDirectoryDao).build
-  val baseMockTosService: TosService = MockTosServiceBuilder().withNoneAccepted().build
-
-  // Setup a UserService that can be used in most of the tests
-  val baseUserService = new UserService(baseMockedDirectoryDao, baseMockedCloudExtensions, Seq.empty, baseMockTosService)
-
-  private def makeUserService(withEnabledUsers: List[SamUser] = List.empty,
-                              withExistingUsers: List[SamUser] = List.empty): UserService = {
-    // Setup the DirectoryDao and TosService
-    val mockDirectoryDaoBuilder = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup)
-    val mockTosServiceBuilder = MockTosServiceBuilder().withNoneAccepted()
-    // Add all Enabled Users to the DirectoryDao and TosService
-    withEnabledUsers.map { user =>
-      mockDirectoryDaoBuilder.withFullyActivatedUser(user)
-      mockTosServiceBuilder.withAcceptedStateForUser(user, true)
-    }
-    // Add all Existing Users to just the DirectoryDao (because they should only exist in the Sam database and bare
-    // minimum existence means they should not have accepted ToS yet either)
-    withExistingUsers.map(mockDirectoryDaoBuilder.withExistingUser)
-
-    // Need the DirectoryDao so that we can make the CloudExtensions :(
-    val mockDirectoryDao = mockDirectoryDaoBuilder.build
-
-    // Setup MockCloudExtensions - Enabled users are all that matter because users who only exist in Sam should not have
-    // any state on Google yet
-    val mockCloudExtensionsBuilder = MockCloudExtensionsBuilder(mockDirectoryDao)
-    withEnabledUsers.map(mockCloudExtensionsBuilder.withEnabledUser)
-
-    new UserService(mockDirectoryDao, mockCloudExtensionsBuilder.build, Seq.empty, mockTosServiceBuilder.build)
-  }
+  val allUsersGroup: BasicWorkbenchGroup = genBasicWorkbenchGroup.sample.get.copy(id = CloudExtensions.allUsersGroupName)
 
   describe("UserService.getUserStatus") {
     describe("for a user that does not exist") {
       it("returns an empty response") {
         // Setup
         val samUser = genWorkbenchUserBoth.sample.get
-        val userService = makeUserService(withExistingUsers = List.empty)
+        val userService = TestUserServiceBuilder()
+          .withAllUsersGroup(allUsersGroup)
+          .withExistingUsers(List.empty) // Just being explicit
+          .build
 
         // Act
         val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
@@ -62,12 +31,16 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       }
     }
 
-    describe("for an enabled user") {
+    describe("for a fully activated user") {
       describe("that has accepted the ToS") {
         it("returns a status with all components enabled") {
           // Setup
           val samUser = genWorkbenchUserBoth.sample.get
-          val userService = makeUserService(withEnabledUsers = List(samUser))
+          val userService = TestUserServiceBuilder()
+            .withAllUsersGroup(allUsersGroup)
+            .withFullyActivatedUser(samUser)
+            .withToSAcceptanceStateForUser(samUser, true)
+            .build
 
           // Act
           val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
@@ -101,12 +74,11 @@ class GetUserStatusSpec extends UserServiceTestTraits {
         it("returns a status with all components disabled") {
           // Setup
           val samUser = genWorkbenchUserBoth.sample.get
-          val directoryDAO = MockDirectoryDaoBuilder()
+          val userService = TestUserServiceBuilder()
             .withAllUsersGroup(allUsersGroup)
-            .withExistingUser(samUser).build
-          val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
-          val tosService = MockTosServiceBuilder().withNoneAccepted().build
-          val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+            .withInvitedUser(samUser)
+            .withNoUsersHavingAcceptedTos()
+            .build
 
           // Act
           val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
