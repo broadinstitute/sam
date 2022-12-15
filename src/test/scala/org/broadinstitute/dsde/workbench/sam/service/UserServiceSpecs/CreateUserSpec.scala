@@ -5,7 +5,7 @@ import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExcepti
 import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genPetServiceAccount, genPolicy, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, MockTosServiceBuilder, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers._
@@ -21,10 +21,10 @@ class CreateUserSpec extends UserServiceTestTraits {
   val blockedDomain = "blocked.domain.com"
 
   // Setup mocks
-  val baseMockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build()
-  val baseMockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(baseMockedDirectoryDao).build()
+  val baseMockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
+  val baseMockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(baseMockedDirectoryDao).build
 
-  val baseMockTosService: TosService = mock[TosService](RETURNS_SMART_NULLS)
+  val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
   when(baseMockTosService.getTosStatus(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO(Option(true)))
 
   // Setup a UserService that can be used in most of the tests
@@ -74,8 +74,8 @@ class CreateUserSpec extends UserServiceTestTraits {
         val mockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder()
           .withAllUsersGroup(allUsersGroup)
           .withInvitedUser(invitedUser)
-          .build()
-        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build()
+          .build
+        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq.empty, baseMockTosService)
         val expectedUserStatus = UserStatusBuilder(invitedUser).build
 
@@ -158,8 +158,8 @@ class CreateUserSpec extends UserServiceTestTraits {
         val mockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder()
           .withAllUsersGroup(allUsersGroup)
           .withEnabledUser(enabledAzureUser)
-          .build()
-        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build()
+          .build
+        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
         val newUser = genWorkbenchUserAzure.sample.get.copy(azureB2CId = enabledAzureUser.azureB2CId)
 
@@ -175,8 +175,8 @@ class CreateUserSpec extends UserServiceTestTraits {
         val mockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder()
           .withAllUsersGroup(allUsersGroup)
           .withEnabledUser(enabledGoogleUser)
-          .build()
-        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build()
+          .build
+        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
         val newUser = genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = enabledGoogleUser.googleSubjectId)
 

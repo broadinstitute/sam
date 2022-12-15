@@ -156,5 +156,5 @@ case class MockDirectoryDaoBuilder() {
     }
   }
 
-  def build(): DirectoryDAO = mockedDirectoryDAO
+  def build: DirectoryDAO = mockedDirectoryDAO
 }

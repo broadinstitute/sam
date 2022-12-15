@@ -1,15 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
-import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, TosService, UserService}
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, doReturn}
+import org.broadinstitute.dsde.workbench.sam.service._
 
 import scala.concurrent.ExecutionContextExecutor
 
@@ -20,27 +15,36 @@ class GetUserStatusSpec extends UserServiceTestTraits {
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
   // Setup mocks
-  val baseMockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build()
-  val baseMockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(baseMockedDirectoryDao).build()
-  val baseMockTosService: TosService = mock[TosService](RETURNS_SMART_NULLS)
-  doReturn(IO(Option(true)))
-    .when(baseMockTosService)
-    .getTosStatus(any[WorkbenchUserId], any[SamRequestContext])
+  val baseMockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
+  val baseMockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(baseMockedDirectoryDao).build
+  val baseMockTosService: TosService = MockTosServiceBuilder().withNoneAccepted().build
 
   // Setup a UserService that can be used in most of the tests
   val baseUserService = new UserService(baseMockedDirectoryDao, baseMockedCloudExtensions, Seq.empty, baseMockTosService)
 
   private def makeUserService(withEnabledUsers: List[SamUser] = List.empty,
                               withExistingUsers: List[SamUser] = List.empty): UserService = {
+    // Setup the DirectoryDao and TosService
     val mockDirectoryDaoBuilder = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup)
-    withEnabledUsers.map(mockDirectoryDaoBuilder.withEnabledUser)
+    val mockTosServiceBuilder = MockTosServiceBuilder().withNoneAccepted()
+    // Add all Enabled Users to the DirectoryDao and TosService
+    withEnabledUsers.map { user =>
+      mockDirectoryDaoBuilder.withEnabledUser(user)
+      mockTosServiceBuilder.withAcceptedStateForUser(user, true)
+    }
+    // Add all Existing Users to just the DirectoryDao (because they should only exist in the Sam database and bare
+    // minimum existence means they should not have accepted ToS yet either)
     withExistingUsers.map(mockDirectoryDaoBuilder.withExistingUser)
-    val mockDirectoryDao = mockDirectoryDaoBuilder.build()
 
+    // Need the DirectoryDao so that we can make the CloudExtensions :(
+    val mockDirectoryDao = mockDirectoryDaoBuilder.build
+
+    // Setup MockCloudExtensions - Enabled users are all that matter because users who only exist in Sam should not have
+    // any state on Google yet
     val mockCloudExtensionsBuilder = MockCloudExtensionsBuilder(mockDirectoryDao)
-    (withEnabledUsers ::: withExistingUsers).map(mockCloudExtensionsBuilder.withEnabledUser)
+    withEnabledUsers.map(mockCloudExtensionsBuilder.withEnabledUser)
 
-    new UserService(mockDirectoryDao, mockCloudExtensionsBuilder.build(), Seq.empty, baseMockTosService)
+    new UserService(mockDirectoryDao, mockCloudExtensionsBuilder.build, Seq.empty, mockTosServiceBuilder.build)
   }
 
   describe("UserService.getUserStatus") {
@@ -91,12 +95,10 @@ class GetUserStatusSpec extends UserServiceTestTraits {
           val samUser = genWorkbenchUserBoth.sample.get
           val directoryDAO = MockDirectoryDaoBuilder()
             .withAllUsersGroup(allUsersGroup)
-            .withExistingUser(samUser).build()
-          val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build()
-          doReturn(IO(Option(false)))
-            .when(baseMockTosService)
-            .getTosStatus(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
-          val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, baseMockTosService)
+            .withExistingUser(samUser).build
+          val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
+          val tosService = MockTosServiceBuilder().withNoneAccepted().build
+          val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
           // Act
           val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))

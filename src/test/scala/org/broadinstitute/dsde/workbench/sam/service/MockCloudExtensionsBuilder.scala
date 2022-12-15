@@ -76,7 +76,7 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
       .getUserStatus(argThat(IsSameUserAs(samUser)))
   }
 
-  def build(): CloudExtensions = mockedCloudExtensions
+  def build: CloudExtensions = mockedCloudExtensions
 }
 
 case class IsSameUserAs(user: SamUser) extends ArgumentMatcher[SamUser] {
