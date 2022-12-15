@@ -94,16 +94,15 @@ class ResourceService(
     * @param samUser
     * @return
     */
-  def createResource(resourceType: ResourceType, resourceId: ResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Resource] =
-    openTelemetry.time("api.v1.resource.createDefault.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
-      val ownerRole = resourceType.roles
-        .find(_.roleName == resourceType.ownerRoleName)
-        .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
-      val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
-        AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(samUser.email), Set.empty, Set(ownerRole.roleName), None, None)
-      )
-      createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, samUser.id, samRequestContext)
-    }
+  def createResource(resourceType: ResourceType, resourceId: ResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Resource] = {
+    val ownerRole = resourceType.roles
+      .find(_.roleName == resourceType.ownerRoleName)
+      .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
+    val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
+      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(samUser.email), Set.empty, Set(ownerRole.roleName), None, None)
+    )
+    createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, samUser.id, samRequestContext)
+  }
 
   /** Validates the resource first and if any validations fail, an exception is thrown with an error report that describes what failed. If validations pass,
     * then the Resource should be persisted.

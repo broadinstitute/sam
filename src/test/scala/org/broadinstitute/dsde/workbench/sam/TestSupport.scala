@@ -57,7 +57,7 @@ trait TestSupport {
 
   when(
     openTelemetry.time(anyString(), any[List[FiniteDuration]], any[Map[String, String]])(any[IO[_]])(any[Temporal[IO]], any[ApplicativeError[IO, Throwable]])
-  ).thenAnswer(invocation => invocation.getArgument[IO[Unit]](3))
+  ).thenAnswer(invocation => invocation.getArgument[IO[_]](3))
 
   val samRequestContext = SamRequestContext()
 
