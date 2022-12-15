@@ -20,7 +20,13 @@ import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockAzureManagedResourceGroupDAO, MockDirectoryDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{
+  AccessPolicyDAO,
+  MockAccessPolicyDAO,
+  MockAzureManagedResourceGroupDAO,
+  MockDirectoryDAO,
+  PostgresDistributedLockDAO
+}
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -55,7 +61,9 @@ trait TestSupport {
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
   implicit val openTelemetry: OpenTelemetryMetricsInterpreter[IO] = mock[OpenTelemetryMetricsInterpreter[IO]](RETURNS_SMART_NULLS)
 
-  when(openTelemetry.time(anyString(), any[List[FiniteDuration]], any[Map[String, String]])(any[IO[_]])(any[Temporal[IO]], any[ApplicativeError[IO, Throwable]])).thenReturn(IO.unit)
+  when(
+    openTelemetry.time(anyString(), any[List[FiniteDuration]], any[Map[String, String]])(any[IO[_]])(any[Temporal[IO]], any[ApplicativeError[IO, Throwable]])
+  ).thenReturn(IO.unit)
 
   val samRequestContext = SamRequestContext()
 
