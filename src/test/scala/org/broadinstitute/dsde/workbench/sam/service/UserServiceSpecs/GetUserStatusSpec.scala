@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirec
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, doReturn}
 
@@ -43,8 +44,22 @@ class GetUserStatusSpec extends UserServiceTestTraits {
   }
 
   describe("UserService.getUserStatus") {
-    describe("for a user that is fully enabled") {
-      describe("when `userDetailsOnly` is false") {
+    describe("for a user that does not exist") {
+      it("returns an empty response") {
+        // Setup
+        val samUser = genWorkbenchUserBoth.sample.get
+        val userService = makeUserService(withExistingUsers = List.empty)
+
+        // Act
+        val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
+
+        // Assert
+        resultingStatus shouldBe empty
+      }
+    }
+
+    describe("for an enabled user") {
+      describe("that has accepted the ToS") {
         it("returns a status with all components enabled") {
           // Setup
           val samUser = genWorkbenchUserBoth.sample.get
@@ -63,31 +78,41 @@ class GetUserStatusSpec extends UserServiceTestTraits {
             "tosAccepted" should beEnabledIn(status)
           }
         }
+      }
 
-        describe("for a user that is disabled") {
-          // TODO:  Currently ignored because the expected functionality is kind of ambiguous.
-          // Need to run some manual tests against a live env to understand what the intended behavior should be
-          ignore("returns a status with `ldap` and `adminEnabled` as false") {
-            // Setup
-            val samUser = genWorkbenchUserBoth.sample.get
-            val userService = makeUserService(withExistingUsers = List(samUser))
+      describe("that has not accepted the ToS") {
 
-            // Act
-            val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
+      }
+    }
 
-            // Assert
-            inside(resultingStatus.value) { status =>
-              status should beForUser(samUser)
-              "google" should beEnabledIn(status)
-              "ldap" shouldNot beEnabledIn(status)
-              "allUsersGroup" should beEnabledIn(status)
-              "adminEnabled" shouldNot beEnabledIn(status)
-              "tosAccepted" should beEnabledIn(status)
-            }
+    describe("for an invited user") {
+        it("returns a status with all components disabled") {
+          // Setup
+          val samUser = genWorkbenchUserBoth.sample.get
+          val directoryDAO = MockDirectoryDaoBuilder()
+            .withAllUsersGroup(allUsersGroup)
+            .withExistingUser(samUser).build()
+          val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build()
+          doReturn(IO(Option(false)))
+            .when(baseMockTosService)
+            .getTosStatus(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+          val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, baseMockTosService)
+
+          // Act
+          val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
+
+          // Assert
+          inside(resultingStatus.value) { status =>
+            status should beForUser(samUser)
+            "google" shouldNot beEnabledIn(status)
+            "ldap" shouldNot beEnabledIn(status)
+            "allUsersGroup" shouldNot beEnabledIn(status)
+            "adminEnabled" shouldNot beEnabledIn(status)
+            "tosAccepted" shouldNot beEnabledIn(status)
           }
         }
       }
-    }
+
   }
 
 //  it should "return UserStatus.ldap and UserStatus.adminEnabled as false if user is disabled" in {

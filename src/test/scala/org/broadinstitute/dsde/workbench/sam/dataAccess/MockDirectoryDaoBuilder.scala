@@ -16,6 +16,12 @@ case class MockDirectoryDaoBuilder() {
 
   val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
+  // Default constructor state is an "empty" database.
+  // Get/load requests should not return anything.
+  // Inserts into tables without foreign keys should succeed
+  // Inserts into tables with foreign keys should fail
+
+  // Attempting to load any user should not find anything
   doReturn(IO(None))
     .when(mockedDirectoryDAO)
     .loadUser(any[WorkbenchUserId], any[SamRequestContext])
@@ -32,6 +38,7 @@ case class MockDirectoryDaoBuilder() {
     .when(mockedDirectoryDAO)
     .loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext])
 
+  // Create/Insert user should succeed and then make the user appear to "exist" in the Mock
   doAnswer { (invocation: InvocationOnMock) =>
     val samUser = invocation.getArgument[SamUser](0)
     makeUserExist(samUser)
@@ -39,6 +46,7 @@ case class MockDirectoryDaoBuilder() {
   }.when(mockedDirectoryDAO)
    .createUser(any[SamUser], any[SamRequestContext])
 
+  // Default behavior can check if the user "exists" in the Mock and respond accordingly
   doAnswer { (invocation: InvocationOnMock) =>
     val samUserId = invocation.getArgument[WorkbenchUserId](0)
     val samRequestContext = invocation.getArgument[SamRequestContext](1)
@@ -51,6 +59,7 @@ case class MockDirectoryDaoBuilder() {
   }.when(mockedDirectoryDAO)
    .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
 
+  // No users "exist" so there are a bunch of queries that should return false/None if they depend on "existing" users
   doReturn(IO(false))
     .when(mockedDirectoryDAO)
     .isEnabled(any[WorkbenchSubject], any[SamRequestContext])
@@ -72,12 +81,12 @@ case class MockDirectoryDaoBuilder() {
     .when(mockedDirectoryDAO)
     .setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext])
 
-  def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = withInvitedUser(samUser)
-
-  def withInvitedUser(samUser: SamUser): MockDirectoryDaoBuilder = {
+  def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = {
     makeUserExist(samUser)
     this
   }
+
+  def withInvitedUser(samUser: SamUser): MockDirectoryDaoBuilder = withExistingUser(samUser)
 
   def withEnabledUser(samUser: SamUser): MockDirectoryDaoBuilder = {
     makeUserExist(samUser)
