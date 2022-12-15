@@ -56,7 +56,7 @@ trait TestSupport {
   implicit val openTelemetry: OpenTelemetryMetricsInterpreter[IO] = mock[OpenTelemetryMetricsInterpreter[IO]](RETURNS_SMART_NULLS)
 
   when(
-    openTelemetry.time(anyString(), any[List[FiniteDuration]], any[Map[String, String]])(any[IO[Unit]])(any[Temporal[IO]], any[ApplicativeError[IO, Throwable]])
+    openTelemetry.time(anyString(), any[List[FiniteDuration]], any[Map[String, String]])(any[IO[_]])(any[Temporal[IO]], any[ApplicativeError[IO, Throwable]])
   ).thenAnswer(invocation => invocation.getArgument[IO[Unit]](3))
 
   val samRequestContext = SamRequestContext()
