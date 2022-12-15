@@ -4,21 +4,14 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.TestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
-import org.broadinstitute.dsde.workbench.sam.model.{
-  ResourceId,
-  ResourceRoleName,
-  ResourceType,
-  ResourceTypeName,
-  RolesAndActions,
-  SamUser,
-  UserResourcesResponse
-}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, SamDependencies, TestSupport}
@@ -28,16 +21,16 @@ import org.mockito.Mockito.when
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.mockito.MockitoSugar.mock
+import pact4s.provider.Authentication.BasicAuth
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
-import java.io.File
 import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
-class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with TestSupport with BeforeAndAfterAll with PactVerifier {
-  def genSamDependencies = {
+class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with TestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging {
+  def genSamDependencies: SamDependencies = {
     val directoryDAO = mock[DirectoryDAO]
     val policyDAO = mock[AccessPolicyDAO]
     val googleExt = mock[GoogleExtensions]
@@ -119,25 +112,44 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with TestSuppo
 
   def startSam: IO[Http.ServerBinding] =
     for {
-      binding <- IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(genSamRoutes(genSamDependencies, Generator.genWorkbenchUserBoth.sample.get).route)))
+      binding <- IO
+        .fromFuture(IO(Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, Generator.genWorkbenchUserBoth.sample.get).route)))
+        .onError { t: Throwable =>
+          IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+        }
       _ <- IO.fromFuture(IO(binding.whenTerminated))
       _ <- IO(system.terminate())
     } yield binding
 
+  lazy val pactBrokerUrl: String = sys.env.getOrElse("PACT_BROKER_URL", "")
+  lazy val pactBrokerUser: String = sys.env.getOrElse("PACT_BROKER_USERNAME", "")
+  lazy val pactBrokerPass: String = sys.env.getOrElse("PACT_BROKER_PASSWORD", "")
+  lazy val branch: String = sys.env.getOrElse("BRANCH", "")
+  lazy val gitShaShort: String = sys.env.getOrElse("GIT_SHA_SHORT", "")
+
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
-    name = "scalatest-provider",
-    pactSource = PactSource.FileSource(
-      Map("scalatest-consumer" -> new File("src/test/resources/pact-provider.json"))
-    )
+    name = "sam-provider",
+    // pactSource = PactSource.FileSource(Map("leo-consumer" -> new File("src/test/resources/leo-consumer-sam-provider.json")))
+    pactSource = PactSource
+      .PactBrokerWithSelectors(
+        brokerUrl = pactBrokerUrl
+      )
+      .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
 
   it should "Verify pacts" in {
     verifyPacts(
-      publishVerificationResults = None,
-      providerVerificationOptions = Nil,
+      providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
+      publishVerificationResults = Some(
+        PublishVerificationResults(gitShaShort, ProviderTags(branch))
+      ),
+      providerVerificationOptions = Seq(
+        ProviderVerificationOption.SHOW_STACKTRACE,
+        // Exclude these Consumers from Pact Broker
+        ProviderVerificationOption.FILTER_CONSUMERS
+          .apply(Seq("Example App", "GoAdminService").toList)
+      ).toList,
       verificationTimeout = Some(10.seconds)
     )
-
   }
-
 }
