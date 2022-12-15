@@ -52,7 +52,7 @@ case class MockDirectoryDaoBuilder() {
     val samRequestContext = invocation.getArgument[SamRequestContext](1)
     val maybeUser = mockedDirectoryDAO.loadUser(samUserId, samRequestContext).unsafeRunSync()
     maybeUser match {
-      case Some(samUser) => makeUserAppearEnabled(samUser)
+      case Some(samUser) => makeUserFullyActivated(samUser)
       case None => throw new RuntimeException("Mocking error when trying to enable a user that does not exist")
     }
     IO.unit
@@ -81,16 +81,25 @@ case class MockDirectoryDaoBuilder() {
     .when(mockedDirectoryDAO)
     .setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext])
 
-  def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = {
-    makeUserExist(samUser)
+  def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = withExistingUsers(Set(samUser))
+  def withExistingUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
+    samUsers.toSet.foreach(makeUserExist)
     this
   }
 
-  def withInvitedUser(samUser: SamUser): MockDirectoryDaoBuilder = withExistingUser(samUser)
+  def withInvitedUser(samUser: SamUser): MockDirectoryDaoBuilder = withInvitedUsers(Set(samUser))
+  def withInvitedUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
+    samUsers.toSet.foreach(makeUserExist)
+    this
+  }
 
-  def withEnabledUser(samUser: SamUser): MockDirectoryDaoBuilder = {
-    makeUserExist(samUser)
-    makeUserAppearEnabled(samUser)
+
+  def withFullyActivatedUser(samUser: SamUser): MockDirectoryDaoBuilder = withFullyActivatedUsers(Set(samUser))
+  def withFullyActivatedUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
+    samUsers.toSet.foreach { u: SamUser =>
+      makeUserExist(u)
+      makeUserFullyActivated(u)
+    }
     this
   }
 
@@ -124,7 +133,7 @@ case class MockDirectoryDaoBuilder() {
       .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
   }
 
-  private def makeUserAppearEnabled(samUser: SamUser): Unit = {
+  private def makeUserFullyActivated(samUser: SamUser): Unit = {
     doReturn(IO(true))
       .when(mockedDirectoryDAO)
       .isEnabled(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])

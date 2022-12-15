@@ -26,7 +26,12 @@ case class MockTosServiceBuilder() {
   }
 
   def withAcceptedStateForUser(samUser: SamUser, isAccepted: Boolean): MockTosServiceBuilder = {
-    setAcceptedStateForUserTo(samUser, isAccepted)
+    setAcceptedStateForUserTo(samUser.id, isAccepted)
+    this
+  }
+
+  def withAcceptedStateForUser(userId: WorkbenchUserId, isAccepted: Boolean): MockTosServiceBuilder = {
+    setAcceptedStateForUserTo(userId, isAccepted)
     this
   }
 
@@ -36,10 +41,10 @@ case class MockTosServiceBuilder() {
       .getTosStatus(any[WorkbenchUserId], any[SamRequestContext])
   }
 
-  private def setAcceptedStateForUserTo(samUser: SamUser, isAccepted: Boolean) = {
+  private def setAcceptedStateForUserTo(userId: WorkbenchUserId, isAccepted: Boolean) = {
     doReturn(IO(Option(isAccepted)))
       .when(tosService)
-      .getTosStatus(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+      .getTosStatus(ArgumentMatchers.eq(userId), any[SamRequestContext])
   }
 
   def build: TosService = tosService

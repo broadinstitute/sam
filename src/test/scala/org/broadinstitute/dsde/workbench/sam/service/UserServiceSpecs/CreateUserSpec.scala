@@ -157,7 +157,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val enabledAzureUser = genWorkbenchUserAzure.sample.get
         val mockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withEnabledUser(enabledAzureUser)
+          .withFullyActivatedUser(enabledAzureUser)
           .build
         val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
@@ -174,7 +174,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val enabledGoogleUser = genWorkbenchUserGoogle.sample.get
         val mockedDirectoryDao: DirectoryDAO = MockDirectoryDaoBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withEnabledUser(enabledGoogleUser)
+          .withFullyActivatedUser(enabledGoogleUser)
           .build
         val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)

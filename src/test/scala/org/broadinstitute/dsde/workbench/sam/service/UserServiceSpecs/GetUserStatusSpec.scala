@@ -29,7 +29,7 @@ class GetUserStatusSpec extends UserServiceTestTraits {
     val mockTosServiceBuilder = MockTosServiceBuilder().withNoneAccepted()
     // Add all Enabled Users to the DirectoryDao and TosService
     withEnabledUsers.map { user =>
-      mockDirectoryDaoBuilder.withEnabledUser(user)
+      mockDirectoryDaoBuilder.withFullyActivatedUser(user)
       mockTosServiceBuilder.withAcceptedStateForUser(user, true)
     }
     // Add all Existing Users to just the DirectoryDao (because they should only exist in the Sam database and bare
@@ -85,6 +85,14 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       }
 
       describe("that has not accepted the ToS") {
+        // Setup
+        val samUser = genWorkbenchUserBoth.sample.get
+        val directoryDAO = MockDirectoryDaoBuilder()
+          .withAllUsersGroup(allUsersGroup)
+          .withExistingUser(samUser).build
+        val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
+        val tosService = MockTosServiceBuilder().withNoneAccepted().build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
       }
     }

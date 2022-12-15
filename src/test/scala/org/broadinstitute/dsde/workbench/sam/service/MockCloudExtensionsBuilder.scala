@@ -61,8 +61,9 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
     .when(mockedCloudExtensions)
     .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
 
-  def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = {
-    makeUserAppearEnabled(samUser)
+  def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withEnabledUsers(Set(samUser))
+  def withEnabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
+    samUsers.foreach(makeUserAppearEnabled)
     this
   }
 
