@@ -25,8 +25,6 @@ import org.scalatestplus.mockito.MockitoSugar
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 
-import scala.concurrent.Future
-
 //TODO This test is flaky. It looks like the tests run too fast and cause some sort of timeout error or race condition
 class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
@@ -1824,7 +1822,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
 
     if (actionsOnChild.contains(SamResourceActions.delete)) {
-      when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(Future.unit)
+      when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(IO.unit)
     }
   }
 

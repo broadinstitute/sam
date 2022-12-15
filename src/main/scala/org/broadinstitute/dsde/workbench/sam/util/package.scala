@@ -1,6 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam
 
+import scala.concurrent.duration._
+
 package object util {
+  val API_TIMING_DURATION_BUCKET: List[FiniteDuration] = List(10 millis, 100 millis, 500 millis, 1 second, 2 seconds, 5 seconds)
 
   /** Takes a list of pairs and returns a map grouped by the first element with values of lists of the second
     * @param list
