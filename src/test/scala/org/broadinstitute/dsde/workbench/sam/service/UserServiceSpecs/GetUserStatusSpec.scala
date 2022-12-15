@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genWorkbenchUserBoth}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service._
 
@@ -60,13 +59,24 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       describe("that has not accepted the ToS") {
         // Setup
         val samUser = genWorkbenchUserBoth.sample.get
-        val directoryDAO = MockDirectoryDaoBuilder()
+        val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withExistingUser(samUser).build
-        val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
-        val tosService = MockTosServiceBuilder().withNoneAccepted().build
-        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+          .withFullyActivatedUser(samUser)
+          .withToSAcceptanceStateForUser(samUser, false)
+          .build
 
+        // Act
+        val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
+
+        // Assert
+        inside(resultingStatus.value) { status =>
+          status should beForUser(samUser)
+          "google" should beEnabledIn(status)
+          "ldap" should beEnabledIn(status)
+          "allUsersGroup" should beEnabledIn(status)
+          "adminEnabled" should beEnabledIn(status)
+          "tosAccepted" shouldNot beEnabledIn(status)
+        }
       }
     }
 
