@@ -310,7 +310,7 @@ object GenEmail {
 // This class DOES connect to a real database and its tests should be broken out to individual Spec files
 // and rewritten
 class OldUserServiceSpec
-  extends AnyFlatSpec
+    extends AnyFlatSpec
     with Matchers
     with TestSupport
     with MockitoSugar
@@ -368,7 +368,6 @@ class OldUserServiceSpec
 
   protected def clearDatabase(): Unit =
     TestSupport.truncateAll
-
 
   "UserService.genWorkbenchUserId" should "generate unique identifier properly" in {
     val current = 1534253386722L
