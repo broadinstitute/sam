@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito
@@ -16,16 +17,25 @@ import org.scalacheck.Gen
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues, Suite}
 import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
-/** Created by rtitle on 10/6/17.
-  */
-class UserServiceSpec
+class UserServiceSpec extends Suite {
+  override def nestedSuites: IndexedSeq[Suite] =
+    IndexedSeq(
+      new CreateUserSpec,
+      new GetUserStatusSpec,
+      new OldUserServiceSpec
+    )
+}
+
+// This test suite is deprecated.  It is still used and still has valid tests in it, but it should be broken out
+// into smaller, more focused suites which should then be added to the `nestedSuites` of `UserServiceSpec`
+class OldUserServiceSpec
     extends AnyFlatSpec
     with Matchers
     with TestSupport
@@ -36,7 +46,7 @@ class UserServiceSpec
     with ScalaFutures
     with OptionValues {
 
-  override implicit val patienceConfig = PatienceConfig(timeout = scaled(5.seconds))
+  override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
   val defaultUser = genWorkbenchUserBoth.sample.get
