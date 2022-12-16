@@ -76,7 +76,6 @@ class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tos
   def getTosText: String =
     getText(termsOfServiceFile, "Terms of Service")
 
-  def getTosDetails: TermsOfServiceDetails = {
+  def getTosDetails: TermsOfServiceDetails =
     TermsOfServiceDetails(tosConfig.enabled, tosConfig.isGracePeriodEnabled, tosConfig.version)
-  }
 }
