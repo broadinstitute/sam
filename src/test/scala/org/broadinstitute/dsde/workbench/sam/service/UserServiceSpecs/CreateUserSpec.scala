@@ -1,15 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
+import com.softwaremill.macwire.wire
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.Generator.{
-  genBasicWorkbenchGroup,
-  genPetServiceAccount,
-  genPolicy,
-  genWorkbenchUserAzure,
-  genWorkbenchUserBoth,
-  genWorkbenchUserGoogle
-}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genPetServiceAccount, genPolicy, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -128,7 +122,8 @@ class CreateUserSpec extends UserServiceTestTraits {
         val mockedDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
         val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
-        val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
+        val blockedDomains: Seq[String] = Seq.empty
+        val userService = wire[UserService]
 
         // Act
         runAndWait(userService.createUser(samUser, samRequestContext))
@@ -146,7 +141,8 @@ class CreateUserSpec extends UserServiceTestTraits {
         val mockedDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
         val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
-        val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
+        val blockedDomains: Seq[String] = Seq.empty
+        val userService = wire[UserService]
 
         // Act
         runAndWait(userService.createUser(samUser, samRequestContext))

@@ -77,26 +77,39 @@ class GoogleExtensions(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"
   )
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
-      executionContext: ExecutionContext
-  ): Future[WorkbenchGroup] = {
-    val allUsersGroupStub = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersGroupEmail)
-    for {
-      existingGroup <- directoryDAO.loadGroup(allUsersGroupStub.id, samRequestContext = samRequestContext).unsafeToFuture()
-      allUsersGroup <- existingGroup match {
-        case None => directoryDAO.createGroup(allUsersGroupStub, samRequestContext = samRequestContext).unsafeToFuture()
-        case Some(group) => Future.successful(group)
-      }
-      existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)
-      _ <- existingGoogleGroup match {
-        case None =>
-          googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
-            case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
-          }
-        case Some(_) => Future.successful(())
-      }
+//  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+//      executionContext: ExecutionContext
+//  ): Future[WorkbenchGroup] = {
+//    val allUsersGroupStub = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersGroupEmail)
+//    for {
+//      existingGroup <- directoryDAO.loadGroup(allUsersGroupStub.id, samRequestContext = samRequestContext).unsafeToFuture()
+//      allUsersGroup <- existingGroup match {
+//        case None => directoryDAO.createGroup(allUsersGroupStub, samRequestContext = samRequestContext).unsafeToFuture()
+//        case Some(group) => Future.successful(group)
+//      }
+//      existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)
+//      _ <- existingGoogleGroup match {
+//        case None =>
+//          googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
+//            case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
+//          }
+//        case Some(_) => Future.successful(())
+//      }
+//
+//    } yield allUsersGroup
+//  }
 
-    } yield allUsersGroup
+  override def doesGroupExist(groupEmail: WorkbenchEmail, samRequestContext: SamRequestContext)
+                             (implicit executionContext: ExecutionContext): Future[Boolean] =
+    googleDirectoryDAO.getGoogleGroup(groupEmail).map {
+      case Some(_) => true
+      case None => false
+    }
+
+  override def createGroup(workbenchGroup: WorkbenchGroup, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[Unit] = {
+    googleDirectoryDAO.createGroup(workbenchGroup.id.toString, workbenchGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
+      case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
+    }
   }
 
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =

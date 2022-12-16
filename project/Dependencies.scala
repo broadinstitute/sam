@@ -128,6 +128,8 @@ object Dependencies {
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
 
+  val macwire = "com.softwaremill.macwire" % "macros_2.13" % "2.5.8"
+
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
@@ -174,6 +176,7 @@ object Dependencies {
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres,
-    cloudResourceLib
+    cloudResourceLib,
+    macwire
   ) ++ openCensusDependencies
 }

@@ -39,9 +39,16 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         .withInfoLogMessage(s"New user ${createdUser.toUserIdInfo} was successfully created")
     } yield res
 
+  // We only need to add the user to the Group in Sam and the GoogleGroupSynchronizer will make sure that the
+  // corresponding Google Group gets updated.  All we need to do here is make sure the Google Group exists.
   def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-
+      // 1. get All_Users group from Sam
+      //    - Create group if not exists
+      // 2. get All_Users group from Google
+      //    - Create group if not exists
+      // 3. If both groups exist
+      //    THEN Add user to both groups
       allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext).unsafeToFuture()
     } yield logger.info(s"Added user uid ${uid.value} to the All Users group")

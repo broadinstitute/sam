@@ -10,7 +10,6 @@ import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
@@ -57,9 +56,15 @@ trait CloudExtensions {
 
   def emailDomain: String
 
-  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
-      executionContext: ExecutionContext
-  ): Future[WorkbenchGroup]
+//  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+//      executionContext: ExecutionContext
+//  ): Future[WorkbenchGroup]
+
+  def doesGroupExist(workbenchEmail: WorkbenchEmail, samRequestContext: SamRequestContext)(implicit
+                                                                                                 executionContext: ExecutionContext
+  ): Future[Boolean] // Google Group email
+
+  def createGroup(workbenchGroup: WorkbenchGroup, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[Unit] // email of group
 }
 
 trait CloudExtensionsInitializer {
