@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceDetails}
 
 import scala.concurrent.ExecutionContext
 import java.io.{FileNotFoundException, IOException}
@@ -75,4 +75,8 @@ class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tos
 
   def getTosText: String =
     getText(termsOfServiceFile, "Terms of Service")
+
+  def getTosDetails: TermsOfServiceDetails = {
+    TermsOfServiceDetails(tosConfig.enabled, tosConfig.isGracePeriodEnabled, tosConfig.version)
+  }
 }
