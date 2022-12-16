@@ -6,8 +6,8 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, googleServicesConfig}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec}
@@ -31,13 +31,16 @@ class UserServiceSpec extends Suite {
     IndexedSeq(
       new CreateUserSpec,
       new GetUserStatusSpec,
-      new OldUserServiceSpec
+      new OldUserServiceSpec,
+      new OldUserServiceMockSpec
     )
 }
 
 // This test suite is deprecated.  It is still used and still has valid tests in it, but it should be broken out
 // into smaller, more focused suites which should then be added to the `nestedSuites` of `UserServiceSpec`
-class OldUserServiceSpec
+// This class does not connect to a real database (hence "mock" in the name (naming is hard, don't judge me)), but its
+// tests should still be broken out to individual Spec files and rewritten
+class OldUserServiceMockSpec
     extends AnyFlatSpec
     with Matchers
     with TestSupport
@@ -290,6 +293,82 @@ class OldUserServiceSpec
       service.registerUser(defaultUser, samRequestContext).unsafeRunSync()
     }
   }
+}
+
+object GenEmail {
+  val genBadChar = Gen.oneOf("!@#$^&*()=::'\"?/\\`~".toSeq)
+  val genEmailUserChar = Gen.frequency((9, Gen.alphaNumChar), (1, Gen.oneOf(Seq('.', '_', '%', '+', '-'))))
+  val genEmailUser = Gen.nonEmptyListOf(genEmailUserChar).map(_.mkString)
+
+  val genEmailServerChar = Gen.frequency((9, Gen.alphaNumChar), (1, Gen.const('-')))
+  val genEmailServerPart = Gen.nonEmptyListOf(genEmailServerChar).map(_.mkString)
+  val genEmailLastPart = Gen.listOfN(2, Gen.alphaChar).map(_.mkString)
+}
+
+// This test suite is deprecated.  It is still used and still has valid tests in it, but it should be broken out
+// into smaller, more focused suites which should then be added to the `nestedSuites` of `UserServiceSpec`
+// This class DOES connect to a real database and its tests should be broken out to individual Spec files
+// and rewritten
+class OldUserServiceSpec
+  extends AnyFlatSpec
+    with Matchers
+    with TestSupport
+    with MockitoSugar
+    with PropertyBasedTesting
+    with BeforeAndAfter
+    with BeforeAndAfterAll
+    with ScalaFutures
+    with OptionValues {
+
+  override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
+  implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
+
+  val defaultUser = genWorkbenchUserBoth.sample.get
+  val enabledDefaultUserStatus = UserStatusBuilder(defaultUser)
+    .withAllUsersGroup(true)
+    .withLdap(true)
+    .withGoogle(true)
+    .withTosAccepted(true)
+    .withAdminEnabled(true)
+    .build
+
+  lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
+
+  var service: UserService = _
+  var googleExtensions: GoogleExtensions = _
+  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
+  var tos: TosService = _
+  var serviceTosEnabled: UserService = _
+  var tosServiceEnabled: TosService = _
+  val blockedDomain = "blocked.domain.com"
+  val enabledUser: SamUser = defaultUser.copy(enabled = true)
+  val disabledUser: SamUser = defaultUser.copy(enabled = false)
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(WorkbenchGroupName("All_Users"), Set(), WorkbenchEmail("all_users@fake.com"))
+
+  before {
+    clearDatabase()
+
+    googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
+    if (databaseEnabled) {
+      when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
+        .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
+    }
+    when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(Future.successful(true))
+    when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
+
+    tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)
+    tosServiceEnabled = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig.copy(enabled = true))
+    serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
+  }
+
+  protected def clearDatabase(): Unit =
+    TestSupport.truncateAll
+
 
   "UserService.genWorkbenchUserId" should "generate unique identifier properly" in {
     val current = 1534253386722L
@@ -632,14 +711,4 @@ class OldUserServiceSpec
     assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
     assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
   }
-}
-
-object GenEmail {
-  val genBadChar = Gen.oneOf("!@#$^&*()=::'\"?/\\`~".toSeq)
-  val genEmailUserChar = Gen.frequency((9, Gen.alphaNumChar), (1, Gen.oneOf(Seq('.', '_', '%', '+', '-'))))
-  val genEmailUser = Gen.nonEmptyListOf(genEmailUserChar).map(_.mkString)
-
-  val genEmailServerChar = Gen.frequency((9, Gen.alphaNumChar), (1, Gen.const('-')))
-  val genEmailServerPart = Gen.nonEmptyListOf(genEmailServerChar).map(_.mkString)
-  val genEmailLastPart = Gen.listOfN(2, Gen.alphaChar).map(_.mkString)
 }
