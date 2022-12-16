@@ -44,7 +44,7 @@ case class MockDirectoryDaoBuilder() {
     makeUserExist(samUser)
     IO(samUser)
   }.when(mockedDirectoryDAO)
-   .createUser(any[SamUser], any[SamRequestContext])
+    .createUser(any[SamUser], any[SamRequestContext])
 
   // Default behavior can check if the user "exists" in the Mock and respond accordingly
   doAnswer { (invocation: InvocationOnMock) =>
@@ -57,7 +57,7 @@ case class MockDirectoryDaoBuilder() {
     }
     IO.unit
   }.when(mockedDirectoryDAO)
-   .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
+    .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
 
   // No users "exist" so there are a bunch of queries that should return false/None if they depend on "existing" users
   doReturn(IO(false))
@@ -92,7 +92,6 @@ case class MockDirectoryDaoBuilder() {
     samUsers.toSet.foreach(makeUserExist)
     this
   }
-
 
   def withFullyActivatedUser(samUser: SamUser): MockDirectoryDaoBuilder = withFullyActivatedUsers(Set(samUser))
   def withFullyActivatedUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {

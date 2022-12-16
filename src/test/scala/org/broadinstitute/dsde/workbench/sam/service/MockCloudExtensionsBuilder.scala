@@ -35,16 +35,16 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
             s"MockCloudExtensionsBuilder has an '${CloudExtensions.allUsersGroupName}' group in it.  If using a " +
             s"mock `directoryDAO`, try building it with `MockDirectoryDaoBuilder.withAllUsersGroup()`"
         )
-      }
-    }.when(mockedCloudExtensions)
-     .getOrCreateAllUsersGroup(ArgumentMatchers.eq(directoryDAO), any[SamRequestContext])(any[ExecutionContext])
+    }
+  }.when(mockedCloudExtensions)
+    .getOrCreateAllUsersGroup(ArgumentMatchers.eq(directoryDAO), any[SamRequestContext])(any[ExecutionContext])
 
   doAnswer { (invocation: InvocationOnMock) =>
     val samUser = invocation.getArgument[SamUser](0)
     makeUserAppearEnabled(samUser)
     Future.successful(())
   }.when(mockedCloudExtensions)
-   .onUserCreate(any[SamUser], any[SamRequestContext])
+    .onUserCreate(any[SamUser], any[SamRequestContext])
 
   doReturn(Future.successful(false))
     .when(mockedCloudExtensions)
@@ -55,7 +55,7 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
     makeUserAppearEnabled(samUser)
     Future.successful(())
   }.when(mockedCloudExtensions)
-   .onUserEnable(any[SamUser], any[SamRequestContext])
+    .onUserEnable(any[SamUser], any[SamRequestContext])
 
   doReturn(Future.successful(()))
     .when(mockedCloudExtensions)

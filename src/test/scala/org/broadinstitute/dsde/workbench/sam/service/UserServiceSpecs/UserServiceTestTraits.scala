@@ -12,17 +12,9 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.collection.mutable.ListBuffer
 
 // See: https://www.scalatest.org/user_guide/defining_base_classes
-abstract class UserServiceTestTraits
-  extends AnyFunSpec
-    with Matchers
-    with TestSupport
-    with MockitoSugar
-    with ScalaFutures
-    with OptionValues
-    with Inside {
+abstract class UserServiceTestTraits extends AnyFunSpec with Matchers with TestSupport with MockitoSugar with ScalaFutures with OptionValues with Inside {
 
-  /**
-    * Asserts that the passed UserStatus.userInfo matches the passed in SamUser Id and Email
+  /** Asserts that the passed UserStatus.userInfo matches the passed in SamUser Id and Email
     * @param expectedUser
     */
   class BeForUserMatcher(expectedUser: SamUser) extends Matcher[UserStatus] {
@@ -53,7 +45,7 @@ abstract class UserServiceTestTraits
   def beForUser(expectedUser: SamUser) = new BeForUserMatcher(expectedUser)
 
   class BeEnabledInMatcher(userStatus: UserStatus) extends Matcher[String] {
-    def apply(componentName: String): MatchResult = {
+    def apply(componentName: String): MatchResult =
       userStatus.enabled.get(componentName) match {
         case Some(status) =>
           MatchResult(
@@ -65,7 +57,6 @@ abstract class UserServiceTestTraits
           val failureMsg = s"No entry found for $componentName"
           MatchResult(false, failureMsg, failureMsg)
       }
-    }
   }
   def beEnabledIn(userStatus: UserStatus) = new BeEnabledInMatcher(userStatus)
 }
