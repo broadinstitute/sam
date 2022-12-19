@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import cats.effect.IO
 import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -11,8 +10,6 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFlatSpec, T
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Database
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse}
-import org.mockito.ArgumentMatchers.{any, anyLong, anyString}
-import org.mockito.Mockito.when
 import org.scalatest.concurrent.Eventually._
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
