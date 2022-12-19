@@ -33,7 +33,6 @@ class StatusRouteSpec extends RetryableAnyFlatSpec with Matchers with ScalatestR
   }
 
   "GET /status" should "give 200 for ok" in {
-    when(openTelemetry.incrementCounter(anyString(), anyLong(), any[Map[String, String]])).thenReturn(IO.unit)
     val samRoutes = TestSamRoutes(Map.empty)
     implicit val patienceConfig = PatienceConfig(timeout = 1 second)
     eventually {
@@ -45,7 +44,6 @@ class StatusRouteSpec extends RetryableAnyFlatSpec with Matchers with ScalatestR
   }
 
   it should "give 500 for not ok" in {
-    when(openTelemetry.incrementCounter(anyString(), anyLong(), any[Map[String, String]])).thenReturn(IO.unit)
     val directoryDAO = new MockDirectoryDAO(passStatusCheck = false)
     val policyDAO = new MockAccessPolicyDAO(directoryDAO)
 
