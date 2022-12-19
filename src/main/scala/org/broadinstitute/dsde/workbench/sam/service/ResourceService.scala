@@ -163,7 +163,7 @@ class ResourceService(
       authDomain: Set[WorkbenchGroupName],
       parentOpt: Option[FullyQualifiedResourceId],
       samRequestContext: SamRequestContext
-  ) = openTelemetry.time("api.v1.resource.persist.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+  ) = {
     val accessPolicies = policies.map(constructAccessPolicy(resourceType, resourceId, _, public = false)) // can't set public at create time
     accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain, accessPolicies = accessPolicies, parent = parentOpt), samRequestContext)
   }

@@ -2,9 +2,8 @@ package org.broadinstitute.dsde.workbench.sam
 
 import akka.actor.ActorSystem
 import akka.stream.Materializer
-import cats.ApplicativeError
+import cats.effect._
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Temporal}
 import cats.kernel.Eq
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
@@ -28,8 +27,8 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers.{any, anyString}
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, when}
+import org.mockito.ArgumentMatchers.{any, anyLong, anyString}
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, doAnswer, doReturn}
 import org.scalatest.Tag
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
@@ -55,9 +54,10 @@ trait TestSupport {
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
   implicit val openTelemetry: OpenTelemetryMetricsInterpreter[IO] = mock[OpenTelemetryMetricsInterpreter[IO]](RETURNS_SMART_NULLS)
 
-  when(
-    openTelemetry.time(anyString(), any[List[FiniteDuration]], any[Map[String, String]])(any[IO[_]])(any[Temporal[IO]], any[ApplicativeError[IO, Throwable]])
-  ).thenAnswer(invocation => invocation.getArgument[IO[_]](3))
+  doReturn(IO.unit).when(openTelemetry).incrementCounter(anyString(), anyLong(), any[Map[String, String]])
+  doAnswer(invocation => invocation.getArguments()(3))
+    .when(openTelemetry)
+    .time(any[String], any[List[FiniteDuration]], any[Map[String, String]])(any[IO[_]])(any[Temporal[IO]], any[Temporal[IO]])
 
   val samRequestContext = SamRequestContext()
 
