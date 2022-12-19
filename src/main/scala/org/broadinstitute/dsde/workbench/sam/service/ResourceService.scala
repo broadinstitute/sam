@@ -141,7 +141,7 @@ class ResourceService(
               _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq: _*)
             } yield persisted
           case errorReports: Seq[ErrorReport] =>
-            throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports)))
         }
       }
     }
