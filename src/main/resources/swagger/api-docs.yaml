@@ -2681,6 +2681,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /register/user/v2/self/termsOfServiceDetails:
+    get:
+      tags:
+        - Terms of Service
+      summary: gets terms of service details, including user's accepted version
+      operationId: getTermsOfServiceDetails
+      responses:
+        200:
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermsOfServiceDetails'
   /status:
     get:
       tags:
@@ -2778,20 +2791,6 @@ paths:
             text/plain:
               schema:
                 type: string
-  /tos/details:
-    get:
-      tags:
-        - Terms of Service
-      summary: gets terms of service details
-      operationId: getTermsOfServiceDetails
-      responses:
-        200:
-          description: success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TermsOfServiceDetails'
-
   /privacy/text:
     get:
       tags:
@@ -3368,6 +3367,7 @@ components:
         - isEnabled
         - isGracePeriodEnabled
         - currentVersion
+        - userAcceptedVersion
       type: object
       properties:
         isEnabled:
@@ -3380,6 +3380,9 @@ components:
         currentVersion:
           type: string
           description: the current version of terms of service for the system
+        userAcceptedVersion:
+          type: string
+          description: the version of the terms of service the user has accepted
     ManagedResourceGroupCoordinates:
       required:
         - tenantId
