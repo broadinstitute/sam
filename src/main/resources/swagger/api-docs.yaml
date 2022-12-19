@@ -2752,12 +2752,13 @@ paths:
       operationId: getUserTermsOfServiceStatus
       responses:
         200:
-          description: terms of service is enabled and user
+          description: terms of service status is enabled, boolean value denotes users acceptance of the latest 
+            terms of service version.
           content:
             application/json:
               schema:
                 type: boolean
-                description: if terms of service is enabled and the user has accepted the latest version
+                description: if user has accepted the latest version of the terms of service
         404:
           description: user not found or terms of service disabled
           content:
