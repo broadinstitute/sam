@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetricsInterpreter
+import org.broadinstitute.dsde.workbench.openTelemetry.{FakeOpenTelemetryMetricsInterpreter, OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
@@ -27,14 +27,11 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers.{any, anyLong, anyString}
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, doAnswer, doReturn}
 import org.scalatest.Tag
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
 import org.scalatest.time.{Seconds, Span}
-import org.scalatestplus.mockito.MockitoSugar.mock
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import scalikejdbc.QueryDSL.delete
 import scalikejdbc.withSQL
@@ -52,12 +49,7 @@ trait TestSupport {
 
   implicit val futureTimeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
-  implicit val openTelemetry: OpenTelemetryMetricsInterpreter[IO] = mock[OpenTelemetryMetricsInterpreter[IO]](RETURNS_SMART_NULLS)
-
-  doReturn(IO.unit).when(openTelemetry).incrementCounter(anyString(), anyLong(), any[Map[String, String]])
-  doAnswer(invocation => invocation.getArguments()(3))
-    .when(openTelemetry)
-    .time(any[String], any[List[FiniteDuration]], any[Map[String, String]])(any[IO[_]])(any[Temporal[IO]], any[Temporal[IO]])
+  implicit val openTelemetry = FakeOpenTelemetryMetricsInterpreter
 
   val samRequestContext = SamRequestContext()
 
@@ -175,7 +167,7 @@ object TestSupport extends TestSupport {
   def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit
       system: ActorSystem,
       materializer: Materializer,
-      openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+      openTelemetry: OpenTelemetryMetrics[IO]
   ): SamRoutes = new SamRoutes(
     samDependencies.resourceService,
     samDependencies.userService,
