@@ -2480,7 +2480,7 @@ class ResourceServiceSpec
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(IO.fromFuture(IO(service.deleteResource(resource.fullyQualifiedId, samRequestContext))), List(ResourceDeleted), tryTwice = false)
+    runAuditLogTest(service.deleteResource(resource.fullyQualifiedId, samRequestContext), List(ResourceDeleted), tryTwice = false)
   }
 
   it should "be called on createResource" in {

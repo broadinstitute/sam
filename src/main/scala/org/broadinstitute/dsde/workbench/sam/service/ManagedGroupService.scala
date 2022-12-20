@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
@@ -10,9 +9,6 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-
-import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
-import scala.concurrent.Future
 
 /** Created by gpolumbo on 2/21/2018.
   */
@@ -110,15 +106,15 @@ class ManagedGroupService(
   def loadManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     directoryDAO.loadGroup(WorkbenchGroupName(groupId.value), samRequestContext).map(_.map(_.email))
 
-  def deleteManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): Future[Unit] =
+  def deleteManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       // order is important here, we want to make sure we do all the cloudExtensions calls before we touch the database
       // so failures there do not leave the database in a bad state
       // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
-      _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
+      _ <- IO.fromFuture(IO(cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))))
       managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
       _ <- resourceService.cloudDeletePolicies(managedGroupResourceId, samRequestContext)
-      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value), samRequestContext).unsafeToFuture()
+      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value), samRequestContext)
       _ <- resourceService.deleteResource(managedGroupResourceId, samRequestContext)
     } yield ()
 
