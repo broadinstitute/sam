@@ -459,7 +459,7 @@ class UserServiceSpec
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status id info (both subject ids and email)
-    val info = service.getUserIdInfoFromEmail(defaultUser.email, samRequestContext).futureValue
+    val info = service.getUserIdInfoFromEmail(defaultUser.email, samRequestContext).unsafeRunSync()
     info shouldBe Right(Some(UserIdInfo(defaultUser.id, defaultUser.email, Some(defaultUser.googleSubjectId.get))))
   }
 
