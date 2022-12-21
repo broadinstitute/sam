@@ -111,7 +111,7 @@ class GoogleGroupSynchronizer(
             case group: WorkbenchGroupIdentity => directoryDAO.loadSubjectEmail(group, samRequestContext).unsafeToFuture()
 
             // use proxy group email instead of user's actual email
-            case userSubjectId: WorkbenchUserId => googleExtensions.getUserProxy(userSubjectId)
+            case userSubjectId: WorkbenchUserId => googleExtensions.getUserProxy(userSubjectId).unsafeToFuture()
 
             // not sure why this next case would happen but if a petSA is in a group just use its email
             case petSA: PetServiceAccountId => directoryDAO.loadSubjectEmail(petSA, samRequestContext).unsafeToFuture()

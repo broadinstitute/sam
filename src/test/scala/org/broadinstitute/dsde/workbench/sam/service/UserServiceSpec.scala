@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam
 package service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
@@ -59,11 +60,11 @@ class UserServiceSpec
       when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
         .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
     }
-    when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(Future.successful(true))
-    when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO.pure(true))
+    when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
     tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
@@ -79,7 +80,7 @@ class UserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
     verify(googleExtensions).onUserCreate(defaultUser, samRequestContext)
 
@@ -90,7 +91,7 @@ class UserServiceSpec
         BasicWorkbenchGroup(
           CloudExtensions.allUsersGroupName,
           Set(defaultUser.id),
-          service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).futureValue.email
+          service.cloudExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext).unsafeRunSync().email
         )
       )
   }
@@ -104,7 +105,7 @@ class UserServiceSpec
   it should "acceptTermsOfService" in {
     assume(databaseEnabled, databaseEnabledClue)
 
-    serviceTosEnabled.createUser(defaultUser, samRequestContext).futureValue
+    serviceTosEnabled.createUser(defaultUser, samRequestContext).unsafeRunSync()
     val status = serviceTosEnabled.acceptTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
     status shouldBe Option(
       UserStatus(
@@ -118,17 +119,17 @@ class UserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
-    service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue shouldBe None
+    service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // user should exist now
-    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
+    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync()
     status shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)))
 
-    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).futureValue
+    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).unsafeRunSync()
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
   }
 
@@ -136,7 +137,7 @@ class UserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     val savedUser = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().value
@@ -150,14 +151,14 @@ class UserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
-    service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status diagnostics
-    val diagnostics = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
+    val diagnostics = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).unsafeRunSync()
     diagnostics shouldBe Some(UserStatusDiagnostics(true, true, true, None, true))
   }
 
@@ -165,18 +166,18 @@ class UserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
-    service.enableUser(defaultUser.id, samRequestContext).futureValue shouldBe None
-    service.disableUser(defaultUser.id, samRequestContext).futureValue shouldBe None
+    service.enableUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
+    service.disableUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // it should be enabled
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
 
     // disable the user
-    val response = service.disableUser(defaultUser.id, samRequestContext).futureValue
+    val response = service.disableUser(defaultUser.id, samRequestContext).unsafeRunSync()
     response shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true)))
 
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
@@ -186,11 +187,11 @@ class UserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // delete the user
-    service.deleteUser(defaultUser.id, samRequestContext).futureValue
+    service.deleteUser(defaultUser.id, samRequestContext).unsafeRunSync()
 
     // check
     dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
@@ -389,7 +390,7 @@ class UserServiceSpec
     val invitedUserDetails = service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
 
     // Check the status of the invited user
-    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).futureValue
+    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).unsafeRunSync()
     val disabledUserStatus = Map("ldap" -> false, "allUsersGroup" -> false, "google" -> true)
     invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, disabledUserStatus)
   }
@@ -406,7 +407,7 @@ class UserServiceSpec
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     // Check the status of the invited user
-    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).futureValue
+    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).unsafeRunSync()
     val enabledUserStatus = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
     invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, enabledUserStatus)
   }
@@ -451,10 +452,10 @@ class UserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
-    service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status id info (both subject ids and email)
