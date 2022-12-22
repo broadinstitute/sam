@@ -4,7 +4,6 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.{ContentTypes, StatusCodes}
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import akka.testkit.TestDuration
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
@@ -313,7 +312,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   private def createSecondUser(samRoutes: TestSamRoutes, addToSpendProfile: Boolean = true): SamUser = {
     val newUser = Generator.genWorkbenchUserGoogle.sample.get
     // wait for Future to complete by converting to IO
-    IO.fromFuture(IO(samRoutes.userService.createUser(newUser, samRequestContext))).unsafeRunSync()
+    samRoutes.userService.createUser(newUser, samRequestContext).unsafeRunSync()
     if (addToSpendProfile) {
       Put(
         s"/api/resources/v2/${SamResourceTypes.spendProfile.value}/${MockCrlService.mockSamSpendProfileResource.resourceId.value}/policies/owner/memberEmails/${newUser.email.value}"

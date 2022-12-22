@@ -54,7 +54,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
-    mockUserService.createUser(defaultUserInfo, samRequestContext)
+    mockUserService.createUser(defaultUserInfo, samRequestContext).unsafeRunSync()
 
     new TestSamRoutes(
       mockResourceService,
