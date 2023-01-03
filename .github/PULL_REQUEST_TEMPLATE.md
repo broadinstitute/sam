@@ -21,4 +21,4 @@ How:
 **PR checklist**
 
 - [ ] I've followed [the instructions](https://github.com/broadinstitute/sam/blob/develop/CONTRIBUTING.md#api-changes) if I've made any changes to the API, _especially_ if they're breaking changes
-- [ ] I've filled out the [Security Risk Assessment](https://broadinstitute.github.io/dsp-appsec-security-risk-assessment/) and attached the result to the JIRA ticket
+- [ ] I've filled out the [Security Risk Assessment](https://sdarq.dsp-appsec.broadinstitute.org/jira-ticket-risk-assesment) (requires Broad Internal network access) and attached the result to the JIRA ticket

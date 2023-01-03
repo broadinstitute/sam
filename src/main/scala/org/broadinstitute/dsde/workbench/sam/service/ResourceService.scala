@@ -4,20 +4,20 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.Applicative
 import cats.data.NonEmptyList
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.google.common.annotations.VisibleForTesting
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
 import java.util.UUID
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 /** Created by mbemis on 5/22/17.
   */
@@ -29,8 +29,10 @@ class ResourceService(
     private val cloudExtensions: CloudExtensions,
     val emailDomain: String,
     private val allowedAdminEmailDomains: Set[String]
-)(implicit val executionContext: ExecutionContext)
+)(implicit val executionContext: ExecutionContext, val openTelemetry: OpenTelemetryMetrics[IO])
     extends LazyLogging {
+
+  private val openTelemetryTags: Map[String, String] = Map("endpoint" -> "createResource")
 
   private[service] case class ValidatableAccessPolicy(
       policyName: AccessPolicyName,
@@ -120,28 +122,29 @@ class ResourceService(
       parentOpt: Option[FullyQualifiedResourceId],
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
-  ): IO[Resource] = {
-    logger.info(s"Creating new `${resourceType.name}` with resourceId: `${resourceId}`")
-    makeValidatablePolicies(policiesMap, samRequestContext).flatMap { policies =>
-      validateCreateResource(resourceType, resourceId, policies, authDomain, userId, parentOpt, samRequestContext).flatMap {
-        case Seq() =>
-          for {
-            persisted <- persistResource(resourceType, resourceId, policies, authDomain, parentOpt, samRequestContext)
+  ): IO[Resource] =
+    openTelemetry.time("api.v1.resource.create.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      logger.info(s"Creating new `${resourceType.name}` with resourceId: `${resourceId}`")
+      makeValidatablePolicies(policiesMap, samRequestContext).flatMap { policies =>
+        validateCreateResource(resourceType, resourceId, policies, authDomain, userId, parentOpt, samRequestContext).flatMap {
+          case Seq() =>
+            for {
+              persisted <- persistResource(resourceType, resourceId, policies, authDomain, parentOpt, samRequestContext)
 
-            _ <- AuditLogger.logAuditEventIO(
-              samRequestContext,
-              ResourceEvent(ResourceCreated, FullyQualifiedResourceId(resourceType.name, resourceId), parentOpt.map(ResourceChange))
-            )
+              _ <- AuditLogger.logAuditEventIO(
+                samRequestContext,
+                ResourceEvent(ResourceCreated, FullyQualifiedResourceId(resourceType.name, resourceId), parentOpt.map(ResourceChange))
+              )
 
-            changeEvents = createAccessChangeEvents(FullyQualifiedResourceId(resourceType.name, resourceId), LazyList.empty, persisted.accessPolicies)
+              changeEvents = createAccessChangeEvents(FullyQualifiedResourceId(resourceType.name, resourceId), LazyList.empty, persisted.accessPolicies)
 
-            _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq: _*)
-          } yield persisted
-        case errorReports: Seq[ErrorReport] =>
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports))
+              _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq: _*)
+            } yield persisted
+          case errorReports: Seq[ErrorReport] =>
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot create resource", errorReports)))
+        }
       }
     }
-  }
 
   /** This method only persists the resource and then overwrites/creates the policies for that resource. Be very careful if calling this method directly because
     * it will not validate the resource or its policies. If you want to create a Resource, use createResource() which will also perform critical validations
@@ -296,18 +299,20 @@ class ResourceService(
   //      preventing a new Resource with the same ID from being created
   // Resources with children cannot be deleted and will throw a 400.
   @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
-  def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[Unit] =
-    for {
-      _ <- checkNoChildren(resource, samRequestContext).unsafeToFuture()
+  def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    openTelemetry.time("api.v1.resource.delete.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      for {
+        _ <- checkNoChildren(resource, samRequestContext)
 
-      // remove from cloud first so a failure there does not leave sam in a bad state
-      _ <- cloudDeletePolicies(resource, samRequestContext)
+        // remove from cloud first so a failure there does not leave sam in a bad state
+        _ <- cloudDeletePolicies(resource, samRequestContext)
 
-      _ <- accessPolicyDAO.deleteAllResourcePolicies(resource, samRequestContext).unsafeToFuture()
-      _ <- maybeDeleteResource(resource, samRequestContext).unsafeToFuture()
+        _ <- accessPolicyDAO.deleteAllResourcePolicies(resource, samRequestContext)
+        _ <- maybeDeleteResource(resource, samRequestContext)
 
-      _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource)).unsafeToFuture()
-    } yield ()
+        _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
+      } yield ()
+    }
 
   /** Check if a resource has any children. If so, then throw a 400. */
   def checkNoChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
@@ -329,11 +334,11 @@ class ResourceService(
       _ <- accessPolicyDAO.deletePolicy(policyId, samRequestContext)
     } yield ()
 
-  def cloudDeletePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Future[LazyList[AccessPolicy]] =
+  def cloudDeletePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] =
     for {
-      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext).unsafeToFuture()
-      _ <- Future.traverse(policiesToDelete) { policy =>
-        cloudExtensions.onGroupDelete(policy.email)
+      policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
+      _ <- policiesToDelete.traverse { policy =>
+        IO.fromFuture(IO(cloudExtensions.onGroupDelete(policy.email)))
       }
     } yield policiesToDelete
 
@@ -348,8 +353,10 @@ class ResourceService(
         } yield ()
     }
 
-  def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): Future[Set[ResourceRoleName]] =
-    accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext).unsafeToFuture()
+  def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] =
+    openTelemetry.time("api.v1.resource.listUserRoles.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext)
+    }
 
   /** Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
     * @param resourceType
@@ -366,15 +373,17 @@ class ResourceService(
       policyMembership: AccessPolicyMembership,
       samRequestContext: SamRequestContext
   ): IO[AccessPolicy] =
-    for {
-      policy <- makeCreatablePolicy(policyName, policyMembership, samRequestContext)
-      _ <- validatePolicy(resourceType, policy).map {
-        case Some(errorReport) =>
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
-        case None =>
-      }
-      overwrittenPolicy <- createOrUpdatePolicy(FullyQualifiedPolicyId(resource, policyName), policy, samRequestContext)
-    } yield overwrittenPolicy
+    openTelemetry.time("api.v1.resource.overwritePolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      for {
+        policy <- makeCreatablePolicy(policyName, policyMembership, samRequestContext)
+        _ <- validatePolicy(resourceType, policy).map {
+          case Some(errorReport) =>
+            throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
+          case None =>
+        }
+        overwrittenPolicy <- createOrUpdatePolicy(FullyQualifiedPolicyId(resource, policyName), policy, samRequestContext)
+      } yield overwrittenPolicy
+    }
 
   /** Overwrites an existing admin policy, saves a new one if it doesn't exist yet.
     */
@@ -412,23 +421,25 @@ class ResourceService(
     * @return
     */
   def overwritePolicyMembers(policyId: FullyQualifiedPolicyId, membersList: Set[WorkbenchEmail], samRequestContext: SamRequestContext): IO[Unit] =
-    mapEmailsToSubjects(membersList, samRequestContext).flatMap { emailsToSubjects =>
-      validateMemberEmails(emailsToSubjects) match {
-        case Some(error) => IO.raiseError(new WorkbenchExceptionWithErrorReport(error.copy(statusCode = Option(StatusCodes.BadRequest))))
-        case None =>
-          val newMembers = emailsToSubjects.values.flatten.toSet
-          accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext).flatMap { originalPolicies =>
-            originalPolicies.find(_.id == policyId) match {
-              case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"policy $policyId does not exist")))
-              case Some(existingPolicy) =>
-                Applicative[IO].whenA(existingPolicy.members != newMembers) {
-                  for {
-                    _ <- accessPolicyDAO.overwritePolicyMembers(policyId, newMembers, samRequestContext)
-                    _ <- onPolicyUpdate(policyId, originalPolicies, samRequestContext)
-                  } yield ()
-                }
+    openTelemetry.time("api.v1.resource.overwritePolicyMembers.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      mapEmailsToSubjects(membersList, samRequestContext).flatMap { emailsToSubjects =>
+        validateMemberEmails(emailsToSubjects) match {
+          case Some(error) => IO.raiseError(new WorkbenchExceptionWithErrorReport(error.copy(statusCode = Option(StatusCodes.BadRequest))))
+          case None =>
+            val newMembers = emailsToSubjects.values.flatten.toSet
+            accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext).flatMap { originalPolicies =>
+              originalPolicies.find(_.id == policyId) match {
+                case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"policy $policyId does not exist")))
+                case Some(existingPolicy) =>
+                  Applicative[IO].whenA(existingPolicy.members != newMembers) {
+                    for {
+                      _ <- accessPolicyDAO.overwritePolicyMembers(policyId, newMembers, samRequestContext)
+                      _ <- onPolicyUpdate(policyId, originalPolicies, samRequestContext)
+                    } yield ()
+                  }
+              }
             }
-          }
+        }
       }
     }
 
@@ -443,7 +454,7 @@ class ResourceService(
       policyIdentity: FullyQualifiedPolicyId,
       policy: ValidatableAccessPolicy,
       samRequestContext: SamRequestContext
-  ): IO[AccessPolicy] = {
+  ): IO[AccessPolicy] = openTelemetry.time("api.v1.resource.createOrUpdatePolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet ++
       policy.memberPolicies.getOrElse(Set.empty).map(p => FullyQualifiedPolicyId(FullyQualifiedResourceId(p.resourceTypeName, p.resourceId), p.policyName))
     accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext).flatMap { originalPolicies =>
@@ -501,7 +512,7 @@ class ResourceService(
       resourceId: FullyQualifiedResourceId,
       samUser: SamUser,
       samRequestContext: SamRequestContext
-  ): IO[List[Boolean]] =
+  ): IO[List[Boolean]] = openTelemetry.time("api.v1.resource.leaveResource.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
     accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext) flatMap { policiesForResource =>
       val policiesForUser = policiesForResource.filter(_.members.contains(samUser.id)).toSet
       val publicPoliciesForResource = policiesForResource.filter(_.public).toSet
@@ -529,6 +540,7 @@ class ResourceService(
         removeSubjectFromPolicy(policy.id, samUser.id, samRequestContext)
       }
     }
+  }
 
   /** Validates a policy in the context of a ResourceType. When validating the policy, we want to collect each entity that was problematic and report that back
     * using ErrorReports
@@ -628,27 +640,31 @@ class ResourceService(
     } yield ()
 
   def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
-    subject match {
-      case subject: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
-        // https://broadworkbench.atlassian.net/browse/CA-257
-        // this case was prevented as a performance enhancement in the dark days before Postgres, does it still apply?
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
-      case _ =>
-        for {
-          originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
-          _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
-          policyChanged <- directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext)
-          _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
-        } yield policyChanged
+    openTelemetry.time("api.v1.resource.addSubjectToPolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      subject match {
+        case _: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
+          // https://broadworkbench.atlassian.net/browse/CA-257
+          // this case was prevented as a performance enhancement in the dark days before Postgres, does it still apply?
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Access policies cannot be added to managed groups.")))
+        case _ =>
+          for {
+            originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
+            _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
+            policyChanged <- directoryDAO.addGroupMember(policyIdentity, subject, samRequestContext)
+            _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
+          } yield policyChanged
+      }
     }
 
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
-    for {
-      originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
-      _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
-      policyChanged <- directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
-      _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
-    } yield policyChanged
+    openTelemetry.time("api.v1.resource.removeSubjectFromPolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      for {
+        originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
+        _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
+        policyChanged <- directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
+        _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
+      } yield policyChanged
+    }
 
   def failWhenPolicyNotExists(policies: Iterable[AccessPolicy], policyId: FullyQualifiedPolicyId): IO[Unit] =
     IO.raiseUnless(policies.exists(_.id == policyId)) {
@@ -672,9 +688,11 @@ class ResourceService(
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =
-    accessPolicyDAO.listAccessPolicyMemberships(resource, samRequestContext).map { policiesWithMembership =>
-      policiesWithMembership.map { policyWithMembership =>
-        AccessPolicyResponseEntry(policyWithMembership.policyName, policyWithMembership.membership, policyWithMembership.email)
+    openTelemetry.time("api.v1.resource.listResourcePolicies.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      accessPolicyDAO.listAccessPolicyMemberships(resource, samRequestContext).map { policiesWithMembership =>
+        policiesWithMembership.map { policyWithMembership =>
+          AccessPolicyResponseEntry(policyWithMembership.policyName, policyWithMembership.membership, policyWithMembership.email)
+        }
       }
     }
 
@@ -713,9 +731,11 @@ class ResourceService(
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
 
   def isPublic(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Boolean] =
-    accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).flatMap {
-      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
-      case Some(accessPolicy) => IO.pure(accessPolicy.public)
+    openTelemetry.time("api.v1.resource.isPublic.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).flatMap {
+        case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
+        case Some(accessPolicy) => IO.pure(accessPolicy.public)
+      }
     }
 
   /** Sets the public field of a policy. Raises an error if the policy has an auth domain and public == true. Triggers update to Google Group upon successfully
@@ -728,37 +748,41 @@ class ResourceService(
     * @return
     */
   def setPublic(policyId: FullyQualifiedPolicyId, public: Boolean, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource, samRequestContext)
-      _ <- authDomain match {
-        case LoadResourceAuthDomainResult.ResourceNotFound =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"ResourceId ${policyId.resource} not found.")))
-        case LoadResourceAuthDomainResult.Constrained(_) =>
-          // resources with auth domains logically can't have public policies but also technically allowing them poses a problem
-          // because the logic for public resources is different. However, sharing with the auth domain should have the
-          // exact same effect as making a policy public: anyone in the auth domain can access.
-          if (public)
-            IO.raiseError(
-              new WorkbenchExceptionWithErrorReport(
-                ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")
+    openTelemetry.time("api.v1.resource.setPublic.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      for {
+        authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource, samRequestContext)
+        _ <- authDomain match {
+          case LoadResourceAuthDomainResult.ResourceNotFound =>
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"ResourceId ${policyId.resource} not found.")))
+          case LoadResourceAuthDomainResult.Constrained(_) =>
+            // resources with auth domains logically can't have public policies but also technically allowing them poses a problem
+            // because the logic for public resources is different. However, sharing with the auth domain should have the
+            // exact same effect as making a policy public: anyone in the auth domain can access.
+            if (public)
+              IO.raiseError(
+                new WorkbenchExceptionWithErrorReport(
+                  ErrorReport(StatusCodes.BadRequest, "Cannot make auth domain protected resources public. Share directly with auth domain groups instead.")
+                )
               )
-            )
-          else IO.unit
-        case LoadResourceAuthDomainResult.NotConstrained =>
-          for {
-            originalPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
-            policyChanged <- accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext)
-            _ <- onPolicyUpdateIfChanged(policyId, originalPolicies, samRequestContext)(policyChanged)
-          } yield ()
-      }
-    } yield ()
+            else IO.unit
+          case LoadResourceAuthDomainResult.NotConstrained =>
+            for {
+              originalPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
+              policyChanged <- accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext)
+              _ <- onPolicyUpdateIfChanged(policyId, originalPolicies, samRequestContext)(policyChanged)
+            } yield ()
+        }
+      } yield ()
+    }
 
   def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[UserIdInfo]] =
-    for {
-      accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext)
-      members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id, samRequestContext))
-      workbenchUsers = members.flatten.toSet
-    } yield workbenchUsers.map(_.toUserIdInfo)
+    openTelemetry.time("api.v1.resource.listAllFlattenedResourceUsers.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      for {
+        accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext)
+        members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id, samRequestContext))
+        workbenchUsers = members.flatten.toSet
+      } yield workbenchUsers.map(_.toUserIdInfo)
+    }
 
   @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
   def getResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] =
@@ -769,39 +793,43 @@ class ResourceService(
     * https://docs.google.com/document/d/10qGxsV9BeM6-N_Zk27_JIayE509B8LUQBGiGrqB0taY/edit#heading=h.dxz6xjtnz9la
     */
   def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
-      _ <- authDomain match {
-        case LoadResourceAuthDomainResult.NotConstrained =>
-          for {
-            _ <- accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
-            _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentUpdated, childResource, Option(ResourceChange(parentResource))))
-          } yield ()
-        case LoadResourceAuthDomainResult.Constrained(_) =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.BadRequest, "Cannot set the parent for a constrained resource")
+    openTelemetry.time("api.v1.resource.setResourceParent.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      for {
+        authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
+        _ <- authDomain match {
+          case LoadResourceAuthDomainResult.NotConstrained =>
+            for {
+              _ <- accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
+              _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentUpdated, childResource, Option(ResourceChange(parentResource))))
+            } yield ()
+          case LoadResourceAuthDomainResult.Constrained(_) =>
+            IO.raiseError(
+              new WorkbenchExceptionWithErrorReport(
+                ErrorReport(StatusCodes.BadRequest, "Cannot set the parent for a constrained resource")
+              )
             )
-          )
-        case LoadResourceAuthDomainResult.ResourceNotFound =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.NotFound, "Resource not found")
+          case LoadResourceAuthDomainResult.ResourceNotFound =>
+            IO.raiseError(
+              new WorkbenchExceptionWithErrorReport(
+                ErrorReport(StatusCodes.NotFound, "Resource not found")
+              )
             )
-          )
-      }
-    } yield ()
+        }
+      } yield ()
+    }
 
   def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] =
-    for {
-      maybeOldParent <- accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
-      _ <- maybeOldParent.traverse { oldParent =>
-        for {
-          _ <- accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
-          _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentRemoved, resourceId, Option(ResourceChange(oldParent))))
-        } yield ()
-      }
-    } yield maybeOldParent.isDefined
+    openTelemetry.time("api.v1.resource.deleteResourceParent.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+      for {
+        maybeOldParent <- accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
+        _ <- maybeOldParent.traverse { oldParent =>
+          for {
+            _ <- accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
+            _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentRemoved, resourceId, Option(ResourceChange(oldParent))))
+          } yield ()
+        }
+      } yield maybeOldParent.isDefined
+    }
 
   def listResourceChildren(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
     accessPolicyDAO.listResourceChildren(resourceId, samRequestContext)

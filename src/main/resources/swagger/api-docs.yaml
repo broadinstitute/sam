@@ -2681,6 +2681,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /register/user/v2/self/termsOfServiceDetails:
+    get:
+      tags:
+        - Terms of Service
+      summary: gets terms of service details, including user's accepted version
+      operationId: getTermsOfServiceDetails
+      responses:
+        200:
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermsOfServiceDetails'
   /liveness:
     get:
       summary: Gets system liveness
@@ -2753,12 +2766,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /register/user/v1/termsofservice/status:
+    get:
+      tags:
+        - Terms of Service
+      summary: returns whether or not the user has accepted the current terms of service.
+      operationId: getUserTermsOfServiceStatus
+      responses:
+        200:
+          description: terms of service status is enabled, boolean value denotes users acceptance of the latest 
+            terms of service version.
+          content:
+            application/json:
+              schema:
+                type: boolean
+                description: if user has accepted the latest version of the terms of service
+        404:
+          description: user not found or terms of service disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /tos/text:
     get:
       tags:
         - Terms of Service
       summary: gets terms of service text
       operationId: getTermsOfServiceText
+      responses:
+        200:
+          description: success
+          content:
+            text/plain:
+              schema:
+                type: string
+  /privacy/text:
+    get:
+      tags:
+        - Terms of Service
+      summary: gets privacy policy text
+      operationId: getPrivacyPolicyText
       responses:
         200:
           description: success
@@ -3324,6 +3371,27 @@ components:
           type: boolean
           description: true if the user is in their proxy group
       description: ""
+    TermsOfServiceDetails:
+      required:
+        - isEnabled
+        - isGracePeriodEnabled
+        - currentVersion
+        - userAcceptedVersion
+      type: object
+      properties:
+        isEnabled:
+          type: boolean
+          description: true if terms of service is enforced in Sam
+        isGracePeriodEnabled:
+          type: boolean
+          description: true if there is currently a grace period enabled, 
+            letting users use the system without accepting the terms of service
+        currentVersion:
+          type: string
+          description: the current version of terms of service for the system
+        userAcceptedVersion:
+          type: string
+          description: the version of the terms of service the user has accepted
     ManagedResourceGroupCoordinates:
       required:
         - tenantId

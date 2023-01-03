@@ -79,21 +79,23 @@ class GoogleExtensions(
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
-  ): Future[WorkbenchGroup] = {
+  ): IO[WorkbenchGroup] = {
     val allUsersGroupStub = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersGroupEmail)
     for {
-      existingGroup <- directoryDAO.loadGroup(allUsersGroupStub.id, samRequestContext = samRequestContext).unsafeToFuture()
+      existingGroup <- directoryDAO.loadGroup(allUsersGroupStub.id, samRequestContext = samRequestContext)
       allUsersGroup <- existingGroup match {
-        case None => directoryDAO.createGroup(allUsersGroupStub, samRequestContext = samRequestContext).unsafeToFuture()
-        case Some(group) => Future.successful(group)
+        case None => directoryDAO.createGroup(allUsersGroupStub, samRequestContext = samRequestContext)
+        case Some(group) => IO.pure(group)
       }
-      existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)
+      existingGoogleGroup <- IO.fromFuture(IO(googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)))
       _ <- existingGoogleGroup match {
         case None =>
-          googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
+          IO.fromFuture(
+            IO(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)))
+          ) recover {
             case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
           }
-        case Some(_) => Future.successful(())
+        case Some(_) => IO.unit
       }
 
     } yield allUsersGroup
@@ -131,7 +133,7 @@ class GoogleExtensions(
                 false,
                 None
               )
-              IO.fromFuture(IO(samApplication.userService.createUser(newUser, samRequestContext))).map(_ => newUser)
+              samApplication.userService.createUser(newUser, samRequestContext).map(_ => newUser)
           }
       }
 
@@ -260,54 +262,54 @@ class GoogleExtensions(
   private def publishMessages(messages: Seq[String]): Future[Unit] =
     googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, messages)
 
-  override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = {
+  override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
     val proxyEmail = toProxyFromUser(user.id)
     for {
-      _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
+      _ <- IO.fromFuture(IO(googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)))) recover {
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
+      _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)))
 
     } yield ()
   }
 
-  override def getUserStatus(user: SamUser): Future[Boolean] =
+  override def getUserStatus(user: SamUser): IO[Boolean] =
     getUserProxy(user.id).flatMap {
-      case Some(proxyEmail) => googleDirectoryDAO.isGroupMember(proxyEmail, WorkbenchEmail(user.email.value))
-      case None => Future.successful(false)
+      case Some(proxyEmail) => IO.fromFuture(IO(googleDirectoryDAO.isGroupMember(proxyEmail, WorkbenchEmail(user.email.value))))
+      case None => IO.pure(false)
     }
 
   /** Evaluate a future for each pet in parallel.
     */
-  private def forAllPets[T](userId: WorkbenchUserId, samRequestContext: SamRequestContext)(f: PetServiceAccount => Future[T]): Future[Seq[T]] =
+  private def forAllPets[T](userId: WorkbenchUserId, samRequestContext: SamRequestContext)(f: PetServiceAccount => IO[T]): IO[Seq[T]] =
     for {
-      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId, samRequestContext).unsafeToFuture()
-      a <- Future.traverse(pets) { pet =>
+      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId, samRequestContext)
+      a <- pets.traverse { pet =>
         f(pet)
       }
     } yield a
 
-  override def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] =
+  override def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- withProxyEmail(user.id) { proxyEmail =>
-        googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))
+        IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))))
       }
       _ <- forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) => enablePetServiceAccount(petServiceAccount, samRequestContext))
     } yield ()
 
-  override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] =
+  override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) => disablePetServiceAccount(petServiceAccount, samRequestContext))
       _ <- withProxyEmail(user.id) { proxyEmail =>
-        googleDirectoryDAO.removeMemberFromGroup(proxyEmail, WorkbenchEmail(user.email.value))
+        IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(proxyEmail, WorkbenchEmail(user.email.value))))
       }
     } yield ()
 
-  override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
+  override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- forAllPets(userId, samRequestContext)((petServiceAccount: PetServiceAccount) => removePetServiceAccount(petServiceAccount, samRequestContext))
-      _ <- withProxyEmail(userId)(googleDirectoryDAO.deleteGroup)
+      _ <- withProxyEmail(userId)(email => IO.fromFuture(IO(googleDirectoryDAO.deleteGroup(email))))
     } yield ()
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] =
@@ -317,7 +319,7 @@ class GoogleExtensions(
     for {
       maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
       deletedSomething <- maybePet match {
-        case Some(pet) => IO.fromFuture(IO(removePetServiceAccount(pet, samRequestContext))).map(_ => true)
+        case Some(pet) => removePetServiceAccount(pet, samRequestContext).map(_ => true)
         case None => IO.pure(false) // didn't find the pet, nothing to delete
       }
     } yield deletedSomething
@@ -336,11 +338,11 @@ class GoogleExtensions(
           for {
             _ <- assertProjectInTerraOrg(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
-            _ <- IO.fromFuture(IO(withProxyEmail(user.id) { proxyEmail =>
+            _ <- withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
               // See: https://broadworkbench.atlassian.net/browse/CA-1005
-              googleDirectoryDAO.addServiceAccountToGroup(proxyEmail, sa)
-            }))
+              IO.fromFuture(IO(googleDirectoryDAO.addServiceAccountToGroup(proxyEmail, sa)))
+            }
             _ <- IO.fromFuture(IO(googleIamDAO.addServiceAccountUserRoleForUser(project, sa.email, sa.email)))
           } yield sa
         // SA already exists in google, use it
@@ -498,30 +500,30 @@ class GoogleExtensions(
       }
     } yield result
 
-  private def enablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): Future[Unit] =
+  private def enablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
     for {
-      _ <- directoryDAO.enableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
+      _ <- directoryDAO.enableIdentity(petServiceAccount.id, samRequestContext)
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
-        googleDirectoryDAO.addMemberToGroup(proxyEmail, petServiceAccount.serviceAccount.email)
+        IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(proxyEmail, petServiceAccount.serviceAccount.email)))
       }
     } yield ()
 
-  private def disablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): Future[Unit] =
+  private def disablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
     for {
-      _ <- directoryDAO.disableIdentity(petServiceAccount.id, samRequestContext).unsafeToFuture()
+      _ <- directoryDAO.disableIdentity(petServiceAccount.id, samRequestContext)
       _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
-        googleDirectoryDAO.removeMemberFromGroup(proxyEmail, petServiceAccount.serviceAccount.email)
+        IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(proxyEmail, petServiceAccount.serviceAccount.email)))
       }
     } yield ()
 
-  private def removePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): Future[Unit] =
+  private def removePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       // disable the pet service account
       _ <- disablePetServiceAccount(petServiceAccount, samRequestContext)
       // remove the record for the pet service account
-      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext).unsafeToFuture()
+      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext)
       // remove the service account itself in Google
-      _ <- googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))
+      _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))))
     } yield ()
 
   def getSynchronizedState(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[GroupSyncResponse]] = {
@@ -562,17 +564,17 @@ class GoogleExtensions(
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit =
     notificationDAO.fireAndForgetNotifications(notifications)
 
-  override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchEmail]] =
-    directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext).unsafeToFuture().flatMap {
+  override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
+    directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext).flatMap {
       case Some(user: WorkbenchUserId) => getUserProxy(user)
       case Some(pet: PetServiceAccountId) => getUserProxy(pet.userId)
-      case _ => Future.successful(None)
+      case _ => IO.pure(None)
     }
 
-  private[google] def getUserProxy(userId: WorkbenchUserId): Future[Option[WorkbenchEmail]] =
-    Future.successful(Some(toProxyFromUser(userId)))
+  private[google] def getUserProxy(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] =
+    IO.pure(Some(toProxyFromUser(userId)))
 
-  private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => Future[T]): Future[T] =
+  private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => IO[T]): IO[T] =
     getUserProxy(userId) flatMap {
       case Some(e) => f(e)
       case None =>

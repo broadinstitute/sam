@@ -15,9 +15,18 @@ trait TermsOfServiceRoutes {
       path("text") {
         pathEndOrSingleSlash {
           get {
-            complete(tosService.getText)
+            complete(tosService.getTosText)
           }
         }
       }
-    }
+    } ~
+      pathPrefix("privacy") {
+        path("text") {
+          pathEndOrSingleSlash {
+            get {
+              complete(tosService.getPrivacyText)
+            }
+          }
+        }
+      }
 }
