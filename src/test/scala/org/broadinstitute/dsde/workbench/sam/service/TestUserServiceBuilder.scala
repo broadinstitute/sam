@@ -97,7 +97,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
       .build
   }
 
-  private def buildCloudExtensionsDao(directoryDAO: DirectoryDAO): CloudExtensions = {
+  private def buildCloudExtensionsDao(directoryDAO: DirectoryDAO): CloudServices = {
     val mockCloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
     mockCloudExtensionsBuilder
       .withEnabledUsers(fullyActivatedUsers)

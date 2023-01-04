@@ -5,10 +5,10 @@ import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.{any, argThat}
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, doAnswer, doReturn}
 import org.mockito.invocation.InvocationOnMock
-import org.mockito.{ArgumentMatcher, ArgumentMatchers}
 import org.scalatestplus.mockito.MockitoSugar.mock
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -17,7 +17,7 @@ import scala.concurrent.{ExecutionContext, Future}
 // so that it can _update_ the database, but it does.  It makes things more complicated here.
 case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
-  val mockedCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+  val mockedCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
 
   /** Constructor logic mocks up CloudExtensions as if in an "empty" state
     */
@@ -26,18 +26,18 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
   // already exist.  It probably shouldn't do that, but it does.  Mocking similar behavior here.
   doAnswer { (invocation: InvocationOnMock) =>
     val samRequestContext = invocation.getArgument[SamRequestContext](1)
-    val maybeGroup = directoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync()
+    val maybeGroup = directoryDAO.loadGroup(CloudServices.allUsersGroupName, samRequestContext).unsafeRunSync()
     maybeGroup match {
       case Some(group) => Future.successful(group)
       case None =>
         throw new RuntimeException(
           "Mocked exception.  Make sure the `directoryDAO` used to construct this " +
-            s"MockCloudExtensionsBuilder has an '${CloudExtensions.allUsersGroupName}' group in it.  If using a " +
+            s"MockCloudExtensionsBuilder has an '${CloudServices.allUsersGroupName}' group in it.  If using a " +
             s"mock `directoryDAO`, try building it with `MockDirectoryDaoBuilder.withAllUsersGroup()`"
         )
     }
   }.when(mockedCloudExtensions)
-    .getOrCreateAllUsersGroup(ArgumentMatchers.eq(directoryDAO), any[SamRequestContext])(any[ExecutionContext])
+    .getOrCreateAllUsersGroup(any[SamRequestContext])(any[ExecutionContext])
 
   doAnswer { (invocation: InvocationOnMock) =>
     val samUser = invocation.getArgument[SamUser](0)
@@ -77,7 +77,7 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
       .getUserStatus(argThat(IsSameUserAs(samUser)))
   }
 
-  def build: CloudExtensions = mockedCloudExtensions
+  def build: CloudServices = mockedCloudExtensions
 }
 
 case class IsSameUserAs(user: SamUser) extends ArgumentMatcher[SamUser] {

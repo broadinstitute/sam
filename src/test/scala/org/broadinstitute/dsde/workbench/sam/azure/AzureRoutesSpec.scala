@@ -11,7 +11,6 @@ import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicyMembership, SamResourceTypes, SamUser}
-import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
@@ -144,7 +143,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   }
 
   private def genSamRoutes(createSpendProfile: Boolean = true, createAzurePolicy: Boolean = true, crlService: Option[CrlService] = None): TestSamRoutes = {
-    val resourceTypes = configResourceTypes.view.filterKeys(k => k == SamResourceTypes.spendProfile || k == CloudExtensions.resourceTypeName)
+    val resourceTypes = configResourceTypes.view.filterKeys(k => k == SamResourceTypes.spendProfile || k == SamResourceTypes.cloudExtensionName)
     val samRoutes = TestSamRoutes(resourceTypes.toMap, crlService = crlService)
 
     // Create mock spend-profile resource
@@ -157,7 +156,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     }
 
     // Create Azure cloud-extension resource
-    Post(s"/api/resources/v2/${CloudExtensions.resourceTypeName.value}/${AzureExtensions.resourceId}") ~> samRoutes.route ~> check {
+    Post(s"/api/resources/v2/${SamResourceTypes.cloudExtensionName.value}/${AzureExtensions.resourceId}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
 
@@ -165,7 +164,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     if (createAzurePolicy) {
       val cloudExtensionMembers = AccessPolicyMembership(Set(samRoutes.user.email), Set(AzureExtensions.getPetManagedIdentityAction), Set.empty, None)
       Put(
-        s"/api/resources/v2/${CloudExtensions.resourceTypeName.value}/${AzureExtensions.resourceId.value}/policies/azure",
+        s"/api/resources/v2/${SamResourceTypes.cloudExtensionName.value}/${AzureExtensions.resourceId.value}/policies/azure",
         cloudExtensionMembers
       ) ~> samRoutes.route ~> check {
         status shouldEqual StatusCodes.Created

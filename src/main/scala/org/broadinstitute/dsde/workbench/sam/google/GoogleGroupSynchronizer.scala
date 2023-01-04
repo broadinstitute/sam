@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
+import org.broadinstitute.dsde.workbench.sam.service.CloudServices
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 
@@ -33,11 +33,11 @@ import scala.util.{Failure, Success, Try}
   * @param executionContext
   */
 class GoogleGroupSynchronizer(
-    directoryDAO: DirectoryDAO,
-    accessPolicyDAO: AccessPolicyDAO,
-    googleDirectoryDAO: GoogleDirectoryDAO,
-    googleExtensions: GoogleExtensions,
-    resourceTypes: Map[ResourceTypeName, ResourceType]
+                               directoryDAO: DirectoryDAO,
+                               accessPolicyDAO: AccessPolicyDAO,
+                               googleDirectoryDAO: GoogleDirectoryDAO,
+                               googleExtensions: GoogleCloudServices,
+                               resourceTypes: Map[ResourceTypeName, ResourceType]
 )(implicit executionContext: ExecutionContext)
     extends LazyLogging
     with FutureSupport {
@@ -73,7 +73,7 @@ class GoogleGroupSynchronizer(
               .map(_.map { loadedPolicy =>
                 if (loadedPolicy.public) {
                   // include all users group when synchronizing a public policy
-                  AccessPolicy.members.modify(_ + CloudExtensions.allUsersGroupName)(loadedPolicy)
+                  AccessPolicy.members.modify(_ + CloudServices.allUsersGroupName)(loadedPolicy)
                 } else {
                   loadedPolicy
                 }

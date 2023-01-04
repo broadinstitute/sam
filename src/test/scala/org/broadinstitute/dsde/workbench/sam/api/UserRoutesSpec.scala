@@ -53,11 +53,11 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
   val petSAEmail = petSAUser.email
 
   def createTestUser(
-      testUser: SamUser = Generator.genWorkbenchUserBoth.sample.get,
-      cloudExtensions: Option[CloudExtensions] = None,
-      googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
-      tosEnabled: Boolean = false,
-      tosAccepted: Boolean = false
+                      testUser: SamUser = Generator.genWorkbenchUserBoth.sample.get,
+                      cloudExtensions: Option[CloudServices] = None,
+                      googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
+                      tosEnabled: Boolean = false,
+                      tosAccepted: Boolean = false
   ): (SamUser, SamDependencies, SamRoutes) = {
     val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO, tosEnabled = tosEnabled)
     val routes = genSamRoutes(samDependencies, testUser)
@@ -92,8 +92,8 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
     val samRoutes = new TestSamRoutes(
       null,
       null,
-      new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      new UserService(directoryDAO, NoServices, Seq.empty, tosService),
+      new StatusService(directoryDAO, NoServices, TestSupport.dbRef),
       null,
       defaultUser,
       directoryDAO,

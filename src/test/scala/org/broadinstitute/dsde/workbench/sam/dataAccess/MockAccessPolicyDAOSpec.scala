@@ -45,14 +45,14 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
     val shared = sharedFixtures
     val ldapPolicyDao = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
     val ldapDirDao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
-    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(ldapDirDao, samRequestContext))
+//    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoServices.getOrCreateAllUsersGroup(samRequestContext))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao, ldapDirDao)
     val resourceService =
-      new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain, Set.empty)
-    val userService = new UserService(ldapDirDao, NoExtensions, Seq.empty, new TosService(ldapDirDao, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+      new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoServices, shared.emailDomain, Set.empty)
+    val userService = new UserService(ldapDirDao, NoServices, Seq.empty, new TosService(ldapDirDao, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val managedGroupService =
-      new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
+      new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoServices, shared.emailDomain)
     shared.resourceTypes foreach { case (_, resourceType) => resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync() }
   }
 
@@ -60,15 +60,15 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
     val shared = sharedFixtures
     val mockDirectoryDAO = new MockDirectoryDAO()
     val mockPolicyDAO = new MockAccessPolicyDAO(shared.resourceTypes, mockDirectoryDAO)
-    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoExtensions.getOrCreateAllUsersGroup(mockDirectoryDAO, samRequestContext))
+//    val allUsersGroup: WorkbenchGroup = TestSupport.runAndWait(NoServices.getOrCreateAllUsersGroup(mockDirectoryDAO, samRequestContext))
 
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO)
     val resourceService =
-      new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain, Set.empty)
+      new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirectoryDAO, NoServices, shared.emailDomain, Set.empty)
     val userService =
-      new UserService(mockDirectoryDAO, NoExtensions, Seq.empty, new TosService(mockDirectoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+      new UserService(mockDirectoryDAO, NoServices, Seq.empty, new TosService(mockDirectoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
     val managedGroupService =
-      new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain)
+      new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO, NoServices, shared.emailDomain)
   }
 
   "RealAccessPolicyDao and MockAccessPolicyDao" should "return the same results for the same methods" in {

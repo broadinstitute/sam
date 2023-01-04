@@ -22,9 +22,13 @@ import scala.util.matching.Regex
 
 /** Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, blockedEmailDomains: Seq[String], tosService: TosService)(implicit
-    val executionContext: ExecutionContext
-) extends LazyLogging {
+class UserService(
+                   val directoryDAO: DirectoryDAO,
+                   val cloudExtensions: CloudServices,
+                   blockedEmailDomains: Seq[String],
+                   tosService: TosService
+  ) (implicit val executionContext: ExecutionContext)
+  extends LazyLogging {
 
   def createUser(user: SamUser, samRequestContext: SamRequestContext): Future[UserStatus] =
     for {
@@ -42,16 +46,31 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // We only need to add the user to the Group in Sam and the GoogleGroupSynchronizer will make sure that the
   // corresponding Google Group gets updated.  All we need to do here is make sure the Google Group exists.
   def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
-    for {
+    (for {
       // 1. get All_Users group from Sam
       //    - Create group if not exists
       // 2. get All_Users group from Google
       //    - Create group if not exists
       // 3. If both groups exist
       //    THEN Add user to both groups
-      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-      _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext).unsafeToFuture()
-    } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
+      allUsersGroupInDB <- getOrCreateAllUsersGroupInDB(samRequestContext)
+      //      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
+      _ <- directoryDAO.addGroupMember(allUsersGroupInDB.id, uid, samRequestContext)
+    } yield logger.info(s"Added user uid ${uid.value} to the All Users group")).unsafeToFuture()
+
+  private def getOrCreateAllUsersGroupInDB(samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
+    for {
+      maybeAllUsersGroupInDB <- directoryDAO.loadGroup(CloudServices.allUsersGroupName, samRequestContext)
+      allUsersGroupInDB <- maybeAllUsersGroupInDB match {
+        case Some(group) => IO(group)
+        case None => directoryDAO.createGroup(cloudExtensions.allUsersGroupStub, None, samRequestContext)
+      }
+    } yield allUsersGroupInDB
+
+  private def getOrCreateAllUsersGroupOnCloud(samRequestContext: SamRequestContext): IO[Unit] =
+    for {
+      foo <- IO.unit
+    } yield foo
 
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
@@ -142,8 +161,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         else
           for {
             googleStatus <- cloudExtensions.getUserStatus(user)
-            allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-            allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover {
+            allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(samRequestContext)
+            allUsersGroupName = WorkbenchGroupName(allUsersGroup.getName)
+            allUsersStatus <- directoryDAO.isGroupMember(allUsersGroupName, user.id, samRequestContext).unsafeToFuture() recover {
               case _: NameNotFoundException => false
             }
             tosAcceptedStatus <- tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
@@ -187,8 +207,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         // pulled out of for comprehension to allow concurrent execution
         val tosAcceptedStatus = tosService.getTosStatus(user.id, samRequestContext).unsafeToFuture()
         val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext).unsafeToFuture()
-        val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
-          directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext).unsafeToFuture() recover { case e: NameNotFoundException => false }
+        val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(samRequestContext).flatMap { allUsersGroup =>
+          val allUsersGroupName = WorkbenchGroupName(allUsersGroup.getName)
+          directoryDAO.isGroupMember(allUsersGroupName, user.id, samRequestContext).unsafeToFuture() recover { case e: NameNotFoundException => false }
         }
         val googleStatus = cloudExtensions.getUserStatus(user)
 
@@ -260,9 +281,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
+      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(samRequestContext)
+      allUsersGroupName = WorkbenchGroupName(allUsersGroup.getName)
       _ <- directoryDAO
-        .removeGroupMember(allUsersGroup.id, userId, samRequestContext)
+        .removeGroupMember(allUsersGroupName, userId, samRequestContext)
         .unsafeToFuture()
         .withInfoLogMessage(s"Removed $userId from the All Users group")
       _ <- cloudExtensions.onUserDelete(userId, samRequestContext)

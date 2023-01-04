@@ -141,7 +141,7 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
   def setUpAdminTest(): (SamUser, SamRoutes) = {
     val googDirectoryDAO = new MockGoogleDirectoryDAO()
     val adminGroupEmail = runAndWait(setupAdminsGroup(googDirectoryDAO))
-    val cloudExtensions = new NoExtensions {
+    val cloudExtensions = new NoServicesTrait {
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
     val (_, _, routes) = createTestUser(testUser = adminUser, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO))
@@ -151,11 +151,11 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
   }
 
   def createTestUser(
-      testUser: SamUser = Generator.genWorkbenchUserBoth.sample.get,
-      cloudExtensions: Option[CloudExtensions] = None,
-      googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
-      tosEnabled: Boolean = false,
-      tosAccepted: Boolean = false
+                      testUser: SamUser = Generator.genWorkbenchUserBoth.sample.get,
+                      cloudExtensions: Option[CloudServices] = None,
+                      googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
+                      tosEnabled: Boolean = false,
+                      tosAccepted: Boolean = false
   ): (SamUser, SamDependencies, SamRoutes) = {
     val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO, tosEnabled = tosEnabled)
     val routes = genSamRoutes(samDependencies, testUser)
@@ -189,7 +189,7 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
 
     val adminGroupEmail = runAndWait(setupAdminsGroup(googleDirectoryDAO))
 
-    val cloudExtensions = new NoExtensions {
+    val cloudExtensions = new NoServicesTrait {
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googleDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
 
@@ -200,7 +200,7 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
       null,
       null,
       new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      new StatusService(directoryDAO, NoServices, TestSupport.dbRef),
       null,
       defaultUser,
       directoryDAO,
@@ -211,7 +211,7 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
       null,
       null,
       new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      new StatusService(directoryDAO, NoServices, TestSupport.dbRef),
       null,
       adminUser,
       directoryDAO,

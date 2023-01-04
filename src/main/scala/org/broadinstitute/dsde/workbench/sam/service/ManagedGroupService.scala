@@ -17,13 +17,13 @@ import scala.concurrent.Future
 /** Created by gpolumbo on 2/21/2018.
   */
 class ManagedGroupService(
-    private val resourceService: ResourceService,
-    private val policyEvaluatorService: PolicyEvaluatorService,
-    private val resourceTypes: Map[ResourceTypeName, ResourceType],
-    private val accessPolicyDAO: AccessPolicyDAO,
-    private val directoryDAO: DirectoryDAO,
-    private val cloudExtensions: CloudExtensions,
-    private val emailDomain: String
+                           private val resourceService: ResourceService,
+                           private val policyEvaluatorService: PolicyEvaluatorService,
+                           private val resourceTypes: Map[ResourceTypeName, ResourceType],
+                           private val accessPolicyDAO: AccessPolicyDAO,
+                           private val directoryDAO: DirectoryDAO,
+                           private val cloudExtensions: CloudServices,
+                           private val emailDomain: String
 ) extends LazyLogging {
 
   def managedGroupType: ResourceType =

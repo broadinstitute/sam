@@ -1,28 +1,26 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
+import com.google.api.services.admin.directory.model.Group
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
 
 import scala.concurrent.{ExecutionContext, Future}
 
-object CloudExtensions {
-  val resourceTypeName = ResourceTypeName("cloud-extension")
+object CloudServices {
   val allUsersGroupName = WorkbenchGroupName("All_Users")
 }
 
-trait CloudExtensions {
+trait CloudServices {
   // this is temporary until we get the admin group rolled into a sam group
   def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean]
 
@@ -56,23 +54,27 @@ trait CloudExtensions {
 
   def emailDomain: String
 
-//  def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
-//      executionContext: ExecutionContext
-//  ): Future[WorkbenchGroup]
+  val allUsersGroupEmail: WorkbenchEmail
+  val allUsersGroupStub = BasicWorkbenchGroup(CloudServices.allUsersGroupName, Set.empty, allUsersGroupEmail)
 
-  def doesGroupExist(workbenchEmail: WorkbenchEmail, samRequestContext: SamRequestContext)(implicit
-                                                                                                 executionContext: ExecutionContext
-  ): Future[Boolean] // Google Group email
+  def getOrCreateAllUsersGroup(samRequestContext: SamRequestContext)
+                              (implicit executionContext: ExecutionContext): Future[Group]
 
-  def createGroup(workbenchGroup: WorkbenchGroup, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[Unit] // email of group
+  def doesGroupExist(workbenchEmail: WorkbenchEmail,
+                     samRequestContext: SamRequestContext)
+                    (implicit executionContext: ExecutionContext): Future[Boolean]
+
+  def createGroup(workbenchGroup: WorkbenchGroup,
+                  samRequestContext: SamRequestContext)
+                 (implicit executionContext: ExecutionContext): Future[Group]
 }
 
 trait CloudExtensionsInitializer {
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit]
-  def cloudExtensions: CloudExtensions
+  def cloudExtensions: CloudServices
 }
 
-trait NoExtensions extends CloudExtensions {
+trait NoServicesTrait extends CloudServices {
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
 
   override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
@@ -106,27 +108,29 @@ trait NoExtensions extends CloudExtensions {
 
   override val emailDomain = "example.com"
 
-  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+  override def getOrCreateAllUsersGroup(samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
-  ): Future[WorkbenchGroup] = {
-    val allUsersGroup =
-      BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"))
-    for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
-        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
-      }
-    } yield createdGroup
+  ): Future[Group] = {
+    val allUsersGroup = BasicWorkbenchGroup(CloudServices.allUsersGroupName, Set.empty, allUsersGroupEmail)
+    createGroup(allUsersGroup, samRequestContext = samRequestContext)
   }
+
+  override val allUsersGroupEmail: WorkbenchEmail = WorkbenchEmail(s"GROUP_${CloudServices.allUsersGroupName.value}@$emailDomain")
+
+  override def doesGroupExist(workbenchEmail: WorkbenchEmail, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[Boolean] = ???
+
+  override def createGroup(workbenchGroup: WorkbenchGroup, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[Group] = ???
+
 }
 
-object NoExtensions extends NoExtensions
+object NoServices extends NoServicesTrait
 
 object NoExtensionsInitializer extends CloudExtensionsInitializer {
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = IO.unit
-  override val cloudExtensions: CloudExtensions = NoExtensions
+  override val cloudExtensions: CloudServices = NoServices
 }
 
 trait NoExtensionRoutes extends ExtensionRoutes {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
-  val cloudExtensions = NoExtensions
+  val cloudExtensions = NoServices
 }

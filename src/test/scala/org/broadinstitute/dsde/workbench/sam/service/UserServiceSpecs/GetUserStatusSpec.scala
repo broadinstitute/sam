@@ -10,7 +10,7 @@ class GetUserStatusSpec extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
   // Setup test vals
-  val allUsersGroup: BasicWorkbenchGroup = genBasicWorkbenchGroup.sample.get.copy(id = CloudExtensions.allUsersGroupName)
+  val allUsersGroup: BasicWorkbenchGroup = genBasicWorkbenchGroup.sample.get.copy(id = CloudServices.allUsersGroupName)
 
   describe("UserService.getUserStatus") {
     describe("for a user that does not exist") {

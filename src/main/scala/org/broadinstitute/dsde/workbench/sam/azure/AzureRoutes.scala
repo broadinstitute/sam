@@ -8,10 +8,9 @@ import cats.syntax.all._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.api.{SecurityDirectives, _}
+import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsString
 
@@ -76,7 +75,7 @@ trait AzureRoutes extends SecurityDirectives {
   // Validates the provided SamUser has 'getPetManagedIdentityAction' on the 'azure' cloud-extension resource.
   private def requireCloudExtensionCreatePetAction(samUser: SamUser, samRequestContext: SamRequestContext): Directive0 =
     requireAction(
-      FullyQualifiedResourceId(CloudExtensions.resourceTypeName, AzureExtensions.resourceId),
+      FullyQualifiedResourceId(SamResourceTypes.cloudExtensionName, AzureExtensions.resourceId),
       AzureExtensions.getPetManagedIdentityAction,
       samUser.id,
       samRequestContext

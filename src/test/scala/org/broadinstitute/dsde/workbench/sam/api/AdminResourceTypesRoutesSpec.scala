@@ -66,7 +66,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
 
-    val cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin)
+    val cloudExtensions = SamSuperAdminServices(isSamSuperAdmin)
 
     val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
@@ -156,7 +156,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     val samRoutes = TestSamRoutes(
       Map(defaultResourceType.name -> defaultResourceType),
       user = firecloudAdmin,
-      cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin = false).some
+      cloudExtensions = SamSuperAdminServices(isSamSuperAdmin = false).some
     )
 
     Put(
@@ -168,7 +168,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
   }
 
   it should "404 if given nonexistent resource type" in {
-    val samRoutes = TestSamRoutes(Map.empty, user = firecloudAdmin, cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin = true).some)
+    val samRoutes = TestSamRoutes(Map.empty, user = firecloudAdmin, cloudExtensions = SamSuperAdminServices(isSamSuperAdmin = true).some)
 
     Put(
       s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$defaultAdminPolicyName",
@@ -182,7 +182,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     val samRoutes = TestSamRoutes(
       Map(defaultResourceType.name -> defaultResourceType),
       user = firecloudAdmin,
-      cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin = true).some
+      cloudExtensions = SamSuperAdminServices(isSamSuperAdmin = true).some
     )
 
     runAndWait {
@@ -247,7 +247,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     }
   }
 
-  case class SamSuperAdminExtensions(isSamSuperAdmin: Boolean) extends NoExtensions {
+  case class SamSuperAdminServices(isSamSuperAdmin: Boolean) extends NoServicesTrait {
     override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(isSamSuperAdmin)
   }
 }

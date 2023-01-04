@@ -47,12 +47,12 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
-    val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain, Set.empty)
+    val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoServices, emailDomain, Set.empty)
     val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
-    val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
+    val mockUserService = new UserService(directoryDAO, NoServices, Seq.empty, tosService)
+    val mockStatusService = new StatusService(directoryDAO, NoServices, TestSupport.dbRef)
     val mockManagedGroupService =
-      new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
+      new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoServices, emailDomain)
 
     mockUserService.createUser(defaultUserInfo, samRequestContext)
 

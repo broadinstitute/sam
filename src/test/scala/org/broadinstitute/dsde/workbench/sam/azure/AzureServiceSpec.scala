@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.PostgresDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, UserStatus, UserStatusDetails}
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{NoServices, TosService, UserService}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +26,7 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
     val crlService = new CrlService(azureServicesConfig.get)
     val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig)
-    val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
+    val userService = new UserService(directoryDAO, NoServices, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val azureService = new AzureService(crlService, directoryDAO)
 

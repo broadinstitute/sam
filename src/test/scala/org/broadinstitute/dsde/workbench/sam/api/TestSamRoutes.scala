@@ -25,17 +25,17 @@ import scala.concurrent.ExecutionContext
 /** Created by dvoet on 7/14/17.
   */
 class TestSamRoutes(
-    resourceService: ResourceService,
-    policyEvaluatorService: PolicyEvaluatorService,
-    userService: UserService,
-    statusService: StatusService,
-    managedGroupService: ManagedGroupService,
-    val user: SamUser,
-    directoryDAO: DirectoryDAO,
-    val cloudExtensions: CloudExtensions = NoExtensions,
-    override val newSamUser: Option[SamUser] = None,
-    tosService: TosService,
-    override val azureService: Option[AzureService] = None
+                     resourceService: ResourceService,
+                     policyEvaluatorService: PolicyEvaluatorService,
+                     userService: UserService,
+                     statusService: StatusService,
+                     managedGroupService: ManagedGroupService,
+                     val user: SamUser,
+                     directoryDAO: DirectoryDAO,
+                     val cloudExtensions: CloudServices = NoServices,
+                     override val newSamUser: Option[SamUser] = None,
+                     tosService: TosService,
+                     override val azureService: Option[AzureService] = None
 )(implicit
     override val system: ActorSystem,
     override val materializer: Materializer,
@@ -62,17 +62,17 @@ class TestSamRoutes(
 }
 
 class TestSamTosEnabledRoutes(
-    resourceService: ResourceService,
-    policyEvaluatorService: PolicyEvaluatorService,
-    userService: UserService,
-    statusService: StatusService,
-    managedGroupService: ManagedGroupService,
-    val user: SamUser,
-    directoryDAO: DirectoryDAO,
-    val cloudExtensions: CloudExtensions = NoExtensions,
-    override val newSamUser: Option[SamUser] = None,
-    tosService: TosService,
-    override val azureService: Option[AzureService] = None
+                               resourceService: ResourceService,
+                               policyEvaluatorService: PolicyEvaluatorService,
+                               userService: UserService,
+                               statusService: StatusService,
+                               managedGroupService: ManagedGroupService,
+                               val user: SamUser,
+                               directoryDAO: DirectoryDAO,
+                               val cloudExtensions: CloudServices = NoServices,
+                               override val newSamUser: Option[SamUser] = None,
+                               tosService: TosService,
+                               override val azureService: Option[AzureService] = None
 )(implicit
     override val system: ActorSystem,
     override val materializer: Materializer,
@@ -146,13 +146,13 @@ object TestSamRoutes {
   )
 
   def apply(
-      resourceTypes: Map[ResourceTypeName, ResourceType],
-      user: SamUser = defaultUserInfo,
-      policyAccessDAO: Option[AccessPolicyDAO] = None,
-      maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
-      cloudExtensions: Option[CloudExtensions] = None,
-      adminEmailDomains: Option[Set[String]] = None,
-      crlService: Option[CrlService] = None
+             resourceTypes: Map[ResourceTypeName, ResourceType],
+             user: SamUser = defaultUserInfo,
+             policyAccessDAO: Option[AccessPolicyDAO] = None,
+             maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
+             cloudExtensions: Option[CloudServices] = None,
+             adminEmailDomains: Option[Set[String]] = None,
+             crlService: Option[CrlService] = None
   )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetricsInterpreter[IO]) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
@@ -163,7 +163,7 @@ object TestSamRoutes {
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)
-    val cloudXtns = cloudExtensions.getOrElse(NoExtensions)
+    val cloudXtns = cloudExtensions.getOrElse(NoServices)
     val mockResourceService = new ResourceService(
       resourceTypesWithAdmin,
       policyEvaluatorService,
@@ -179,8 +179,8 @@ object TestSamRoutes {
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, cloudXtns, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(user, samRequestContext))
-    val allUsersGroup = TestSupport.runAndWait(cloudXtns.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
-    TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
+    val allUsersGroup = TestSupport.runAndWait(cloudXtns.getOrCreateAllUsersGroup(samRequestContext))
+    TestSupport.runAndWait(googleDirectoryDAO.createGroup(CloudServices.allUsersGroupName, cloudXtns.allUsersGroupEmail))
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns, dbRef)

@@ -32,7 +32,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
   private def newStatusService(directoryDAO: DirectoryDAO) =
     new StatusService(
       directoryDAO,
-      new NoExtensions {
+      new NoServicesTrait {
         override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] =
           Map(Subsystems.GoogleGroups -> Future.successful(SubsystemStatus(true, None)))
       },
@@ -45,7 +45,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
       override def checkStatus(samRequestContext: SamRequestContext): Boolean = response
     }
     directoryDAO
-      .createGroup(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersEmail), samRequestContext = samRequestContext)
+      .createGroup(BasicWorkbenchGroup(CloudServices.allUsersGroupName, Set.empty, allUsersEmail), samRequestContext = samRequestContext)
       .unsafeRunSync()
     directoryDAO
   }
@@ -55,7 +55,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
   private def failingExtension = {
     val service = new StatusService(
       directoryDAOWithAllUsersGroup(),
-      new NoExtensions {
+      new NoServicesTrait {
         override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] =
           Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
       },
@@ -68,7 +68,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
   private def failingDatabase = {
     // background database configured to connect to non existent database
     val dbReferenceOverride = new TestDbReference(appConfig.samDatabaseConfig.samBackground.dbName, TestSupport.blockingEc)
-    val service = new StatusService(directoryDAOWithAllUsersGroup(false), NoExtensions, dbReferenceOverride, pollInterval = 10 milliseconds)
+    val service = new StatusService(directoryDAOWithAllUsersGroup(false), NoServices, dbReferenceOverride, pollInterval = 10 milliseconds)
     service
   }
 

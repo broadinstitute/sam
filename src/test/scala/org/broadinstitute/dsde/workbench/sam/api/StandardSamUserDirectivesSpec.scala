@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{CloudServices, TosService, UserService}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.mockito.MockitoSugar
@@ -28,10 +28,10 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     new StandardSamUserDirectives {
       override implicit val executionContext: ExecutionContext = null
       override val directoryDAO: DirectoryDAO = dirDAO
-      override val cloudExtensions: CloudExtensions = null
+      override val cloudExtensions: CloudServices = null
       override val termsOfServiceConfig: TermsOfServiceConfig = null
       override val userService: UserService = null
-      override val tosService: TosService = new TosService(dirDAO, googleServicesConfig.appsDomain, tosConfig)
+      override val tosService: TosService = new TosService(dirDAO, googleServicesConfig.appsDomain, tosConfig)(executionContext)
     }
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {

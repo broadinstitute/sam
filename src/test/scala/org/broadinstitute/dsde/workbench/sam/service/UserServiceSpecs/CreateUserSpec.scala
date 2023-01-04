@@ -18,7 +18,7 @@ class CreateUserSpec extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
   // Setup test vals
-  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudServices.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val blockedDomain = "blocked.domain.com"
 
   describe("UserService.createUser") {
@@ -120,7 +120,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         // Setup
         val samUser: SamUser = genWorkbenchUserBoth.sample.get
         val mockedDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
-        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
+        val mockedCloudExtensions: CloudServices = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
         val blockedDomains: Seq[String] = Seq.empty
         val userService = wire[UserService]
@@ -139,7 +139,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         // Setup
         val samUser: SamUser = genWorkbenchUserBoth.sample.get
         val mockedDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
-        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
+        val mockedCloudExtensions: CloudServices = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
         val blockedDomains: Seq[String] = Seq.empty
         val userService = wire[UserService]

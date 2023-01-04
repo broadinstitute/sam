@@ -130,15 +130,15 @@ class ResourceServiceSpec
     otherParentResourceType.name -> otherParentResourceType
   )
   private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, dirDAO)
-  private val service = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set("test.firecloud.org"))
+  private val service = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoServices, emailDomain, Set("test.firecloud.org"))
   private val constrainableResourceTypes =
     Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
   private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
   private val constrainableService =
-    new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
+    new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoServices, emailDomain, Set.empty)
 
   val managedGroupService =
-    new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
+    new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoServices, emailDomain)
 
   private object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)
@@ -898,7 +898,7 @@ class ResourceServiceSpec
   }
 
   it should "call CloudExtensions.onGroupUpdate when members are added via memberPolicy list" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -939,7 +939,7 @@ class ResourceServiceSpec
   }
 
   it should "call CloudExtensions.onGroupUpdate when members change" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -979,7 +979,7 @@ class ResourceServiceSpec
   }
 
   it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -1127,7 +1127,7 @@ class ResourceServiceSpec
   }
 
   it should "call CloudExtensions.onGroupUpdate when members change" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -1158,7 +1158,7 @@ class ResourceServiceSpec
   }
 
   it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -1433,7 +1433,7 @@ class ResourceServiceSpec
     val reusableResourceType = defaultResourceType.copy(reuseIds = true)
     reusableResourceType.reuseIds shouldEqual true
     val localService =
-      new ResourceService(Map(reusableResourceType.name -> reusableResourceType), null, policyDAO, dirDAO, NoExtensions, "example.com", Set.empty)
+      new ResourceService(Map(reusableResourceType.name -> reusableResourceType), null, policyDAO, dirDAO, NoServices, "example.com", Set.empty)
 
     localService.createResourceType(reusableResourceType, samRequestContext).unsafeRunSync()
 
@@ -1635,7 +1635,7 @@ class ResourceServiceSpec
   }
 
   "addSubjectToPolicy" should "call CloudExtensions.onGroupUpdate when member added" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -1662,7 +1662,7 @@ class ResourceServiceSpec
   }
 
   it should "not call CloudExtensions.onGroupUpdate when member added but is already there" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -1689,7 +1689,7 @@ class ResourceServiceSpec
   }
 
   "removeSubjectFromPolicy" should "call CloudExtensions.onGroupUpdate when member removed" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -1716,7 +1716,7 @@ class ResourceServiceSpec
   }
 
   it should "not call CloudExtensions.onGroupUpdate when member removed but wasn't there to start with" in {
-    val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtensions: CloudServices = mock[CloudServices](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
     val resourceService = new ResourceService(
@@ -1757,7 +1757,7 @@ class ResourceServiceSpec
       policyEvaluatorService,
       policyDAO,
       dirDAO,
-      NoExtensions,
+      NoServices,
       emailDomain,
       Set.empty
     )
@@ -1800,7 +1800,7 @@ class ResourceServiceSpec
 
   it should "fail if resourceTypeAdmin not defined" in {
     val service =
-      new ResourceService(Map(defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
+      new ResourceService(Map(defaultResourceType.name -> defaultResourceType), policyEvaluatorService, policyDAO, dirDAO, NoServices, emailDomain, Set.empty)
 
     intercept[WorkbenchException] {
       service.initResourceTypes().unsafeRunSync()
@@ -1826,7 +1826,7 @@ class ResourceServiceSpec
       policyEvaluatorService,
       policyDAO,
       dirDAO,
-      NoExtensions,
+      NoServices,
       emailDomain,
       Set.empty
     )
@@ -1856,7 +1856,7 @@ class ResourceServiceSpec
       policyEvaluatorService,
       policyDAO,
       dirDAO,
-      NoExtensions,
+      NoServices,
       emailDomain,
       Set.empty
     )
@@ -1892,7 +1892,7 @@ class ResourceServiceSpec
       policyEvaluatorService,
       policyDAO,
       dirDAO,
-      NoExtensions,
+      NoServices,
       emailDomain,
       Set.empty
     )
@@ -1915,7 +1915,7 @@ class ResourceServiceSpec
       policyEvaluatorService,
       policyDAO,
       dirDAO,
-      NoExtensions,
+      NoServices,
       emailDomain,
       Set.empty
     )
@@ -1952,7 +1952,7 @@ class ResourceServiceSpec
       policyEvaluatorService,
       policyDAO,
       dirDAO,
-      NoExtensions,
+      NoServices,
       emailDomain,
       Set.empty
     )
@@ -1991,7 +1991,7 @@ class ResourceServiceSpec
       policyEvaluatorService,
       policyDAO,
       dirDAO,
-      NoExtensions,
+      NoServices,
       emailDomain,
       Set.empty
     )
@@ -2421,7 +2421,7 @@ class ResourceServiceSpec
     val beforePolicies = List(testPolicy)
     val afterPolicies = List(AccessPolicy.public.set(true)(testPolicy))
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
-    val expectedChangeEvents = changesFromPolicy(testPolicy, CloudExtensions.allUsersGroupName, AccessAdded)
+    val expectedChangeEvents = changesFromPolicy(testPolicy, CloudServices.allUsersGroupName, AccessAdded)
     result should contain theSameElementsAs expectedChangeEvents
   }
 
@@ -2429,7 +2429,7 @@ class ResourceServiceSpec
     val beforePolicies = List(AccessPolicy.public.set(true)(testPolicy))
     val afterPolicies = List(testPolicy)
     val result = service.createAccessChangeEvents(testPolicy.id.resource, beforePolicies, afterPolicies)
-    val expectedChangeEvents = changesFromPolicy(testPolicy, CloudExtensions.allUsersGroupName, AccessRemoved)
+    val expectedChangeEvents = changesFromPolicy(testPolicy, CloudServices.allUsersGroupName, AccessRemoved)
     result should contain theSameElementsAs expectedChangeEvents
   }
 

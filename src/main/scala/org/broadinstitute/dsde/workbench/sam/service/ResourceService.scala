@@ -22,13 +22,13 @@ import scala.concurrent.{ExecutionContext, Future}
 /** Created by mbemis on 5/22/17.
   */
 class ResourceService(
-    private val resourceTypes: Map[ResourceTypeName, ResourceType],
-    private[service] val policyEvaluatorService: PolicyEvaluatorService,
-    private val accessPolicyDAO: AccessPolicyDAO,
-    private val directoryDAO: DirectoryDAO,
-    private val cloudExtensions: CloudExtensions,
-    val emailDomain: String,
-    private val allowedAdminEmailDomains: Set[String]
+                       private val resourceTypes: Map[ResourceTypeName, ResourceType],
+                       private[service] val policyEvaluatorService: PolicyEvaluatorService,
+                       private val accessPolicyDAO: AccessPolicyDAO,
+                       private val directoryDAO: DirectoryDAO,
+                       private val cloudExtensions: CloudServices,
+                       val emailDomain: String,
+                       private val allowedAdminEmailDomains: Set[String]
 )(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
 

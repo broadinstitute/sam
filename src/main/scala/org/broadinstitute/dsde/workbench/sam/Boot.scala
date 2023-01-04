@@ -204,7 +204,7 @@ object Boot extends IOApp with LazyLogging {
       googleStorageNew: GoogleStorageService[IO],
       googleKms: GoogleKmsService[IO],
       adminConfig: AdminConfig
-  )(implicit actorSystem: ActorSystem): GoogleExtensions = {
+  )(implicit actorSystem: ActorSystem): GoogleCloudServices = {
     val workspaceMetricBaseName = "google"
     val googleDirDaos = createGoogleDirDaos(config, workspaceMetricBaseName)
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
@@ -259,7 +259,7 @@ object Boot extends IOApp with LazyLogging {
       )
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, config.googleServicesConfig.notificationTopic)
 
-    new GoogleExtensions(
+    new GoogleCloudServices(
       distributedLock,
       directoryDAO,
       accessPolicyDAO,

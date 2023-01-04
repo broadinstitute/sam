@@ -83,7 +83,7 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
     policyEvaluatorService,
     policyDAO,
     dirDAO,
-    NoExtensions,
+    NoServices,
     emailDomain,
     Set.empty
   )
@@ -96,13 +96,13 @@ class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupp
     constrainablePolicyEvaluatorService,
     policyDAO,
     dirDAO,
-    NoExtensions,
+    NoServices,
     emailDomain,
     Set.empty
   )
 
   lazy val managedGroupService =
-    new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
+    new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoServices, emailDomain)
 
   private object SamResourceActionPatterns {
     val readPolicies = ResourceActionPattern("read_policies", "", false)

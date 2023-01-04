@@ -55,10 +55,10 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
     val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
-    val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
-    val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
+    val mockUserService = new UserService(directoryDAO, NoServices, Seq.empty, tosService)
+    val mockStatusService = new StatusService(directoryDAO, NoServices, TestSupport.dbRef)
     val mockManagedGroupService =
-      new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
+      new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoServices, emailDomain)
 
     mockUserService.createUser(samUser, samRequestContext)
 

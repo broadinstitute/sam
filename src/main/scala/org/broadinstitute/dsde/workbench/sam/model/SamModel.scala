@@ -110,6 +110,7 @@ object SamResourceTypes {
   val workspaceName = ResourceTypeName("workspace")
   val googleProjectName = ResourceTypeName("google-project")
   val spendProfile = ResourceTypeName("spend-profile")
+  val cloudExtensionName = ResourceTypeName("cloud-extension")
 }
 
 //for backwards compatibility to old API

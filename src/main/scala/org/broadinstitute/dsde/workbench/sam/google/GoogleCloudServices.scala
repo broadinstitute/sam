@@ -8,6 +8,7 @@ import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
+import com.google.api.services.admin.directory.model.Group
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
@@ -25,7 +26,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, CloudExtensionsInitializer, ManagedGroupService, SamApplication}
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensionsInitializer, CloudServices, ManagedGroupService, SamApplication}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
@@ -37,12 +38,12 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
 
-object GoogleExtensions {
+object GoogleCloudServices {
   val resourceId = ResourceId("google")
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
 }
 
-class GoogleExtensions(
+class GoogleCloudServices(
     distributedLock: PostgresDistributedLockDAO[IO],
     val directoryDAO: DirectoryDAO,
     val accessPolicyDAO: AccessPolicyDAO,
@@ -63,7 +64,7 @@ class GoogleExtensions(
 )(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
     extends LazyLogging
     with FutureSupport
-    with CloudExtensions
+    with CloudServices
     with Retry {
 
   private val maxGroupEmailLength = 64
@@ -73,31 +74,20 @@ class GoogleExtensions(
 
   override val emailDomain = googleServicesConfig.appsDomain
 
-  private[google] val allUsersGroupEmail = WorkbenchEmail(
-    s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"
+  override val allUsersGroupEmail = WorkbenchEmail(
+    s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudServices.allUsersGroupName.value}@$emailDomain"
   )
 
-//  override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
-//      executionContext: ExecutionContext
-//  ): Future[WorkbenchGroup] = {
-//    val allUsersGroupStub = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, allUsersGroupEmail)
-//    for {
-//      existingGroup <- directoryDAO.loadGroup(allUsersGroupStub.id, samRequestContext = samRequestContext).unsafeToFuture()
-//      allUsersGroup <- existingGroup match {
-//        case None => directoryDAO.createGroup(allUsersGroupStub, samRequestContext = samRequestContext).unsafeToFuture()
-//        case Some(group) => Future.successful(group)
-//      }
-//      existingGoogleGroup <- googleDirectoryDAO.getGoogleGroup(allUsersGroup.email)
-//      _ <- existingGoogleGroup match {
-//        case None =>
-//          googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
-//            case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
-//          }
-//        case Some(_) => Future.successful(())
-//      }
-//
-//    } yield allUsersGroup
-//  }
+  override def getOrCreateAllUsersGroup(samRequestContext: SamRequestContext)
+                              (implicit executionContext: ExecutionContext ): Future[Group] = {
+    for {
+      maybeAllUsersGroup <- googleDirectoryDAO.getGoogleGroup(allUsersGroupEmail)
+      allUsersGroup <- maybeAllUsersGroup match {
+        case Some(group) => Future.successful(group)
+        case None => ???
+      }
+    } yield allUsersGroup
+  }
 
   override def doesGroupExist(groupEmail: WorkbenchEmail, samRequestContext: SamRequestContext)
                              (implicit executionContext: ExecutionContext): Future[Boolean] =
@@ -106,9 +96,15 @@ class GoogleExtensions(
       case None => false
     }
 
-  override def createGroup(workbenchGroup: WorkbenchGroup, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[Unit] = {
-    googleDirectoryDAO.createGroup(workbenchGroup.id.toString, workbenchGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
-      case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
+  override def createGroup(workbenchGroup: WorkbenchGroup, samRequestContext: SamRequestContext)(implicit executionContext: ExecutionContext): Future[Group] = {
+    for {
+      _ <- googleDirectoryDAO.createGroup(workbenchGroup.id.toString, workbenchGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
+          case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
+        }
+      maybeGroup <- googleDirectoryDAO.getGoogleGroup(workbenchGroup.email)
+    } yield maybeGroup match {
+      case Some(group) => group
+      case None => throw new WorkbenchException(s"Attempted to create ${workbenchGroup} on Google, but was unable to find the group again after creation")
     }
   }
 
@@ -125,7 +121,7 @@ class GoogleExtensions(
   def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
     val samRequestContext = SamRequestContext() // `SamRequestContext()` is used so that we don't trace 1-off boot/init methods
     val extensionResourceType =
-      resourceTypes.getOrElse(CloudExtensions.resourceTypeName, throw new Exception(s"${CloudExtensions.resourceTypeName} resource type not found"))
+      resourceTypes.getOrElse(SamResourceTypes.cloudExtensionName, throw new Exception(s"${SamResourceTypes.cloudExtensionName} resource type not found"))
     val googleSubjectId = GoogleSubjectId(googleServicesConfig.serviceAccountClientId)
     for {
       maybeSamUser <- directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext)
@@ -174,7 +170,7 @@ class GoogleExtensions(
 
       _ <- samApplication.resourceService.createResourceType(extensionResourceType, samRequestContext)
 
-      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, samUser, samRequestContext) handleErrorWith {
+      _ <- samApplication.resourceService.createResource(extensionResourceType, GoogleCloudServices.resourceId, samUser, samRequestContext) handleErrorWith {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
       }
       _ <- googleKeyCache.onBoot()
@@ -279,8 +275,9 @@ class GoogleExtensions(
       _ <- googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)) recover {
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
-      allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)
+      allUsersGroup <- getOrCreateAllUsersGroup(samRequestContext)
+      allUsersGroupEmail = WorkbenchEmail(allUsersGroup.getEmail)
+      _ <- googleDirectoryDAO.addMemberToGroup(allUsersGroupEmail, proxyEmail)
 
     } yield ()
   }
@@ -652,7 +649,7 @@ class GoogleExtensions(
   override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
 }
 
-case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {
+case class GoogleExtensionsInitializer(cloudExtensions: GoogleCloudServices, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
     system.actorOf(
       GoogleGroupSyncMonitorSupervisor.props(

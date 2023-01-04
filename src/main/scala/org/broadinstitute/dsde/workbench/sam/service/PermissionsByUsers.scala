@@ -60,7 +60,7 @@ private[service] class PermissionsByUsers(policies: Iterable[AccessPolicy]) {
 
   private def maybeAllUsers(public: Boolean) =
     if (public) {
-      LazyList(CloudExtensions.allUsersGroupName)
+      LazyList(CloudServices.allUsersGroupName)
     } else {
       LazyList.empty
     }

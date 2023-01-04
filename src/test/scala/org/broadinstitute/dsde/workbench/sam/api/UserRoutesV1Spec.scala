@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport.rootBooleanJsonFormat
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusService, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.{NoServices, StatusService, TosService, UserService}
 
 /** Created by dvoet on 6/7/17.
   */
@@ -24,23 +24,23 @@ class UserRoutesV1Spec extends UserRoutesSpecHelper {
     val samRoutes = new TestSamRoutes(
       null,
       null,
-      new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      new UserService(directoryDAO, NoServices, Seq.empty, tosService),
+      new StatusService(directoryDAO, NoServices, TestSupport.dbRef),
       null,
       defaultUser,
       directoryDAO,
-      NoExtensions,
+      NoServices,
       tosService = tosService
     )
     val SARoutes = new TestSamRoutes(
       null,
       null,
-      new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      new UserService(directoryDAO, NoServices, Seq.empty, tosService),
+      new StatusService(directoryDAO, NoServices, TestSupport.dbRef),
       null,
       petSAUser,
       directoryDAO,
-      NoExtensions,
+      NoServices,
       tosService = tosService
     )
     testCode(samRoutes, SARoutes)

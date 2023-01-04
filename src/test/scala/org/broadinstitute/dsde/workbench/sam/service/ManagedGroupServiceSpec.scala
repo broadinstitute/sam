@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.google.GoogleCloudServices
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.ArgumentMatchers
@@ -48,9 +48,9 @@ class ManagedGroupServiceSpec
   private val testDomain = "example.com"
 
   private val policyEvaluatorService = PolicyEvaluatorService(testDomain, resourceTypeMap, policyDAO, dirDAO)
-  private val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain, Set.empty)
+  private val resourceService = new ResourceService(resourceTypeMap, policyEvaluatorService, policyDAO, dirDAO, NoServices, testDomain, Set.empty)
   private val managedGroupService =
-    new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, NoExtensions, testDomain)
+    new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, NoServices, testDomain)
 
   val dummyUser = Generator.genWorkbenchUserBoth.sample.get
 
@@ -133,7 +133,7 @@ class ManagedGroupServiceSpec
   it should "sync the new group with Google" in {
     assume(databaseEnabled, databaseEnabledClue)
 
-    val mockGoogleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
+    val mockGoogleExtensions = mock[GoogleCloudServices](RETURNS_SMART_NULLS)
     val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
     val groupName = WorkbenchGroupName(resourceId.value)
 
@@ -199,7 +199,7 @@ class ManagedGroupServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
-    val mockGoogleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
+    val mockGoogleExtensions = mock[GoogleCloudServices](RETURNS_SMART_NULLS)
     when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
     when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
     val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
@@ -422,8 +422,8 @@ class ManagedGroupServiceSpec
     makeResourceType(newResourceType)
     val resTypes = resourceTypeMap + (newResourceType.name -> newResourceType)
 
-    val resService = new ResourceService(resTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, testDomain, Set.empty)
-    val mgService = new ManagedGroupService(resService, policyEvaluatorService, resTypes, policyDAO, dirDAO, NoExtensions, testDomain)
+    val resService = new ResourceService(resTypes, policyEvaluatorService, policyDAO, dirDAO, NoServices, testDomain, Set.empty)
+    val mgService = new ManagedGroupService(resService, policyEvaluatorService, resTypes, policyDAO, dirDAO, NoServices, testDomain)
 
     val user1 = Generator.genWorkbenchUserBoth.sample.get
     val user2 = Generator.genWorkbenchUserBoth.sample.get
@@ -524,7 +524,7 @@ class ManagedGroupServiceSpec
   "ManagedGroupService requestAccess" should "send notifications" in {
     assume(databaseEnabled, databaseEnabledClue)
 
-    val mockCloudExtension = mock[CloudExtensions](RETURNS_SMART_NULLS)
+    val mockCloudExtension = mock[CloudServices](RETURNS_SMART_NULLS)
     when(mockCloudExtension.publishGroup(ArgumentMatchers.any[WorkbenchGroupName])).thenReturn(Future.successful(()))
     val testManagedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, resourceTypeMap, policyDAO, dirDAO, mockCloudExtension, testDomain)

@@ -315,8 +315,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
 
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
-    Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
+    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleCloudServices.getPetPrivateKeyAction), Set.empty, None)
+    Put(s"/api/resource/${SamResourceTypes.cloudExtensionName.value}/${GoogleCloudServices.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
@@ -331,8 +331,8 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   it should "404 when user does not exist" in {
     val (defaultUserInfo, samRoutes, _) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
-    Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
+    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleCloudServices.getPetPrivateKeyAction), Set.empty, None)
+    Put(s"/api/resource/${SamResourceTypes.cloudExtensionName.value}/${GoogleCloudServices.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
@@ -418,7 +418,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     )
 
     samDeps.cloudExtensions
-      .asInstanceOf[GoogleExtensions]
+      .asInstanceOf[GoogleCloudServices]
       .onBoot(
         SamApplication(
           samDeps.userService,

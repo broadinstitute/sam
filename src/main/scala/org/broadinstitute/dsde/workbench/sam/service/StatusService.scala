@@ -17,11 +17,11 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 class StatusService(
-    val directoryDAO: DirectoryDAO,
-    val cloudExtensions: CloudExtensions,
-    val dbReference: DbReference,
-    initialDelay: FiniteDuration = Duration.Zero,
-    pollInterval: FiniteDuration = 1 minute
+                     val directoryDAO: DirectoryDAO,
+                     val cloudExtensions: CloudServices,
+                     val dbReference: DbReference,
+                     initialDelay: FiniteDuration = Duration.Zero,
+                     pollInterval: FiniteDuration = 1 minute
 )(implicit system: ActorSystem, executionContext: ExecutionContext)
     extends LazyLogging {
   implicit val askTimeout = Timeout(5 seconds)

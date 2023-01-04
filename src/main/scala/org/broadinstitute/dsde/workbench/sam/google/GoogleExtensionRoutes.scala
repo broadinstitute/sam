@@ -8,17 +8,9 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.api.{
-  ExtensionRoutes,
-  SamModelDirectives,
-  SamRequestContextDirectives,
-  SamUserDirectives,
-  SecurityDirectives,
-  ioMarshaller
-}
+import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SamModelDirectives, SamRequestContextDirectives, SamUserDirectives, SecurityDirectives, ioMarshaller}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsString
@@ -27,7 +19,7 @@ import scala.concurrent.ExecutionContext
 
 trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with SecurityDirectives with SamModelDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
-  val googleExtensions: GoogleExtensions
+  val googleExtensions: GoogleCloudServices
   val googleGroupSynchronizer: GoogleGroupSynchronizer
 
   override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
@@ -35,8 +27,8 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
       // "Admin" routes, requires permission on cloud-extension/google resource
       pathPrefix("petServiceAccount") {
         requireAction(
-          FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId),
-          GoogleExtensions.getPetPrivateKeyAction,
+          FullyQualifiedResourceId(SamResourceTypes.cloudExtensionName, GoogleCloudServices.resourceId),
+          GoogleCloudServices.getPetPrivateKeyAction,
           samUser.id,
           samRequestContext
         ) {

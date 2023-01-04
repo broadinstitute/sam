@@ -4,11 +4,12 @@ package service
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
+import com.google.api.services.admin.directory.model.Group
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, googleServicesConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.google.GoogleCloudServices
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -66,7 +67,7 @@ class OldUserServiceMockSpec
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
 
   var service: UserService = _
-  var googleExtensions: GoogleExtensions = _
+  var googleExtensions: GoogleCloudServices = _
   var dirDAO: DirectoryDAO = _
   var mockTosService: TosService = _
   val blockedDomain = "blocked.domain.com"
@@ -92,9 +93,9 @@ class OldUserServiceMockSpec
     when(dirDAO.setGoogleSubjectId(defaultUser.id, defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(()))
     when(dirDAO.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext)).thenReturn(IO(()))
 
-    googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
-    when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
-      .thenReturn(Future.successful(allUsersGroup))
+    googleExtensions = mock[GoogleCloudServices](RETURNS_SMART_NULLS)
+    when(googleExtensions.getOrCreateAllUsersGroup(any[SamRequestContext])(any[ExecutionContext]))
+      .thenReturn(Future.successful(new Group().setName(allUsersGroup.id.value).setEmail(allUsersGroup.email.value)))
 
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
@@ -335,7 +336,7 @@ class OldUserServiceSpec
   lazy val petServiceAccountConfig = TestSupport.appConfig.googleConfig.get.petServiceAccountConfig
 
   var service: UserService = _
-  var googleExtensions: GoogleExtensions = _
+  var googleExtensions: GoogleCloudServices = _
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   var tos: TosService = _
   var serviceTosEnabled: UserService = _
@@ -348,10 +349,10 @@ class OldUserServiceSpec
   before {
     clearDatabase()
 
-    googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
+    googleExtensions = mock[GoogleCloudServices](RETURNS_SMART_NULLS)
     if (databaseEnabled) {
-      when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
-        .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
+      when(googleExtensions.getOrCreateAllUsersGroup(any[SamRequestContext])(any[ExecutionContext]))
+        .thenReturn(NoServices.getOrCreateAllUsersGroup(samRequestContext))
     }
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))

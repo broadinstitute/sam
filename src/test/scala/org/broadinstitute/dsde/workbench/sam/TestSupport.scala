@@ -22,7 +22,7 @@ import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
+import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleCloudServices, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -82,15 +82,15 @@ object TestSupport extends TestSupport {
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
 
   def genSamDependencies(
-      resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty,
-      googIamDAO: Option[GoogleIamDAO] = None,
-      googleServicesConfig: GoogleServicesConfig = googleServicesConfig,
-      cloudExtensions: Option[CloudExtensions] = None,
-      googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
-      policyAccessDAO: Option[AccessPolicyDAO] = None,
-      policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-      resourceServiceOpt: Option[ResourceService] = None,
-      tosEnabled: Boolean = false
+                          resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty,
+                          googIamDAO: Option[GoogleIamDAO] = None,
+                          googleServicesConfig: GoogleServicesConfig = googleServicesConfig,
+                          cloudExtensions: Option[CloudServices] = None,
+                          googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
+                          policyAccessDAO: Option[AccessPolicyDAO] = None,
+                          policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
+                          resourceServiceOpt: Option[ResourceService] = None,
+                          tosEnabled: Boolean = false
   )(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
@@ -113,7 +113,7 @@ object TestSupport extends TestSupport {
       petServiceAccountConfig
     )
     val googleExt = cloudExtensions.getOrElse(
-      new GoogleExtensions(
+      new GoogleCloudServices(
         distributedLock,
         directoryDAO,
         policyDAO,
@@ -183,13 +183,13 @@ object TestSupport extends TestSupport {
     samDependencies.oauth2Config,
     Some(samDependencies.azureService)
   ) with MockSamUserDirectives with GoogleExtensionRoutes {
-    override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
-    override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
-      case extensions: GoogleExtensions => extensions
+    override val cloudExtensions: CloudServices = samDependencies.cloudExtensions
+    override val googleExtensions: GoogleCloudServices = samDependencies.cloudExtensions match {
+      case extensions: GoogleCloudServices => extensions
       case _ => null
     }
     override val googleGroupSynchronizer: GoogleGroupSynchronizer =
-      if (samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) {
+      if (samDependencies.cloudExtensions.isInstanceOf[GoogleCloudServices]) {
         new GoogleGroupSynchronizer(
           googleExtensions.directoryDAO,
           googleExtensions.accessPolicyDAO,
@@ -199,7 +199,7 @@ object TestSupport extends TestSupport {
         )(executionContext)
       } else null
     val googleKeyCache = samDependencies.cloudExtensions match {
-      case extensions: GoogleExtensions => extensions.googleKeyCache
+      case extensions: GoogleCloudServices => extensions.googleKeyCache
       case _ => null
     }
     override val user: SamUser = uInfo
@@ -256,17 +256,17 @@ object TestSupport extends TestSupport {
 }
 
 final case class SamDependencies(
-    resourceService: ResourceService,
-    policyEvaluatorService: PolicyEvaluatorService,
-    tosService: TosService,
-    userService: UserService,
-    statusService: StatusService,
-    managedGroupService: ManagedGroupService,
-    directoryDAO: MockDirectoryDAO,
-    policyDao: AccessPolicyDAO,
-    cloudExtensions: CloudExtensions,
-    oauth2Config: OpenIDConnectConfiguration,
-    azureService: AzureService
+                                  resourceService: ResourceService,
+                                  policyEvaluatorService: PolicyEvaluatorService,
+                                  tosService: TosService,
+                                  userService: UserService,
+                                  statusService: StatusService,
+                                  managedGroupService: ManagedGroupService,
+                                  directoryDAO: MockDirectoryDAO,
+                                  policyDao: AccessPolicyDAO,
+                                  cloudExtensions: CloudServices,
+                                  oauth2Config: OpenIDConnectConfiguration,
+                                  azureService: AzureService
 )
 
 object ConnectedTest extends Tag("connected test")
