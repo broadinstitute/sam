@@ -58,25 +58,27 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       }
 
       describe("that has not accepted the ToS") {
-        // Setup
-        val samUser = genWorkbenchUserBoth.sample.get
-        val userService = TestUserServiceBuilder()
-          .withAllUsersGroup(allUsersGroup)
-          .withFullyActivatedUser(samUser)
-          .withToSAcceptanceStateForUser(samUser, false)
-          .build
+        it("returns a status with ToS disabled and all other components enabled") {
+          // Setup
+          val samUser = genWorkbenchUserBoth.sample.get
+          val userService = TestUserServiceBuilder()
+            .withAllUsersGroup(allUsersGroup)
+            .withFullyActivatedUser(samUser)
+            .withToSAcceptanceStateForUser(samUser, false)
+            .build
 
-        // Act
-        val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
+          // Act
+          val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
 
-        // Assert
-        inside(resultingStatus.value) { status =>
-          status should beForUser(samUser)
-          "google" should beEnabledIn(status)
-          "ldap" should beEnabledIn(status)
-          "allUsersGroup" should beEnabledIn(status)
-          "adminEnabled" should beEnabledIn(status)
-          "tosAccepted" shouldNot beEnabledIn(status)
+          // Assert
+          inside(resultingStatus.value) { status =>
+            status should beForUser(samUser)
+            "google" should beEnabledIn(status)
+            "ldap" should beEnabledIn(status)
+            "allUsersGroup" should beEnabledIn(status)
+            "adminEnabled" should beEnabledIn(status)
+            "tosAccepted" shouldNot beEnabledIn(status)
+          }
         }
       }
     }
