@@ -33,6 +33,8 @@ object SamJsonSupport {
 
   implicit val TermsOfServiceAcceptanceFormat = ValueObjectFormat(TermsOfServiceAcceptance.apply)
 
+  implicit val termsOfServiceDetailsFormat = jsonFormat4(TermsOfServiceDetails.apply)
+
   implicit val UserStatusDiagnosticsFormat = jsonFormat5(UserStatusDiagnostics.apply)
 
   implicit val AccessPolicyNameFormat = ValueObjectFormat(AccessPolicyName.apply)
@@ -97,6 +99,7 @@ object SamResourceActions {
   val adminAddMember = ResourceAction("admin_add_member")
   val adminRemoveMember = ResourceAction("admin_remove_member")
   val link = ResourceAction("link")
+  val setManagedResourceGroup = ResourceAction("set_managed_resource_group")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
@@ -130,6 +133,7 @@ object UserStatusDetails {
 )
 @Lenses final case class TermsOfServiceAcceptance(value: String) extends ValueObject
 
+@Lenses final case class TermsOfServiceDetails(isEnabled: Boolean, isGracePeriodEnabled: Boolean, currentVersion: String, userAcceptedVersion: Option[String])
 @Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }

@@ -123,7 +123,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     assertCreateGroup(samRoutes = samRoutes)
     assertGetGroup(samRoutes = samRoutes)
 
-    samRoutes.userService.createUser(newGuy, samRequestContext).futureValue
+    samRoutes.userService.createUser(newGuy, samRequestContext).unsafeRunSync()
 
     setGroupMembers(samRoutes, Set(newGuy.email), expectedStatus = StatusCodes.Created)
 

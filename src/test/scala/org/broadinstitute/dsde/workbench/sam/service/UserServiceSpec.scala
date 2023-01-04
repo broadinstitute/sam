@@ -353,11 +353,11 @@ class OldUserServiceSpec
       when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
         .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
     }
-    when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(Future.successful(true))
-    when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO.pure(true))
+    when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
     tos = new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
@@ -562,7 +562,7 @@ class OldUserServiceSpec
     val invitedUserDetails = service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
 
     // Check the status of the invited user
-    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).futureValue
+    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).unsafeRunSync()
     val disabledUserStatus = Map("ldap" -> false, "allUsersGroup" -> false, "google" -> true)
     invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, disabledUserStatus)
   }
@@ -579,7 +579,7 @@ class OldUserServiceSpec
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     // Check the status of the invited user
-    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).futureValue
+    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).unsafeRunSync()
     val enabledUserStatus = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
     invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, enabledUserStatus)
   }
@@ -624,14 +624,14 @@ class OldUserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // user doesn't exist yet
-    service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // get user status id info (both subject ids and email)
-    val info = service.getUserIdInfoFromEmail(defaultUser.email, samRequestContext).futureValue
+    val info = service.getUserIdInfoFromEmail(defaultUser.email, samRequestContext).unsafeRunSync()
     info shouldBe Right(Some(UserIdInfo(defaultUser.id, defaultUser.email, Some(defaultUser.googleSubjectId.get))))
   }
 

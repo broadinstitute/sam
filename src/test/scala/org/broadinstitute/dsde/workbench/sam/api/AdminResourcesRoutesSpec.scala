@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import cats.effect.IO
 import cats.implicits.toFoldableOps
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
@@ -51,7 +50,7 @@ class AdminResourcesRoutesSpec extends AnyFlatSpec with Matchers with TestSuppor
       val routes = TestSamRoutes(resources, user = requester)
       for {
         _ <- (admin +: users).toSet.toList.filterNot(_ == requester).traverse_ { user =>
-          IO.fromFuture(IO(routes.userService.createUser(user, samRequestContext)))
+          routes.userService.createUser(user, samRequestContext)
         }
         _ <- routes.resourceService.createPolicy(
           FullyQualifiedPolicyId(defaultAdminResourceId, defaultAdminPolicyName),

@@ -9,7 +9,7 @@ object Dependencies {
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.5.0"
-  val http4sVersion = "0.21.13"
+  val http4sVersion = "1.0.0-M32"
   val sentryVersion = "6.6.0"
 
   val workbenchUtilV = "0.6-74c9fc2"
@@ -59,6 +59,8 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.85.Final"
+
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.1"
 
@@ -100,7 +102,8 @@ object Dependencies {
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
-  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.1"
+  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.2"
+  val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "1.33"
 
   val scalikeCore = "org.scalikejdbc" %% "scalikejdbc" % scalikejdbcVersion
   val scalikeCoreConfig = "org.scalikejdbc" %% "scalikejdbc-config" % scalikejdbcVersion
@@ -124,6 +127,8 @@ object Dependencies {
 
   val cloudResourceLib: ModuleID =
     "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
+  val azureManagedApplications: ModuleID =
+    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
@@ -170,10 +175,13 @@ object Dependencies {
     commonsCodec,
     liquibaseCore,
     circeYAML,
+    snakeYAML,
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres,
-    cloudResourceLib
+    cloudResourceLib,
+    nettyAll,
+    azureManagedApplications
   ) ++ openCensusDependencies
 }

@@ -395,7 +395,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     ) = initPetTest
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
@@ -486,7 +486,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val serviceAccount = mockGoogleIamDAO.createServiceAccount(googleProject, saName, saDisplayName).futureValue
     // create a user
 
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
@@ -509,7 +509,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     ) = initPetTest
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // create a pet service account
@@ -964,7 +964,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
     when(mockGoogleDirectoryDAO.lockedDownGroupSettings).thenCallRealMethod()
 
-    googleExtensions.onUserCreate(user, samRequestContext).futureValue
+    googleExtensions.onUserCreate(user, samRequestContext).unsafeRunSync()
 
     val lockedDownGroupSettings = Option(mockGoogleDirectoryDAO.lockedDownGroupSettings)
     verify(mockGoogleDirectoryDAO).createGroup(user.email.value, proxyEmail, lockedDownGroupSettings)
@@ -1213,7 +1213,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
-    val newUser = service.createUser(createDefaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(createDefaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(
       UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
       Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
@@ -1238,7 +1238,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
-    val newUser = service.createUser(createDefaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(createDefaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(
       UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
       Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
@@ -1275,7 +1275,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
-    val newUser = service.createUser(createDefaultUser, samRequestContext).futureValue
+    val newUser = service.createUser(createDefaultUser, samRequestContext).unsafeRunSync()
     newUser shouldBe UserStatus(
       UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
       Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)

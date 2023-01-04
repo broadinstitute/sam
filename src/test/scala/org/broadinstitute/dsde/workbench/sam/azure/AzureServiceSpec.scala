@@ -1,12 +1,15 @@
 package org.broadinstitute.dsde.workbench.sam.azure
 
-import cats.effect.IO
-import org.broadinstitute.dsde.workbench.sam.ConnectedTest
+import akka.http.scaladsl.model.StatusCodes
+import com.azure.resourcemanager.managedapplications.models.Plan
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.PostgresDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAzureManagedResourceGroupDAO, MockDirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator}
+import org.mockito.Mockito.when
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,11 +31,11 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
-    val azureService = new AzureService(crlService, directoryDAO)
+    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
 
     // create user
     val defaultUser = genWorkbenchUserAzure.sample.get
-    val userStatus = IO.fromFuture(IO(userService.createUser(defaultUser, samRequestContext))).unsafeRunSync()
+    val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
     userStatus shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // user should exist in postgres
@@ -97,7 +100,7 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val crlService = new CrlService(azureServicesConfig.get)
-    val azureService = new AzureService(crlService, directoryDAO)
+    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
 
     // build request
     val tenantId = TenantId(azureTestConfig.getString("tenantId"))
@@ -106,10 +109,283 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     val request = GetOrCreatePetManagedIdentityRequest(tenantId, subscriptionId, managedResourceGroupName)
 
     // call getBillingProfileId
-    val res = azureService.getBillingProfileId(request).unsafeRunSync()
+    val res = azureService.getBillingProfileId(request, samRequestContext).unsafeRunSync()
 
     // should return a billing profile id
     res shouldBe defined
-    res.get shouldBe ResourceId("wm-default-spend-profile-id")
+    res.get shouldBe BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
+  }
+
+  "createManagedResourceGroup" should "create a managed resource group" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val svc =
+      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+
+    svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    mockMrgDAO.mrgs should contain(managedResourceGroup)
+  }
+
+  it should "create a managed resource group IN AZURE" taggedAs ConnectedTest in {
+    val azureServicesConfig = appConfig.azureServicesConfig
+
+    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
+
+    // create dependencies
+    val crlService = new CrlService(azureServicesConfig.get)
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val azureService = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+
+    // build request
+    val azureTestConfig = config.getConfig("testStuff.azure")
+    val managedResourceGroup = ManagedResourceGroup(
+      ManagedResourceGroupCoordinates(
+        TenantId(azureTestConfig.getString("tenantId")),
+        SubscriptionId(azureTestConfig.getString("subscriptionId")),
+        ManagedResourceGroupName(azureTestConfig.getString("managedResourceGroupName"))
+      ),
+      BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
+    )
+
+    val user = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("rtitlefireclouddev@gmail.com")))
+
+    azureService.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    mockMrgDAO.mrgs should contain(managedResourceGroup)
+  }
+
+  it should "Conflict when MRG coordinates already exist" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val svc =
+      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+
+    mockMrgDAO.insertManagedResourceGroup(managedResourceGroup.copy(billingProfileId = BillingProfileId("no the same")), samRequestContext).unsafeRunSync()
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Conflict)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Conflict when MRG billing project already exist" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val svc =
+      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+
+    mockMrgDAO
+      .insertManagedResourceGroup(
+        managedResourceGroup
+          .copy(managedResourceGroupCoordinates = managedResourceGroup.managedResourceGroupCoordinates.copy(tenantId = TenantId("other tenant"))),
+        samRequestContext
+      )
+      .unsafeRunSync()
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Conflict)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Forbidden when MRG does not exist in Azure" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val svc = new AzureService(MockCrlService(user), new MockDirectoryDAO(), mockMrgDAO)
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Forbidden when MRG is not associated to an Application" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+
+    val mockApplication = crlService
+      .buildApplicationManager(
+        managedResourceGroup.managedResourceGroupCoordinates.tenantId,
+        managedResourceGroup.managedResourceGroupCoordinates.subscriptionId
+      )
+      .unsafeRunSync()
+      .applications()
+      .list()
+      .asScala
+      .head
+    when(mockApplication.managedResourceGroupId()).thenReturn("something else")
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Forbidden when an Application has a null Plan" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+
+    val mockApplication = crlService
+      .buildApplicationManager(
+        managedResourceGroup.managedResourceGroupCoordinates.tenantId,
+        managedResourceGroup.managedResourceGroupCoordinates.subscriptionId
+      )
+      .unsafeRunSync()
+      .applications()
+      .list()
+      .asScala
+      .head
+    when(mockApplication.plan())
+      .thenReturn(null)
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Forbidden when an Application does not have an accepted Plan name" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+
+    val mockApplication = crlService
+      .buildApplicationManager(
+        managedResourceGroup.managedResourceGroupCoordinates.tenantId,
+        managedResourceGroup.managedResourceGroupCoordinates.subscriptionId
+      )
+      .unsafeRunSync()
+      .applications()
+      .list()
+      .asScala
+      .head
+    when(mockApplication.plan())
+      .thenReturn(new Plan().withName(MockCrlService.defaultManagedAppPlan.name).withPublisher("other publisher"))
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Forbidden when an Application does not have an accepted Plan publisher" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+
+    val mockApplication = crlService
+      .buildApplicationManager(
+        managedResourceGroup.managedResourceGroupCoordinates.tenantId,
+        managedResourceGroup.managedResourceGroupCoordinates.subscriptionId
+      )
+      .unsafeRunSync()
+      .applications()
+      .list()
+      .asScala
+      .head
+    when(mockApplication.plan())
+      .thenReturn(new Plan().withName("other name").withPublisher(MockCrlService.defaultManagedAppPlan.publisher))
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Forbidden when user is not authorized for Application" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val svc =
+      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc
+        .createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user.map(_.copy(email = WorkbenchEmail("other@email.com")))))
+        .unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+    mockMrgDAO.mrgs should not contain managedResourceGroup
+  }
+
+  it should "Forbidden when an Application has invalid parameters" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+
+    val mockApplication = crlService
+      .buildApplicationManager(
+        managedResourceGroup.managedResourceGroupCoordinates.tenantId,
+        managedResourceGroup.managedResourceGroupCoordinates.subscriptionId
+      )
+      .unsafeRunSync()
+      .applications()
+      .list()
+      .asScala
+      .head
+
+    val invalidParameters = List(
+      null,
+      Map.empty.asJava,
+      "I am a not a map",
+      Map("value" -> "I am not a map").asJava,
+      Map("value" -> Map.empty.asJava).asJava,
+      Map("value" -> Map(MockCrlService.defaultManagedAppPlan.authorizedUserKey -> 5).asJava).asJava
+    )
+    invalidParameters.foreach { parameters =>
+      when(mockApplication.parameters())
+        .thenReturn(parameters)
+
+      val err = intercept[WorkbenchExceptionWithErrorReport] {
+        svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
+      }
+      err.errorReport.statusCode shouldBe Some(StatusCodes.Forbidden)
+      mockMrgDAO.mrgs should not contain managedResourceGroup
+    }
+  }
+
+  "deleteManagedResourceGroup" should "delete a managed resource group" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val svc =
+      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+
+    mockMrgDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext).unsafeRunSync()
+    svc.deleteManagedResourceGroup(managedResourceGroup.billingProfileId, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    mockMrgDAO.mrgs shouldNot contain(managedResourceGroup)
+  }
+
+  it should "NotFound when MRG does not exist" in {
+    val user = Generator.genWorkbenchUserAzure.sample
+    val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val svc =
+      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      svc.deleteManagedResourceGroup(managedResourceGroup.billingProfileId, samRequestContext.copy(samUser = user)).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
   }
 }

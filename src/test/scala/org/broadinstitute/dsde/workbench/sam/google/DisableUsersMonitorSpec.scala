@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.mock.MockGooglePubSubDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
@@ -10,13 +11,13 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{PropertyBasedTesting, TestSupport}
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import org.mockito.Mockito._
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatestplus.mockito.MockitoSugar
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class DisableUsersMonitorSpec(_system: ActorSystem)
@@ -60,7 +61,7 @@ class DisableUsersMonitorSpec(_system: ActorSystem)
     }
     when(userService.disableUser(mockitoEq(userId), any[SamRequestContext]))
       .thenReturn(
-        Future.successful(
+        IO.pure(
           Some(
             UserStatus(
               UserStatusDetails(userId, userEmail),
@@ -92,7 +93,7 @@ class DisableUsersMonitorSpec(_system: ActorSystem)
     eventually {
       assert(mockGooglePubSubDAO.subscriptionsByName.contains(subscriptionName))
     }
-    when(userService.disableUser(mockitoEq(userId), any[SamRequestContext])).thenReturn(Future.successful(None))
+    when(userService.disableUser(mockitoEq(userId), any[SamRequestContext])).thenReturn(IO.pure(None))
 
     mockGooglePubSubDAO.publishMessages(topicName, Seq(userId.value))
 

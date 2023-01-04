@@ -140,6 +140,11 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
                       }
                     }
                   }
+                } ~
+                path("termsOfServiceDetails") {
+                  get {
+                    complete(tosService.getTosDetails(user.id, samRequestContext))
+                  }
                 }
             }
         }

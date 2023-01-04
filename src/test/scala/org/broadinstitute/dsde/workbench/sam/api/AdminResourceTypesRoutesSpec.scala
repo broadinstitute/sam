@@ -195,7 +195,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
           Set(),
           samRequestContext
         )
-        _ <- IO.fromFuture(IO(samRoutes.userService.createUser(testUser1, samRequestContext)))
+        _ <- samRoutes.userService.createUser(testUser1, samRequestContext)
       } yield ()
     }
 
