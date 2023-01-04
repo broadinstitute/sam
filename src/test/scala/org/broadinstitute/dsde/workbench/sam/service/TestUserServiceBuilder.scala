@@ -41,7 +41,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   }
 
   def withInvitedUser(samUser: SamUser): TestUserServiceBuilder = withExistingUser(samUser)
-  def withInvitedUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = withFullyActivatedUsers(samUsers)
+  def withInvitedUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = withExistingUsers(samUsers)
 
   def withFullyActivatedUser(samUser: SamUser): TestUserServiceBuilder = withFullyActivatedUsers(List(samUser))
   def withFullyActivatedUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = {
