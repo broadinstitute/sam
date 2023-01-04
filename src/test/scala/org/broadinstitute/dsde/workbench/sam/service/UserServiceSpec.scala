@@ -26,6 +26,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
+// TODO: continue breaking down old UserServiceSpec tests into nested suites
+// See: https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
 class UserServiceSpec extends Suite {
   override def nestedSuites: IndexedSeq[Suite] =
     IndexedSeq(
@@ -108,13 +110,6 @@ class OldUserServiceMockSpec
 
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
   }
-
-  // TODO: Add nested suites for each of the component test suites:
-  // https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
-
-  /** *********************************************************************************************************** UserService.createUser is tested in:
-    * src/test/scala/org/broadinstitute/dsde/workbench/sam/service/UserServiceSpecs/CreateUserSpec.scala
-    */
 
   "getUserStatus" should "get user status for a user that exists and is enabled" in {
     val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync()
