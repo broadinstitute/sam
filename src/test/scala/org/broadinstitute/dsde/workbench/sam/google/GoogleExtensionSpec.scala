@@ -998,7 +998,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     when(mockDirectoryDAO.deleteGroup(testPolicy.id, samRequestContext)).thenReturn(IO.unit)
 
-    googleExtensions.onGroupDelete(testPolicy.email)
+    googleExtensions.onGroupDelete(testPolicy.email).unsafeRunSync()
 
     verify(mockGoogleDirectoryDAO).deleteGroup(testPolicy.email)
   }
