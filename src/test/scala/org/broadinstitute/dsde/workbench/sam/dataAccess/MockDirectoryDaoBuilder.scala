@@ -87,6 +87,7 @@ case class MockDirectoryDaoBuilder() {
     this
   }
 
+  // An invited user is equivalent to a bare minimum "existing" user
   def withInvitedUser(samUser: SamUser): MockDirectoryDaoBuilder = withInvitedUsers(Set(samUser))
   def withInvitedUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
     samUsers.toSet.foreach(makeUserExist)
@@ -116,7 +117,12 @@ case class MockDirectoryDaoBuilder() {
     this
   }
 
-  // Bare minimum existing user has an ID and an email, but no googleSubjectId or azureB2CId
+  // Bare minimum for a user to exist:
+  // - has an ID
+  // - has an email
+  // - does not have a googleSubjectId
+  // - does not have an azureB2CId
+  // - is not enabled
   private def makeUserExist(samUser: SamUser): Unit = {
     doThrow(new RuntimeException(s"User $samUser is mocked to already exist"))
       .when(mockedDirectoryDAO)
@@ -132,6 +138,9 @@ case class MockDirectoryDaoBuilder() {
       .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
   }
 
+  // A Fully Activated user is:
+  // - Enabled
+  // - a direct member of the All_Users group
   private def makeUserFullyActivated(samUser: SamUser): Unit = {
     doReturn(IO(true))
       .when(mockedDirectoryDAO)
