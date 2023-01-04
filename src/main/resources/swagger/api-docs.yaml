@@ -2694,11 +2694,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermsOfServiceDetails'
+  /liveness:
+    get:
+      summary: Gets system liveness
+      responses:
+        "200":
+          description: System is up, but other routes may not be ready yet. See /status api for readiness.
+      operationId: getLiveness
+      tags:
+        - Status
   /status:
     get:
       tags:
         - Status
-      summary: gets system status
+      summary: gets system readiness status
       operationId: getSystemStatus
       responses:
         200:
