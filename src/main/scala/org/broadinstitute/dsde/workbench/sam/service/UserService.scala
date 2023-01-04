@@ -51,7 +51,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     openTelemetry.time("api.v1.user.invite.time", API_TIMING_DURATION_BUCKET) {
       for {
-      _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains)
+        _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains)
         existingSubject <- directoryDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext)
         createdUser <- existingSubject match {
           case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false, None), samRequestContext)
