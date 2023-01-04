@@ -310,7 +310,7 @@ object UserService {
   // CurrentMillis.append(randomString)
   private[workbench] def genRandom(currentMilli: Long): String = {
     val currentMillisString = currentMilli.toString
-    // one hexdecimal is 4 bits, one byte can generate 2 hexdecimal number, so we only need half the number of bytes, which is 8
+    // one hexadecimal is 4 bits, one byte can generate 2 hexadecimal number, so we only need half the number of bytes, which is 8
     // currentMilli is 13 digits, and it'll be another 200 years before it becomes 14 digits. So we're assuming currentMillis is 13 digits here
     val bytes = new Array[Byte](4)
     random.nextBytes(bytes)
