@@ -94,13 +94,13 @@ class OldUserServiceMockSpec
 
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
-      .thenReturn(Future.successful(allUsersGroup))
+      .thenReturn(IO(allUsersGroup))
 
-    when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(Future.successful(true))
-    when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
-    when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO(true))
+    when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
@@ -117,111 +117,111 @@ class OldUserServiceMockSpec
     */
 
   "getUserStatus" should "get user status for a user that exists and is enabled" in {
-    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
+    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync()
     status.value shouldBe enabledDefaultUserStatus
   }
 
   it should "return UserStatus.ldap and UserStatus.adminEnabled as false if user is disabled" in {
     when(dirDAO.isEnabled(disabledUser.id, samRequestContext)).thenReturn(IO(false))
-    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
+    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync()
     status.value.enabled("ldap") shouldBe false
     status.value.enabled("adminEnabled") shouldBe false
   }
 
   it should "return UserStatus.allUsersGroup as false if user is not in the All_Users group" in {
     when(dirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(false))
-    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue
+    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync()
     status.value.enabled("allUsersGroup") shouldBe false
   }
 
   it should "return UserStatus.google as false if user is not a member of their proxy group on Google" in {
-    when(googleExtensions.getUserStatus(enabledUser)).thenReturn(Future.successful(false))
-    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).futureValue
+    when(googleExtensions.getUserStatus(enabledUser)).thenReturn(IO(false))
+    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).unsafeRunSync()
     status.value.enabled("google") shouldBe false
   }
 
   it should "not return UserStatus.tosAccepted or UserStatus.adminEnabled if user's TOS status is false" in {
     when(mockTosService.getTosStatus(enabledUser.id, samRequestContext)).thenReturn(IO(Option(false)))
-    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).futureValue
+    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).unsafeRunSync()
     status.value.enabled shouldNot contain("tosAccepted")
     status.value.enabled shouldNot contain("adminEnabled")
   }
 
   it should "not return UserStatus.tosAccepted or UserStatus.adminEnabled if user's TOS status is None" in {
     when(mockTosService.getTosStatus(enabledUser.id, samRequestContext)).thenReturn(IO(None))
-    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).futureValue
+    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).unsafeRunSync()
     status.value.enabled shouldNot contain("tosAccepted")
     status.value.enabled shouldNot contain("adminEnabled")
   }
 
   it should "return no status for a user that does not exist" in {
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
-    service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).futureValue shouldBe None
+    service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync() shouldBe None
   }
 
   it should "return userDetailsOnly status when told to" in {
-    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).futureValue
+    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).unsafeRunSync()
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
   }
 
   it should "return userDetailsOnly status for a disabled user" in {
     when(dirDAO.isEnabled(disabledUser.id, samRequestContext)).thenReturn(IO(false))
-    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).futureValue
+    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).unsafeRunSync()
     statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
   }
 
   "getUserStatusDiagnostics" should "return UserStatusDiagnostics for a user that exists and is enabled" in {
-    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
+    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).unsafeRunSync()
     status shouldBe Some(UserStatusDiagnostics(true, true, true, Some(true), true))
   }
 
   it should "return UserStatusDiagnostics.enabled and UserStatusDiagnostics.adminEnabled as false if user is disabled" in {
     when(dirDAO.isEnabled(disabledUser.id, samRequestContext)).thenReturn(IO(false))
-    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
+    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).unsafeRunSync()
     status.value.enabled shouldBe false
     status.value.adminEnabled shouldBe false
   }
 
   it should "return UserStatusDiagnostics.inAllUsersGroup as false if user is not in the All_Users group" in {
     when(dirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(false))
-    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue
+    val status = service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).unsafeRunSync()
     status.value.inAllUsersGroup shouldBe false
   }
 
   it should "return UserStatusDiagnostics.inGoogleProxyGroup as false if user is not a member of their proxy group on Google" in {
-    when(googleExtensions.getUserStatus(enabledUser)).thenReturn(Future.successful(false))
-    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).futureValue
+    when(googleExtensions.getUserStatus(enabledUser)).thenReturn(IO(false))
+    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).unsafeRunSync()
     status.value.inGoogleProxyGroup shouldBe false
   }
 
   it should "return UserStatusDiagnostics.tosAccepted as false if user's TOS status is false" in {
     when(mockTosService.getTosStatus(enabledUser.id, samRequestContext)).thenReturn(IO(Option(false)))
-    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).futureValue
+    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).unsafeRunSync()
     status.value.tosAccepted.value shouldBe false
   }
 
   it should "return UserStatusDiagnostics.tosAccepted as None if user's TOS status is None" in {
     when(mockTosService.getTosStatus(enabledUser.id, samRequestContext)).thenReturn(IO(None))
-    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).futureValue
+    val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).unsafeRunSync()
     status.value.tosAccepted shouldBe None
   }
 
   it should "return no UserStatusDiagnostics for a user that does not exist" in {
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
-    service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).futureValue shouldBe None
+    service.getUserStatusDiagnostics(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
   }
 
   // Tests describing the shared behavior of a user that is being enabled
   def successfullyEnabledUser(user: SamUser): Unit = {
     it should "enable the user in the database" in {
       when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
-      service.enableUser(defaultUser.id, samRequestContext).futureValue
+      service.enableUser(defaultUser.id, samRequestContext).unsafeRunSync()
       verify(dirDAO).enableIdentity(user.id, samRequestContext)
     }
 
     it should "enable the user on google" in {
       when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
-      service.enableUser(defaultUser.id, samRequestContext).futureValue
+      service.enableUser(defaultUser.id, samRequestContext).unsafeRunSync()
       verify(googleExtensions).onUserEnable(user, samRequestContext)
     }
   }
@@ -231,7 +231,7 @@ class OldUserServiceMockSpec
 
   "enableUser for a non-existent user" should "return None" in {
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
-    val status = service.enableUser(defaultUser.id, samRequestContext).futureValue
+    val status = service.enableUser(defaultUser.id, samRequestContext).unsafeRunSync()
     status shouldBe None
   }
 
@@ -239,13 +239,13 @@ class OldUserServiceMockSpec
   def successfullyDisabledUser(user: SamUser): Unit = {
     it should "disable the user in the database" in {
       when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
-      service.disableUser(defaultUser.id, samRequestContext).futureValue
+      service.disableUser(defaultUser.id, samRequestContext).unsafeRunSync()
       verify(dirDAO).disableIdentity(user.id, samRequestContext)
     }
 
     it should "disable the user on google" in {
       when(dirDAO.loadUser(user.id, samRequestContext)).thenReturn(IO(Option(user)))
-      service.disableUser(defaultUser.id, samRequestContext).futureValue
+      service.disableUser(defaultUser.id, samRequestContext).unsafeRunSync()
       verify(googleExtensions).onUserDisable(user, samRequestContext)
     }
   }
@@ -255,22 +255,22 @@ class OldUserServiceMockSpec
 
   "disableUser for a non-existent user" should "return None" in {
     when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
-    val status = service.disableUser(defaultUser.id, samRequestContext).futureValue
+    val status = service.disableUser(defaultUser.id, samRequestContext).unsafeRunSync()
     status shouldBe None
   }
 
   "deleteUser" should "remove the user from the All_Users group" in {
-    service.deleteUser(defaultUser.id, samRequestContext).futureValue
+    service.deleteUser(defaultUser.id, samRequestContext).unsafeRunSync()
     verify(dirDAO).removeGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)
   }
 
   it should "delete the user on google" in {
-    service.deleteUser(defaultUser.id, samRequestContext).futureValue
+    service.deleteUser(defaultUser.id, samRequestContext).unsafeRunSync()
     verify(googleExtensions).onUserDelete(defaultUser.id, samRequestContext)
   }
 
   it should "delete the user from the database" in {
-    service.deleteUser(defaultUser.id, samRequestContext).futureValue
+    service.deleteUser(defaultUser.id, samRequestContext).unsafeRunSync()
     verify(dirDAO).deleteUser(defaultUser.id, samRequestContext)
   }
 

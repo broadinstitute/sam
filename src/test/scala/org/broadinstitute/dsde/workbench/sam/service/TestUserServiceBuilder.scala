@@ -1,13 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 
-case class TestUserServiceBuilder()(implicit val executionContext: ExecutionContext) {
+case class TestUserServiceBuilder()(implicit
+                                    val executionContext: ExecutionContext,
+                                    val openTelemetry: OpenTelemetryMetrics[IO]) {
 
   // TODO - While writing out these "rules" for what describes an "existing" user and a "fully activated" user,
   // it occurred to me that these "definitions" seem like the sort of thing that should be coded into the Business

@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
+import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genWorkbenchUserBoth}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -23,7 +24,7 @@ class GetUserStatusSpec extends UserServiceTestTraits {
           .build
 
         // Act
-        val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
+        val resultingStatus = userService.getUserStatus(samUser.id, false, samRequestContext).unsafeRunSync()
 
         // Assert
         resultingStatus shouldBe empty

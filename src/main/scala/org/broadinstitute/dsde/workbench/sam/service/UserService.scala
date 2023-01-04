@@ -29,8 +29,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       for {
-      _ <- validateEmailAddress(user.email, blockedEmailDomains).unsafeToFuture()
-      createdUser <- registerUser(user, samRequestContext).unsafeToFuture()
+        _ <- validateEmailAddress(user.email, blockedEmailDomains)
+        createdUser <- registerUser(user, samRequestContext)
         _ <- enableUserInternal(createdUser, samRequestContext)
         _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
         userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
@@ -134,10 +134,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         createdUser <- directoryDAO.createUser(user, samRequestContext)
         _ <- cloudExtensions.onUserCreate(createdUser, samRequestContext)
       } yield createdUser
-
-  def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchSubject]] =
-    directoryDAO.loadSubjectFromEmail(email, samRequestContext).unsafeToFuture()
     }
+
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext)
 
@@ -287,6 +285,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- cloudExtensions.onUserDelete(userId, samRequestContext)
         _ <- directoryDAO.deleteUser(userId, samRequestContext)
       } yield logger.info(s"Deleted user $userId")
+    }
 
   // moved this method from the UserService companion object into this class
   // because Mockito would not let us spy/mock the static method
@@ -297,7 +296,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case UserService.emailRegex() => IO.unit
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }
-    }
+
 }
 
 object UserService {

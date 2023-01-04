@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
@@ -28,7 +29,7 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
     val samRequestContext = invocation.getArgument[SamRequestContext](1)
     val maybeGroup = directoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext).unsafeRunSync()
     maybeGroup match {
-      case Some(group) => Future.successful(group)
+      case Some(group) => IO(group)
       case None =>
         throw new RuntimeException(
           "Mocked exception.  Make sure the `directoryDAO` used to construct this " +
@@ -42,18 +43,18 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
   doAnswer { (invocation: InvocationOnMock) =>
     val samUser = invocation.getArgument[SamUser](0)
     makeUserAppearEnabled(samUser)
-    Future.successful(())
+    IO.unit
   }.when(mockedCloudExtensions)
     .onUserCreate(any[SamUser], any[SamRequestContext])
 
-  doReturn(Future.successful(false))
+  doReturn(IO(false))
     .when(mockedCloudExtensions)
     .getUserStatus(any[SamUser])
 
   doAnswer { (invocation: InvocationOnMock) =>
     val samUser = invocation.getArgument[SamUser](0)
     makeUserAppearEnabled(samUser)
-    Future.successful(())
+    IO.unit
   }.when(mockedCloudExtensions)
     .onUserEnable(any[SamUser], any[SamRequestContext])
 
@@ -69,10 +70,10 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
 
   private def makeUserAppearEnabled(samUser: SamUser): Unit = {
     // Real implementation just returns unit if the user already exists
-    doReturn(Future.successful(()))
+    doReturn(IO.unit)
       .when(mockedCloudExtensions)
       .onUserCreate(argThat(IsSameUserAs(samUser)), any[SamRequestContext])
-    doReturn(Future.successful(true))
+    doReturn(IO(true))
       .when(mockedCloudExtensions)
       .getUserStatus(argThat(IsSameUserAs(samUser)))
   }
