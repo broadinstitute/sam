@@ -1,8 +1,8 @@
 # Terra Platform Terms of Service
 
-Last Modified: October 13, 2022
+Last Modified: January 10th, 2023
 
-Effective Date: December 7th, 2022
+Effective Date: January 10th, 2023
 
 Certain terms (including capitalized terms) are defined in Section 13
 (Definitions).
@@ -15,7 +15,6 @@ publish datasets, discover and access data, find and leverage tools, and
 collaborate with others. These Terms of Service apply to your use of
 Terra, as described in Section 2 and as operated by The Broad Institute.
 
-The mission of Terra is to enable the next generation of collaborative
 The mission of Terra is to enable the next generation of collaborative
 biomedical research by building an open platform that connects
 researchers to each other and to the datasets and tools they need to
@@ -59,16 +58,16 @@ Use” above, may use Terra only under the terms of a Commercial Agreement
 with Microsoft or Verily, which will govern, or for the following
 limited circumstances:
 
-1. Accessing specific Public Datasets via Terra to the extent that
-   the owner of the Public Dataset has made such Public Dataset available
+1. Accessing specific Community Resource Datasets via Terra to the extent that
+   the owner of the Community Resource Dataset has made such Community Resource Dataset available
    to Users that include For-Profit Entities. If such owner has
-   designated a specific purpose for such Public Dataset, a For-Profit
-   Entity may use such Public Dataset only for such designated purpose.
-   Access by a For-Profit Entity to Public Datasets through Terra under
-   this exception may include using Terra to work across Public Datasets,
+   designated a specific purpose for such Community Resource Dataset, a For-Profit
+   Entity may use such Community Resource Dataset only for such designated purpose.
+   Access by a For-Profit Entity to Community Resource Datasets through Terra under
+   this exception may include using Terra to work across Community Resource Datasets,
    but does not extend to working in connection with any data,
-   information, material, documents, or other Content outside of a Public
-   Dataset and the software and tools provided for use with a Public
+   information, material, documents, or other Content outside of a Community Resource
+   Dataset and the software and tools provided for use with a Community Resource
    Dataset.
 
 2. Incidental access to Terra as part of a collaboration between a
@@ -549,6 +548,9 @@ copies of the same information that is not Connected to Terra.
 Procedures available at <https://support.terra.bio/hc/en-us/sections/4408251025563> or such
 other location as we may notify you of.
 
+“Community Resource Dataset” means those datasets listed at https://support.terra.bio/hc/en-us/articles/10859572748827 
+or such other location as we may notify you of.
+
 “Customer Security Requirements” means our Customer Security
 Requirements available at
 <https://terra.bio/about/customer-security-requirements/> or such other
@@ -619,10 +621,6 @@ not-for-profit business.
 
 “Privacy Policy” means our Privacy Policy, available at
 <https://app.terra.bio/#privacy> or such other location as we may
-notify you of.
-
-“Public Dataset” means those datasets listed at
-<https://support.terra.bio/hc/en-us/articles/10859572748827> or such other location as we may
 notify you of.
 
 “Remove” means to cause Content to not be Connected to Terra.
