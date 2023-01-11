@@ -1,15 +1,14 @@
 package org.broadinstitute.dsde.workbench.sam.azure
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
 import com.azure.resourcemanager.managedapplications.models.Plan
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAzureManagedResourceGroupDAO, MockDirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator}
 import org.mockito.Mockito.when
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
@@ -36,7 +35,7 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
 
     // create user
     val defaultUser = genWorkbenchUserAzure.sample.get
-    val userStatus = IO.fromFuture(IO(userService.createUser(defaultUser, samRequestContext))).unsafeRunSync()
+    val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
     userStatus shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // user should exist in postgres

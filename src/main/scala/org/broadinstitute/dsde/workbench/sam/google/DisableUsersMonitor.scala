@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 import akka.actor.SupervisorStrategy.{Escalate, Stop}
 import akka.actor._
 import akka.pattern._
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
@@ -164,12 +165,13 @@ class DisableUsersMonitorActor(
       acknowledgeMessage(ackId).map(_ => StartMonitorPass)
     }
 
-  private def attemptToDisableUser(message: PubSubMessage) = {
+  private def attemptToDisableUser(message: PubSubMessage): Future[Product] = {
     logger.debug(s"received disable user message: $message")
     val userId = WorkbenchUserId(message.contents)
     Tracing.trace("DisableUsersMonitor-PubSubMessage") { span =>
       userService
         .disableUser(userId, samRequestContext = SamRequestContext(Option(span)))
+        .unsafeToFuture()
         .toTry
         .map(dr => dr.fold(t => FailToDisable(t, message.ackId), maybeUserStatus => ReportMessage(DisableUserResponse(userId, maybeUserStatus), message.ackId)))
     }

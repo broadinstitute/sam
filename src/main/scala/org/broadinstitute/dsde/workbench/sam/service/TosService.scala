@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceDetails}
 
 import scala.concurrent.ExecutionContext
 import java.io.{FileNotFoundException, IOException}
@@ -30,14 +30,22 @@ class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tos
       directoryDao.rejectTermsOfService(userId, samRequestContext).map(Option(_))
     } else IO.pure(None)
 
+  def getTosDetails(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[TermsOfServiceDetails] =
+    for {
+      userAcceptedVersion <- getUserAcceptedVersion(userId, samRequestContext)
+    } yield TermsOfServiceDetails(tosConfig.enabled, tosConfig.isGracePeriodEnabled, tosConfig.version, userAcceptedVersion.flatten)
+
   /** Check if Terms of service is enabled and if the user has accepted the latest version
     * @return
     *   IO[Some(true)] if ToS is enabled and the user has accepted IO[Some(false)] if ToS is enabled and the user hasn't accepted IO[None] if ToS is disabled
     */
   def getTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Boolean]] =
     if (tosConfig.enabled) {
-      directoryDao.loadUser(userId, samRequestContext).map(_.map(_.acceptedTosVersion.contains(tosConfig.version)))
+      getUserAcceptedVersion(userId, samRequestContext).map(_.map(_.contains(tosConfig.version)))
     } else IO.none
+
+  def getUserAcceptedVersion(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[Option[String]]] =
+    directoryDao.loadUser(userId, samRequestContext).map(_.map(_.acceptedTosVersion))
 
   /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS, or is a service account
     */
