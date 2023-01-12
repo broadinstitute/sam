@@ -23,7 +23,7 @@ sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
 
 addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
 
-lazy val pact4s = project
-  .in(file("pact4s"))
-  .settings(pact4sSettings)
-  .dependsOn(root % "test->test;compile->compile")
+//lazy val pact4s = project
+//  .in(file("pact4s"))
+//  .settings(pact4sSettings)
+//  .dependsOn(root % "test->test;compile->compile")
