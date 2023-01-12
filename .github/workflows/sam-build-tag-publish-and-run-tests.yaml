@@ -48,6 +48,10 @@ jobs:
           echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
           echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
 
+      - name: Echo branch
+        run: |
+          echo ${{ steps.extract-branch.outputs.ref }}
+
       - name: dispatch build to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
@@ -63,7 +67,6 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "$GITHUB_CONTEXT"
-          echo ${{ steps.extract-branch.outputs.ref }}
           echo 'custom-version-json={\"sam\":{\"appVersion\":\"${{ steps.tag.outputs.tag }}\"}}' >> $GITHUB_OUTPUT
 
   create-bee-workflow:
