@@ -146,7 +146,7 @@ object Dependencies {
     // http4sDsl,
     // http4sEmberServer,
     // http4sCirce,
-    circeCore,
+    circeCore
     // typelevelCat,
     // scalaTest
   )

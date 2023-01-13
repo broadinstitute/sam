@@ -2,10 +2,10 @@ import Dependencies._
 import Merging._
 import Testing._
 import Version._
-import sbt.Keys.{scalacOptions, _}
+import org.scalafmt.sbt.ScalafmtPlugin.autoImport.{scalafmtAll, scalafmtSbt}
+import sbt.Keys._
 import sbt.{Compile, Test, _}
-import sbtassembly.AssemblyPlugin.autoImport.{assembly, _}
-import org.scalafmt.sbt.ScalafmtPlugin.autoImport.{scalafmt, scalafmtAll, scalafmtCheck, scalafmtCheckAll, scalafmtOnCompile, scalafmtSbt, scalafmtSbtCheck}
+import sbtassembly.AssemblyPlugin.autoImport._
 
 object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
@@ -79,12 +79,12 @@ object Settings {
     libraryDependencies ++= rootDependencies
   ) ++ commonAssemblySettings ++ rootVersionSettings
 
-  val pact4sSettings = commonSettings ++ commonTestSettings ++ List(
+  val pact4sSettings = commonSettings ++ List(
     libraryDependencies ++= pact4sDependencies,
 
     /** Invoking pact tests from root project (sbt "project pact" test) will launch tests in a separate JVM context that ensures contracts are written to the
       * pact/target/pacts folder. Otherwise, contracts will be written to the root folder.
       */
     Test / fork := true
-  ) ++ commonAssemblySettings
+  ) ++ commonAssemblySettings ++ rootVersionSettings
 }
