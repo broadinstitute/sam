@@ -148,7 +148,7 @@ object Dependencies {
 
   val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
-  val circeCore = "io.circe" %% "circe-core" % "0.14.2"
+  val circeCore: ModuleID = "io.circe" %% "circe-core" % "0.14.2"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
