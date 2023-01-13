@@ -213,6 +213,6 @@ object Dependencies {
   val pact4sDependencies = Seq(
     // pact4sScalaTest,
     // pact4sCirce,
-    scalaTest
+    // scalaTest
   )
 }
