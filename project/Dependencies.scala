@@ -22,6 +22,7 @@ object Dependencies {
   val workbenchOpenTelemetryV = "0.3-0096bac"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.4-SNAPSHOT"
+  val pact4sV = "0.6.0"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 = ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
@@ -125,6 +126,18 @@ object Dependencies {
     opencensusLoggingExporter
   )
 
+  val pact4sDependencies = Seq(
+    // pact4sScalaTest
+    // pact4sCirce,
+    // http4sEmberClient,
+    // http4sDsl,
+    // http4sEmberServer,
+    // http4sCirce,
+    circeCore
+    // typelevelCat,
+    // scalaTest
+  )
+
   val cloudResourceLib: ModuleID =
     "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
   val azureManagedApplications: ModuleID =
@@ -132,6 +145,10 @@ object Dependencies {
 
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
+
+  val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
+  val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
+  val circeCore = "io.circe" %% "circe-core" % "0.14.2"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -183,5 +200,5 @@ object Dependencies {
     cloudResourceLib,
     nettyAll,
     azureManagedApplications
-  ) ++ openCensusDependencies
+  ) ++ openCensusDependencies ++ pact4sDependencies
 }

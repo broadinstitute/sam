@@ -2,10 +2,10 @@ import Dependencies._
 import Merging._
 import Testing._
 import Version._
-import sbt.Keys.{scalacOptions, _}
+import org.scalafmt.sbt.ScalafmtPlugin.autoImport.{scalafmtAll, scalafmtSbt}
+import sbt.Keys._
 import sbt.{Compile, Test, _}
-import sbtassembly.AssemblyPlugin.autoImport.{assembly, _}
-import org.scalafmt.sbt.ScalafmtPlugin.autoImport.{scalafmt, scalafmtAll, scalafmtCheck, scalafmtCheckAll, scalafmtOnCompile, scalafmtSbt, scalafmtSbtCheck}
+import sbtassembly.AssemblyPlugin.autoImport._
 
 object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
@@ -78,4 +78,8 @@ object Settings {
     name := "sam",
     libraryDependencies ++= rootDependencies
   ) ++ commonAssemblySettings ++ rootVersionSettings
+
+  val pact4sSettings = commonSettings ++ commonTestSettings ++ List(
+    libraryDependencies ++= pact4sDependencies,
+  ) ++ commonAssemblySettings
 }
