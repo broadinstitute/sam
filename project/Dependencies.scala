@@ -173,6 +173,8 @@ object Dependencies {
     googleStorage,
     monocle,
     monocleMacro,
+    pact4sCirce,
+    pact4sScalaTest,
     scalaTest,
     scalaTestScalaCheck,
     scalaCheck,
