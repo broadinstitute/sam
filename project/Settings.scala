@@ -79,7 +79,7 @@ object Settings {
     libraryDependencies ++= rootDependencies
   ) ++ commonAssemblySettings ++ rootVersionSettings
 
-  lazy val pact4sSettings = commonSettings ++ commonTestSettings ++ List(
+  lazy val pact4sSettings = commonSettings ++ List(
     libraryDependencies ++= pact4sDependencies,
 
     /**
@@ -90,5 +90,5 @@ object Settings {
       */
     Test / fork := true
 
-  ) ++ commonAssemblySettings ++ rootVersionSettings
+  ) ++ rootVersionSettings
 }

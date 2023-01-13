@@ -9,7 +9,7 @@ object Dependencies {
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.5.0"
-  val http4sVersion = "1.0.0-M32"
+  // val http4sVersion = "1.0.0-M32"
   val sentryVersion = "6.6.0"
 
   val workbenchUtilV = "0.6-74c9fc2"
@@ -136,6 +136,25 @@ object Dependencies {
 
   val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
+
+  val coreDependencies = Seq(
+    workbenchOauth2,
+    workbenchOauth2Tests,
+    scalaTest,
+    workbenchModel,
+    workbenchGoogle,
+    workbenchGoogle2,
+    workbenchGoogleTests,
+    workbenchGoogle2Tests,
+    workbenchOpenTelemetry,
+    workbenchOpenTelemetryTest,
+    monocle,
+    monocleMacro,
+    circeYAML,
+    scalaTestScalaCheck,
+    logbackClassic,
+    logstashLogback
+  )
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
