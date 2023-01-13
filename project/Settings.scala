@@ -71,6 +71,12 @@ object Settings {
       Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtSbt).value
     )
 
+  val coreSettings = commonSettings ++ List(
+    libraryDependencies ++= coreDependencies
+    //the version is applied in versionSettings and is set to 0.1-githash.
+    //we don't really use it for anything but we might when we publish our model
+  ) ++ rootVersionSettings
+
   // the full list of settings for the root project that's ultimately the one we build into a fat JAR and run
   // coreDefaultSettings (inside commonSettings) sets the project name, which we want to override, so ordering is important.
   // thus commonSettings needs to be added first.
