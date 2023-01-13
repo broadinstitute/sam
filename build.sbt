@@ -6,6 +6,10 @@ lazy val root = project
   .settings(rootSettings: _*)
   .withTestSettings
 
+lazy val pact4s = project.in(file("pact4s"))
+  .settings(pact4sSettings)
+  .dependsOn(root % "test->test;compile->compile")
+
 Revolver.settings
 Global / excludeLintKeys += debugSettings // To avoid lint warning
 

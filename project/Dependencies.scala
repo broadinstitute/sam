@@ -126,18 +126,6 @@ object Dependencies {
     opencensusLoggingExporter
   )
 
-  // val pact4sDependencies = Seq(
-    // pact4sScalaTest
-    // pact4sCirce,
-    // http4sEmberClient,
-    // http4sDsl,
-    // http4sEmberServer,
-    // http4sCirce,
-    // circeCore
-    // typelevelCat,
-    // scalaTest
-  // )
-
   val cloudResourceLib: ModuleID =
     "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
   val azureManagedApplications: ModuleID =
@@ -148,7 +136,6 @@ object Dependencies {
 
   val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
-  val circeCore: ModuleID = "io.circe" %% "circe-core" % "0.14.2"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -195,7 +182,6 @@ object Dependencies {
     liquibaseCore,
     circeYAML,
     snakeYAML,
-    circeCore,
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
@@ -204,4 +190,10 @@ object Dependencies {
     nettyAll,
     azureManagedApplications
   ) ++ openCensusDependencies
+
+  val pact4sDependencies = Seq(
+    pact4sScalaTest,
+    pact4sCirce,
+    scalaTest
+  )
 }
