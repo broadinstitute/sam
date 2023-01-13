@@ -126,17 +126,17 @@ object Dependencies {
     opencensusLoggingExporter
   )
 
-  val pact4sDependencies = Seq(
+  // val pact4sDependencies = Seq(
     // pact4sScalaTest
     // pact4sCirce,
     // http4sEmberClient,
     // http4sDsl,
     // http4sEmberServer,
     // http4sCirce,
-    circeCore
+    // circeCore
     // typelevelCat,
     // scalaTest
-  )
+  // )
 
   val cloudResourceLib: ModuleID =
     "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
@@ -193,6 +193,7 @@ object Dependencies {
     liquibaseCore,
     circeYAML,
     snakeYAML,
+    circeCore,
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
