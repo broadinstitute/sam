@@ -142,13 +142,13 @@ object Dependencies {
   val pact4sDependencies = Seq(
     pact4sScalaTest,
     pact4sCirce,
-    http4sEmberClient,
-    http4sDsl,
-    http4sEmberServer,
-    http4sCirce,
+    // http4sEmberClient,
+    // http4sDsl,
+    // http4sEmberServer,
+    // http4sCirce,
     circeCore,
-    typelevelCat,
-    scalaTest
+    // typelevelCat,
+    // scalaTest
   )
 
   val cloudResourceLib: ModuleID =
