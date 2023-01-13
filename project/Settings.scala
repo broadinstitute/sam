@@ -78,8 +78,4 @@ object Settings {
     name := "sam",
     libraryDependencies ++= rootDependencies
   ) ++ commonAssemblySettings ++ rootVersionSettings
-
-  val pact4sSettings = commonSettings ++ commonTestSettings ++ List(
-    libraryDependencies ++= pact4sDependencies,
-  ) ++ commonAssemblySettings
 }

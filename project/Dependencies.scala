@@ -200,5 +200,5 @@ object Dependencies {
     cloudResourceLib,
     nettyAll,
     azureManagedApplications
-  ) ++ openCensusDependencies ++ pact4sDependencies
+  ) ++ openCensusDependencies
 }
