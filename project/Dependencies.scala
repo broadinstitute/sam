@@ -211,8 +211,8 @@ object Dependencies {
   ) ++ openCensusDependencies
 
   val pact4sDependencies = Seq(
-    pact4sScalaTest,
-    pact4sCirce,
+    // pact4sScalaTest,
+    // pact4sCirce,
     scalaTest
   )
 }
