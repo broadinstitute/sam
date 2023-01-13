@@ -9,7 +9,6 @@ SAM_DIR=$1
 cd $SAM_DIR
 
 export SBT_OPTS="-Xms2g -Xmx2g"
-source $SAM_DIR/env/test.env
 sbt 'set assembly / test := {}' clean assembly
 SAM_JAR=$(find target | grep 'sam.*\.jar')
 mv $SAM_JAR .
