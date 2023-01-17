@@ -27,6 +27,7 @@ import pact4s.scalatest.PactVerifier
 
 import java.lang.Thread.sleep
 import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 
 class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with TestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging {
   def genSamDependencies: SamDependencies = {
