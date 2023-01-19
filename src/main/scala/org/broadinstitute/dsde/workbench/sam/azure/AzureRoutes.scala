@@ -89,7 +89,7 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
       }
       .getOrElse(reject)
 
-  // Validates the provided SamUser has 'link' permission on the spend-profile resource represented by the
+  // Validates the provided SamUser has 'create-pet' permission on the spend-profile resource represented by the
   // GetOrCreatePetManagedIdentityRequest
   private def requireUserCreatePetAction(request: GetOrCreatePetManagedIdentityRequest, samUser: SamUser, samRequestContext: SamRequestContext): Directive0 = {
     val failWithForbidden = failWith(
@@ -105,7 +105,7 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
       case Some(resourceId) =>
         maskNotFound & requireAction(
           FullyQualifiedResourceId(SamResourceTypes.spendProfile, resourceId.asResourceId),
-          SamResourceActions.link,
+          SamResourceActions.createPet,
           samUser.id,
           samRequestContext
         )
