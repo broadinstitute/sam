@@ -41,7 +41,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.4"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.2.11"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
