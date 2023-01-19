@@ -45,17 +45,16 @@ class ResourceServiceSpec
     with BeforeAndAfterAll
     with MockitoSugar
     with PropertyBasedTesting {
+  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
+  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  val otherParentResourceType: ResourceType = parentResourceType.copy(name = ResourceTypeName("parent-resource-type-2"))
+  val managedGroupService =
+    new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
   // Note: we intentionally use the Managed Group resource type loaded from reference.conf for the tests here.
   private val realResourceTypes = TestSupport.appConfig.resourceTypes
   private val realResourceTypeMap = realResourceTypes.map(rt => rt.name -> rt).toMap
-
-  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
-  lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
-
   private val ownerRoleName = ResourceRoleName("owner")
-
   private val dummyUser = Generator.genWorkbenchUserBoth.sample.get
-
   private val defaultResourceTypeActions =
     Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
   private val defaultResourceTypeActionPatterns = Set(
@@ -102,8 +101,6 @@ class ResourceServiceSpec
   private val parentResourceTypeRoles = Set(parentResourceTypeOwnerRole, parentResourceTypeOtherRole)
   private val parentResourceType =
     ResourceType(ResourceTypeName("parent-resource-type"), defaultResourceTypeActionPatterns, parentResourceTypeRoles, ownerRoleName)
-  val otherParentResourceType: ResourceType = parentResourceType.copy(name = ResourceTypeName("parent-resource-type-2"))
-
   private val constrainableActionPatterns = Set(ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true))
   private val constrainableViewAction = ResourceAction("constrainable_view")
   private val constrainableResourceTypeActions = Set(constrainableViewAction)
@@ -115,10 +112,8 @@ class ResourceServiceSpec
     constrainableReaderRoleName
   )
   private val constrainablePolicyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
-
   private val managedGroupResourceType =
     realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
-
   private val emailDomain = "example.com"
   private val resourceTypes = Map(
     defaultResourceType.name -> defaultResourceType,
@@ -136,17 +131,7 @@ class ResourceServiceSpec
   private val constrainableService =
     new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
 
-  val managedGroupService =
-    new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
-
-  private object SamResourceActionPatterns {
-    val readPolicies = ResourceActionPattern("read_policies", "", false)
-    val alterPolicies = ResourceActionPattern("alter_policies", "", false)
-    val delete = ResourceActionPattern("delete", "", false)
-
-    val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
-    val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
-  }
+  protected def clearDatabase(): Unit = TestSupport.truncateAll
 
   before {
     clearDatabase()
@@ -155,10 +140,11 @@ class ResourceServiceSpec
     }
   }
 
-  protected def clearDatabase(): Unit = TestSupport.truncateAll
-
-  def toEmail(resourceType: String, resourceName: String, policyName: String) =
-    WorkbenchEmail("policy-randomuuid@example.com")
+  private def assertResourceExists(resource: FullyQualifiedResourceId, resourceType: ResourceType, policyDao: AccessPolicyDAO) = {
+    val resultingPolicies =
+      policyDao.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
+    resultingPolicies should contain theSameElementsAs constructExpectedPolicies(resourceType, resource)
+  }
 
   private def constructExpectedPolicies(resourceType: ResourceType, resource: FullyQualifiedResourceId) = {
     val role = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).get
@@ -180,6 +166,9 @@ class ResourceServiceSpec
       )
     )
   }
+
+  def toEmail(resourceType: String, resourceName: String, policyName: String) =
+    WorkbenchEmail("policy-randomuuid@example.com")
 
   "ResourceType config" should "allow constraining policies to an auth domain" in {
     val resourceTypes = TestSupport.config.as[Map[String, ResourceType]]("testStuff.resourceTypes").values.toSet
@@ -576,10 +565,31 @@ class ResourceServiceSpec
     test.unsafeRunSync()
   }
 
-  private def assertResourceExists(resource: FullyQualifiedResourceId, resourceType: ResourceType, policyDao: AccessPolicyDAO) = {
-    val resultingPolicies =
-      policyDao.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
-    resultingPolicies should contain theSameElementsAs constructExpectedPolicies(resourceType, resource)
+  private def testDeleteResource(resourceType: ResourceType) = {
+    val parentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("my-resource-parent"))
+    val childResource = FullyQualifiedResourceId(resourceType.name, ResourceId("my-resource-child"))
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+    runAndWait(service.createResource(resourceType, parentResource.resourceId, dummyUser, samRequestContext))
+    runAndWait(service.createResource(resourceType, childResource.resourceId, dummyUser, samRequestContext))
+    runAndWait(service.setResourceParent(childResource, parentResource, samRequestContext))
+
+    runAndWait(
+      service.createPolicy(
+        FullyQualifiedPolicyId(parentResource, AccessPolicyName("reader")),
+        Set.empty,
+        Set.empty,
+        Set.empty,
+        Set(AccessPolicyDescendantPermissions(resourceType.name, defaultResourceTypeActions, Set.empty)),
+        samRequestContext
+      )
+    )
+
+    assert(policyDAO.listResourceChildren(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
+
+    runAndWait(service.deleteResource(childResource, samRequestContext))
+
+    assert(policyDAO.listResourceChildren(parentResource, samRequestContext).unsafeRunSync().isEmpty)
+    assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().isEmpty)
   }
 
   "Creating a resource that has at least 1 constrainable action pattern" should "succeed when no auth domain is provided" in {
@@ -1508,32 +1518,8 @@ class ResourceServiceSpec
     testDeleteResource(managedGroupResourceType)
   }
 
-  private def testDeleteResource(resourceType: ResourceType) = {
-    val parentResource = FullyQualifiedResourceId(resourceType.name, ResourceId("my-resource-parent"))
-    val childResource = FullyQualifiedResourceId(resourceType.name, ResourceId("my-resource-child"))
-    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-    runAndWait(service.createResource(resourceType, parentResource.resourceId, dummyUser, samRequestContext))
-    runAndWait(service.createResource(resourceType, childResource.resourceId, dummyUser, samRequestContext))
-    runAndWait(service.setResourceParent(childResource, parentResource, samRequestContext))
-
-    runAndWait(
-      service.createPolicy(
-        FullyQualifiedPolicyId(parentResource, AccessPolicyName("reader")),
-        Set.empty,
-        Set.empty,
-        Set.empty,
-        Set(AccessPolicyDescendantPermissions(resourceType.name, defaultResourceTypeActions, Set.empty)),
-        samRequestContext
-      )
-    )
-
-    assert(policyDAO.listResourceChildren(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
-
-    runAndWait(service.deleteResource(childResource, samRequestContext))
-
-    assert(policyDAO.listResourceChildren(parentResource, samRequestContext).unsafeRunSync().isEmpty)
-    assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().isEmpty)
-  }
+  private def genWorkbenchSubjectNotInPolicy(testPolicy: AccessPolicy) =
+    genWorkbenchSubject.suchThat(!testPolicy.members.contains(_))
 
   it should "fail deleting a parent resource that has children" in {
     assume(databaseEnabled, databaseEnabledClue)
@@ -2304,8 +2290,23 @@ class ResourceServiceSpec
     }
   }
 
-  private def genWorkbenchSubjectNotInPolicy(testPolicy: AccessPolicy) =
-    genWorkbenchSubject.suchThat(!testPolicy.members.contains(_))
+  private def changesFromPolicy(testPolicy: AccessPolicy, testSubject: WorkbenchSubject, eventType: AccessChangeEventType): Set[AccessChangeEvent] = {
+    val expectedChangeDetails = AccessChange(
+      testSubject,
+      noneIfEmpty(testPolicy.roles),
+      noneIfEmpty(testPolicy.actions),
+      descendantRolesMap(testPolicy.descendantPermissions),
+      descendantActionsMap(testPolicy.descendantPermissions)
+    )
+
+    if (
+      (expectedChangeDetails.actions ++ expectedChangeDetails.roles ++ expectedChangeDetails.descendantActions ++ expectedChangeDetails.descendantRoles).isEmpty
+    ) {
+      Set.empty
+    } else {
+      Set(AccessChangeEvent(eventType, testPolicy.id.resource, Set(expectedChangeDetails)))
+    }
+  }
 
   it should "show changes for member removal from a policy" in forAll(genPolicyWithDescendantPermissions) { testPolicy =>
     forAll(genWorkbenchSubjectNotInPolicy(testPolicy)) { testSubject =>
@@ -2454,21 +2455,31 @@ class ResourceServiceSpec
     noneIfEmpty(typesAndActions)
   }
 
-  private def changesFromPolicy(testPolicy: AccessPolicy, testSubject: WorkbenchSubject, eventType: AccessChangeEventType): Set[AccessChangeEvent] = {
-    val expectedChangeDetails = AccessChange(
-      testSubject,
-      noneIfEmpty(testPolicy.roles),
-      noneIfEmpty(testPolicy.actions),
-      descendantRolesMap(testPolicy.descendantPermissions),
-      descendantActionsMap(testPolicy.descendantPermissions)
-    )
+  /** Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures that `events` were appended. If tryTwice` run `test` again to make
+    * sure subsequent calls to no log more messages. Ends by tearing down the log appender.
+    */
+  private def runAuditLogTest(test: IO[_], events: List[AuditEventType], tryTwice: Boolean = true) = {
+    // val auditLogger: Logger = LoggerFactory.getLogger(AuditLogger.getClass.getName).asInstanceOf[Logger]
+    val context = new LoggerContext
+    val auditLogger = context.getLogger(AuditLogger.getClass.getName)
+    val testAppender = new ListAppender[ILoggingEvent]()
+    val startingLevel = auditLogger.getLevel
+    auditLogger.setLevel(Level.INFO)
+    testAppender.start()
 
-    if (
-      (expectedChangeDetails.actions ++ expectedChangeDetails.roles ++ expectedChangeDetails.descendantActions ++ expectedChangeDetails.descendantRoles).isEmpty
-    ) {
-      Set.empty
-    } else {
-      Set(AccessChangeEvent(eventType, testPolicy.id.resource, Set(expectedChangeDetails)))
+    auditLogger.addAppender(testAppender)
+
+    try {
+      testAppender.list.size() shouldBe 0
+      test.unsafeRunSync()
+      testAppender.list.asScala.map(_.getFormattedMessage) should contain theSameElementsInOrderAs events.map(_.toString)
+      if (tryTwice) {
+        test.unsafeRunSync()
+        testAppender.list.asScala.map(_.getFormattedMessage) should contain theSameElementsInOrderAs events.map(_.toString)
+      }
+    } finally {
+      auditLogger.detachAppender(testAppender)
+      auditLogger.setLevel(startingLevel)
     }
   }
 
@@ -2638,31 +2649,12 @@ class ResourceServiceSpec
     runAuditLogTest(service.overwritePolicyMembers(policy.id, Set(dummyUser.email), samRequestContext), List(AccessAdded))
   }
 
-  /** Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures that `events` were appended. If tryTwice` run `test` again to make
-    * sure subsequent calls to no log more messages. Ends by tearing down the log appender.
-    */
-  private def runAuditLogTest(test: IO[_], events: List[AuditEventType], tryTwice: Boolean = true) = {
-    //val auditLogger: Logger = LoggerFactory.getLogger(AuditLogger.getClass.getName).asInstanceOf[Logger]
-    val context = new LoggerContext
-    val auditLogger = context.getLogger(AuditLogger.getClass.getName)
-    val testAppender = new ListAppender[ILoggingEvent]()
-    val startingLevel = auditLogger.getLevel
-    auditLogger.setLevel(Level.INFO)
-    testAppender.start()
+  private object SamResourceActionPatterns {
+    val readPolicies = ResourceActionPattern("read_policies", "", false)
+    val alterPolicies = ResourceActionPattern("alter_policies", "", false)
+    val delete = ResourceActionPattern("delete", "", false)
 
-    auditLogger.addAppender(testAppender)
-
-    try {
-      testAppender.list.size() shouldBe 0
-      test.unsafeRunSync()
-      testAppender.list.asScala.map(_.getFormattedMessage) should contain theSameElementsInOrderAs events.map(_.toString)
-      if (tryTwice) {
-        test.unsafeRunSync()
-        testAppender.list.asScala.map(_.getFormattedMessage) should contain theSameElementsInOrderAs events.map(_.toString)
-      }
-    } finally {
-      auditLogger.detachAppender(testAppender)
-      auditLogger.setLevel(startingLevel)
-    }
+    val sharePolicy = ResourceActionPattern("share_policy::.+", "", false)
+    val readPolicy = ResourceActionPattern("read_policy::.+", "", false)
   }
 }
