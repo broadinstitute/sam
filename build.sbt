@@ -6,7 +6,8 @@ lazy val root: Project = project
   .settings(rootSettings: _*)
   .withTestSettings
 
-lazy val pact4s = project.in(file("pact4s"))
+lazy val pact4s = project
+  .in(file("pact4s"))
   .settings(pact4sSettings)
   .dependsOn(root % "test->test;compile->compile")
 
