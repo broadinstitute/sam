@@ -135,7 +135,7 @@ object Dependencies {
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
 
   val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
-  val  pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
+  val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
 
   val coreDependencies = Seq(
     workbenchOauth2,
