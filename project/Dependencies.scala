@@ -21,6 +21,7 @@ object Dependencies {
   val workbenchOpenTelemetryV = "0.3-0096bac"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.4-SNAPSHOT"
+  val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 = ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
@@ -116,6 +117,8 @@ object Dependencies {
   val opencensusStackDriverExporter: ModuleID =
     "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
+  val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
+  val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
   // pact deps
   val pact4sV = "0.6.0"
@@ -171,6 +174,8 @@ object Dependencies {
     scalaTestScalaCheck,
     scalaCheck,
     scalaTestMockito,
+    slf4jApi,
+    slf4jSimple,
     workbenchUtil,
     workbenchModel,
     workbenchGoogle,

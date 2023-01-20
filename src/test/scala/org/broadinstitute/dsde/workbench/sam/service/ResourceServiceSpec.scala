@@ -5,7 +5,7 @@ import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.classic.{Level, LoggerContext}
+import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.model._
@@ -27,6 +27,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import org.scalatestplus.mockito.MockitoSugar
+import org.slf4j.LoggerFactory
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -2642,9 +2643,9 @@ class ResourceServiceSpec
     * sure subsequent calls to no log more messages. Ends by tearing down the log appender.
     */
   private def runAuditLogTest(test: IO[_], events: List[AuditEventType], tryTwice: Boolean = true) = {
-    // val auditLogger: Logger = LoggerFactory.getLogger(AuditLogger.getClass.getName).asInstanceOf[Logger]
-    val context = new LoggerContext
-    val auditLogger = context.getLogger(AuditLogger.getClass.getName)
+    val auditLogger: Logger = LoggerFactory.getLogger(AuditLogger.getClass.getName).asInstanceOf[Logger]
+    // val context = new LoggerContext
+    // val auditLogger = context.getLogger(AuditLogger.getClass.getName)
     val testAppender = new ListAppender[ILoggingEvent]()
     val startingLevel = auditLogger.getLevel
     auditLogger.setLevel(Level.INFO)
