@@ -2644,8 +2644,6 @@ class ResourceServiceSpec
     */
   private def runAuditLogTest(test: IO[_], events: List[AuditEventType], tryTwice: Boolean = true) = {
     val auditLogger: Logger = LoggerFactory.getLogger(AuditLogger.getClass.getName).asInstanceOf[Logger]
-    // val context = new LoggerContext
-    // val auditLogger = context.getLogger(AuditLogger.getClass.getName)
     val testAppender = new ListAppender[ILoggingEvent]()
     val startingLevel = auditLogger.getLevel
     auditLogger.setLevel(Level.INFO)
