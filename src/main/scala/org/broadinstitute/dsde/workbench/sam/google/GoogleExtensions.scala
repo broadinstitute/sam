@@ -312,8 +312,8 @@ class GoogleExtensions(
       _ <- withProxyEmail(userId)(email => IO.fromFuture(IO(googleDirectoryDAO.deleteGroup(email))))
     } yield ()
 
-  override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] =
-    googleDirectoryDAO.deleteGroup(groupEmail)
+  override def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit] =
+    IO.fromFuture(IO(googleDirectoryDAO.deleteGroup(groupEmail)))
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] =
     for {

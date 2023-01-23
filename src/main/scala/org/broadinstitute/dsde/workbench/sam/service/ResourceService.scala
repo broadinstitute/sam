@@ -330,7 +330,7 @@ class ResourceService(
     for {
       policyEmailOpt <- directoryDAO.loadSubjectEmail(policyId, samRequestContext)
       policyEmail = policyEmailOpt.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
-      _ <- IO.fromFuture(IO(cloudExtensions.onGroupDelete(policyEmail)))
+      _ <- cloudExtensions.onGroupDelete(policyEmail)
       _ <- accessPolicyDAO.deletePolicy(policyId, samRequestContext)
     } yield ()
 
@@ -338,7 +338,7 @@ class ResourceService(
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
       _ <- policiesToDelete.traverse { policy =>
-        IO.fromFuture(IO(cloudExtensions.onGroupDelete(policy.email)))
+        cloudExtensions.onGroupDelete(policy.email)
       }
     } yield policiesToDelete
 
