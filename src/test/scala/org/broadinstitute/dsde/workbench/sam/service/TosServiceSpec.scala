@@ -16,13 +16,6 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   val defaultUser = Generator.genWorkbenchUserBoth.sample.get
   val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
 
-  private val tosServiceEnabledV0 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "0"))
-  private val tosServiceEnabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true))
-  private val tosServiceEnabledV2 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2"))
-  private val tosServiceGracePeriodEnabled =
-    new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2", isGracePeriodEnabled = true))
-  private val tosServiceDisabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = false))
-
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     TestSupport.truncateAll
@@ -40,6 +33,7 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     assume(databaseEnabled, databaseEnabledClue)
 
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
+    val tosServiceEnabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true))
 
     // accept and get ToS status
     val acceptTosStatusResult = tosServiceEnabled.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
@@ -59,10 +53,12 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
 
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
+    val tosServiceEnabledV0 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "0"))
     tosServiceEnabledV0.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(false)
     tosServiceEnabledV0.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(true)
     tosServiceEnabledV0.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(true)
 
+    val tosServiceEnabledV2 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2"))
     tosServiceEnabledV2.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(false)
     tosServiceEnabledV2.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(true)
     tosServiceEnabledV2.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(true)
@@ -71,12 +67,15 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   "TosService.isTermsOfServiceStatusAcceptable" should "allow all requests to the API if TOS is disabled" in {
     assume(databaseEnabled, databaseEnabledClue)
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
+    val tosServiceDisabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = false))
     tosServiceDisabled.isTermsOfServiceStatusAcceptable(defaultUser) should be(true)
   }
 
   it should "not allow users who have never accepted a ToS version to use the API, even with a grace period enabled" in {
     assume(databaseEnabled, databaseEnabledClue)
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
+    val tosServiceGracePeriodEnabled =
+      new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2", isGracePeriodEnabled = true))
     tosServiceGracePeriodEnabled.isTermsOfServiceStatusAcceptable(defaultUser) should be(false)
   }
 
@@ -85,6 +84,9 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
     dirDAO.acceptTermsOfService(defaultUser.id, "1", samRequestContext).unsafeRunSync()
     val userAcceptedPreviousVersion = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().orNull
+
+    val tosServiceGracePeriodEnabled =
+      new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2", isGracePeriodEnabled = true))
     tosServiceGracePeriodEnabled.isTermsOfServiceStatusAcceptable(userAcceptedPreviousVersion) should be(true)
   }
 
@@ -93,12 +95,16 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
     dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
     dirDAO.acceptTermsOfService(defaultUser.id, "1", samRequestContext).unsafeRunSync()
     val userAcceptedPreviousVersion = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().orNull
+
+    val tosServiceEnabledV2 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2"))
     tosServiceEnabledV2.isTermsOfServiceStatusAcceptable(userAcceptedPreviousVersion) should be(false)
   }
 
   it should "exclude service accounts from ToS checks" in {
     assume(databaseEnabled, databaseEnabledClue)
     dirDAO.createUser(serviceAccountUser, samRequestContext).unsafeRunSync()
+
+    val tosServiceEnabledV0 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "0"))
     tosServiceEnabledV0.isTermsOfServiceStatusAcceptable(serviceAccountUser) should be(true)
   }
 }
