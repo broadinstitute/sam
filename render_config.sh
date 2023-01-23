@@ -8,7 +8,6 @@ SECRET_ENV_VARS_LOCATION="${SERVICE_OUTPUT_LOCATION}/secrets.env"
 
 vault read --format=json --field=data ${SAM_VAULT_PATH}/sam-account.json > ${SERVICE_OUTPUT_LOCATION}/sam-account.json
 vault read --field=private_key ${SAM_VAULT_PATH}/sam-account.json > ${SERVICE_OUTPUT_LOCATION}/sam-account.pem
-vault read --format=json --field=data ${SAM_VAULT_PATH}/sam-firestore-account.json > ${SERVICE_OUTPUT_LOCATION}/sam-firestore-account.json
 
 vault read --format=json --field=data ${SAM_VAULT_PATH}/service_accounts/service_account_0 > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-0.json
 vault read --format=json --field=data ${SAM_VAULT_PATH}/service_accounts/service_account_1 > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-1.json
