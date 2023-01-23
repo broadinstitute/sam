@@ -19,7 +19,8 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   private val tosServiceEnabledV0 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "0"))
   private val tosServiceEnabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true))
   private val tosServiceEnabledV2 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2"))
-  private val tosServiceGracePeriodEnabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2", isGracePeriodEnabled = true))
+  private val tosServiceGracePeriodEnabled =
+    new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2", isGracePeriodEnabled = true))
   private val tosServiceDisabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = false))
 
   override protected def beforeAll(): Unit = {
