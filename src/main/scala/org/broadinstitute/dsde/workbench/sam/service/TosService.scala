@@ -50,9 +50,10 @@ class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tos
   /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS, or is a service account
     */
   def isTermsOfServiceStatusAcceptable(user: SamUser): Boolean =
-    tosConfig.isGracePeriodEnabled || !tosConfig.enabled || user.acceptedTosVersion.contains(tosConfig.version) || StandardSamUserDirectives.SAdomain.matches(
-      user.email.value
-    )
+    !tosConfig.enabled || // ToS is disabled
+      (tosConfig.isGracePeriodEnabled && user.acceptedTosVersion.isDefined) || // There is a grace period, and the user has accepted some form of the ToS
+      user.acceptedTosVersion.contains(tosConfig.version) || // No grace period, but user has accepted the current ToS version
+      StandardSamUserDirectives.SAdomain.matches(user.email.value) // The user is a Service Account
 
   /** Get the terms of service text and send it to the caller
     * @return
