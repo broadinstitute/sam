@@ -262,7 +262,6 @@ final case class SamDependencies(
     statusService: StatusService,
     managedGroupService: ManagedGroupService,
     directoryDAO: MockDirectoryDAO,
-    // directoryDAO: DirectoryDAO,
     policyDao: AccessPolicyDAO,
     cloudExtensions: CloudExtensions,
     oauth2Config: OpenIDConnectConfiguration,
