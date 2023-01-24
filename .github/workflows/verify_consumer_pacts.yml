@@ -5,7 +5,6 @@ name: Verify consumer pacts
 # The workflow requires Pact broker credentials
 # - PACT_BROKER_USERNAME - the Pact Broker username
 # - PACT_BROKER_PASSWORD - the Pact Broker password
-#
 on:
   pull_request:
     branches:
