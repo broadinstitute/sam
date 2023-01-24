@@ -136,7 +136,9 @@ object Dependencies {
   val pact4sDependencies = Seq(
     pact4sScalaTest,
     pact4sCirce,
-    circeCore
+    circeCore,
+    slf4jApi,
+    slf4jSimple
   )
 
   val cloudResourceLib: ModuleID =
