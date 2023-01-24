@@ -138,7 +138,7 @@ object MockTestSupport extends MockTestSupport {
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
     val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
-    SamDependencies(
+    MockSamDependencies(
       mockResourceService,
       policyEvaluatorService,
       tosService,
@@ -155,7 +155,7 @@ object MockTestSupport extends MockTestSupport {
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit
+  def genSamRoutes(samDependencies: MockSamDependencies, uInfo: SamUser)(implicit
       system: ActorSystem,
       materializer: Materializer,
       openTelemetry: OpenTelemetryMetrics[IO]
@@ -245,7 +245,7 @@ So, just use the DatabaseNames.Read connection pool for tests.
     }
 }
 
-final case class SamDependencies(
+final case class MockSamDependencies(
     resourceService: ResourceService,
     policyEvaluatorService: PolicyEvaluatorService,
     tosService: TosService,

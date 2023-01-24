@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.{Generator, MockTestSupport, SamDependencies}
+import org.broadinstitute.dsde.workbench.sam.{Generator, MockTestSupport, MockSamDependencies}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
@@ -32,7 +32,7 @@ import scala.concurrent.duration.DurationInt
 object ContractTest extends Tag("ContractTest")
 
 class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging {
-  def genSamDependencies: SamDependencies = {
+  def genSamDependencies: MockSamDependencies = {
     val directoryDAO = mock[DirectoryDAO]
     val policyDAO = mock[AccessPolicyDAO]
     val googleExt = mock[GoogleExtensions]
@@ -91,7 +91,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       )
     )
 
-    SamDependencies(
+    MockSamDependencies(
       mockResourceService,
       policyEvaluatorService,
       tosService,

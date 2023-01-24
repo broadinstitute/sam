@@ -176,8 +176,6 @@ object Dependencies {
     scalaTestScalaCheck,
     scalaCheck,
     scalaTestMockito,
-    slf4jApi,
-    slf4jSimple,
     workbenchUtil,
     workbenchModel,
     workbenchGoogle,
@@ -201,5 +199,5 @@ object Dependencies {
     cloudResourceLib,
     nettyAll,
     azureManagedApplications
-  ) ++ openCensusDependencies ++ pact4sDependencies
+  ) ++ openCensusDependencies
 }

@@ -37,25 +37,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Extract branch
-        id: extract-branch
-        run: |
-          GITHUB_EVENT_NAME=${{ github.event_name }}
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            GITHUB_REF=${{ github.ref }}
-            GITHUB_SHA=${{ github.sha }}
-          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            GITHUB_REF=refs/heads/${{ github.head_ref }}
-            GITHUB_SHA=${{ github.event.pull_request.head.sha }}
-          else
-            echo "Failed to extract branch information"
-            exit 1
-          fi
-          echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
-          echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "branch=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_OUTPUT
-
       # coursier cache action caches both coursier and sbt caches
       - name: coursier-cache-action
         uses: coursier/cache-action@v5
@@ -85,13 +66,7 @@ jobs:
 
       - name: Run unit tests and generate coverage report
         id: coverageReport
-        env:
-          BRANCH: ${{ steps.extract-branch.outputs.branch }}
-          GIT_SHA_SHORT: ${{ steps.extract-branch.outputs.sha_short }}
-          PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
-          PACT_BROKER_USERNAME: ${{ secrets.PACT_BROKER_USERNAME }}
-          PACT_BROKER_PASSWORD: ${{ secrets.PACT_BROKER_PASSWORD }}
-        run: source env/test.env; sbt coverage "testOnly -- -l ContractTest" coverageReport
+        run: source env/test.env; sbt coverage "testOnly --" coverageReport
 
   generateAndPublishClient:
     runs-on: ubuntu-20.04
