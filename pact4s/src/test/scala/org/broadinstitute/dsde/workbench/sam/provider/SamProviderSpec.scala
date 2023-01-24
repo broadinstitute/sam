@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.sam.TestSupport.genSamRoutes
+import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
