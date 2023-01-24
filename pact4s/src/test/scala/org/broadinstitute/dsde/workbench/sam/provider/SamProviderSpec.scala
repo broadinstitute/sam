@@ -14,11 +14,11 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.{Generator, MockTestSupport, MockSamDependencies}
+import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
-import org.scalatest.{BeforeAndAfterAll, Tag}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.mockito.MockitoSugar.mock
 import pact4s.provider.Authentication.BasicAuth
@@ -28,8 +28,6 @@ import pact4s.scalatest.PactVerifier
 import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
-
-object ContractTest extends Tag("ContractTest")
 
 class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging {
   def genSamDependencies: MockSamDependencies = {
@@ -139,7 +137,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
 
-  it should "Verify pacts" taggedAs ContractTest in {
+  it should "Verify pacts" in {
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
       publishVerificationResults = Some(
