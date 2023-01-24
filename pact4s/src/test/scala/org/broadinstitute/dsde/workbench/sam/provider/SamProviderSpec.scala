@@ -9,12 +9,12 @@ import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail,
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.TestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
-import org.broadinstitute.dsde.workbench.sam.{Generator, SamDependencies, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, ResourceRoleName, ResourceType, ResourceTypeName, RolesAndActions, SamUser, UserResourcesResponse}
-import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, PolicyEvaluatorService, ResourceService, StatusService, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.{Generator, MockTestSupport, SamDependencies}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
@@ -22,14 +22,14 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.mockito.MockitoSugar.mock
 import pact4s.provider.Authentication.BasicAuth
-import pact4s.provider.{Branch, PactSource, ProviderInfoBuilder, ProviderTags, ProviderVerificationOption, PublishVerificationResults}
+import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
 import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
-class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with TestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging {
+class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging {
   def genSamDependencies: SamDependencies = {
     val directoryDAO = mock[DirectoryDAO]
     val policyDAO = mock[AccessPolicyDAO]
