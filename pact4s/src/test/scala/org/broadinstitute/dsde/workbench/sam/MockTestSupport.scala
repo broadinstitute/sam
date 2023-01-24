@@ -39,31 +39,23 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Awaitable, ExecutionContext}
 
 trait MockTestSupport {
-  val samRequestContext = SamRequestContext()
-
   def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
+  def runAndWait[T](f: IO[T]): T = f.unsafeRunSync()
 
   implicit val futureTimeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
   implicit val openTelemetry = FakeOpenTelemetryMetricsInterpreter
 
-  def runAndWait[T](f: IO[T]): T = f.unsafeRunSync()
+  val samRequestContext = SamRequestContext()
 
   def dummyResourceType(name: ResourceTypeName) =
     ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
 }
 
 object MockTestSupport extends MockTestSupport {
-  lazy val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
-  /*
-  In unit tests there really is not a difference between read and write pools.
-  Ideally I would not even have it. But I also want to have DatabaseNames enum and DbReference.init to use it.
-  So the situation is a little messy and I favor having more mess on the test side than the production side
-  (i.e. I don't want to add a new database name just for tests).
-  So, just use the DatabaseNames.Read connection pool for tests.
-   */
-  lazy val dbRef = TestDbReference.init(config.as[LiquibaseConfig]("liquibase"), appConfig.samDatabaseConfig.samRead.dbName, TestSupport.blockingEc)
+  private val executor = Executors.newCachedThreadPool()
   val blockingEc = ExecutionContext.fromExecutor(executor)
+
   val config = ConfigFactory.load()
   val appConfig = AppConfig.readConfig(config)
   val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
@@ -72,17 +64,11 @@ object MockTestSupport extends MockTestSupport {
   val adminConfig = config.as[AdminConfig]("admin")
   val databaseEnabled = config.getBoolean("db.enabled")
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
-  val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
-  private val executor = Executors.newCachedThreadPool()
 
+  lazy val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
-
   def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
-
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
-
-  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): MockSamRoutes =
-    genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
 
   def genSamDependencies(
       resourceTypes: Map[ResourceTypeName, ResourceType] = Map.empty,
@@ -167,6 +153,8 @@ object MockTestSupport extends MockTestSupport {
     )
   }
 
+  val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
+
   def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit
       system: ActorSystem,
       materializer: Materializer,
@@ -206,6 +194,18 @@ object MockTestSupport extends MockTestSupport {
     override val user: SamUser = uInfo
     override val newSamUser: Option[SamUser] = Option(uInfo)
   }
+
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): MockSamRoutes =
+    genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
+
+  /*
+In unit tests there really is not a difference between read and write pools.
+Ideally I would not even have it. But I also want to have DatabaseNames enum and DbReference.init to use it.
+So the situation is a little messy and I favor having more mess on the test side than the production side
+(i.e. I don't want to add a new database name just for tests).
+So, just use the DatabaseNames.Read connection pool for tests.
+   */
+  lazy val dbRef = TestDbReference.init(config.as[LiquibaseConfig]("liquibase"), appConfig.samDatabaseConfig.samRead.dbName, MockTestSupport.blockingEc)
 
   def truncateAll: Int =
     if (databaseEnabled) {
