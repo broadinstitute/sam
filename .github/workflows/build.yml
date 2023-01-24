@@ -91,7 +91,7 @@ jobs:
           PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
           PACT_BROKER_USERNAME: ${{ secrets.PACT_BROKER_USERNAME }}
           PACT_BROKER_PASSWORD: ${{ secrets.PACT_BROKER_PASSWORD }}
-        run: source env/test.env; sbt coverage "testOnly --" coverageReport
+        run: source env/test.env; sbt coverage "testOnly -- -l ContractTest" coverageReport
 
   generateAndPublishClient:
     runs-on: ubuntu-20.04
