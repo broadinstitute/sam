@@ -132,9 +132,11 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
   ) { (externalId, email, accessToken, userId) =>
     val services = directives()
     val headers = createRequiredHeaders(externalId, email, accessToken)
-    val user = TestSupport.newUserWithAcceptedTos(services,
+    val user = TestSupport.newUserWithAcceptedTos(
+      services,
       SamUser(userId, externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None),
-      samRequestContext)
+      samRequestContext
+    )
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(x => complete(x.toString))) ~> check {
         status shouldBe StatusCodes.OK

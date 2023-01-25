@@ -67,7 +67,10 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
 
     Put(s"/api/admin/v1/user/${user.id}/disable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), enabledMapNoTosAccepted + ("ldap" -> false) + ("adminEnabled" -> false))
+      responseAs[UserStatus] shouldEqual UserStatus(
+        UserStatusDetails(user.id, user.email),
+        enabledMapNoTosAccepted + ("ldap" -> false) + ("adminEnabled" -> false)
+      )
     }
 
     Put(s"/api/admin/v1/user/${user.id}/enable") ~> adminRoutes.route ~> check {
@@ -144,7 +147,8 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
     val cloudExtensions = new NoExtensions {
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
-    val (_, _, routes) = createTestUser(testUser = adminUser, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO), tosAccepted = true)
+    val (_, _, routes) =
+      createTestUser(testUser = adminUser, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO), tosAccepted = true)
     val user = Generator.genWorkbenchUserGoogle.sample.get
     runAndWait(routes.userService.createUser(user, samRequestContext))
     (user.copy(enabled = true), routes) // userService.createUser enables the user

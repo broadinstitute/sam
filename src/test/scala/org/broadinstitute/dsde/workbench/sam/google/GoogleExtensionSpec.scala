@@ -397,7 +397,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     // create a user
     val newUser = newUserWithAcceptedTos(service, tosService, defaultUser, samRequestContext)
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email),TestSupport.enabledMapTosAccepted)
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), TestSupport.enabledMapTosAccepted)
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")

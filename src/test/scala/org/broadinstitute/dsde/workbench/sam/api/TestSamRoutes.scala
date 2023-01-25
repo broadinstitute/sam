@@ -157,7 +157,7 @@ object TestSamRoutes {
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None,
-      acceptTermsOfService: Boolean = true,
+      acceptTermsOfService: Boolean = true
   )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetrics[IO]) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
