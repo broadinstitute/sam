@@ -29,7 +29,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getActiveSamUser(oidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture().map(samUser => {
-        logger.info(s"Handling request for active Sam User: $samUser")
+        logger.info(s"Auth Headers: $oidcHeaders mapped to active user: $samUser")
         samUser
       })
     }
@@ -38,7 +38,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getSamUser(oidcHeaders, directoryDAO, samRequestContext).unsafeToFuture().map(samUser => {
-        logger.info(s"Handling request for (in)active Sam User: $samUser")
+        logger.info(s"Auth Headers: $oidcHeaders mapped to (in)active user: $samUser")
         samUser
       })
     }
@@ -158,4 +158,18 @@ final case class OIDCHeaders(
     email: WorkbenchEmail,
     googleSubjectIdFromAzure: Option[GoogleSubjectId],
     managedIdentityObjectId: Option[ManagedIdentityObjectId] = None
-)
+) {
+
+  // Customized toString method so that fields are labeled and we must ensure that we do not log the Bearer Token
+  override def toString: String = {
+    val extId = externalId match {
+      case Left(googleSubjectId) => s"GoogleSubjectId($googleSubjectId)"
+      case Right(azureB2CId) => s"AzureB2CId($azureB2CId)"
+    }
+    s"OIDCHeaders(" +
+      s"externalId: $extId, " +
+      s"email: $email, " +
+      s"googleSubjectIdFromAzure: $googleSubjectIdFromAzure, " +
+      s"managedIdentityObjectId: $managedIdentityObjectId)"
+  }
+}
