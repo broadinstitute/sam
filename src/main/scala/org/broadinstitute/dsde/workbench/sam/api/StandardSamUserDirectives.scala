@@ -29,7 +29,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getActiveSamUser(oidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture().map(samUser => {
-        logger.info(s"Auth Headers: $oidcHeaders mapped to active user: $samUser")
+        logger.info(s"Handling request for active Sam User: $samUser")
         samUser
       })
     }
@@ -38,7 +38,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getSamUser(oidcHeaders, directoryDAO, samRequestContext).unsafeToFuture().map(samUser => {
-        logger.info(s"Auth Headers: $oidcHeaders mapped to (in)active user: $samUser")
+        logger.info(s"Handling request for (in)active Sam User: $samUser")
         samUser
       })
     }
@@ -62,6 +62,10 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       headerValueByName(emailHeader).as(WorkbenchEmail) &
       optionalHeaderValueByName(googleIdFromAzureHeader).map(_.map(GoogleSubjectId)) &
       optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId))).as(OIDCHeaders)
+      .map(oidcHeaders => {
+        logger.info(s"Auth Headers: $oidcHeaders")
+        oidcHeaders
+      })
 
   private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
     Try(BigInt(idString)).fold(
