@@ -75,6 +75,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
     runAndWait(mockUserService.createUser(user, samRequestContext))
+    runAndWait(tosService.acceptTosStatus(user.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,

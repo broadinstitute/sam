@@ -4,7 +4,6 @@ package api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.ManagedGroupRoutesSpec._
@@ -59,8 +58,8 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     }
 
   // Makes an anonymous object for a user acting on the same data as the user specified in samRoutes
-  def makeOtherUser(samRoutes: SamRoutes, samUser: SamUser = defaultNewUser) = new {
-    runAndWait(samRoutes.userService.createUser(samUser, samRequestContext))
+  def makeOtherUser(samRoutes: TestSamRoutes, samUser: SamUser = defaultNewUser) = new {
+    samRoutes.createUserAndAcceptTos(samUser, samRequestContext)
     val email = samUser.email
     val routes = new TestSamRoutes(
       samRoutes.resourceService,
@@ -79,12 +78,12 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
       status shouldEqual expectedStatus
     }
 
-  def withUserNotInGroup[T](defaultRoutes: SamRoutes)(body: TestSamRoutes => T): T = {
+  def withUserNotInGroup[T](defaultRoutes: TestSamRoutes)(body: TestSamRoutes => T): T = {
     assertCreateGroup(defaultRoutes)
     assertGetGroup(defaultRoutes)
 
     val theDude = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
-    defaultRoutes.directoryDAO.createUser(theDude, samRequestContext).unsafeRunSync()
+    defaultRoutes.createUserAndAcceptTos(theDude, samRequestContext)
     val dudesRoutes = new TestSamRoutes(
       defaultRoutes.resourceService,
       defaultRoutes.policyEvaluatorService,
@@ -123,7 +122,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     assertCreateGroup(samRoutes = samRoutes)
     assertGetGroup(samRoutes = samRoutes)
 
-    samRoutes.userService.createUser(newGuy, samRequestContext).unsafeRunSync()
+    samRoutes.createUserAndAcceptTos(newGuy, samRequestContext)
 
     setGroupMembers(samRoutes, Set(newGuy.email), expectedStatus = StatusCodes.Created)
 
@@ -142,7 +141,7 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
     assertCreateGroup(samRoutes)
 
     val newGuy = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
-    samRoutes.directoryDAO.createUser(newGuy, samRequestContext).unsafeRunSync()
+    samRoutes.createUserAndAcceptTos(newGuy, samRequestContext)
     val newGuyRoutes = new TestSamRoutes(
       samRoutes.resourceService,
       samRoutes.policyEvaluatorService,

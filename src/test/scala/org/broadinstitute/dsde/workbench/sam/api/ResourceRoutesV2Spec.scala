@@ -58,7 +58,8 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
-    mockUserService.createUser(samUser, samRequestContext).unsafeRunSync()
+    TestSupport.runAndWait(mockUserService.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,

@@ -49,7 +49,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       val res = responseAs[UserStatus]
       res.userInfo.userSubjectId.value.length shouldBe 21
       res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      res.enabled shouldBe TestSupport.enabledMapNoTosAccepted
     }
 
     Post("/register/user/v2/self") ~> samRoutes.route ~> check {
@@ -61,7 +61,7 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
-    val (user, samDep, routes) = createTestUser()
+    val (user, samDep, routes) = createTestUser(tosAccepted = true)
     Get("/register/user/v2/self/info") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true, true)
@@ -73,26 +73,26 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
     Get("/register/user/v2/self/diagnostics") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
-    val (user, samDep, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+    val (user, samDep, routes) = createTestUser(tosAccepted = true)
 
     Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true, Option(true), true)
+      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true, true, true)
     }
   }
 
   it should "get user's diagnostics after accepting the tos" in {
-    val (user, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+    val (user, _, routes) = createTestUser(tosAccepted = true)
 
     Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val res = responseAs[UserStatusDiagnostics]
-      res.tosAccepted shouldBe Some(true)
+      res.tosAccepted shouldBe true
     }
   }
 
   "GET /register/user/v2/self/termsOfServiceDetails" should "get the user's Terms of Service details" in {
-    val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+    val (_, _, routes) = createTestUser(tosAccepted = true)
 
     Get("/register/user/v2/self/termsOfServiceDetails") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK

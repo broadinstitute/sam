@@ -71,8 +71,6 @@ object Boot extends IOApp with LazyLogging {
 
     val appDependencies = createAppDependencies(appConfig)
 
-    val tosCheckEnabled = appConfig.termsOfServiceConfig.enabled
-
     appDependencies.use { dependencies => // this is where the resource is used
       for {
         _ <- dependencies.samApplication.resourceService.initResourceTypes().onError { case t: Throwable =>

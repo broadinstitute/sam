@@ -381,7 +381,16 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
       res.userInfo.userEmail shouldBe user.email
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      res.enabled shouldBe TestSupport.enabledMapNoTosAccepted
+    }
+
+    // accept the tos
+    Post("/register/user/v1/termsofservice", TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")) ~> createRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[UserStatus]
+      res.userInfo.userEmail shouldBe user.email
+      val enabledBaseArray = enabledMapTosAccepted
+      res.enabled shouldBe enabledBaseArray
     }
 
     (user, samDependencies, createRoutes)

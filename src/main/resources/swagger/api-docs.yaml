@@ -2694,6 +2694,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermsOfServiceDetails'
+  /register/user/v2/self/termsOfServiceAdherenceStatus:
+    get:
+      tags:
+        - Terms of Service
+      summary: gets info on whether the user has accepted the latest terms of service and if they can use Terra based on that
+      operationId: getTermsOfServiceAdherenceStatus
+      responses:
+        200:
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermsOfServiceAdherenceStatus'
   /liveness:
     get:
       summary: Gets system liveness
@@ -3392,6 +3405,22 @@ components:
         userAcceptedVersion:
           type: string
           description: the version of the terms of service the user has accepted
+    TermsOfServiceAdherenceStatus:
+      required:
+        - userId
+        - userHasAcceptedLatestTos
+        - acceptedTosAllowsUsage
+      type: object
+      properties:
+        userId:
+          type: string
+          description: user id terms of service adherence pertains to
+        userHasAcceptedLatestTos:
+          type: boolean
+          description: has the user accepted the latest terms of service?
+        acceptedTosAllowsUsage:
+          type: boolean
+          description: based on terms of service status, can the user use Terra?
     ManagedResourceGroupCoordinates:
       required:
         - tenantId
