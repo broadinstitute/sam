@@ -101,6 +101,17 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       details.userAcceptedVersion should not be empty
       details.currentVersion should be(details.userAcceptedVersion.get)
     }
+  }
 
+  "GET /register/user/v2/self/termsOfServiceDetails" should "get the user's Terms of Service Adherence Status" in {
+    val (user, _, routes) = createTestUser(tosAccepted = true)
+
+    Get("/register/user/v2/self/termsOfServiceAdherenceStatus") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val adherenceStatus = responseAs[TermsOfServiceAdherenceStatus]
+      adherenceStatus.userId shouldBe user.id
+      adherenceStatus.acceptedTosAllowsUsage shouldBe true
+      adherenceStatus.userHasAcceptedLatestTos shouldBe true
+    }
   }
 }
