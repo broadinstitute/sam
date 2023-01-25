@@ -9,7 +9,7 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{googleServicesConfig, samRequestContext, tosConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
@@ -178,9 +178,8 @@ object TestSamRoutes {
       emailDomain,
       allowedAdminEmailDomains = adminEmailDomains.getOrElse(Set.empty)
     )
-    val mockUserService =
-      new UserService(directoryDAO, cloudXtns, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
-    val mockTosService = new TosService(directoryDAO, emailDomain, TestSupport.tosConfig)
+    val mockTosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, cloudXtns, Seq.empty, mockTosService)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, cloudXtns, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(user, samRequestContext))

@@ -15,8 +15,7 @@ import scala.concurrent.ExecutionContext
 import java.io.{FileNotFoundException, IOException}
 import scala.io.Source
 
-class TosService(val directoryDao: DirectoryDAO, val appsDomain: String, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext)
-    extends LazyLogging {
+class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
   val termsOfServiceFile = s"tos/termsOfService-${tosConfig.version}.md"
   val privacyPolicyFile = s"tos/privacyPolicy-${tosConfig.version}.md"
 

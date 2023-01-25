@@ -6,7 +6,6 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.implicits.catsSyntaxOptionId
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -68,7 +67,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
 
     val cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin)
 
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, cloudExtensions, TestSupport.dbRef)
     val mockManagedGroupService =

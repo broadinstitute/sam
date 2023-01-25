@@ -10,7 +10,6 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
@@ -31,7 +30,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       override val cloudExtensions: CloudExtensions = null
       override val termsOfServiceConfig: TermsOfServiceConfig = null
       override val userService: UserService = null
-      override val tosService: TosService = new TosService(dirDAO, googleServicesConfig.appsDomain, tosConfig)
+      override val tosService: TosService = new TosService(dirDAO, tosConfig)
     }
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {
