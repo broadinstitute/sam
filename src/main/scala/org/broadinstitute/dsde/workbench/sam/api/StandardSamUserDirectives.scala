@@ -9,6 +9,7 @@ import akka.http.scaladsl.server.directives.OnSuccessMagnet._
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
@@ -65,7 +66,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   }
 }
 
-object StandardSamUserDirectives {
+object StandardSamUserDirectives extends LazyLogging {
   val SAdomain: Regex = "(\\S+@\\S*gserviceaccount\\.com$)".r
   // UAMI == "User Assigned Managed Identity" in Azure
   val UamiPattern: Regex = "(^/subscriptions/\\S+/resourcegroups/\\S+/providers/Microsoft\\.ManagedIdentity/userAssignedIdentities/\\S+$)".r
@@ -75,7 +76,7 @@ object StandardSamUserDirectives {
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
   val managedIdentityObjectIdHeader = "OAUTH2_CLAIM_xms_mirid"
 
-  def getSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] =
+  def getSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] = {
     oidcHeaders match {
       case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _, _) =>
         // If it's a PET account, we treat it as its owner
@@ -97,6 +98,8 @@ object StandardSamUserDirectives {
       case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
         loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, samRequestContext)
     }
+  }.withInfoLogMessage()
+
 
   def getActiveSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
