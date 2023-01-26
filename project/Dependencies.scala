@@ -9,7 +9,6 @@ object Dependencies {
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.5.0"
-  val http4sVersion = "1.0.0-M32"
   val sentryVersion = "6.6.0"
 
   val workbenchUtilV = "0.6-74c9fc2"
@@ -22,6 +21,7 @@ object Dependencies {
   val workbenchOpenTelemetryV = "0.3-0096bac"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.4-SNAPSHOT"
+  val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 = ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
@@ -117,12 +117,28 @@ object Dependencies {
   val opencensusStackDriverExporter: ModuleID =
     "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
+  val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
+  val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
+
+  // pact deps
+  val pact4sV = "0.6.0"
+  val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
+  val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
+  val circeCore = "io.circe" %% "circe-core" % "0.14.3"
 
   val openCensusDependencies = Seq(
     opencensusScalaCode,
     opencensusAkkaHttp,
     opencensusStackDriverExporter,
     opencensusLoggingExporter
+  )
+
+  val pact4sDependencies = Seq(
+    pact4sScalaTest,
+    pact4sCirce,
+    circeCore,
+    slf4jApi,
+    slf4jSimple
   )
 
   val cloudResourceLib: ModuleID =

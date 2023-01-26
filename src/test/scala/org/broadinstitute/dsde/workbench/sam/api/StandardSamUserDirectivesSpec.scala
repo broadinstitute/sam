@@ -163,14 +163,14 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       }
   }
 
-  it should "pass if user has rejected terms of service within grace period" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
+  it should "fail if user has rejected terms of service within grace period" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
     val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true, isGracePeriodEnabled = true))
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
-        status shouldBe StatusCodes.OK
+        status shouldBe StatusCodes.Unauthorized
       }
   }
 
