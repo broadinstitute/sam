@@ -13,7 +13,7 @@ on:
       - 'README.md'
   push:
     branches:
-      - develop
+      - IA-3814-1
     paths-ignore:
       - 'README.md'
 env:
