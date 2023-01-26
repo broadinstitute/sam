@@ -21,11 +21,13 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
   val privacyPolicyFile = s"tos/privacyPolicy-${tosConfig.version}.md"
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
-    directoryDao.acceptTermsOfService(userId, tosConfig.version, samRequestContext)
+    directoryDao
+      .acceptTermsOfService(userId, tosConfig.version, samRequestContext)
       .withInfoLogMessage(s"$userId has accepted version ${tosConfig.version} of the Terms of Service")
 
   def rejectTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
-    directoryDao.rejectTermsOfService(userId, samRequestContext)
+    directoryDao
+      .rejectTermsOfService(userId, samRequestContext)
       .withInfoLogMessage(s"$userId has rejected version ${tosConfig.version} of the Terms of Service")
 
   // This method will disappear once UI is using getTosAdherenceDetails
