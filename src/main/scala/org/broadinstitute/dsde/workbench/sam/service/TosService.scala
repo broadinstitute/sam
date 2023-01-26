@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
@@ -21,9 +22,11 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao.acceptTermsOfService(userId, tosConfig.version, samRequestContext)
+      .withInfoLogMessage(s"$userId has accepted version ${tosConfig.version} of the Terms of Service")
 
   def rejectTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao.rejectTermsOfService(userId, samRequestContext)
+      .withInfoLogMessage(s"$userId has rejected version ${tosConfig.version} of the Terms of Service")
 
   // This method will disappear once UI is using getTosAdherenceDetails
   def getTosDetails(samUser: SamUser): IO[TermsOfServiceDetails] =
