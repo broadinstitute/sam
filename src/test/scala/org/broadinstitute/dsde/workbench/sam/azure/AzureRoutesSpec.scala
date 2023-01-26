@@ -51,25 +51,6 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  it should "successfully create a pet managed identity using MRG Azure tag for backwards compatibility" in {
-    val samRoutes = genSamRoutes(crlService = Option(MockCrlService(includeBillingProfileTag = true)))
-
-    // Create a pet managed identity, should return 201 created
-    val request = GetOrCreatePetManagedIdentityRequest(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
-    Post("/api/azure/v1/user/petManagedIdentity", request) ~> samRoutes.route ~> check {
-      handled shouldBe true
-      status shouldEqual StatusCodes.Created
-      contentType shouldEqual ContentTypes.`application/json`
-    }
-
-    // Create again, should return 200
-    Post("/api/azure/v1/user/petManagedIdentity", request) ~> samRoutes.route ~> check {
-      handled shouldBe true
-      status shouldEqual StatusCodes.OK
-      contentType shouldEqual ContentTypes.`application/json`
-    }
-  }
-
   it should "return 403 if the MRG does not exist" in {
     val samRoutes = genSamRoutes()
 
@@ -125,26 +106,6 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     }
 
     // Create a pet managed identity, should return 201 created
-    Post(s"/api/azure/v1/petManagedIdentity/${newUser.email.value}", request) ~> samRoutes.route ~> check {
-      handled shouldBe true
-      status shouldEqual StatusCodes.Created
-      contentType shouldEqual ContentTypes.`application/json`
-    }
-
-    // Create again, should return 200
-    Post(s"/api/azure/v1/petManagedIdentity/${newUser.email.value}", request) ~> samRoutes.route ~> check {
-      handled shouldBe true
-      status shouldEqual StatusCodes.OK
-      contentType shouldEqual ContentTypes.`application/json`
-    }
-  }
-
-  it should "successfully create a pet managed identity for a user using MRG Azure tag for backwards compatibility" in {
-    val samRoutes = genSamRoutes(crlService = Option(MockCrlService(includeBillingProfileTag = true)))
-    val newUser = createSecondUser(samRoutes)
-
-    // Create a pet managed identity for the second user, should return 201 created
-    val request = GetOrCreatePetManagedIdentityRequest(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
     Post(s"/api/azure/v1/petManagedIdentity/${newUser.email.value}", request) ~> samRoutes.route ~> check {
       handled shouldBe true
       status shouldEqual StatusCodes.Created
