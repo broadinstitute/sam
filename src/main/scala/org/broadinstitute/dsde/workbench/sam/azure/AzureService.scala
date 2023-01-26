@@ -146,23 +146,12 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   def getBillingProfileId(request: GetOrCreatePetManagedIdentityRequest, samRequestContext: SamRequestContext): IO[Option[BillingProfileId]] =
     // get the billing profile id from the database
     // if not there, for backwards compatibility, get the billing profile id from a tag on the Azure resource
-    OptionT(getBillingProfileIdFromSamDb(request, samRequestContext))
-      .orElseF(getBillingProfileIdFromAzureTag(request, samRequestContext))
-      .value
+    OptionT(getBillingProfileIdFromSamDb(request, samRequestContext)).value
 
   private def getBillingProfileIdFromSamDb(request: GetOrCreatePetManagedIdentityRequest, samRequestContext: SamRequestContext): IO[Option[BillingProfileId]] =
     for {
       maybeMrg <- azureManagedResourceGroupDAO.getManagedResourceGroupByCoordinates(request.toManagedResourceGroupCoordinates, samRequestContext)
     } yield maybeMrg.map(_.billingProfileId)
-
-  private def getBillingProfileIdFromAzureTag(
-      request: GetOrCreatePetManagedIdentityRequest,
-      samRequestContext: SamRequestContext
-  ): IO[Option[BillingProfileId]] = traceIOWithContext("getBillingProfileIdFromAzureTag", samRequestContext) { _ =>
-    for {
-      mrg <- validateManagedResourceGroup(request.toManagedResourceGroupCoordinates, samRequestContext, false)
-    } yield getBillingProfileFromTag(mrg)
-  }
 
   /** Validates a managed resource group. Algorithm:
     *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Get the managed app "plan" name and publisher 5.
