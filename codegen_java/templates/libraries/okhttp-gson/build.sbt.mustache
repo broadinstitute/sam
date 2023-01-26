@@ -6,15 +6,15 @@ lazy val root = (project in file(".")).
     Seq(organization := "org.broadinstitute.dsde.workbench",
     name := "sam-client",
     version := createVersion("{{artifactVersion}}"),
-    scalaVersion := "2.13.5",
+    scalaVersion := "2.13.10",
     scalacOptions ++= Seq("-feature"),
     javacOptions in compile ++= Seq("-Xlint:deprecation"),
     publishArtifact in (Compile, packageDoc) := false,
     resolvers += Resolver.mavenLocal,
     libraryDependencies ++= Seq(
       "io.swagger" % "swagger-annotations" % "1.5.24",
-      "com.squareup.okhttp3" % "okhttp" % "4.9.1",
-      "com.squareup.okhttp3" % "logging-interceptor" % "4.9.1",
+      "com.squareup.okhttp3" % "okhttp" % "4.10.0",
+      "com.squareup.okhttp3" % "logging-interceptor" % "4.10.0",
       "com.google.code.gson" % "gson" % "2.8.6",
       "org.apache.commons" % "commons-lang3" % "3.10",
       {{#openApiNullable}}

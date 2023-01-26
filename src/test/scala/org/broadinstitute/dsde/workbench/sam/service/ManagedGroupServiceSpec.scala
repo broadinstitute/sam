@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
@@ -200,7 +201,7 @@ class ManagedGroupServiceSpec
 
     val groupEmail = WorkbenchEmail(resourceId.value + "@" + testDomain)
     val mockGoogleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
-    when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(Future.successful(()))
+    when(mockGoogleExtensions.onGroupDelete(groupEmail)).thenReturn(IO.unit)
     when(mockGoogleExtensions.publishGroup(WorkbenchGroupName(resourceId.value))).thenReturn(Future.successful(()))
     val managedGroupService = new ManagedGroupService(resourceService, null, resourceTypeMap, policyDAO, dirDAO, mockGoogleExtensions, testDomain)
 

@@ -90,4 +90,18 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       res.tosAccepted shouldBe Some(true)
     }
   }
+
+  "GET /register/user/v2/self/termsOfServiceDetails" should "get the user's Terms of Service details" in {
+    val (_, _, routes) = createTestUser(tosEnabled = true, tosAccepted = true)
+
+    Get("/register/user/v2/self/termsOfServiceDetails") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val details = responseAs[TermsOfServiceDetails]
+      details.isEnabled should be(true)
+      details.isGracePeriodEnabled should be(TestSupport.tosConfig.isGracePeriodEnabled)
+      details.userAcceptedVersion should not be empty
+      details.currentVersion should be(details.userAcceptedVersion.get)
+    }
+
+  }
 }

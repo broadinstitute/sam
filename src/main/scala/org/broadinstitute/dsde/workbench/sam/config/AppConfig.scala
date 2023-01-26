@@ -153,6 +153,10 @@ object AppConfig {
     )
   }
 
+  implicit val azureManagedAppPlanReader: ValueReader[ManagedAppPlan] = ValueReader.relative { config =>
+    ManagedAppPlan(config.getString("name"), config.getString("publisher"), config.getString("authorizedUserKey"))
+  }
+
   implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
     config
       .getAs[Boolean]("azureEnabled")
@@ -163,7 +167,7 @@ object AppConfig {
               config.getString("managedAppClientId"),
               config.getString("managedAppClientSecret"),
               config.getString("managedAppTenantId"),
-              config.as[Seq[String]]("managedAppPlanIds")
+              config.as[Seq[ManagedAppPlan]]("managedAppPlans")
             )
           )
         } else {

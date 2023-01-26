@@ -9,7 +9,6 @@ object Dependencies {
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.5.0"
-  val http4sVersion = "1.0.0-M32"
   val sentryVersion = "6.6.0"
 
   val workbenchUtilV = "0.6-74c9fc2"
@@ -22,6 +21,7 @@ object Dependencies {
   val workbenchOpenTelemetryV = "0.3-0096bac"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.4-SNAPSHOT"
+  val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 = ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
@@ -58,6 +58,8 @@ object Dependencies {
   val akkaTestKit: ModuleID = "com.typesafe.akka" %% "akka-testkit" % akkaV % "test"
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
+
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.85.Final"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.1"
@@ -100,7 +102,8 @@ object Dependencies {
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
-  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.1"
+  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.2"
+  val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "1.33"
 
   val scalikeCore = "org.scalikejdbc" %% "scalikejdbc" % scalikejdbcVersion
   val scalikeCoreConfig = "org.scalikejdbc" %% "scalikejdbc-config" % scalikejdbcVersion
@@ -114,6 +117,14 @@ object Dependencies {
   val opencensusStackDriverExporter: ModuleID =
     "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
+  val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
+  val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
+
+  // pact deps
+  val pact4sV = "0.6.0"
+  val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
+  val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
+  val circeCore = "io.circe" %% "circe-core" % "0.14.3"
 
   val openCensusDependencies = Seq(
     opencensusScalaCode,
@@ -122,8 +133,18 @@ object Dependencies {
     opencensusLoggingExporter
   )
 
+  val pact4sDependencies = Seq(
+    pact4sScalaTest,
+    pact4sCirce,
+    circeCore,
+    slf4jApi,
+    slf4jSimple
+  )
+
   val cloudResourceLib: ModuleID =
     "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
+  val azureManagedApplications: ModuleID =
+    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
@@ -170,10 +191,13 @@ object Dependencies {
     commonsCodec,
     liquibaseCore,
     circeYAML,
+    snakeYAML,
     scalikeCore,
     scalikeCoreConfig,
     scalikeCoreTest,
     postgres,
-    cloudResourceLib
+    cloudResourceLib,
+    nettyAll,
+    azureManagedApplications
   ) ++ openCensusDependencies
 }

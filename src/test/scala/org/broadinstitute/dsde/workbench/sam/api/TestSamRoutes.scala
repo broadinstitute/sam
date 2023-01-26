@@ -8,7 +8,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetricsInterpreter
+import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{googleServicesConfig, samRequestContext}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
@@ -40,7 +40,7 @@ class TestSamRoutes(
     override val system: ActorSystem,
     override val materializer: Materializer,
     override val executionContext: ExecutionContext,
-    override val openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+    override val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends SamRoutes(
       resourceService,
       userService,
@@ -77,7 +77,7 @@ class TestSamTosEnabledRoutes(
     override val system: ActorSystem,
     override val materializer: Materializer,
     override val executionContext: ExecutionContext,
-    override val openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+    override val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends SamRoutes(
       resourceService,
       userService,
@@ -153,7 +153,7 @@ object TestSamRoutes {
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None
-  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetricsInterpreter[IO]) = {
+  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetrics[IO]) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
@@ -184,7 +184,7 @@ object TestSamRoutes {
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns, dbRef)
-    val azureService = new AzureService(crlService.getOrElse(MockCrlService()), directoryDAO)
+    val azureService = new AzureService(crlService.getOrElse(MockCrlService(Option(user))), directoryDAO, new MockAzureManagedResourceGroupDAO)
     new TestSamRoutes(
       mockResourceService,
       policyEvaluatorService,

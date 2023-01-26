@@ -16,7 +16,7 @@ import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetricsInterpreter
+import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
@@ -44,7 +44,7 @@ abstract class SamRoutes(
     val system: ActorSystem,
     val materializer: Materializer,
     val executionContext: ExecutionContext,
-    val openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+    val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging
     with ResourceRoutes
     with UserRoutes
@@ -72,7 +72,7 @@ abstract class SamRoutes(
                   extensionRoutes(samUser, samRequestContextWithUser) ~
                   groupRoutes(samUser, samRequestContextWithUser) ~
                   apiUserRoutes(samUser, samRequestContextWithUser) ~
-                  azureRoutes(samUser, samRequestContext)
+                  azureRoutes(samUser, samRequestContextWithUser)
               }
             }
         }
