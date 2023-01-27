@@ -2694,19 +2694,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermsOfServiceDetails'
-  /register/user/v2/self/termsOfServiceAdherenceStatus:
+  /register/user/v2/self/termsOfServiceComplianceStatus:
     get:
       tags:
         - Terms of Service
-      summary: gets info on whether the user has accepted the latest terms of service and if they can use Terra based on that
-      operationId: getTermsOfServiceAdherenceStatus
+      summary: gets info on whether the user has accepted the latest terms of service and if they can use the system based on that
+      operationId: getTermsOfServiceComplianceStatus
       responses:
         200:
           description: success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TermsOfServiceAdherenceStatus'
+                $ref: '#/components/schemas/TermsOfServiceComplianceStatus'
   /liveness:
     get:
       summary: Gets system liveness
@@ -3405,22 +3405,23 @@ components:
         userAcceptedVersion:
           type: string
           description: the version of the terms of service the user has accepted
-    TermsOfServiceAdherenceStatus:
+    TermsOfServiceComplianceStatus:
       required:
         - userId
         - userHasAcceptedLatestTos
-        - acceptedTosAllowsUsage
+        - permitsSystemUsage
       type: object
       properties:
         userId:
           type: string
-          description: user id terms of service adherence pertains to
+          description: user id terms of service compliance status pertains to
         userHasAcceptedLatestTos:
           type: boolean
           description: has the user accepted the latest terms of service?
-        acceptedTosAllowsUsage:
+        permitsSystemUsage:
           type: boolean
-          description: based on terms of service status, can the user use Terra?
+          description: based on the user's currently accepted terms of service version and when the terms of service were last changed, 
+            should the user still be permitted to use the system?
     ManagedResourceGroupCoordinates:
       required:
         - tenantId

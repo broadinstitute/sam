@@ -208,6 +208,36 @@ class UserServiceSpec
     dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
   }
 
+  it should "enable/disable user who has accepted the terms of service" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // user doesn't exist yet
+    service.enableUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
+    service.disableUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe None
+
+    // create a user
+    val newUser = TestSupport.newUserStatusWithAcceptedTos(service, tos, defaultUser, samRequestContext)
+
+    newUser shouldBe UserStatus(
+      UserStatusDetails(defaultUser.id, defaultUser.email),
+      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+    )
+
+    // it should be enabled
+    dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
+
+    // disable the user
+    val response = service.disableUser(defaultUser.id, samRequestContext).unsafeRunSync()
+    response shouldBe Some(
+      UserStatus(
+        UserStatusDetails(defaultUser.id, defaultUser.email),
+        Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> false)
+      )
+    )
+
+    dirDAO.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
+  }
+
   it should "delete a user" in {
     assume(databaseEnabled, databaseEnabledClue)
 

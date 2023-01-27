@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAdherenceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
 
 import scala.concurrent.ExecutionContext
 import java.io.{FileNotFoundException, IOException}
@@ -30,22 +30,25 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       .rejectTermsOfService(userId, samRequestContext)
       .withInfoLogMessage(s"$userId has rejected version ${tosConfig.version} of the Terms of Service")
 
-  // This method will disappear once UI is using getTosAdherenceDetails
+  @Deprecated
   def getTosDetails(samUser: SamUser): IO[TermsOfServiceDetails] =
     IO.pure(TermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, samUser.acceptedTosVersion))
 
-  def getTosAdherenceStatus(samUser: SamUser): IO[TermsOfServiceAdherenceStatus] = {
+  def getTosComplianceStatus(samUser: SamUser): IO[TermsOfServiceComplianceStatus] = {
     val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(samUser)
-    val canUseTerra = tosAcceptanceAllowsTerraUsage(samUser)
-    IO.pure(TermsOfServiceAdherenceStatus(samUser.id, userHasAcceptedLatestVersion, canUseTerra))
+    val permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser)
+    IO.pure(TermsOfServiceComplianceStatus(samUser.id, userHasAcceptedLatestVersion, permitsSystemUsage))
   }
 
   /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS, or is a service account
     */
-  private def tosAcceptanceAllowsTerraUsage(user: SamUser): Boolean =
-    (tosConfig.isGracePeriodEnabled && user.acceptedTosVersion.isDefined) || // There is a grace period, and the user has accepted some form of the ToS
-      userHasAcceptedLatestTosVersion(user) || // No grace period, but user has accepted the current ToS version
-      StandardSamUserDirectives.SAdomain.matches(user.email.value) // The user is a Service Account
+  private def tosAcceptancePermitsSystemUsage(user: SamUser): Boolean = {
+    val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(user)
+    val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && user.acceptedTosVersion.isDefined
+    val userIsServiceAccount = StandardSamUserDirectives.SAdomain.matches(user.email.value) // Service Account users do not need to accept ToS
+
+    userHasAcceptedLatestVersion || userCanUseSystemUnderGracePeriod || userIsServiceAccount
+  }
 
   private def userHasAcceptedLatestTosVersion(samUser: SamUser): Boolean =
     samUser.acceptedTosVersion.contains(tosConfig.version)

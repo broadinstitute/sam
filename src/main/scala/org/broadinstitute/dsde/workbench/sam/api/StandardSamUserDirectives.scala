@@ -101,11 +101,10 @@ object StandardSamUserDirectives {
   def getActiveSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
       user <- getSamUser(oidcHeaders, directoryDAO, samRequestContext)
-      tosAcceptanceDetails <- tosService.getTosAdherenceStatus(user)
+      tosComplianceDetails <- tosService.getTosComplianceStatus(user)
     } yield {
-      // service account users do not need to accept ToS
-      if (!tosAcceptanceDetails.acceptedTosAllowsUsage) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User has not accepted the terms of service."))
+      if (!tosComplianceDetails.permitsSystemUsage) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User must accept the latest terms of service."))
       }
       if (!user.enabled) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))

@@ -258,6 +258,12 @@ object TestSupport extends TestSupport {
     TestSupport.runAndWait(services.directoryDAO.loadUser(samUser.id, samRequestContext)).orNull
   }
 
+  def newUserStatusWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
+    TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly = false, samRequestContext)).orNull
+  }
+
   val enabledMapNoTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)
   val enabledMapTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
 }

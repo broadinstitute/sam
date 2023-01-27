@@ -151,7 +151,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
               allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case _: NameNotFoundException =>
                 false
               }
-              tosAdherenceStatus <- tosService.getTosAdherenceStatus(user)
+              tosComplianceStatus <- tosService.getTosComplianceStatus(user)
               adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
             } yield {
               // We are removing references to LDAP but this will require an API version change here, so we are leaving
@@ -163,7 +163,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
                 "allUsersGroup" -> allUsersStatus,
                 "google" -> googleStatus,
                 "adminEnabled" -> adminEnabled,
-                "tosAccepted" -> tosAdherenceStatus.acceptedTosAllowsUsage
+                "tosAccepted" -> tosComplianceStatus.permitsSystemUsage
               )
               val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledMap))
               res
@@ -186,15 +186,15 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] =
     for {
-      tosAcceptanceDetails <- tosService.getTosAdherenceStatus(user)
-    } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.acceptedTosAllowsUsage && user.enabled, user.enabled)
+      tosAcceptanceDetails <- tosService.getTosComplianceStatus(user)
+    } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.permitsSystemUsage && user.enabled, user.enabled)
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusDiagnostics]] =
     openTelemetry.time("api.v1.user.statusDiagnostics.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
           // pulled out of for comprehension to allow concurrent execution
-          val tosAcceptanceStatus = tosService.getTosAdherenceStatus(user)
+          val tosAcceptanceStatus = tosService.getTosComplianceStatus(user)
           val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext)
           val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
             directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case e: NameNotFoundException => false }
@@ -211,7 +211,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             tosAccepted <- tosAcceptanceStatus
             google <- googleStatus
             adminEnabled <- adminEnabledStatus
-          } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted.acceptedTosAllowsUsage, adminEnabled))
+          } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted.permitsSystemUsage, adminEnabled))
         case None => IO.pure(None)
       }
     }

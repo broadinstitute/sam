@@ -66,8 +66,8 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     }
 
     when {
-      tosService.getTosAdherenceStatus(any[SamUser])
-    } thenReturn IO.pure(TermsOfServiceAdherenceStatus(WorkbenchUserId("test"), userHasAcceptedLatestTos = true, acceptedTosAllowsUsage = true))
+      tosService.getTosComplianceStatus(any[SamUser])
+    } thenReturn IO.pure(TermsOfServiceComplianceStatus(WorkbenchUserId("test"), userHasAcceptedLatestTos = true, permitsSystemUsage = true))
 
     val fakeWorkspaceResourceType = ResourceType(ResourceTypeName("workspace"), Set.empty, Set.empty, ResourceRoleName("workspace"))
     when {
