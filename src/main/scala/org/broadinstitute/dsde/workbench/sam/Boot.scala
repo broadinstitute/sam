@@ -65,7 +65,7 @@ object Boot extends IOApp with LazyLogging {
 
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
-    livenessServerStartup()
+    // livenessServerStartup()
 
     val appConfig = AppConfig.load
 
