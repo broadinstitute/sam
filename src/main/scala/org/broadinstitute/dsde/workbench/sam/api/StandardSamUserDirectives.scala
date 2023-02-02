@@ -28,19 +28,19 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getActiveSamUser(oidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture().map { samUser =>
-        logger.info(s"Handling request for active Sam User: $samUser")
-        samUser
-      }
+      getActiveSamUser(oidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
+    }.tmap { samUser =>
+      logger.info(s"Handling request for active Sam User: $samUser")
+      samUser
     }
   }
 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getSamUser(oidcHeaders, directoryDAO, samRequestContext).unsafeToFuture().map { samUser =>
-        logger.info(s"Handling request for (in)active Sam User: $samUser")
-        samUser
-      }
+      getSamUser(oidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
+    }.tmap { samUser =>
+      logger.info(s"Handling request for (in)active Sam User: $samUser")
+      samUser
     }
   }
 
