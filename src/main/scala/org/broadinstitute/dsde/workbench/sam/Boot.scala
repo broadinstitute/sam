@@ -331,9 +331,15 @@ object Boot extends IOApp with LazyLogging {
       case Some(accounts) =>
         config.googleServicesConfig.directoryApiAccounts match {
           case Some(directoryApiAccounts) =>
-            logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
+            logger.info(
+              s"Using ${config.googleServicesConfig.adminSdkServiceAccountPaths} to impersonate $directoryApiAccounts to talk to Google Directory API"
+            )
             directoryApiAccounts.flatMap(directoryApiAccount => accounts.map(account => Json(account, Option(directoryApiAccount))))
-          case None => accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
+          case None =>
+            logger.info(
+              s"Using ${config.googleServicesConfig.adminSdkServiceAccountPaths} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API"
+            )
+            accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
         }
     }
 
