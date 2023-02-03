@@ -322,12 +322,16 @@ object Boot extends IOApp with LazyLogging {
     val googleCredentials = serviceAccountJsons match {
       case None =>
         config.googleServicesConfig.directoryApiAccounts match {
-          case Some(directoryApiAccounts) => directoryApiAccounts.map(makePem)
+          case Some(directoryApiAccounts) =>
+            logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
+            directoryApiAccounts.map(makePem)
           case None => NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
         }
       case Some(accounts) =>
         config.googleServicesConfig.directoryApiAccounts match {
-          case Some(directoryApiAccounts) => directoryApiAccounts.flatMap(directoryApiAccount => accounts.map(account => Json(account, Option(directoryApiAccount))))
+          case Some(directoryApiAccounts) =>
+            logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
+            directoryApiAccounts.flatMap(directoryApiAccount => accounts.map(account => Json(account, Option(directoryApiAccount))))
           case None => accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
         }
     }
