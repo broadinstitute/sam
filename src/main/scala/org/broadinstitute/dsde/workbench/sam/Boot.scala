@@ -313,16 +313,23 @@ object Boot extends IOApp with LazyLogging {
   ): NonEmptyList[HttpGoogleDirectoryDAO] = {
     val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
 
+    def makePem = (directoryApiAccount: WorkbenchEmail) => Pem(
+      WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
+      new File(config.googleServicesConfig.pemFile),
+      Option(directoryApiAccount)
+    )
+
     val googleCredentials = serviceAccountJsons match {
       case None =>
-        NonEmptyList.one(
-          Pem(
-            WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
-            new File(config.googleServicesConfig.pemFile),
-            Option(config.googleServicesConfig.subEmail)
-          )
-        )
-      case Some(accounts) => accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
+        config.googleServicesConfig.directoryApiAccounts match {
+          case Some(directoryApiAccounts) => directoryApiAccounts.map(makePem)
+          case None => NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
+        }
+      case Some(accounts) =>
+        config.googleServicesConfig.directoryApiAccounts match {
+          case Some(directoryApiAccounts) => directoryApiAccounts.flatMap(directoryApiAccount => accounts.map(account => Json(account, Option(directoryApiAccount))))
+          case None => accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
+        }
     }
 
     googleCredentials.map(credentials => new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName))
