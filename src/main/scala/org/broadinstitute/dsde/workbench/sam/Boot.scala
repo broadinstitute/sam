@@ -313,11 +313,12 @@ object Boot extends IOApp with LazyLogging {
   ): NonEmptyList[HttpGoogleDirectoryDAO] = {
     val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
 
-    def makePem = (directoryApiAccount: WorkbenchEmail) => Pem(
-      WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
-      new File(config.googleServicesConfig.pemFile),
-      Option(directoryApiAccount)
-    )
+    def makePem = (directoryApiAccount: WorkbenchEmail) =>
+      Pem(
+        WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
+        new File(config.googleServicesConfig.pemFile),
+        Option(directoryApiAccount)
+      )
 
     val googleCredentials = serviceAccountJsons match {
       case None =>
