@@ -313,16 +313,34 @@ object Boot extends IOApp with LazyLogging {
   ): NonEmptyList[HttpGoogleDirectoryDAO] = {
     val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
 
+    def makePem = (directoryApiAccount: WorkbenchEmail) =>
+      Pem(
+        WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
+        new File(config.googleServicesConfig.pemFile),
+        Option(directoryApiAccount)
+      )
+
     val googleCredentials = serviceAccountJsons match {
       case None =>
-        NonEmptyList.one(
-          Pem(
-            WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
-            new File(config.googleServicesConfig.pemFile),
-            Option(config.googleServicesConfig.subEmail)
-          )
-        )
-      case Some(accounts) => accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
+        config.googleServicesConfig.directoryApiAccounts match {
+          case Some(directoryApiAccounts) =>
+            logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
+            directoryApiAccounts.map(makePem)
+          case None => NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
+        }
+      case Some(accounts) =>
+        config.googleServicesConfig.directoryApiAccounts match {
+          case Some(directoryApiAccounts) =>
+            logger.info(
+              s"Using ${config.googleServicesConfig.adminSdkServiceAccountPaths} to impersonate $directoryApiAccounts to talk to Google Directory API"
+            )
+            directoryApiAccounts.flatMap(directoryApiAccount => accounts.map(account => Json(account, Option(directoryApiAccount))))
+          case None =>
+            logger.info(
+              s"Using ${config.googleServicesConfig.adminSdkServiceAccountPaths} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API"
+            )
+            accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
+        }
     }
 
     googleCredentials.map(credentials => new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName))
