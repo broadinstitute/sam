@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.nonEmptyListReader
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 /** Created by mbemis on 8/17/17.
   */
@@ -97,4 +97,8 @@ object GoogleServicesConfig {
 
 final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
 final case class ServiceAccountCredentialJson(defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)
-final case class GoogleConfig(googleServicesConfig: GoogleServicesConfig, petServiceAccountConfig: PetServiceAccountConfig)
+final case class GoogleConfig(
+    googleServicesConfig: GoogleServicesConfig,
+    petServiceAccountConfig: PetServiceAccountConfig,
+    coordinatedAdminSdkBackoffDuration: Option[Duration]
+)

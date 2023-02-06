@@ -113,7 +113,7 @@ object Boot extends IOApp with LazyLogging {
 
   private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
     for {
-      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO, azureManagedResourceGroupDAO) <- createDAOs(
+      (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO, azureManagedResourceGroupDAO, lastQuotaErrorDAO) <- createDAOs(
         appConfig,
         appConfig.samDatabaseConfig.samWrite,
         appConfig.samDatabaseConfig.samRead
@@ -121,7 +121,7 @@ object Boot extends IOApp with LazyLogging {
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
       // of an api call (foreground). They are meant to partition resources so that background processes can't crowd our api calls.
-      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _, _) <- createDAOs(
+      (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _, _, _) <- createDAOs(
         appConfig,
         appConfig.samDatabaseConfig.samBackground,
         appConfig.samDatabaseConfig.samBackground
@@ -141,7 +141,8 @@ object Boot extends IOApp with LazyLogging {
         backgroundDirectoryDAO,
         backgroundAccessPolicyDAO,
         postgresDistributedLockDAO,
-        googleSynchronizerExecutionContext
+        googleSynchronizerExecutionContext,
+        lastQuotaErrorDAO
       )
 
       oauth2Config <- cats.effect.Resource.eval(
@@ -172,7 +173,8 @@ object Boot extends IOApp with LazyLogging {
       backgroundDirectoryDAO: DirectoryDAO,
       backgroundAccessPolicyDAO: AccessPolicyDAO,
       postgresDistributedLockDAO: PostgresDistributedLockDAO[IO],
-      googleSynchronizerExecutionContext: ExecutionContext
+      googleSynchronizerExecutionContext: ExecutionContext,
+      lastQuotaErrorDAO: LastQuotaErrorDAO
   )(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
       case Some(config) =>
@@ -192,6 +194,7 @@ object Boot extends IOApp with LazyLogging {
           val cloudExtension = createGoogleCloudExt(
             foregroundAccessPolicyDAO,
             foregroundDirectoryDAO,
+            lastQuotaErrorDAO,
             config,
             resourceTypeMap,
             postgresDistributedLockDAO,
@@ -212,7 +215,7 @@ object Boot extends IOApp with LazyLogging {
       appConfig: AppConfig,
       writeDbConfig: DatabaseConfig,
       readDbConfig: DatabaseConfig
-  ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO], AzureManagedResourceGroupDAO)] =
+  ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO], AzureManagedResourceGroupDAO, LastQuotaErrorDAO)] =
     for {
       writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbConfig)
       readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbConfig)
@@ -221,11 +224,13 @@ object Boot extends IOApp with LazyLogging {
       accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)
       postgresDistributedLockDAO = new PostgresDistributedLockDAO[IO](writeDbRef, readDbRef, appConfig.distributedLockConfig)
       azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(writeDbRef, readDbRef)
-    } yield (directoryDAO, accessPolicyDAO, postgresDistributedLockDAO, azureManagedResourceGroupDAO)
+      lastQuotaErrorDAO = new PostgresLastQuotaErrorDAO(writeDbRef, readDbRef)
+    } yield (directoryDAO, accessPolicyDAO, postgresDistributedLockDAO, azureManagedResourceGroupDAO, lastQuotaErrorDAO)
 
   private[sam] def createGoogleCloudExt(
       accessPolicyDAO: AccessPolicyDAO,
       directoryDAO: DirectoryDAO,
+      lastQuotaErrorDAO: LastQuotaErrorDAO,
       config: GoogleConfig,
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
       distributedLock: PostgresDistributedLockDAO[IO],
@@ -234,7 +239,7 @@ object Boot extends IOApp with LazyLogging {
       adminConfig: AdminConfig
   )(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
-    val googleDirDaos = createGoogleDirDaos(config, workspaceMetricBaseName)
+    val googleDirDaos = createGoogleDirDaos(config, workspaceMetricBaseName, lastQuotaErrorDAO)
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
     val googleIamDAO = new HttpGoogleIamDAO(
       config.googleServicesConfig.appName,
@@ -308,7 +313,7 @@ object Boot extends IOApp with LazyLogging {
     )
   }
 
-  private def createGoogleDirDaos(config: GoogleConfig, workspaceMetricBaseName: String)(implicit
+  private def createGoogleDirDaos(config: GoogleConfig, workspaceMetricBaseName: String, lastQuotaErrorDAO: LastQuotaErrorDAO)(implicit
       actorSystem: ActorSystem
   ): NonEmptyList[HttpGoogleDirectoryDAO] = {
     val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
@@ -343,7 +348,15 @@ object Boot extends IOApp with LazyLogging {
         }
     }
 
-    googleCredentials.map(credentials => new HttpGoogleDirectoryDAO(config.googleServicesConfig.appName, credentials, workspaceMetricBaseName))
+    googleCredentials.map(credentials =>
+      new CoordinatedBackoffHttpGoogleDirectoryDAO(
+        config.googleServicesConfig.appName,
+        credentials,
+        workspaceMetricBaseName,
+        lastQuotaErrorDAO,
+        backoffDuration = config.coordinatedAdminSdkBackoffDuration
+      )
+    )
   }
 
   private[sam] def createAppDependenciesWithSamRoutes(

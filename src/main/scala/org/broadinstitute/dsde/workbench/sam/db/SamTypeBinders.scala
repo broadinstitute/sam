@@ -177,4 +177,10 @@ object SamTypeBinders {
     def apply(rs: ResultSet, label: String): BillingProfileId = BillingProfileId(rs.getString(label))
     def apply(rs: ResultSet, index: Int): BillingProfileId = BillingProfileId(rs.getString(index))
   }
+
+  implicit val lastQuotaErrorPKTypeBinder: TypeBinder[LastQuotaErrorPK] = new TypeBinder[LastQuotaErrorPK] {
+    def apply(rs: ResultSet, label: String): LastQuotaErrorPK = LastQuotaErrorPK(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): LastQuotaErrorPK = LastQuotaErrorPK(rs.getLong(index))
+  }
+
 }
