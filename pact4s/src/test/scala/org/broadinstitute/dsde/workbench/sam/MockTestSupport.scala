@@ -185,7 +185,7 @@ object MockTestSupport extends MockTestSupport {
           googleExtensions.googleDirectoryDAO,
           googleExtensions,
           googleExtensions.resourceTypes
-        )(executionContext)
+        )
       } else null
     val googleKeyCache = samDependencies.cloudExtensions match {
       case extensions: GoogleExtensions => extensions.googleKeyCache
