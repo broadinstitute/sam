@@ -161,7 +161,7 @@ class GoogleGroupSyncMonitorActor(
             groupId,
             samRequestContext = samRequestContext
           )
-          .redeem(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))
+          .redeem(FailToSynchronize(_, message.ackId), ReportMessage(_, message.ackId))
           .guarantee(IO(deadlineExtender.cancel()))
       }.unsafeToFuture() pipeTo self
 

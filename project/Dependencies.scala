@@ -44,7 +44,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.2.11"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.5"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
@@ -92,10 +92,9 @@ object Dependencies {
   // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
   // workbench-libs dependency so exclude auto-value from there
   val excludGoogleAutoValue = ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
-  val excludeSlf4j = ExclusionRule("org.slf4j")
   val excludeBouncyCastle = ExclusionRule("org.bouncycastle")
   val workbenchGoogle2: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludGoogleAutoValue, excludeSlf4j, excludeBouncyCastle)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludGoogleAutoValue, excludeBouncyCastle)
   val workbenchNotifications: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =
