@@ -216,9 +216,16 @@ trait PostgresGroupDAO {
                 and ${f.lastGroupMembershipElement} = (${workbenchGroupIdentityToGroupPK(groupId)})""".update().apply()
 
     // remove rows where groupId is directly followed by memberGroup in membership path, these are indirect memberships
-    samsql"""delete from ${GroupMemberFlatTable as f}
-                where array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(groupId)})) + 1 =
-                array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(memberGroup)}))""".update().apply()
+    // The condition that uses @> is for performance, it allows the query to hit an index. It finds all rows where
+    // f.groupMembershipPath contains both the container and member but in no particular order or placement.
+    // But we really only want to delete entries where container is immediately before member. However @> uses an index
+    // and array_position does not.
+    samsql"""with container as (${workbenchGroupIdentityToGroupPK(groupId)}),
+             member as (${workbenchGroupIdentityToGroupPK(memberGroup)})
+             delete from ${GroupMemberFlatTable as f}
+                where array_position(${f.groupMembershipPath}, (select id from container)) + 1 =
+                array_position(${f.groupMembershipPath}, (select id from member))
+                and ${f.groupMembershipPath} @> array[(select id from container), (select id from member)]""".update().apply()
   }
 
   private def removeMemberUserFromHierarchy(groupId: WorkbenchGroupIdentity, memberUser: WorkbenchUserId)(implicit session: DBSession) = {
