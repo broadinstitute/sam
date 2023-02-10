@@ -15,37 +15,33 @@ class GetUserStatusSpec extends UserServiceTestTraits {
 
   describe("UserService.getUserStatus") {
     describe("for a user that does not exist") {
-      it("returns an empty response") {
-        // Setup
-        val samUser = genWorkbenchUserBoth.sample.get
-        val userService = TestUserServiceBuilder()
-          .withAllUsersGroup(allUsersGroup)
-          .withExistingUsers(List.empty) // Just being explicit
-          .build
+      // Shared Setup - create a UserService with no existing users
+      val samUser = genWorkbenchUserBoth.sample.get
+      val userService = TestUserServiceBuilder()
+        .withAllUsersGroup(allUsersGroup)
+        .withExistingUsers(List.empty) // Just being explicit
+        .build
 
-        // Act
+      it("returns an empty response") {
         val resultingStatus = userService.getUserStatus(samUser.id, false, samRequestContext).unsafeRunSync()
 
-        // Assert
         resultingStatus shouldBe empty
       }
     }
 
     describe("for a fully activated user") {
       describe("that has accepted the ToS") {
-        it("returns a status with all components enabled") {
-          // Setup
-          val samUser = genWorkbenchUserBoth.sample.get
-          val userService = TestUserServiceBuilder()
-            .withAllUsersGroup(allUsersGroup)
-            .withFullyActivatedUser(samUser)
-            .withToSAcceptanceStateForUser(samUser, true)
-            .build
+        // Shared Setup - create a UserService with a fully activated user who has accepted the ToS
+        val samUser = genWorkbenchUserBoth.sample.get
+        val userService = TestUserServiceBuilder()
+          .withAllUsersGroup(allUsersGroup)
+          .withFullyActivatedUser(samUser)
+          .withToSAcceptanceStateForUser(samUser, true)
+          .build
 
-          // Act
+        it("returns a status with all components enabled") {
           val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
 
-          // Assert
           inside(resultingStatus.value) { status =>
             status should beForUser(samUser)
             "google" should beEnabledIn(status)
@@ -58,19 +54,8 @@ class GetUserStatusSpec extends UserServiceTestTraits {
 
         describe("and only user details are requested") {
           it("returns a status with user information and without component information") {
-            // Setup
-            val samUser = genWorkbenchUserBoth.sample.get
-            val userService = TestUserServiceBuilder()
-              .withAllUsersGroup(allUsersGroup)
-              .withFullyActivatedUser(samUser)
-              .withToSAcceptanceStateForUser(samUser, true)
-              .build
-            val userDetailsOnly = true
+            val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly = true, samRequestContext))
 
-            // Act
-            val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly, samRequestContext))
-
-            // Assert
             inside(resultingStatus.value) { status =>
               status should beForUser(samUser)
               status.enabled shouldBe empty
@@ -80,7 +65,7 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       }
 
       describe("that has not accepted the ToS") {
-        // Shared Setup - UserService with a fully activated user who has not accepted ToS
+        // Shared Setup - create a UserService with a fully activated user who has not accepted ToS
         val samUser = genWorkbenchUserBoth.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
@@ -119,7 +104,7 @@ class GetUserStatusSpec extends UserServiceTestTraits {
     }
 
     describe("for an invited user") {
-      // Shared Setup - UserService with an invited user
+      // Shared Setup - create a UserService with an invited user
       val samUser = genWorkbenchUserBoth.sample.get
       val userService = TestUserServiceBuilder()
         .withAllUsersGroup(allUsersGroup)
