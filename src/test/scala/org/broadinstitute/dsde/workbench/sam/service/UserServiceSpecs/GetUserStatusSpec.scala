@@ -29,9 +29,9 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       }
     }
 
-    describe("for a fully activated user") {
+    describe("for an enabled user") {
       describe("that has accepted the ToS") {
-        // Shared Setup - create a UserService with a fully activated user who has accepted the ToS
+        // Shared Setup - create a UserService with an enabled user who has accepted the ToS
         val samUser = genWorkbenchUserBoth.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
@@ -65,7 +65,7 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       }
 
       describe("that has not accepted the ToS") {
-        // Shared Setup - create a UserService with a fully activated user who has not accepted ToS
+        // Shared Setup - create a UserService with an enabled user who has not accepted ToS
         val samUser = genWorkbenchUserBoth.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
