@@ -29,7 +29,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       for {
-        _ <- UserService.validateEmailAddress(user.email, blockedEmailDomains)
+        _ <- validateEmailAddress(user.email, blockedEmailDomains)
         createdUser <- registerUser(user, samRequestContext)
         _ <- enableUserInternal(createdUser, samRequestContext)
         _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
@@ -51,7 +51,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     openTelemetry.time("api.v1.user.invite.time", API_TIMING_DURATION_BUCKET) {
       for {
-        _ <- UserService.validateEmailAddress(inviteeEmail, blockedEmailDomains)
+        _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains)
         existingSubject <- directoryDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext)
         createdUser <- existingSubject match {
           case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false, None), samRequestContext)
@@ -135,6 +135,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- cloudExtensions.onUserCreate(createdUser, samRequestContext)
       } yield createdUser
     }
+
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext)
 
@@ -287,6 +288,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- directoryDAO.deleteUser(userId, samRequestContext)
       } yield logger.info(s"Deleted user $userId")
     }
+
+  // moved this method from the UserService companion object into this class
+  // because Mockito would not let us spy/mock the static method
+  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): IO[Unit] =
+    email.value match {
+      case emailString if blockedEmailDomains.exists(domain => emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)) =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")))
+      case UserService.emailRegex() => IO.unit
+      case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
+    }
+
 }
 
 object UserService {
@@ -300,7 +312,7 @@ object UserService {
   // CurrentMillis.append(randomString)
   private[workbench] def genRandom(currentMilli: Long): String = {
     val currentMillisString = currentMilli.toString
-    // one hexdecimal is 4 bits, one byte can generate 2 hexdecial number, so we only need half the number of bytes, which is 8
+    // one hexadecimal is 4 bits, one byte can generate 2 hexadecimal number, so we only need half the number of bytes, which is 8
     // currentMilli is 13 digits, and it'll be another 200 years before it becomes 14 digits. So we're assuming currentMillis is 13 digits here
     val bytes = new Array[Byte](4)
     random.nextBytes(bytes)
@@ -312,12 +324,4 @@ object UserService {
 
   def genWorkbenchUserId(currentMilli: Long): WorkbenchUserId =
     WorkbenchUserId(genRandom(currentMilli))
-
-  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): IO[Unit] =
-    email.value match {
-      case emailString if blockedEmailDomains.exists(domain => emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)) =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")))
-      case UserService.emailRegex() => IO.unit
-      case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
-    }
 }
