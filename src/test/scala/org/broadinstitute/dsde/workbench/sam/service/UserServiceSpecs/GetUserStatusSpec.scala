@@ -55,22 +55,42 @@ class GetUserStatusSpec extends UserServiceTestTraits {
             "tosAccepted" should beEnabledIn(status)
           }
         }
+
+        describe("and only user details are requested") {
+          it("returns a status with user information and without component information") {
+            // Setup
+            val samUser = genWorkbenchUserBoth.sample.get
+            val userService = TestUserServiceBuilder()
+              .withAllUsersGroup(allUsersGroup)
+              .withFullyActivatedUser(samUser)
+              .withToSAcceptanceStateForUser(samUser, true)
+              .build
+            val userDetailsOnly = true
+
+            // Act
+            val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly, samRequestContext))
+
+            // Assert
+            inside(resultingStatus.value) { status =>
+              status should beForUser(samUser)
+              status.enabled shouldBe empty
+            }
+          }
+        }
       }
 
       describe("that has not accepted the ToS") {
-        it("returns a status with ToS disabled and all other components enabled") {
-          // Setup
-          val samUser = genWorkbenchUserBoth.sample.get
-          val userService = TestUserServiceBuilder()
-            .withAllUsersGroup(allUsersGroup)
-            .withFullyActivatedUser(samUser)
-            .withToSAcceptanceStateForUser(samUser, false)
-            .build
+        // Shared Setup - UserService with a fully activated user who has not accepted ToS
+        val samUser = genWorkbenchUserBoth.sample.get
+        val userService = TestUserServiceBuilder()
+          .withAllUsersGroup(allUsersGroup)
+          .withFullyActivatedUser(samUser)
+          .withToSAcceptanceStateForUser(samUser, false)
+          .build
 
-          // Act
+        it("returns a status with ToS disabled and all other components enabled") {
           val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
 
-          // Assert
           inside(resultingStatus.value) { status =>
             status should beForUser(samUser)
             "google" should beEnabledIn(status)
@@ -80,23 +100,35 @@ class GetUserStatusSpec extends UserServiceTestTraits {
             "tosAccepted" shouldNot beEnabledIn(status)
           }
         }
+
+        describe("and only user details are requested") {
+          it("returns a status with user information and without component information") {
+            val userDetailsOnly = true
+
+            // Act
+            val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly, samRequestContext))
+
+            // Assert
+            inside(resultingStatus.value) { status =>
+              status should beForUser(samUser)
+              status.enabled shouldBe empty
+            }
+          }
+        }
       }
     }
 
     describe("for an invited user") {
-      it("returns a status with all components disabled") {
-        // Setup
-        val samUser = genWorkbenchUserBoth.sample.get
-        val userService = TestUserServiceBuilder()
-          .withAllUsersGroup(allUsersGroup)
-          .withInvitedUser(samUser)
-          .withNoUsersHavingAcceptedTos()
-          .build
+      // Shared Setup - UserService with an invited user
+      val samUser = genWorkbenchUserBoth.sample.get
+      val userService = TestUserServiceBuilder()
+        .withAllUsersGroup(allUsersGroup)
+        .withInvitedUser(samUser)
+        .build
 
-        // Act
+      it("returns a status with all components disabled") {
         val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
 
-        // Assert
         inside(resultingStatus.value) { status =>
           status should beForUser(samUser)
           "google" shouldNot beEnabledIn(status)
@@ -104,6 +136,17 @@ class GetUserStatusSpec extends UserServiceTestTraits {
           "allUsersGroup" shouldNot beEnabledIn(status)
           "adminEnabled" shouldNot beEnabledIn(status)
           "tosAccepted" shouldNot beEnabledIn(status)
+        }
+      }
+
+      describe("and only user details are requested") {
+        it("returns a status with user information and without component information") {
+          val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly = true, samRequestContext))
+
+          inside(resultingStatus.value) { status =>
+            status should beForUser(samUser)
+            status.enabled shouldBe empty
+          }
         }
       }
     }
