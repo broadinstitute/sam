@@ -108,8 +108,22 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       val samUser = genWorkbenchUserBoth.sample.get
       val userService = TestUserServiceBuilder()
         .withAllUsersGroup(allUsersGroup)
-        .withInvitedUser(samUser)
+        .withDisabledUser(samUser)
+        .withToSAcceptanceStateForUser(samUser, true)
         .build
+
+      it("returns a status with some components disabled") {
+        val resultingStatus = runAndWait(userService.getUserStatus(samUser.id, false, samRequestContext))
+
+        inside(resultingStatus.value) { status =>
+          status should beForUser(samUser)
+          "google" shouldNot beEnabledIn(status)
+          "ldap" shouldNot beEnabledIn(status)
+          "allUsersGroup" should beEnabledIn(status)
+          "adminEnabled" shouldNot beEnabledIn(status)
+          "tosAccepted" should beEnabledIn(status)
+        }
+      }
     }
 
     describe("for an invited user") {

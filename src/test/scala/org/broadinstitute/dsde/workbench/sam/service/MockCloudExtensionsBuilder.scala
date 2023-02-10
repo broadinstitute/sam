@@ -78,6 +78,23 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) {
       .getUserStatus(argThat(IsSameUserAs(samUser)))
   }
 
+  def withDisabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withDisabledUsers(Set(samUser))
+
+  def withDisabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
+    samUsers.foreach(makeUserAppearDisabled)
+    this
+  }
+
+  private def makeUserAppearDisabled(samUser: SamUser): Unit = {
+    // Real implementation just returns unit if the user already exists
+    doReturn(IO.unit)
+      .when(mockedCloudExtensions)
+      .onUserCreate(argThat(IsSameUserAs(samUser)), any[SamRequestContext])
+    doReturn(IO(false))
+      .when(mockedCloudExtensions)
+      .getUserStatus(argThat(IsSameUserAs(samUser)))
+  }
+
   def build: CloudExtensions = mockedCloudExtensions
 }
 

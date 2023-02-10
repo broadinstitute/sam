@@ -103,6 +103,17 @@ case class MockDirectoryDaoBuilder() {
     this
   }
 
+  def withDisabledUser(samUser: SamUser): MockDirectoryDaoBuilder = withDisabledUsers(Set(samUser))
+
+  def withDisabledUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
+    samUsers.toSet.foreach { u: SamUser =>
+      makeUserExist(u)
+      makeUserEnabled(u)
+      makeUserDisabled(u)
+    }
+    this
+  }
+
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): MockDirectoryDaoBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
 
@@ -167,6 +178,22 @@ case class MockDirectoryDaoBuilder() {
       doReturn(IO(LazyList(maybeAllUsersGroup.get.id)))
         .when(mockedDirectoryDAO)
         .listUserDirectMemberships(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+    }
+  }
+
+  private def makeUserDisabled(samUser: SamUser): Unit = {
+    doReturn(IO(false))
+      .when(mockedDirectoryDAO)
+      .isEnabled(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+
+    doReturn(IO(Option(samUser.copy(enabled = false))))
+      .when(mockedDirectoryDAO)
+      .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+
+    if (samUser.azureB2CId.nonEmpty) {
+      doReturn(IO(Option(samUser.copy(enabled = false))))
+        .when(mockedDirectoryDAO)
+        .loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext])
     }
   }
 
