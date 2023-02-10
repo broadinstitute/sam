@@ -48,6 +48,9 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
     this
   }
 
+  // A disabled user is explicitly a user who was previously enabled and is now no longer enabled
+  def withDisabledUser(samUser: SamUser): TestUserServiceBuilder = ???
+
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): TestUserServiceBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
     this

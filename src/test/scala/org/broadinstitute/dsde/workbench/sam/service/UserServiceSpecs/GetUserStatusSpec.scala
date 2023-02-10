@@ -103,6 +103,15 @@ class GetUserStatusSpec extends UserServiceTestTraits {
       }
     }
 
+    describe("for a disabled user") {
+      // Shared Setup - create a UserService with an invited user
+      val samUser = genWorkbenchUserBoth.sample.get
+      val userService = TestUserServiceBuilder()
+        .withAllUsersGroup(allUsersGroup)
+        .withInvitedUser(samUser)
+        .build
+    }
+
     describe("for an invited user") {
       // Shared Setup - create a UserService with an invited user
       val samUser = genWorkbenchUserBoth.sample.get
