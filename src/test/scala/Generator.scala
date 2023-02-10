@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam
 
 import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.scalacheck._
@@ -25,6 +25,7 @@ object Generator {
   val genFirecloudEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@test.firecloud.org"))
   val genBroadInstituteEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@broadinstitute.org"))
   val genServiceAccountEmail: Gen[WorkbenchEmail] = Gen.alphaStr.map(x => WorkbenchEmail(s"t$x@test.iam.gserviceaccount.com"))
+  val genServiceAccountDisplayName: Gen[ServiceAccountDisplayName] = Gen.alphaStr.map(x => ServiceAccountDisplayName(x))
   val genGoogleSubjectId: Gen[GoogleSubjectId] = Gen.stringOfN(20, Gen.numChar).map(id => GoogleSubjectId("1" + id))
   val genAzureB2CId: Gen[AzureB2CId] = Gen.uuid.map(uuid => AzureB2CId(uuid.toString))
   val genExternalId: Gen[Either[GoogleSubjectId, AzureB2CId]] = Gen.either(genGoogleSubjectId, genAzureB2CId)
@@ -95,6 +96,22 @@ object Generator {
     azureB2CId <- genAzureB2CId
     userId <- genWorkbenchUserId
   } yield SamUser(userId, Option(googleSubjectId), email, Option(azureB2CId), false, None)
+
+  val genPetServiceAccountId = for {
+    userId <- genWorkbenchUserId
+    googleProject <- genGoogleProject
+  } yield PetServiceAccountId(userId, googleProject)
+
+  val genPetServiceAccount = for {
+    petServiceAccountId <- genPetServiceAccountId
+    serviceAccount <- genServiceAccount
+  } yield PetServiceAccount(petServiceAccountId, serviceAccount)
+
+  val genServiceAccount = for {
+    subjectId <- genServiceAccountSubjectId
+    email <- genServiceAccountEmail
+    displayName <- genServiceAccountDisplayName
+  } yield ServiceAccount(subjectId, email, displayName)
 
   val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s${x.take(50)}")) // prepending `s` just so this won't be an empty string
   val genGoogleProject = Gen.alphaStr.map(x => GoogleProject(s"s$x")) // prepending `s` just so this won't be an empty string
