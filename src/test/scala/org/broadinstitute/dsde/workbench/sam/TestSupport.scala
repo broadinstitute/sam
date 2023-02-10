@@ -237,7 +237,8 @@ object TestSupport extends TestSupport {
           PetManagedIdentityTable,
           UserTable,
           AccessInstructionsTable,
-          GroupTable
+          GroupTable,
+          LastQuotaErrorTable
         )
 
         tables

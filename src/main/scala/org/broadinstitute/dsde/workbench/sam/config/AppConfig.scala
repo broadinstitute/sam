@@ -201,7 +201,11 @@ object AppConfig {
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
-    } yield GoogleConfig(googleServices, config.as[PetServiceAccountConfig]("petServiceAccount"))
+    } yield GoogleConfig(
+      googleServices,
+      config.as[PetServiceAccountConfig]("petServiceAccount"),
+      config.as[Option[Duration]]("coordinatedAdminSdkBackoffDuration")
+    )
 
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
