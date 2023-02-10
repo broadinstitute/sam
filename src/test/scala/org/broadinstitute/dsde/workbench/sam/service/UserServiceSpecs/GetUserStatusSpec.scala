@@ -35,7 +35,7 @@ class GetUserStatusSpec extends UserServiceTestTraits {
         val samUser = genWorkbenchUserBoth.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withFullyActivatedUser(samUser)
+          .withEnabledUser(samUser)
           .withToSAcceptanceStateForUser(samUser, true)
           .build
 
@@ -69,7 +69,7 @@ class GetUserStatusSpec extends UserServiceTestTraits {
         val samUser = genWorkbenchUserBoth.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withFullyActivatedUser(samUser)
+          .withEnabledUser(samUser)
           .withToSAcceptanceStateForUser(samUser, false)
           .build
 

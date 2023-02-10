@@ -200,7 +200,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val enabledAzureUser = genWorkbenchUserAzure.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withFullyActivatedUser(enabledAzureUser)
+          .withEnabledUser(enabledAzureUser)
           .build
         val newUser = genWorkbenchUserAzure.sample.get.copy(azureB2CId = enabledAzureUser.azureB2CId)
 
@@ -215,7 +215,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val enabledGoogleUser = genWorkbenchUserGoogle.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withFullyActivatedUser(enabledGoogleUser)
+          .withEnabledUser(enabledGoogleUser)
           .build
         val newUser = genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = enabledGoogleUser.googleSubjectId)
 

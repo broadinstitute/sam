@@ -21,13 +21,12 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   // - are not enabled
   private val existingUsers: mutable.Set[SamUser] = mutable.Set.empty
 
-  // Users that:
+  // What defines an enabled user:
   // - "exist" in the DirectoryDao
   // - have a GoogleSubjectId and/or an AzureB2CId
-  // - are enabled
   // - are in the "All_Users" group in Sam
   // - are in the "All_Users" group in Google
-  private val fullyActivatedUsers: mutable.Set[SamUser] = mutable.Set.empty
+  private val enabledUsers: mutable.Set[SamUser] = mutable.Set.empty
 
   private var maybeAllUsersGroup: Option[WorkbenchGroup] = None
   private val blockedEmailDomains: mutable.Set[String] = mutable.Set.empty
@@ -43,9 +42,9 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   def withInvitedUser(samUser: SamUser): TestUserServiceBuilder = withExistingUser(samUser)
   def withInvitedUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = withExistingUsers(samUsers)
 
-  def withFullyActivatedUser(samUser: SamUser): TestUserServiceBuilder = withFullyActivatedUsers(List(samUser))
-  def withFullyActivatedUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = {
-    fullyActivatedUsers.addAll(samUsers)
+  def withEnabledUser(samUser: SamUser): TestUserServiceBuilder = withEnabledUsers(List(samUser))
+  def withEnabledUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = {
+    enabledUsers.addAll(samUsers)
     this
   }
 
@@ -95,14 +94,14 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
 
     mockDirectoryDaoBuilder
       .withExistingUsers(existingUsers)
-      .withFullyActivatedUsers(fullyActivatedUsers)
+      .withEnabledUsers(enabledUsers)
       .build
   }
 
   private def buildCloudExtensionsDao(directoryDAO: DirectoryDAO): CloudExtensions = {
     val mockCloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
     mockCloudExtensionsBuilder
-      .withEnabledUsers(fullyActivatedUsers)
+      .withEnabledUsers(enabledUsers)
       .build
   }
 

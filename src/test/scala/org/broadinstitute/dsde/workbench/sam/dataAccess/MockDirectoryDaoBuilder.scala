@@ -52,7 +52,7 @@ case class MockDirectoryDaoBuilder() {
     val samRequestContext = invocation.getArgument[SamRequestContext](1)
     val maybeUser = mockedDirectoryDAO.loadUser(samUserId, samRequestContext).unsafeRunSync()
     maybeUser match {
-      case Some(samUser) => makeUserFullyActivated(samUser)
+      case Some(samUser) => makeUserEnabled(samUser)
       case None => throw new RuntimeException("Mocking error when trying to enable a user that does not exist")
     }
     IO.unit
@@ -94,11 +94,11 @@ case class MockDirectoryDaoBuilder() {
     this
   }
 
-  def withFullyActivatedUser(samUser: SamUser): MockDirectoryDaoBuilder = withFullyActivatedUsers(Set(samUser))
-  def withFullyActivatedUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
+  def withEnabledUser(samUser: SamUser): MockDirectoryDaoBuilder = withEnabledUsers(Set(samUser))
+  def withEnabledUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
     samUsers.toSet.foreach { u: SamUser =>
       makeUserExist(u)
-      makeUserFullyActivated(u)
+      makeUserEnabled(u)
     }
     this
   }
@@ -138,10 +138,7 @@ case class MockDirectoryDaoBuilder() {
       .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
   }
 
-  // A Fully Activated user is:
-  // - Enabled
-  // - a direct member of the All_Users group
-  private def makeUserFullyActivated(samUser: SamUser): Unit = {
+  private def makeUserEnabled(samUser: SamUser): Unit = {
     doReturn(IO(true))
       .when(mockedDirectoryDAO)
       .isEnabled(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
