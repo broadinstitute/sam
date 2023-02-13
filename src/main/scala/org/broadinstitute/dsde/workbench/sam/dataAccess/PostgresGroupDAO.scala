@@ -217,9 +217,9 @@ trait PostgresGroupDAO {
 
     // remove rows where groupId is directly followed by memberGroup in membership path, these are indirect memberships
     // The condition that uses @> is for performance, it allows the query to hit an index. It finds all rows where
-    // f.groupMembershipPath contains both the container and member but in no particular order or placement.
-    // But we really only want to delete entries where container is immediately before member. However @> uses an index
-    // and array_position does not.
+    // f.groupMembershipPath contains both groupId and memberGroup but in no particular order or placement.
+    // The condition using array_position is sufficient however @> uses an index and array_position does not.
+    // Think of it like an efficient pre filter so that the real condition has less to do.
     samsql"""delete from ${GroupMemberFlatTable as f}
                 where array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(groupId)})) + 1 =
                 array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(memberGroup)}))
