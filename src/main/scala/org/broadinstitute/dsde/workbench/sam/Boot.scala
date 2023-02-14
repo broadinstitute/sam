@@ -71,8 +71,6 @@ object Boot extends IOApp with LazyLogging {
 
     val appDependencies = createAppDependencies(appConfig)
 
-    val tosCheckEnabled = appConfig.termsOfServiceConfig.enabled
-
     appDependencies.use { dependencies => // this is where the resource is used
       for {
         _ <- dependencies.samApplication.resourceService.initResourceTypes().onError { case t: Throwable =>
@@ -378,7 +376,7 @@ object Boot extends IOApp with LazyLogging {
       config.emailDomain,
       config.adminConfig.allowedEmailDomains
     )
-    val tosService = new TosService(directoryDAO, config.googleConfig.get.googleServicesConfig.appsDomain, config.termsOfServiceConfig)
+    val tosService = new TosService(directoryDAO, config.termsOfServiceConfig)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService)
     val statusService =
       new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(config.samDatabaseConfig.samRead.dbName, implicitly), 10 seconds)

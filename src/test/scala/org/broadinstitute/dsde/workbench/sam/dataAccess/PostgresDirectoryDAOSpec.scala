@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, samRequestContext}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure.{
   ManagedIdentityDisplayName,
   ManagedIdentityObjectId,
@@ -1452,5 +1452,36 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
     }
 
+    "acceptTermsOfService" - {
+      "accept the terms of service for a new user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+      }
+
+      "accept the terms of service for a user who has already accepted a previous version of the terms of service" in {
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.acceptTermsOfService(defaultUser.id, "0", samRequestContext).unsafeRunSync() shouldBe true
+        dao.acceptTermsOfService(defaultUser.id, "2", samRequestContext).unsafeRunSync() shouldBe true
+      }
+    }
+
+    "rejectTermsOfService" - {
+      "reject the terms of service for an existing user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+        dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
+      }
+
+      "cannot reject the terms of service for a user who has not accepted terms of service previously" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
+      }
+    }
   }
 }
