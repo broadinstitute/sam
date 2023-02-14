@@ -18,15 +18,14 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
-import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
+import org.mockito.scalatest.MockitoSugar
 import org.mockito.{ArgumentMatchers, Mockito}
 import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
-import org.scalatestplus.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 
 import java.util.UUID
@@ -998,10 +997,6 @@ class ResourceServiceSpec
     // setup existing policy with no members
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(accessPolicy)))
 
-    // function calls that should pass but what they return does not matter
-    when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
-
     // overwrite policy with no members
     runAndWait(
       resourceService.overwritePolicy(
@@ -1176,10 +1171,6 @@ class ResourceServiceSpec
     // setup existing policy with no members
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
-
-    // function calls that should pass but what they return does not matter
-    when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
 
     // overwrite policy members with empty set
     runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
@@ -1680,7 +1671,6 @@ class ResourceServiceSpec
 
     // return value false at the end indicates group did not change
     when(mockDirectoryDAO.addGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(false))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
@@ -1734,7 +1724,6 @@ class ResourceServiceSpec
 
     // return value false at the end indicates group did not change
     when(mockDirectoryDAO.removeGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(false))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))

@@ -15,7 +15,7 @@ import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.mockito.MockitoSugar
+import org.mockito.scalatest.MockitoSugar
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
