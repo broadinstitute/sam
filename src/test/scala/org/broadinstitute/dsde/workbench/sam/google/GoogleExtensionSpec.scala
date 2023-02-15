@@ -823,7 +823,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockGoogleKeyCachePubSubDAO,
       googleServicesConfig,
       petServiceAccountConfig
-    ){
+    ) {
       // don't do any of the real boot stuff, it is all googley
       override def onBoot()(implicit system: ActorSystem): IO[Unit] = IO.unit
     }
