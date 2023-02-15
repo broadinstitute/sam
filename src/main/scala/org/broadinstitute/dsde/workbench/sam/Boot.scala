@@ -33,13 +33,11 @@ import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.util.DelegatePool
-import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import java.io.File
 import java.nio.file.{Files, Paths}
-import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
@@ -125,8 +123,6 @@ object Boot extends IOApp with LazyLogging {
         appConfig.samDatabaseConfig.samBackground
       )
 
-      googleSynchronizerExecutionContext <- ExecutionContexts.fixedThreadPool[IO](24)
-
       // This is for sending custom metrics to stackdriver. all custom metrics starts with `OpenCensus/sam/`.
       // Typing in `sam` in metrics explorer will show all sam custom metrics.
       // As best practice, we should have all related metrics under same prefix separated by `/`
@@ -139,7 +135,6 @@ object Boot extends IOApp with LazyLogging {
         backgroundDirectoryDAO,
         backgroundAccessPolicyDAO,
         postgresDistributedLockDAO,
-        googleSynchronizerExecutionContext,
         lastQuotaErrorDAO
       )
 
@@ -171,7 +166,6 @@ object Boot extends IOApp with LazyLogging {
       backgroundDirectoryDAO: DirectoryDAO,
       backgroundAccessPolicyDAO: AccessPolicyDAO,
       postgresDistributedLockDAO: PostgresDistributedLockDAO[IO],
-      googleSynchronizerExecutionContext: ExecutionContext,
       lastQuotaErrorDAO: LastQuotaErrorDAO
   )(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, CloudExtensionsInitializer] =
     appConfig.googleConfig match {
@@ -201,9 +195,7 @@ object Boot extends IOApp with LazyLogging {
             appConfig.adminConfig
           )
           val googleGroupSynchronizer =
-            new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)(
-              googleSynchronizerExecutionContext
-            )
+            new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)
           new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
         }
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
