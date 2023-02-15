@@ -36,8 +36,7 @@ class GoogleGroupSynchronizer(
     googleDirectoryDAO: GoogleDirectoryDAO,
     googleExtensions: GoogleExtensions,
     resourceTypes: Map[ResourceTypeName, ResourceType]
-) //(implicit executionContext: ExecutionContext)
-    extends LazyLogging
+) extends LazyLogging
     with FutureSupport {
 
   def init(): IO[Set[ResourceTypeName]] =
@@ -52,20 +51,20 @@ class GoogleGroupSynchronizer(
       IO.pure(Map.empty)
     } else {
       for {
-        group <- loadGroup(groupId, samRequestContext)
-        members <- maybeCalculateIntersection(group, samRequestContext)
-        subGroupSyncs <- maybeSyncSubGroups(group, visitedGroups, samRequestContext)
+        group <- loadSamGroup(groupId, samRequestContext)
+        members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
+        subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
         googleMemberEmails <- loadGoogleGroupMemberEmailsMaybeCreateGroup(group, samRequestContext)
         samMemberEmails <- loadSamMemberEmails(members, samRequestContext)
 
         toAdd = samMemberEmails -- googleMemberEmails
         toRemove = googleMemberEmails -- samMemberEmails
 
-        addTrials <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
-        removeTrials <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
+        addedUserSyncReports <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
+        removedUserSyncReports <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
 
         _ <- directoryDAO.updateSynchronizedDate(groupId, samRequestContext)
-      } yield Map(group.email -> Seq(addTrials, removeTrials).flatten) ++ subGroupSyncs.flatten
+      } yield Map(group.email -> Seq(addedUserSyncReports, removedUserSyncReports).flatten) ++ subGroupSyncs.flatten
     }
 
   private def removeMemberFromGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(removeEmail: String) =
@@ -116,13 +115,15 @@ class GoogleGroupSynchronizer(
     }
   }
 
-  /** synchronize any sub groups that have never been synchronized otherwise they don't exist in google and can't be added
+  /** Synchronize any sub groups that have never been synchronized otherwise they don't exist in google and can't be added. This is effectively a recursive call
+    * to synchronizeGroupMembers so it may fan out even further.
     * @param group
     * @param visitedGroups
+    *   used to break out of any group hierarchy cycles, there shouldn't be any but nobody likes infinite loops
     * @param samRequestContext
     * @return
     */
-  private def maybeSyncSubGroups(group: WorkbenchGroup, visitedGroups: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext) =
+  private def syncSubGroupsIfRequired(group: WorkbenchGroup, visitedGroups: Set[WorkbenchGroupIdentity], samRequestContext: SamRequestContext) =
     group.members.toList.traverse {
       case subGroup: WorkbenchGroupIdentity =>
         directoryDAO.getSynchronizedDate(subGroup, samRequestContext).flatMap {
@@ -137,7 +138,7 @@ class GoogleGroupSynchronizer(
     * @param samRequestContext
     * @return
     */
-  private def maybeCalculateIntersection(group: WorkbenchGroup, samRequestContext: SamRequestContext): IO[Set[WorkbenchSubject]] =
+  private def calculateAuthDomainIntersectionIfRequired(group: WorkbenchGroup, samRequestContext: SamRequestContext): IO[Set[WorkbenchSubject]] =
     group match {
       case accessPolicy: AccessPolicy =>
         if (isConstrainable(accessPolicy.id.resource, accessPolicy)) {
@@ -153,7 +154,7 @@ class GoogleGroupSynchronizer(
     * @param samRequestContext
     * @return
     */
-  private def loadGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[WorkbenchGroup] =
+  private def loadSamGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[WorkbenchGroup] =
     for {
       groupOption <- groupId match {
         case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName, samRequestContext)

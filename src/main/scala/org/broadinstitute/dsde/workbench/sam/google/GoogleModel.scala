@@ -11,6 +11,15 @@ object SamGoogleModelJsonSupport {
   implicit val SyncReportItemFormat = jsonFormat3(SyncReportItem.apply)
 }
 
+/** A SyncReportItem represents the results of synchronizing a single member of a google group. Synchronizing a google group will result in a collection of
+  * these.
+  * @param operation
+  *   usually either "added" or "removed"
+  * @param email
+  *   the affected email address
+  * @param errorReport
+  *   whether or not there was an error
+  */
 final case class SyncReportItem(operation: String, email: String, errorReport: Option[ErrorReport])
 
 object SyncReportItem {
