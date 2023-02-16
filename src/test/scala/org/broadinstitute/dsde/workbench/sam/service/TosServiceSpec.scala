@@ -4,18 +4,17 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.TestSupport.tosConfig
-import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, verify, when}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
+import org.mockito.Mockito.RETURNS_SMART_NULLS
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.freespec.AnyFreeSpec
-import org.scalatestplus.mockito.MockitoSugar.mock
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class TosServiceSpec extends AnyFreeSpec with TestSupport with BeforeAndAfterAll with BeforeAndAfter with PropertyBasedTesting {
+class TosServiceSpec extends AnyFreeSpec with TestSupport with BeforeAndAfterAll with BeforeAndAfter with PropertyBasedTesting with MockitoSugar {
 
   lazy val dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
