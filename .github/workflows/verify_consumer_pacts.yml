@@ -12,6 +12,7 @@ on:
       - iv-cttt-demo
     paths-ignore:
       - 'README.md'
+
 env:
   PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
 
@@ -44,6 +45,10 @@ jobs:
           echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "branch=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_OUTPUT
+
+      - name: Print variable if not empty
+        if: "${{ inputs.consumerVersionTags != '' }}"
+        run: echo consumerVersionTags value is ${{ inputs.consumerVersionTags }}
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
