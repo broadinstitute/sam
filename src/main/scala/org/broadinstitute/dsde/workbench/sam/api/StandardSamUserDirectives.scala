@@ -29,12 +29,18 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getActiveSamUser(oidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
+    }.tmap { samUser =>
+      logger.info(s"Handling request for active Sam User: $samUser")
+      samUser
     }
   }
 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getSamUser(oidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
+    }.tmap { samUser =>
+      logger.info(s"Handling request for (in)active Sam User: $samUser")
+      samUser
     }
   }
 
@@ -55,7 +61,12 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       externalIdFromHeaders &
       headerValueByName(emailHeader).as(WorkbenchEmail) &
       optionalHeaderValueByName(googleIdFromAzureHeader).map(_.map(GoogleSubjectId)) &
-      optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId))).as(OIDCHeaders)
+      optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId)))
+      .as(OIDCHeaders)
+      .map { oidcHeaders =>
+        logger.info(s"Auth Headers: $oidcHeaders")
+        oidcHeaders
+      }
 
   private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
     Try(BigInt(idString)).fold(
@@ -151,4 +162,18 @@ final case class OIDCHeaders(
     email: WorkbenchEmail,
     googleSubjectIdFromAzure: Option[GoogleSubjectId],
     managedIdentityObjectId: Option[ManagedIdentityObjectId] = None
-)
+) {
+
+  // Customized toString method so that fields are labeled and we must ensure that we do not log the Bearer Token
+  override def toString: String = {
+    val extId = externalId match {
+      case Left(googleSubjectId) => s"GoogleSubjectId($googleSubjectId)"
+      case Right(azureB2CId) => s"AzureB2CId($azureB2CId)"
+    }
+    s"OIDCHeaders(" +
+      s"externalId: $extId, " +
+      s"email: $email, " +
+      s"googleSubjectIdFromAzure: $googleSubjectIdFromAzure, " +
+      s"managedIdentityObjectId: $managedIdentityObjectId)"
+  }
+}
