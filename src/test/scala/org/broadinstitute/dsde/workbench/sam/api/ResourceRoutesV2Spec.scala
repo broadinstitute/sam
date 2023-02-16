@@ -7,7 +7,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{configResourceTypes, googleServicesConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
@@ -15,20 +15,18 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport, model}
+import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFlatSpec, TestSupport, model}
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.{any, argThat, eq => mockitoEq}
 import org.mockito.Mockito._
 import org.scalatest.AppendedClues
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 
-import scala.concurrent.Future
-
-class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
+//TODO This test is flaky. It looks like the tests run too fast and cause some sort of timeout error or race condition
+class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
   implicit val errorReportSource = ErrorReportSource("sam")
 
@@ -54,13 +52,14 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     resourceTypes.map { case (resourceTypeName, resourceType) =>
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
-    mockUserService.createUser(samUser, samRequestContext)
+    TestSupport.runAndWait(mockUserService.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,
@@ -1824,7 +1823,7 @@ class ResourceRoutesV2Spec extends AnyFlatSpec with Matchers with TestSupport wi
     }
 
     if (actionsOnChild.contains(SamResourceActions.delete)) {
-      when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(Future.unit)
+      when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(IO.unit)
     }
   }
 

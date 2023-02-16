@@ -2,10 +2,10 @@ import Dependencies._
 import Merging._
 import Testing._
 import Version._
-import sbt.Keys.{scalacOptions, _}
+import org.scalafmt.sbt.ScalafmtPlugin.autoImport.{scalafmtAll, scalafmtSbt}
+import sbt.Keys._
 import sbt.{Compile, Test, _}
-import sbtassembly.AssemblyPlugin.autoImport.{assembly, _}
-import org.scalafmt.sbt.ScalafmtPlugin.autoImport.{scalafmt, scalafmtAll, scalafmtCheck, scalafmtCheckAll, scalafmtOnCompile, scalafmtSbt, scalafmtSbtCheck}
+import sbtassembly.AssemblyPlugin.autoImport._
 
 object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
@@ -25,7 +25,7 @@ object Settings {
 
   // recommended scalac options by https://tpolecat.github.io/2017/04/25/scalac-flags.html
   lazy val commonCompilerSettings = Seq(
-    "-target:jvm-1.11",
+    "-release:11",
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
     "-encoding",
     "utf-8", // Specify character encoding used by source files.
@@ -64,7 +64,7 @@ object Settings {
   lazy val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
       organization := "org.broadinstitute.dsde.workbench",
-      scalaVersion := "2.13.5",
+      scalaVersion := "2.13.10",
       resolvers ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtAll).value,
@@ -77,5 +77,15 @@ object Settings {
   lazy val rootSettings = commonSettings ++ List(
     name := "sam",
     libraryDependencies ++= rootDependencies
+  ) ++ commonAssemblySettings ++ rootVersionSettings
+
+  val pact4sSettings = commonSettings ++ List(
+    libraryDependencies ++= pact4sDependencies,
+
+    /** Invoking pact tests from root project (sbt "project pact" test) will launch tests in a separate JVM context that ensures contracts are written to the
+      * pact/target/pacts folder. Otherwise, contracts will be written to the root folder.
+      */
+    Test / fork := true,
+    publish / skip := true
   ) ++ commonAssemblySettings ++ rootVersionSettings
 }

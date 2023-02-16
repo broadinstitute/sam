@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam
 
 import akka.actor.ActorSystem
 import akka.stream.Materializer
-import cats.effect.IO
+import cats.effect._
 import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import com.typesafe.config.ConfigFactory
@@ -14,13 +14,14 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
+import org.broadinstitute.dsde.workbench.openTelemetry.{FakeOpenTelemetryMetricsInterpreter, OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess._
+import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.db.{DatabaseNames, DbReference}
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -48,6 +49,7 @@ trait TestSupport {
 
   implicit val futureTimeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
+  implicit val openTelemetry = FakeOpenTelemetryMetricsInterpreter
 
   val samRequestContext = SamRequestContext()
 
@@ -69,8 +71,10 @@ object TestSupport extends TestSupport {
   val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val adminConfig = config.as[AdminConfig]("admin")
+  val databaseEnabled = config.getBoolean("db.enabled")
+  val databaseEnabledClue = "-- skipping tests that talk to a real database"
 
-  val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
+  lazy val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
@@ -83,8 +87,7 @@ object TestSupport extends TestSupport {
       googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
       policyAccessDAO: Option[AccessPolicyDAO] = None,
       policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-      resourceServiceOpt: Option[ResourceService] = None,
-      tosEnabled: Boolean = false
+      resourceServiceOpt: Option[ResourceService] = None
   )(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
@@ -141,8 +144,8 @@ object TestSupport extends TestSupport {
     )
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
-    val azureService = new AzureService(MockCrlService(), directoryDAO)
+    val tosService = new TosService(directoryDAO, tosConfig)
+    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     SamDependencies(
       mockResourceService,
       policyEvaluatorService,
@@ -160,7 +163,11 @@ object TestSupport extends TestSupport {
 
   val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
-  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit system: ActorSystem, materializer: Materializer): SamRoutes = new SamRoutes(
+  def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit
+      system: ActorSystem,
+      materializer: Materializer,
+      openTelemetry: OpenTelemetryMetrics[IO]
+  ): SamRoutes = new SamRoutes(
     samDependencies.resourceService,
     samDependencies.userService,
     samDependencies.statusService,
@@ -186,7 +193,7 @@ object TestSupport extends TestSupport {
           googleExtensions.googleDirectoryDAO,
           googleExtensions,
           googleExtensions.resourceTypes
-        )(executionContext)
+        )
       } else null
     val googleKeyCache = samDependencies.cloudExtensions match {
       case extensions: GoogleExtensions => extensions.googleKeyCache
@@ -196,7 +203,7 @@ object TestSupport extends TestSupport {
     override val newSamUser: Option[SamUser] = Option(uInfo)
   }
 
-  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes =
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): SamRoutes =
     genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
 
   /*
@@ -206,39 +213,60 @@ object TestSupport extends TestSupport {
   (i.e. I don't want to add a new database name just for tests).
   So, just use the DatabaseNames.Read connection pool for tests.
    */
-  lazy val dbRef = DbReference.init(config.as[LiquibaseConfig]("liquibase"), DatabaseNames.Read, TestSupport.blockingEc)
+  lazy val dbRef = TestDbReference.init(config.as[LiquibaseConfig]("liquibase"), appConfig.samDatabaseConfig.samRead.dbName, TestSupport.blockingEc)
 
   def truncateAll: Int =
-    dbRef.inLocalTransaction { implicit session =>
-      val tables = List(
-        PolicyActionTable,
-        PolicyRoleTable,
-        PolicyTable,
-        AuthDomainTable,
-        ResourceTable,
-        RoleActionTable,
-        ResourceActionTable,
-        NestedRoleTable,
-        ResourceRoleTable,
-        ResourceActionPatternTable,
-        ResourceTypeTable,
-        GroupMemberTable,
-        GroupMemberFlatTable,
-        PetServiceAccountTable,
-        PetManagedIdentityTable,
-        UserTable,
-        AccessInstructionsTable,
-        GroupTable
-      )
-
-      tables
-        .map(table =>
-          withSQL {
-            delete.from(table)
-          }.update().apply()
+    if (databaseEnabled) {
+      dbRef.inLocalTransaction { implicit session =>
+        val tables = List(
+          PolicyActionTable,
+          PolicyRoleTable,
+          PolicyTable,
+          AuthDomainTable,
+          ResourceTable,
+          RoleActionTable,
+          ResourceActionTable,
+          NestedRoleTable,
+          ResourceRoleTable,
+          ResourceActionPatternTable,
+          ResourceTypeTable,
+          GroupMemberTable,
+          GroupMemberFlatTable,
+          PetServiceAccountTable,
+          AzureManagedResourceGroupTable,
+          PetManagedIdentityTable,
+          UserTable,
+          AccessInstructionsTable,
+          GroupTable,
+          LastQuotaErrorTable
         )
-        .sum
+
+        tables
+          .map(table =>
+            withSQL {
+              delete.from(table)
+            }.update().apply()
+          )
+          .sum
+      }
+    } else {
+      0
     }
+
+  def newUserWithAcceptedTos(services: StandardSamUserDirectives, samUser: SamUser, samRequestContext: SamRequestContext): SamUser = {
+    TestSupport.runAndWait(services.directoryDAO.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(services.tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(services.directoryDAO.loadUser(samUser.id, samRequestContext)).orNull
+  }
+
+  def newUserStatusWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
+    TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly = false, samRequestContext)).orNull
+  }
+
+  val enabledMapNoTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)
+  val enabledMapTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
 }
 
 final case class SamDependencies(

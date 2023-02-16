@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.nonEmptyListReader
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 /** Created by mbemis on 8/17/17.
   */
@@ -22,6 +22,7 @@ final case class GoogleServicesConfig(
     serviceAccountClientEmail: WorkbenchEmail,
     serviceAccountClientProject: GoogleProject,
     subEmail: WorkbenchEmail,
+    directoryApiAccounts: Option[NonEmptyList[WorkbenchEmail]],
     projectServiceAccount: WorkbenchEmail,
     groupSyncPubSubConfig: GooglePubSubConfig,
     disableUsersPubSubConfig: GooglePubSubConfig,
@@ -79,6 +80,7 @@ object GoogleServicesConfig {
       WorkbenchEmail(config.getString("serviceAccountClientEmail")),
       GoogleProject(config.getString("serviceAccountClientProject")),
       WorkbenchEmail(config.getString("subEmail")),
+      config.as[Option[NonEmptyList[String]]]("directoryApiAccounts").map(_.map(WorkbenchEmail)),
       WorkbenchEmail(config.getString("projectServiceAccount")),
       config.as[GooglePubSubConfig]("groupSync"),
       config.as[GooglePubSubConfig]("disableUsers"),
@@ -95,4 +97,8 @@ object GoogleServicesConfig {
 
 final case class DefaultServiceAccountJsonPath(asString: String) extends AnyVal
 final case class ServiceAccountCredentialJson(defaultServiceAccountJsonPath: DefaultServiceAccountJsonPath)
-final case class GoogleConfig(googleServicesConfig: GoogleServicesConfig, petServiceAccountConfig: PetServiceAccountConfig)
+final case class GoogleConfig(
+    googleServicesConfig: GoogleServicesConfig,
+    petServiceAccountConfig: PetServiceAccountConfig,
+    coordinatedAdminSdkBackoffDuration: Option[Duration]
+)

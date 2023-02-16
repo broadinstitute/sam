@@ -4,18 +4,23 @@ import akka.actor.SupervisorStrategy.{Escalate, Stop}
 import akka.actor._
 import akka.http.scaladsl.model.StatusCodes
 import akka.pattern._
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import io.opencensus.scala.Tracing
+import io.opencensus.trace.AttributeValue
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.PubSubMessage
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
+import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 import spray.json._
 
+import scala.jdk.CollectionConverters._
 import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util.Try
@@ -94,9 +99,10 @@ class GoogleGroupSyncMonitorSupervisor(
 object GoogleGroupSyncMonitor {
   case object StartMonitorPass
 
-  sealed abstract class SynchronizGroupMembersResult(ackId: String)
-  final case class ReportMessage(value: Map[WorkbenchEmail, Seq[SyncReportItem]], ackId: String) extends SynchronizGroupMembersResult(ackId = ackId)
-  final case class FailToSynchronize(t: Throwable, ackId: String) extends SynchronizGroupMembersResult(ackId = ackId)
+  sealed abstract class SynchronizeGroupMembersResult(ackId: String)
+  final case class ReportMessage(value: Map[WorkbenchEmail, Seq[SyncReportItem]], ackId: String) extends SynchronizeGroupMembersResult(ackId = ackId)
+  final case class FailToSynchronize(t: Throwable, ackId: String) extends SynchronizeGroupMembersResult(ackId = ackId)
+  final case class ExtendDeadline(ackId: String, deadlineSeconds: Int, samRequestContext: SamRequestContext)
 
   def props(
       pollInterval: FiniteDuration,
@@ -132,28 +138,45 @@ class GoogleGroupSyncMonitorActor(
 
   override def receive = {
     case StartMonitorPass =>
-      logger.debug(s"Pulling messages off: $pubSubSubscriptionName")
+      logger.info(s"Pulling messages off: $pubSubSubscriptionName")
       // start the process by pulling a message and sending it back to self
       pubSubDao.pullMessages(pubSubSubscriptionName, 1).map(_.headOption) pipeTo self
 
     case Some(message: PubSubMessage) =>
-      logger.debug(s"received sync message: $message")
-      import Tracing._
-      trace("GoogleGroupSyncMonitor-PubSubMessage") { span =>
+      logger.info(s"received sync message: $message")
+
+      traceIO("GoogleGroupSyncMonitor-PubSubMessage", SamRequestContext()) { samRequestContext =>
+        // every 15s reset the deadline to 60s in the future, canceled when IO is done
+        // 15s so we get a few tries at extending before deadline occurs
+        val deadlineExtender = system.scheduler.scheduleAtFixedRate(Duration.Zero, 15 seconds, self, ExtendDeadline(message.ackId, 60, samRequestContext))
+
         val groupId: WorkbenchGroupIdentity = parseMessage(message)
+        samRequestContext.parentSpan.foreach(
+          _.putAttributes(
+            Map("groupId" -> AttributeValue.stringAttributeValue(groupId.toString), "messageId" -> AttributeValue.stringAttributeValue(message.ackId)).asJava
+          )
+        )
         groupSynchronizer
           .synchronizeGroupMembers(
             groupId,
-            samRequestContext = SamRequestContext(Option(span))
-          ) // Since this is an internal pub/sub call, we have to start a new SamRequestContext.
-          .toTry
-          .map(sr => sr.fold(t => FailToSynchronize(t, message.ackId), x => ReportMessage(x, message.ackId))) pipeTo self
-      }
+            samRequestContext = samRequestContext
+          )
+          .redeem(FailToSynchronize(_, message.ackId), ReportMessage(_, message.ackId))
+          .guarantee(IO(deadlineExtender.cancel()))
+      }.unsafeToFuture() pipeTo self
+
+    case ExtendDeadline(ackId, deadlineSeconds, samRequestContext) =>
+      traceIOWithContext("extendDeadline", samRequestContext) { _ =>
+        IO.fromFuture(IO(pubSubDao.extendDeadlineById(pubSubSubscriptionName, Seq(ackId), deadlineSeconds))).timeout(10 seconds).handleError { t =>
+          // log and eat the error, we don't want it to bubble up and kill the actor
+          logger.error(s"error extending deadline for ackId $ackId", t)
+        }
+      }.unsafeRunSync()
 
     case None =>
       // there was no message to wait and try again
       val nextTime = org.broadinstitute.dsde.workbench.util.addJitter(pollInterval, pollIntervalJitter)
-      system.scheduler.scheduleOnce(nextTime.asInstanceOf[FiniteDuration], self, StartMonitorPass)
+      system.scheduler.scheduleOnce(nextTime, self, StartMonitorPass)
 
     case ReportMessage(report, ackId) =>
       import Tracing._
@@ -179,7 +202,7 @@ class GoogleGroupSyncMonitorActor(
 
     case FailToSynchronize(t, ackId) =>
       t match {
-        case groupNotFound: WorkbenchExceptionWithErrorReport if groupNotFound.errorReport.statusCode == Some(StatusCodes.NotFound) =>
+        case groupNotFound: WorkbenchExceptionWithErrorReport if groupNotFound.errorReport.statusCode.contains(StatusCodes.NotFound) =>
           // this can happen if a group is created then removed before the sync message is handled
           // acknowledge it so we don't have to handle it again
           acknowledgeMessage(ackId).map(_ => StartMonitorPass) pipeTo self

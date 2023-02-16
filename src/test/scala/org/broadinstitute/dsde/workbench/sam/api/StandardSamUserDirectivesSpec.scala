@@ -10,7 +10,6 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
@@ -31,7 +30,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       override val cloudExtensions: CloudExtensions = null
       override val termsOfServiceConfig: TermsOfServiceConfig = null
       override val userService: UserService = null
-      override val tosService: TosService = new TosService(dirDAO, googleServicesConfig.appsDomain, tosConfig)
+      override val tosService: TosService = new TosService(dirDAO, tosConfig)
     }
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {
@@ -132,9 +131,11 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
   ) { (externalId, email, accessToken, userId) =>
     val services = directives()
     val headers = createRequiredHeaders(externalId, email, accessToken)
-    val user = services.directoryDAO
-      .createUser(SamUser(userId, externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None), samRequestContext)
-      .unsafeRunSync()
+    val user = TestSupport.newUserWithAcceptedTos(
+      services,
+      SamUser(userId, externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None),
+      samRequestContext
+    )
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(x => complete(x.toString))) ~> check {
         status shouldBe StatusCodes.OK
@@ -153,7 +154,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
   }
 
   it should "fail if user has rejected terms of service" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
-    val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true))
+    val services = directives(tosConfig = TestSupport.tosConfig)
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
@@ -163,19 +164,19 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       }
   }
 
-  it should "pass if user has rejected terms of service within grace period" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
-    val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true, isGracePeriodEnabled = true))
+  it should "fail if user has rejected terms of service within grace period" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
+    val services = directives(tosConfig = TestSupport.tosConfig.copy(isGracePeriodEnabled = true))
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
-        status shouldBe StatusCodes.OK
+        status shouldBe StatusCodes.Unauthorized
       }
   }
 
   it should "pass if service account has rejected terms" in forAll(genWorkbenchUserServiceAccount, genOAuth2BearerToken) { (user, token) =>
-    val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true))
+    val services = directives(tosConfig = TestSupport.tosConfig)
     val headers = createRequiredHeaders(Left(user.googleSubjectId.get), user.email, token)
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
@@ -186,7 +187,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
   }
 
   it should "pass if user has accepted terms of service" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
-    val services = directives(tosConfig = TestSupport.tosConfig.copy(enabled = true))
+    val services = directives(tosConfig = TestSupport.tosConfig)
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     services.directoryDAO.createUser(user.copy(enabled = true), samRequestContext).unsafeRunSync()
     services.tosService.acceptTosStatus(user.id, samRequestContext).unsafeRunSync()
@@ -206,7 +207,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     (azureB2CId, googleUser, accessToken) =>
       val services = directives(new MockDirectoryDAO())
       val headers = createRequiredHeaders(Right(azureB2CId), googleUser.email, accessToken, googleUser.googleSubjectId)
-      val existingUser = services.directoryDAO.createUser(googleUser.copy(enabled = true), samRequestContext).unsafeRunSync()
+      val existingUser = TestSupport.newUserWithAcceptedTos(services, googleUser.copy(enabled = true), samRequestContext)
       Get("/").withHeaders(headers) ~>
         handleExceptions(myExceptionHandler) {
           services.withActiveUser(samRequestContext)(x => complete(x.toString))
@@ -221,7 +222,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
   it should "pass if google id from azure does not exist" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken, genGoogleSubjectId) {
     (azureUser, accessToken, googleSubjectId) =>
       val services = directives(new MockDirectoryDAO())
-      services.directoryDAO.createUser(azureUser.copy(enabled = true), samRequestContext).unsafeRunSync()
+      TestSupport.newUserWithAcceptedTos(services, azureUser.copy(enabled = true), samRequestContext)
       val headers = createRequiredHeaders(Right(azureUser.azureB2CId.get), azureUser.email, accessToken, Option(googleSubjectId))
       Get("/").withHeaders(headers) ~>
         handleExceptions(myExceptionHandler) {
@@ -261,6 +262,28 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     Get("/") ~> handleExceptions(myExceptionHandler)(directives().withNewUser(samRequestContext)(x => complete(x.toString))) ~> check {
       rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
+  }
+
+  "SADomain regex" should "match email addresses that end in 'gserviceaccount.com'" in {
+    val emails = List(
+      "foo@iam.gserviceaccount.com",
+      "foo@gserviceaccount.com",
+      "foo@appspot.gserviceaccount.com",
+      "foo@gserviceaccount.gserviceaccount.com",
+      "foo@bar.iam.gserviceaccount.com",
+      "foo@developer.gserviceaccount.com"
+    )
+    emails.foreach(email => email should fullyMatch regex StandardSamUserDirectives.SAdomain)
+  }
+
+  it should "not match email addresses that do not end in 'gserviceaccount.com'" in {
+    val emails = List(
+      "foo@iam.google.com",
+      "foo@gserviceaccount.google.com",
+      "foo@gserviceaccount.org",
+      "foo@   .gserviceaccount.com"
+    )
+    emails.foreach(email => email shouldNot fullyMatch regex StandardSamUserDirectives.SAdomain)
   }
 
   private def createRequiredHeaders(

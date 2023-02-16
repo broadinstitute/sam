@@ -8,20 +8,18 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.AppendedClues
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 
 /** Created by dvoet on 6/7/17.
   */
-class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
+class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with AppendedClues {
 
   val defaultUserInfo = TestSamRoutes.defaultUserInfo
 
@@ -49,13 +47,14 @@ class ResourceRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, accessPolicyDAO, directoryDAO)
     val mockResourceService = new ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain, Set.empty)
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
-    mockUserService.createUser(defaultUserInfo, samRequestContext)
+    TestSupport.runAndWait(mockUserService.createUser(defaultUserInfo, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(defaultUserInfo.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,

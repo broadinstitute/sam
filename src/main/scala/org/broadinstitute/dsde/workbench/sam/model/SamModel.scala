@@ -33,6 +33,10 @@ object SamJsonSupport {
 
   implicit val TermsOfServiceAcceptanceFormat = ValueObjectFormat(TermsOfServiceAcceptance.apply)
 
+  implicit val termsOfServiceDetailsFormat = jsonFormat4(TermsOfServiceDetails.apply)
+
+  implicit val termsOfAcceptanceStatusFormat = jsonFormat3(TermsOfServiceComplianceStatus.apply)
+
   implicit val UserStatusDiagnosticsFormat = jsonFormat5(UserStatusDiagnostics.apply)
 
   implicit val AccessPolicyNameFormat = ValueObjectFormat(AccessPolicyName.apply)
@@ -97,6 +101,7 @@ object SamResourceActions {
   val adminAddMember = ResourceAction("admin_add_member")
   val adminRemoveMember = ResourceAction("admin_remove_member")
   val link = ResourceAction("link")
+  val setManagedResourceGroup = ResourceAction("set_managed_resource_group")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
@@ -112,7 +117,12 @@ object SamResourceTypes {
   val spendProfile = ResourceTypeName("spend-profile")
 }
 
-@Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail) //for backwards compatibility to old API
+//for backwards compatibility to old API
+@Lenses final case class UserStatusDetails(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail)
+object UserStatusDetails {
+  def apply(samUser: SamUser): UserStatusDetails = UserStatusDetails(samUser.id, samUser.email)
+}
+
 @Lenses final case class UserIdInfo(userSubjectId: WorkbenchUserId, userEmail: WorkbenchEmail, googleSubjectId: Option[GoogleSubjectId])
 @Lenses final case class UserStatus(userInfo: UserStatusDetails, enabled: Map[String, Boolean])
 @Lenses final case class UserStatusInfo(userSubjectId: String, userEmail: String, enabled: Boolean, adminEnabled: Boolean)
@@ -120,11 +130,15 @@ object SamResourceTypes {
     enabled: Boolean,
     inAllUsersGroup: Boolean,
     inGoogleProxyGroup: Boolean,
-    tosAccepted: Option[Boolean],
+    tosAccepted: Boolean,
     adminEnabled: Boolean
 )
 @Lenses final case class TermsOfServiceAcceptance(value: String) extends ValueObject
 
+@Lenses final case class TermsOfServiceComplianceStatus(userId: WorkbenchUserId, userHasAcceptedLatestTos: Boolean, permitsSystemUsage: Boolean)
+
+@Deprecated
+@Lenses final case class TermsOfServiceDetails(isEnabled: Boolean, isGracePeriodEnabled: Boolean, currentVersion: String, userAcceptedVersion: Option[String])
 @Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }
@@ -273,6 +287,13 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 )
 
 @Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
+object BasicWorkbenchGroup {
+  def apply(workbenchGroup: WorkbenchGroup): BasicWorkbenchGroup =
+    workbenchGroup.id match {
+      case wbg: WorkbenchGroupName => BasicWorkbenchGroup(wbg, workbenchGroup.members, workbenchGroup.email)
+      case _ => throw new WorkbenchException(s"WorkbenchGroup ${workbenchGroup} cannot be converted to a BasicWorkbenchGroup")
+    }
+}
 
 @Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
 @Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)

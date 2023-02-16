@@ -6,10 +6,15 @@ lazy val root = project
   .settings(rootSettings: _*)
   .withTestSettings
 
+lazy val pact4s = project
+  .in(file("pact4s"))
+  .settings(pact4sSettings)
+  .dependsOn(root % "test->test;compile->compile")
+
 Revolver.settings
 Global / excludeLintKeys += debugSettings // To avoid lint warning
 
-javaOptions in reStart += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5050"
+reStart / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5050"
 
 // When JAVA_OPTS are specified in the environment, they are usually meant for the application
 // itself rather than sbt, but they are not passed by default to the application, which is a forked
@@ -18,7 +23,7 @@ javaOptions in reStart += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n
 // for some reason using ++= causes revolver not to find the main class so do the stupid map below
 //javaOptions in reStart ++= sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq
 sys.env.getOrElse("JAVA_OPTS", "").split(" ").toSeq.map { opt =>
-  javaOptions in reStart += opt
+  reStart / javaOptions += opt
 }
 
 addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")

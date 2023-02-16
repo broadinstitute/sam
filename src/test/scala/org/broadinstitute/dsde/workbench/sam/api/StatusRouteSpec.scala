@@ -3,20 +3,19 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFlatSpec, TestSupport}
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Database
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse}
 import org.scalatest.concurrent.Eventually._
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.duration._
 
-class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport {
+class StatusRouteSpec extends RetryableAnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar {
 
   "GET /version" should "give 200 for ok" in {
     val samRoutes = TestSamRoutes(Map.empty)
@@ -46,7 +45,7 @@ class StatusRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
     val emailDomain = "example.com"
     val mockResourceService = new ResourceService(Map.empty, null, policyDAO, directoryDAO, NoExtensions, emailDomain, Set.empty)
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, null, Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)

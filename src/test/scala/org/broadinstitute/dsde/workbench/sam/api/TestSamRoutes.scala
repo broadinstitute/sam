@@ -4,10 +4,12 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.reject
 import akka.stream.Materializer
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{googleServicesConfig, samRequestContext}
+import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
@@ -34,13 +36,17 @@ class TestSamRoutes(
     override val newSamUser: Option[SamUser] = None,
     tosService: TosService,
     override val azureService: Option[AzureService] = None
-)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-    extends SamRoutes(
+)(implicit
+    override val system: ActorSystem,
+    override val materializer: Materializer,
+    override val executionContext: ExecutionContext,
+    override val openTelemetry: OpenTelemetryMetrics[IO]
+) extends SamRoutes(
       resourceService,
       userService,
       statusService,
       managedGroupService,
-      TermsOfServiceConfig(false, false, "0", "app.terra.bio/#terms-of-service"),
+      TermsOfServiceConfig(false, "0", "app.terra.bio/#terms-of-service"),
       directoryDAO,
       policyEvaluatorService,
       tosService,
@@ -53,6 +59,10 @@ class TestSamRoutes(
     with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
+  def createUserAndAcceptTos(samUser: SamUser, samRequestContext: SamRequestContext): Unit = {
+    TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+  }
 }
 
 class TestSamTosEnabledRoutes(
@@ -67,13 +77,17 @@ class TestSamTosEnabledRoutes(
     override val newSamUser: Option[SamUser] = None,
     tosService: TosService,
     override val azureService: Option[AzureService] = None
-)(implicit override val system: ActorSystem, override val materializer: Materializer, override val executionContext: ExecutionContext)
-    extends SamRoutes(
+)(implicit
+    override val system: ActorSystem,
+    override val materializer: Materializer,
+    override val executionContext: ExecutionContext,
+    override val openTelemetry: OpenTelemetryMetrics[IO]
+) extends SamRoutes(
       resourceService,
       userService,
       statusService,
       managedGroupService,
-      TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"),
+      TermsOfServiceConfig(false, "0", "app.terra.bio/#terms-of-service"),
       directoryDAO,
       policyEvaluatorService,
       tosService,
@@ -142,8 +156,9 @@ object TestSamRoutes {
       maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
-      crlService: Option[CrlService] = None
-  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
+      crlService: Option[CrlService] = None,
+      acceptTermsOfService: Boolean = true
+  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetrics[IO]) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
@@ -163,25 +178,30 @@ object TestSamRoutes {
       emailDomain,
       allowedAdminEmailDomains = adminEmailDomains.getOrElse(Set.empty)
     )
-    val mockUserService =
-      new UserService(directoryDAO, cloudXtns, Seq.empty, new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
-    val mockTosService = new TosService(directoryDAO, emailDomain, TestSupport.tosConfig)
+    val mockTosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val mockUserService = new UserService(directoryDAO, cloudXtns, Seq.empty, mockTosService)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, cloudXtns, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(user, samRequestContext))
+
+    if (acceptTermsOfService) {
+      TestSupport.runAndWait(mockTosService.acceptTosStatus(user.id, samRequestContext))
+    }
+
     val allUsersGroup = TestSupport.runAndWait(cloudXtns.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns, dbRef)
-    val azureService = new AzureService(crlService.getOrElse(MockCrlService()), directoryDAO)
+    val azureService = new AzureService(crlService.getOrElse(MockCrlService(Option(user))), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    val userToTestWith = if (acceptTermsOfService) user.copy(acceptedTosVersion = Some(tosConfig.version)) else user
     new TestSamRoutes(
       mockResourceService,
       policyEvaluatorService,
       mockUserService,
       mockStatusService,
       mockManagedGroupService,
-      user,
+      userToTestWith,
       directoryDAO,
       tosService = mockTosService,
       cloudExtensions = cloudXtns,

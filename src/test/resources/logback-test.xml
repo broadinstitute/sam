@@ -3,7 +3,7 @@
 
     <if condition='!isDefined("SAM_LOG_APPENDER")'>
         <then>
-            <variable name="SAM_LOG_APPENDER" value="Console-Stackdriver" />
+            <variable name="SAM_LOG_APPENDER" value="Console-Standard" />
         </then>
     </if>
 
@@ -12,15 +12,6 @@
             <fieldNames>
                 <level>severity</level>
             </fieldNames>
-        </encoder>
-    </appender>
-
-    <appender name="Console-Stackdriver" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
-            <layout class="org.springframework.cloud.gcp.logging.StackdriverJsonLayout">
-                <includeTraceId>true</includeTraceId>
-                <includeSpanId>true</includeSpanId>
-            </layout>
         </encoder>
     </appender>
 

@@ -875,11 +875,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v1/petServiceAccount/{userEmail}/key:
+    get:
+      tags:
+        - Google
+      summary: gets a key for the user's arbitrary pet service account, get_pet_private_key action on cloud-extension/google required
+      operationId: getUserArbitraryPetServiceAccountKey
+      parameters:
+        - name: userEmail
+          in: path
+          description: User's email address
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys
+          content:
+            application/json:
+              schema:
+                type: string
+        403:
+          description: caller has some access to cloud-extension/google but not to
+            the get_pet_private_key action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: user does not exist or caller does not have any access to cloud-extension/google
+            resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/user/petServiceAccount/{project}:
     get:
       tags:
         - Google
-      summary: gets the pet service account for the specified user
+      summary: gets the pet service account for the specified project
       operationId: getPetServiceAccount
       parameters:
         - name: project
@@ -901,6 +941,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+    delete:
+      tags:
+        - Google
+      summary: deletes the pet service account for the specified project
+      operationId: deletePetServiceAccount
+      parameters:
+        - name: project
+          in: path
+          description: Google project of the pet
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: pet service account deleted
+          content: {}
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/user/petServiceAccount/key:
     get:
       tags:
@@ -910,7 +972,10 @@ paths:
       responses:
         200:
           description: json format key for a pet service account, see https://cloud.google.com/iam/docs/creating-managing-service-account-keys
-          content: {}
+          content:
+            application/json:
+              schema:
+                type: string
         500:
           description: Internal Server Error
           content:
@@ -1142,6 +1207,88 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/azure/v1/billingProfile/{billingProfileId}/managedResourceGroup:
+    post:
+      tags:
+        - Azure
+      summary: associates billing profile id to managed resource group coordinates
+      operationId: createManagedResourceGroup
+      parameters:
+        - name: billingProfileId
+          in: path
+          description: billing profile id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: The details of the managed resource group in which to create the pet
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/ManagedResourceGroupCoordinates'
+        required: true
+      responses:
+        201:
+          description: Successfully created managed resource group
+          content: { }
+        400:
+          description: Invalid or incomplete request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        403:
+          description: Caller does not have permission to the managed resource group or it cannot be found or is otherwise invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: Caller does not have permission to the billing profile or it does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        409:
+          description: Managed resource group and/or billing profile already has an association
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    delete:
+      tags:
+        - Azure
+      summary: Deletes the managed resource group coordinates associated with the billing profile id
+      operationId: deleteManagedResourceGroup
+      parameters:
+        - name: billingProfileId
+          in: path
+          description: billing profile id
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Successfully deleted managed resource group
+          content: { }
+        403:
+          description: You do not have permission to perform this action on the resource
+          content: { }
+        404:
+          description: Resource does not exist
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+
   /api/azure/v1/user/petManagedIdentity:
     post:
       tags:
@@ -1173,10 +1320,10 @@ paths:
           content: { }
         403:
           description: Caller does not have permission to create a pet managed identity in the given managed resource group
-          content: { }
-        404:
-          description: Managed resource group does not exist
-          content: { }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         500:
           description: Internal Server Error
           content:
@@ -1488,7 +1635,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: string
+                  $ref: '#/components/schemas/UserIdInfo'
         403:
           description: You do not have permission to perform this action on the resource
           content: { }
@@ -2478,6 +2625,11 @@ paths:
         - Users
       summary: create current user in the system using login credentials
       operationId: createUserV2
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         201:
           description: user successfully created
@@ -2529,11 +2681,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /register/user/v2/self/termsOfServiceDetails:
+    get:
+      tags:
+        - Terms of Service
+      summary: gets terms of service details, including user's accepted version
+      operationId: getTermsOfServiceDetails
+      responses:
+        200:
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermsOfServiceDetails'
+  /register/user/v2/self/termsOfServiceComplianceStatus:
+    get:
+      tags:
+        - Terms of Service
+      summary: gets info on whether the user has accepted the latest terms of service and if they can use the system based on that
+      operationId: getTermsOfServiceComplianceStatus
+      responses:
+        200:
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermsOfServiceComplianceStatus'
+  /liveness:
+    get:
+      summary: Gets system liveness
+      responses:
+        "200":
+          description: System is up, but other routes may not be ready yet. See /status api for readiness.
+      operationId: getLiveness
+      tags:
+        - Status
   /status:
     get:
       tags:
         - Status
-      summary: gets system status
+      summary: gets system readiness status
       operationId: getSystemStatus
       responses:
         200:
@@ -2592,12 +2779,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /register/user/v1/termsofservice/status:
+    get:
+      tags:
+        - Terms of Service
+      summary: returns whether or not the user has accepted the current terms of service.
+      operationId: getUserTermsOfServiceStatus
+      responses:
+        200:
+          description: terms of service status is enabled, boolean value denotes users acceptance of the latest 
+            terms of service version.
+          content:
+            application/json:
+              schema:
+                type: boolean
+                description: if user has accepted the latest version of the terms of service
+        404:
+          description: user not found or terms of service disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /tos/text:
     get:
       tags:
         - Terms of Service
       summary: gets terms of service text
       operationId: getTermsOfServiceText
+      responses:
+        200:
+          description: success
+          content:
+            text/plain:
+              schema:
+                type: string
+  /privacy/text:
+    get:
+      tags:
+        - Terms of Service
+      summary: gets privacy policy text
+      operationId: getPrivacyPolicyText
       responses:
         200:
           description: success
@@ -3002,15 +3223,20 @@ components:
       additionalProperties:
         type: array
         items:
-          type: object
-          properties:
-            operation:
-              type: string
-            email:
-              type: string
-            errorReport:
-              $ref: '#/components/schemas/ErrorReport'
+          $ref: '#/components/schemas/SyncReportEntry'
       description: results of an attempt to synchronize a group
+    SyncReportEntry:
+      required:
+        - email
+        - operation
+      type: object
+      properties:
+        operation:
+          type: string
+        email:
+          type: string
+        errorReport:
+          $ref: '#/components/schemas/ErrorReport'
     SyncStatus:
       required:
         - email
@@ -3033,8 +3259,9 @@ components:
           description: true if everything is ok, false if anything is amiss
         systems:
           type: object
-          properties: {}
-          description: Map[String, SubsystemStatus]
+          description: status of each subsystem
+          additionalProperties:
+            $ref: '#/components/schemas/SubsystemStatus'
       description: status of each aubsystem Sam depends on
     UserIdInfo:
       required:
@@ -3157,6 +3384,63 @@ components:
           type: boolean
           description: true if the user is in their proxy group
       description: ""
+    TermsOfServiceDetails:
+      required:
+        - isEnabled
+        - isGracePeriodEnabled
+        - currentVersion
+        - userAcceptedVersion
+      type: object
+      properties:
+        isEnabled:
+          type: boolean
+          description: true if terms of service is enforced in Sam
+        isGracePeriodEnabled:
+          type: boolean
+          description: true if there is currently a grace period enabled, 
+            letting users use the system without accepting the terms of service
+        currentVersion:
+          type: string
+          description: the current version of terms of service for the system
+        userAcceptedVersion:
+          type: string
+          description: the version of the terms of service the user has accepted
+    TermsOfServiceComplianceStatus:
+      required:
+        - userId
+        - userHasAcceptedLatestTos
+        - permitsSystemUsage
+      type: object
+      properties:
+        userId:
+          type: string
+          description: user id terms of service compliance status pertains to
+        userHasAcceptedLatestTos:
+          type: boolean
+          description: has the user accepted the latest terms of service?
+        permitsSystemUsage:
+          type: boolean
+          description: based on the user's currently accepted terms of service version and when the terms of service were last changed, 
+            should the user still be permitted to use the system?
+    ManagedResourceGroupCoordinates:
+      required:
+        - tenantId
+        - subscriptionId
+        - managedResourceGroupName
+      type: object
+      properties:
+        tenantId:
+          type: string
+          description: the Azure tenant id (UUID)
+          example: 0cb7a640-45a2-4ed6-be9f-63519f86e04b
+        subscriptionId:
+          type: string
+          description: the Azure subscription id (UUID)
+          example: 3efc5bdf-be0e-44e7-b1d7-c08931e3c16c
+        managedResourceGroupName:
+          type: string
+          description: the name of the Azure managed resource group
+          example: my-managed-resource-group
     GetOrCreatePetManagedIdentityRequest:
       required:
         - tenantId
