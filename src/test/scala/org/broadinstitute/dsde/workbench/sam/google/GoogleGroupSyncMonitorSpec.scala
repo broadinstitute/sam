@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.mock.MockGooglePubSubDAO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupIdentity, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, _}
@@ -11,12 +12,10 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.scalatest.BeforeAndAfterAll
 import org.scalatestplus.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers.{eq => mockitoEq}
-
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers.any
 import org.scalatest.concurrent.Eventually
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import spray.json._
 import org.scalatest.flatspec.AnyFlatSpecLike
@@ -48,12 +47,12 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem)
     val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
     when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext]))
-      .thenReturn(Future.successful(Map(groupToSyncEmail -> Seq.empty[SyncReportItem])))
+      .thenReturn(IO.pure(Map(groupToSyncEmail -> Seq.empty[SyncReportItem])))
 
     val policyToSyncEmail = WorkbenchEmail("testpolicy@example.com")
     val policyToSyncId = FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName("rt"), ResourceId("rid")), AccessPolicyName("pname"))
     when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(policyToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext]))
-      .thenReturn(Future.successful(Map(policyToSyncEmail -> Seq.empty[SyncReportItem])))
+      .thenReturn(IO.pure(Map(policyToSyncEmail -> Seq.empty[SyncReportItem])))
 
     val topicName = "testtopic"
     val subscriptionName = "testsub"
@@ -89,7 +88,7 @@ class GoogleGroupSyncMonitorSpec(_system: ActorSystem)
     val groupToSyncEmail = WorkbenchEmail("testgroup@example.com")
     val groupToSyncId = WorkbenchGroupName("testgroup")
     when(mockGoogleExtensions.synchronizeGroupMembers(mockitoEq(groupToSyncId), any[Set[WorkbenchGroupIdentity]], any[SamRequestContext]))
-      .thenReturn(Future.failed(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
+      .thenReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "not found"))))
 
     val topicName = "testtopic"
     val subscriptionName = "testsub"

@@ -3,7 +3,14 @@ package org.broadinstitute.dsde.workbench.sam.db
 import java.sql.ResultSet
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityDisplayName, ManagedIdentityObjectId, ManagedResourceGroupName, SubscriptionId, TenantId}
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  BillingProfileId,
+  ManagedIdentityDisplayName,
+  ManagedIdentityObjectId,
+  ManagedResourceGroupName,
+  SubscriptionId,
+  TenantId
+}
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
 import scalikejdbc.TypeBinder
@@ -160,4 +167,20 @@ object SamTypeBinders {
     def apply(rs: ResultSet, label: String): ManagedIdentityDisplayName = ManagedIdentityDisplayName(rs.getString(label))
     def apply(rs: ResultSet, index: Int): ManagedIdentityDisplayName = ManagedIdentityDisplayName(rs.getString(index))
   }
+
+  implicit val ManagedResourceGroupPKTypeBinder: TypeBinder[ManagedResourceGroupPK] = new TypeBinder[ManagedResourceGroupPK] {
+    def apply(rs: ResultSet, label: String): ManagedResourceGroupPK = ManagedResourceGroupPK(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): ManagedResourceGroupPK = ManagedResourceGroupPK(rs.getLong(index))
+  }
+
+  implicit val BillingProfileIdTypeBinder: TypeBinder[BillingProfileId] = new TypeBinder[BillingProfileId] {
+    def apply(rs: ResultSet, label: String): BillingProfileId = BillingProfileId(rs.getString(label))
+    def apply(rs: ResultSet, index: Int): BillingProfileId = BillingProfileId(rs.getString(index))
+  }
+
+  implicit val lastQuotaErrorPKTypeBinder: TypeBinder[LastQuotaErrorPK] = new TypeBinder[LastQuotaErrorPK] {
+    def apply(rs: ResultSet, label: String): LastQuotaErrorPK = LastQuotaErrorPK(rs.getLong(label))
+    def apply(rs: ResultSet, index: Int): LastQuotaErrorPK = LastQuotaErrorPK(rs.getLong(index))
+  }
+
 }

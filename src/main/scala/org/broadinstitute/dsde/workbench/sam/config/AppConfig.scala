@@ -116,7 +116,6 @@ object AppConfig {
 
   implicit val termsOfServiceConfigReader: ValueReader[TermsOfServiceConfig] = ValueReader.relative { config =>
     TermsOfServiceConfig(
-      config.getBoolean("enabled"),
       config.getBoolean("isGracePeriodEnabled"),
       config.getString("version"),
       config.getString("url")
@@ -153,26 +152,48 @@ object AppConfig {
     )
   }
 
-  implicit val azureServicesConfigReader: ValueReader[AzureServicesConfig] = ValueReader.relative { config =>
-    AzureServicesConfig(
-      config.as[Option[Boolean]]("azureEnabled"),
-      config.getString("managedAppClientId"),
-      config.getString("managedAppClientSecret"),
-      config.getString("managedAppTenantId"),
-      config.as[Seq[String]]("managedAppPlanIds")
-    )
+  implicit val azureManagedAppPlanReader: ValueReader[ManagedAppPlan] = ValueReader.relative { config =>
+    ManagedAppPlan(config.getString("name"), config.getString("publisher"), config.getString("authorizedUserKey"))
+  }
+
+  implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
+    config
+      .getAs[Boolean]("azureEnabled")
+      .flatMap(azureEnabled =>
+        if (azureEnabled) {
+          Option(
+            AzureServicesConfig(
+              config.getString("managedAppClientId"),
+              config.getString("managedAppClientSecret"),
+              config.getString("managedAppTenantId"),
+              config.as[Seq[ManagedAppPlan]]("managedAppPlans")
+            )
+          )
+        } else {
+          None
+        }
+      )
   }
 
   implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
     PrometheusConfig(config.getInt("endpointPort"))
   }
+
+  /** Loads all the configs for the Sam App. All values defined in `src/main/resources/sam.conf` will take precedence over any other configs. In this way, we
+    * can still use configs rendered by `firecloud-develop` that render to `config/sam.conf` if we want. To do so, you must render `config/sam.conf` and then do
+    * not populate ENV variables for `src/main/resources/sam.conf`.
+    *
+    * The ENV variables that you need to populate can be found in `src/main/resources/sam.conf` variable substitutions. To run Sam locally, you can `source
+    * env/local.env` and all required ENV variables will be populated with with default values.
+    */
   def load: AppConfig = {
-    // We need to manually parse and resolve the env.conf file.
-    // ConfigFactory.load automatically pulls in the default reference.conf,
-    // which then ends up overriding any conf files provided as java options.
-    // We need to get _just_ the contents of env.conf so that normal overriding can occur.
+    // Start by parsing sam config files (like 'sam.conf') from wherever they live on the classpath
     val samConfig = ConfigFactory.parseResourcesAnySyntax("sam").resolve()
+    // Load any other configs on the classpath following: https://github.com/lightbend/config#standard-behavior
+    // This is where things like `src/main/resources/reference.conf` will get loaded
     val config = ConfigFactory.load()
+    // Combine the two sets of configs.  If a value is defined in both sets of configs, the ones in `samConfig` will
+    // take precedence over those in `config`
     val combinedConfig = samConfig.withFallback(config)
     AppConfig.readConfig(combinedConfig)
   }
@@ -180,7 +201,11 @@ object AppConfig {
   def readConfig(config: Config): AppConfig = {
     val googleConfigOption = for {
       googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
-    } yield GoogleConfig(googleServices, config.as[PetServiceAccountConfig]("petServiceAccount"))
+    } yield GoogleConfig(
+      googleServices,
+      config.as[PetServiceAccountConfig]("petServiceAccount"),
+      config.as[Option[Duration]]("coordinatedAdminSdkBackoffDuration")
+    )
 
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to

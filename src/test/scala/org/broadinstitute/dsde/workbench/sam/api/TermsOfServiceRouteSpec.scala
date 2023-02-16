@@ -21,4 +21,15 @@ class TermsOfServiceRouteSpec extends AnyFlatSpec with Matchers with ScalatestRo
       }
     }
   }
+
+  "GET /privacy/text" should "return the privacy policy text" in {
+    val samRoutes = TestSamRoutes(Map.empty)
+    eventually {
+      Get("/privacy/text") ~> samRoutes.route ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String].isEmpty shouldBe false
+      }
+    }
+  }
+
 }

@@ -5,7 +5,6 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
@@ -33,21 +32,21 @@ trait CloudExtensions {
 
   def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit]
 
-  def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit]
+  def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit]
 
-  def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): Future[Unit]
+  def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
 
-  def getUserStatus(user: SamUser): Future[Boolean]
+  def getUserStatus(user: SamUser): IO[Boolean]
 
-  def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit]
+  def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
 
-  def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit]
+  def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
 
-  def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit]
+  def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean]
 
-  def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchEmail]]
+  def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
 
   def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit
 
@@ -59,7 +58,7 @@ trait CloudExtensions {
 
   def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
-  ): Future[WorkbenchGroup]
+  ): IO[WorkbenchGroup]
 }
 
 trait CloudExtensionsInitializer {
@@ -76,22 +75,22 @@ trait NoExtensions extends CloudExtensions {
 
   override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
 
-  override def onGroupDelete(groupEmail: WorkbenchEmail): Future[Unit] = Future.successful(())
+  override def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit] = IO.unit
 
-  override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
+  override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
-  override def getUserStatus(user: SamUser): Future[Boolean] = Future.successful(true)
+  override def getUserStatus(user: SamUser): IO[Boolean] = IO.pure(true)
 
-  override def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
+  override def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
-  override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
+  override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
-  override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
+  override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
 
-  override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): Future[Option[WorkbenchEmail]] =
-    Future.successful(Option(userEmail))
+  override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
+    IO.pure(Option(userEmail))
 
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit = ()
 
@@ -103,11 +102,11 @@ trait NoExtensions extends CloudExtensions {
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
-  ): Future[WorkbenchGroup] = {
+  ): IO[WorkbenchGroup] = {
     val allUsersGroup =
       BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"))
     for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext).unsafeToFuture() recover {
+      createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext) recover {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
       }
     } yield createdGroup

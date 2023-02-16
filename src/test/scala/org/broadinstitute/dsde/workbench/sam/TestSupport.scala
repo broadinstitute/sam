@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam
 
 import akka.actor.ActorSystem
 import akka.stream.Materializer
-import cats.effect.IO
+import cats.effect._
 import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import com.typesafe.config.ConfigFactory
@@ -14,12 +14,12 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetricsInterpreter
+import org.broadinstitute.dsde.workbench.openTelemetry.{FakeOpenTelemetryMetricsInterpreter, OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
 import org.broadinstitute.dsde.workbench.sam.config._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockDirectoryDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
@@ -27,13 +27,11 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.Mockito.RETURNS_SMART_NULLS
 import org.scalatest.Tag
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
 import org.scalatest.time.{Seconds, Span}
-import org.scalatestplus.mockito.MockitoSugar.mock
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import scalikejdbc.QueryDSL.delete
 import scalikejdbc.withSQL
@@ -51,7 +49,7 @@ trait TestSupport {
 
   implicit val futureTimeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
-  implicit val openTelemetry: OpenTelemetryMetricsInterpreter[IO] = mock[OpenTelemetryMetricsInterpreter[IO]](RETURNS_SMART_NULLS)
+  implicit val openTelemetry = FakeOpenTelemetryMetricsInterpreter
 
   val samRequestContext = SamRequestContext()
 
@@ -89,8 +87,7 @@ object TestSupport extends TestSupport {
       googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
       policyAccessDAO: Option[AccessPolicyDAO] = None,
       policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-      resourceServiceOpt: Option[ResourceService] = None,
-      tosEnabled: Boolean = false
+      resourceServiceOpt: Option[ResourceService] = None
   )(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
@@ -147,8 +144,8 @@ object TestSupport extends TestSupport {
     )
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
-    val azureService = new AzureService(MockCrlService(), directoryDAO)
+    val tosService = new TosService(directoryDAO, tosConfig)
+    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     SamDependencies(
       mockResourceService,
       policyEvaluatorService,
@@ -169,7 +166,7 @@ object TestSupport extends TestSupport {
   def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit
       system: ActorSystem,
       materializer: Materializer,
-      openTelemetry: OpenTelemetryMetricsInterpreter[IO]
+      openTelemetry: OpenTelemetryMetrics[IO]
   ): SamRoutes = new SamRoutes(
     samDependencies.resourceService,
     samDependencies.userService,
@@ -196,7 +193,7 @@ object TestSupport extends TestSupport {
           googleExtensions.googleDirectoryDAO,
           googleExtensions,
           googleExtensions.resourceTypes
-        )(executionContext)
+        )
       } else null
     val googleKeyCache = samDependencies.cloudExtensions match {
       case extensions: GoogleExtensions => extensions.googleKeyCache
@@ -236,10 +233,12 @@ object TestSupport extends TestSupport {
           GroupMemberTable,
           GroupMemberFlatTable,
           PetServiceAccountTable,
+          AzureManagedResourceGroupTable,
           PetManagedIdentityTable,
           UserTable,
           AccessInstructionsTable,
-          GroupTable
+          GroupTable,
+          LastQuotaErrorTable
         )
 
         tables
@@ -253,6 +252,21 @@ object TestSupport extends TestSupport {
     } else {
       0
     }
+
+  def newUserWithAcceptedTos(services: StandardSamUserDirectives, samUser: SamUser, samRequestContext: SamRequestContext): SamUser = {
+    TestSupport.runAndWait(services.directoryDAO.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(services.tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(services.directoryDAO.loadUser(samUser.id, samRequestContext)).orNull
+  }
+
+  def newUserStatusWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
+    TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly = false, samRequestContext)).orNull
+  }
+
+  val enabledMapNoTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)
+  val enabledMapTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
 }
 
 final case class SamDependencies(
