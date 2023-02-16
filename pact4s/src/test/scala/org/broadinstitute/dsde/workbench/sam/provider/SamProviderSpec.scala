@@ -134,7 +134,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .PactBrokerWithSelectors(
         brokerUrl = pactBrokerUrl
       )
-      .withConsumerVersionSelectors(ConsumerVersionSelectors.tag("a74e637"))
+      .withConsumerVersionSelectors(ConsumerVersionSelectors.tag("6387433"))
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
 
