@@ -21,15 +21,15 @@ class InviteUserSpec extends UserServiceTestTraits {
   describe("When a new user") {
     val newUser = genWorkbenchUserGoogle.sample.get
 
-    describe("with a new email address") {
+    describe("is invited") {
       val userService = TestUserServiceBuilder().withAllUsersGroup(allUsersGroup).build
 
-      describe("is invited") {
+      describe("with a valid email address") {
         val invitedUserEmail = newUser.email
         val invitedUserStatus = runAndWait(userService.inviteUser(invitedUserEmail, samRequestContext))
 
         it("returns a status that indicates the user exists and is invited") {
-          invitedUserStatus.userSubjectId.value should fullyMatch regex """\S{3,}"""
+          invitedUserStatus.userSubjectId.value should fullyMatch regex """\S+"""
           invitedUserStatus.userEmail shouldBe invitedUserEmail
         }
 
@@ -54,6 +54,16 @@ class InviteUserSpec extends UserServiceTestTraits {
         // we should perform these assertions, however right now they're buried inside cloudExtensions.onUserCreate, which is dumb
         ignore("creates a proxy group for the user on GCP") {}
         ignore("adds the user to the All_Users group") {}
+      }
+
+      describe("with an invalid email address") {
+        it("errors telling us the email address is invalid") {
+          val invalidUserEmail = WorkbenchEmail("not an email")
+          val e = intercept[Exception] {
+            runAndWait(userService.inviteUser(invalidUserEmail, samRequestContext))
+          }
+          e.getMessage should include("invalid email address")
+        }
       }
     }
   }

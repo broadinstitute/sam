@@ -2,7 +2,14 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genPetServiceAccount, genPolicy, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
+import org.broadinstitute.dsde.workbench.sam.Generator.{
+  genBasicWorkbenchGroup,
+  genPetServiceAccount,
+  genPolicy,
+  genWorkbenchUserAzure,
+  genWorkbenchUserBoth,
+  genWorkbenchUserGoogle
+}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
