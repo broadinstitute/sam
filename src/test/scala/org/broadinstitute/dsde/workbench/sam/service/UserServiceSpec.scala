@@ -523,33 +523,6 @@ class OldUserServiceSpec
     }
   }
 
-  "UserService inviteUser" should "create a new user" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    val userEmail = genNonPetEmail.sample.get
-    service.inviteUser(userEmail, samRequestContext).unsafeRunSync()
-    val userId = dirDAO.loadSubjectFromEmail(userEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
-    val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
-    res shouldBe Some(SamUser(userId, None, userEmail, None, false, None))
-  }
-
-  it should "reject blocked domain" in {
-    intercept[WorkbenchExceptionWithErrorReport] {
-      service.inviteUser(WorkbenchEmail(s"user@$blockedDomain"), samRequestContext).unsafeRunSync()
-    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
-  }
-
-  it should "return conflict when there's an existing subject for a given email" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    val user = genWorkbenchUserGoogle.sample.get
-    dirDAO.createUser(user, samRequestContext).unsafeRunSync()
-    val res = intercept[WorkbenchExceptionWithErrorReport] {
-      service.inviteUser(user.email, samRequestContext).unsafeRunSync()
-    }
-    res.errorReport.statusCode shouldBe Option(StatusCodes.Conflict)
-  }
-
   "GetStatus for an invited user" should "return a user status that is disabled" in {
     assume(databaseEnabled, databaseEnabledClue)
 
