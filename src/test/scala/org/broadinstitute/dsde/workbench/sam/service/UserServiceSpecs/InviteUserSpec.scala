@@ -56,7 +56,7 @@ class InviteUserSpec extends UserServiceTestTraits {
       }
 
       describe("with an invalid email address") {
-        it("errors telling us the email address is invalid") {
+        it("fails with a message indicating that the email address is invalid") {
           val invalidUserEmail = WorkbenchEmail("not an email")
           val e = intercept[Exception] {
             runAndWait(userService.inviteUser(invalidUserEmail, samRequestContext))
@@ -68,7 +68,7 @@ class InviteUserSpec extends UserServiceTestTraits {
       describe("with an email address from a blocked domain") {
         val blockedDomain = "blocked.domain.com"
 
-        it("errors telling us the email domain is invalid") {
+        it("fails with a message indicating that the email domain is invalid") {
           // Setup
           val invalidEmail = WorkbenchEmail(s"foo@${blockedDomain}")
           val userService = TestUserServiceBuilder()
