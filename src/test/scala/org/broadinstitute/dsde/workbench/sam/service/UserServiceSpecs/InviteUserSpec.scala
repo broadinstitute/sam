@@ -16,7 +16,6 @@ class InviteUserSpec extends UserServiceTestTraits {
 
   // Setup test vals
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  val blockedDomain = "blocked.domain.com"
 
   describe("When a new user") {
     val newUser = genWorkbenchUserGoogle.sample.get
@@ -63,6 +62,23 @@ class InviteUserSpec extends UserServiceTestTraits {
             runAndWait(userService.inviteUser(invalidUserEmail, samRequestContext))
           }
           e.getMessage should include("invalid email address")
+        }
+      }
+
+      describe("with an email address from a blocked domain") {
+        val blockedDomain = "blocked.domain.com"
+
+        it("errors telling us the email domain is invalid") {
+          // Setup
+          val invalidEmail = WorkbenchEmail(s"foo@${blockedDomain}")
+          val userService = TestUserServiceBuilder()
+            .withBlockedEmailDomain(blockedDomain)
+            .build
+
+          val e = intercept[Exception] {
+            runAndWait(userService.inviteUser(invalidEmail, samRequestContext))
+          }
+          e.getMessage should include(s"email domain not permitted [${invalidEmail.value}]")
         }
       }
     }
