@@ -27,6 +27,22 @@ class CreateUserSpec extends UserServiceTestTraits {
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val blockedDomain = "blocked.domain.com"
 
+  // TODO: describe the createUser behavior in a more behavior-oriented manner
+  // we need to make sure that we cover all the various user states that a user can be in when they register
+  // from a non-existent user, to an invited user, to an already registered user, to a disabled user, etc etc etc.
+  // we might already have a bunch of these covered in this spec but we want to rename them
+
+  describe("create a user") {
+    describe("that doesn't already exist") {}
+    describe("that already exists") {
+      describe("is already registered") {}
+      describe("is invited") {}
+    }
+    describe("with a pet email address") {}
+    describe("with a Sam group email address") {}
+  }
+
+
   describe("UserService.createUser") {
     describe("returns an activated UserStatus that has NOT accepted ToS") {
       it("when user has an AzureB2CId and a GoogleSubjectId") {
