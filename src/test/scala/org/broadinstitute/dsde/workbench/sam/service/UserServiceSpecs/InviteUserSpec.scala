@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserGoogle
+import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TestUserServiceBuilder}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -80,6 +80,23 @@ class InviteUserSpec extends UserServiceTestTraits {
           }
           e.getMessage should include(s"email domain not permitted [${invalidEmail.value}]")
         }
+      }
+    }
+  }
+
+  describe("When an existing user") {
+    describe("is invited") {
+      it("fails with a message indicating that the user already exists") {
+        val existingUser = genWorkbenchUserBoth.sample.get
+        val userService = TestUserServiceBuilder()
+          .withAllUsersGroup(allUsersGroup)
+          .withExistingUser(existingUser)
+          .build
+
+        val e = intercept[Exception] {
+          runAndWait(userService.inviteUser(existingUser.email, samRequestContext))
+        }
+        e.getMessage should include(s"${existingUser.email.value} already exists")
       }
     }
   }
