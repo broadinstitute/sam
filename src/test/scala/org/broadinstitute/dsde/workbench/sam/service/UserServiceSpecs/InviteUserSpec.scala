@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.service.GenEmail.genBadChar
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TestUserServiceBuilder}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentCaptor
@@ -58,6 +59,22 @@ class InviteUserSpec extends UserServiceTestTraits {
       describe("with an invalid email address") {
         it("fails with a message indicating that the email address is invalid") {
           val invalidUserEmail = WorkbenchEmail("not an email")
+          val e = intercept[Exception] {
+            runAndWait(userService.inviteUser(invalidUserEmail, samRequestContext))
+          }
+          e.getMessage should include("invalid email address")
+        }
+
+        it("reject email addresses missing @") {
+          val invalidUserEmail = WorkbenchEmail("bart.simpson_google.com")
+          val e = intercept[Exception] {
+            runAndWait(userService.inviteUser(invalidUserEmail, samRequestContext))
+          }
+          e.getMessage should include("invalid email address")
+        }
+
+        it("reject email addresses with bad chars") {
+          val invalidUserEmail = WorkbenchEmail(s"barts${genBadChar}simpson@google.com")
           val e = intercept[Exception] {
             runAndWait(userService.inviteUser(invalidUserEmail, samRequestContext))
           }
