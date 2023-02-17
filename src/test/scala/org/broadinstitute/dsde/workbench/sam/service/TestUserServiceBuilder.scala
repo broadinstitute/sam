@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.WorkbenchGroup
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
@@ -32,7 +32,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   private var maybeAllUsersGroup: Option[WorkbenchGroup] = None
   private val blockedEmailDomains: mutable.Set[String] = mutable.Set.empty
   private var haveAllAcceptedToS: Boolean = false
-  private val tosStatesForUsers: mutable.Map[WorkbenchUserId, Boolean] = mutable.Map.empty
+  private val tosStatesForUsers: mutable.Map[SamUser, Boolean] = mutable.Map.empty
 
   def withExistingUser(samUser: SamUser): TestUserServiceBuilder = withExistingUsers(List(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = {
@@ -73,7 +73,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   }
 
   def withToSAcceptanceStateForUser(samUser: SamUser, isAccepted: Boolean): TestUserServiceBuilder = {
-    tosStatesForUsers.update(samUser.id, isAccepted)
+    tosStatesForUsers.update(samUser, isAccepted)
     this
   }
 
@@ -126,7 +126,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
     }
 
     // Then set any individual ToS states for specific users
-    tosStatesForUsers.foreach { tuple: (WorkbenchUserId, Boolean) =>
+    tosStatesForUsers.foreach { tuple: (SamUser, Boolean) =>
       mockTosServiceBuilder.withAcceptedStateForUser(tuple._1, tuple._2)
     }
 

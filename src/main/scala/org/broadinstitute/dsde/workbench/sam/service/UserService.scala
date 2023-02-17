@@ -164,19 +164,21 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
               allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case _: NameNotFoundException =>
                 false
               }
-              tosAcceptedStatus <- tosService.getTosStatus(user.id, samRequestContext)
+              tosComplianceStatus <- tosService.getTosComplianceStatus(user)
               adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
             } yield {
               // We are removing references to LDAP but this will require an API version change here, so we are leaving
               // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
               // leaving that logic unchanged for now.
               // ticket: https://broadworkbench.atlassian.net/browse/ID-266
-              val enabledMap = Map("ldap" -> adminEnabled, "allUsersGroup" -> allUsersStatus, "google" -> googleStatus)
-              val enabledStatuses = tosAcceptedStatus match {
-                case Some(status) => enabledMap + ("tosAccepted" -> status) + ("adminEnabled" -> adminEnabled)
-                case None => enabledMap
-              }
-              val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledStatuses))
+              val enabledMap = Map(
+                "ldap" -> adminEnabled,
+                "allUsersGroup" -> allUsersStatus,
+                "google" -> googleStatus,
+                "adminEnabled" -> adminEnabled,
+                "tosAccepted" -> tosComplianceStatus.permitsSystemUsage
+              )
+              val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledMap))
               res
             }
         case None => IO.pure(None)
@@ -203,17 +205,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // single boolean response indicating whether the user can use the system.
   // Then there can be a simple, separate endpoint for `getUserInfo` that just returns the user record and that's it.
   // Mixing up the endpoint to return user info AND status information is only causing problems and confusion
-  def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] = {
-    val tosStatus = tosService.isTermsOfServiceStatusAcceptable(user)
-    IO.pure(UserStatusInfo(user.id.value, user.email.value, tosStatus && user.enabled, user.enabled))
-  }
+  def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] =
+    for {
+      tosAcceptanceDetails <- tosService.getTosComplianceStatus(user)
+    } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.permitsSystemUsage && user.enabled, user.enabled)
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusDiagnostics]] =
     openTelemetry.time("api.v1.user.statusDiagnostics.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
           // pulled out of for comprehension to allow concurrent execution
-          val tosAcceptedStatus = tosService.getTosStatus(user.id, samRequestContext)
+          val tosAcceptanceStatus = tosService.getTosComplianceStatus(user)
           val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext)
           val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
             directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case e: NameNotFoundException => false }
@@ -227,10 +229,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             // ticket: https://broadworkbench.atlassian.net/browse/ID-266
             ldap <- adminEnabledStatus
             allUsers <- allUsersStatus
-            tosAccepted <- tosAcceptedStatus
+            tosAccepted <- tosAcceptanceStatus
             google <- googleStatus
             adminEnabled <- adminEnabledStatus
-          } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted, adminEnabled))
+          } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted.permitsSystemUsage, adminEnabled))
         case None => IO.pure(None)
       }
     }
