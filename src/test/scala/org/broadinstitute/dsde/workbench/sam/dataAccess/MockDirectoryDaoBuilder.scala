@@ -59,7 +59,7 @@ case class MockDirectoryDaoBuilder() {
   }.when(mockedDirectoryDAO)
     .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
 
-  doAnswer{ (invocation: InvocationOnMock) =>
+  doAnswer { (invocation: InvocationOnMock) =>
     val subject = invocation.getArgument[WorkbenchUserId](0)
     val samRequestContext = invocation.getArgument[SamRequestContext](1)
     val maybeUser = mockedDirectoryDAO.loadUser(subject, samRequestContext).unsafeRunSync()
