@@ -27,6 +27,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   // - are in the "All_Users" group in Sam
   // - are in the "All_Users" group in Google
   private val enabledUsers: mutable.Set[SamUser] = mutable.Set.empty
+  private val disabledUsers: mutable.Set[SamUser] = mutable.Set.empty
 
   private var maybeAllUsersGroup: Option[WorkbenchGroup] = None
   private val blockedEmailDomains: mutable.Set[String] = mutable.Set.empty
@@ -49,7 +50,12 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   }
 
   // A disabled user is explicitly a user who was previously enabled and is now no longer enabled
-  def withDisabledUser(samUser: SamUser): TestUserServiceBuilder = ???
+  def withDisabledUser(samUser: SamUser): TestUserServiceBuilder = withDisabledUsers(List(samUser))
+
+  def withDisabledUsers(samUsers: Iterable[SamUser]): TestUserServiceBuilder = {
+    disabledUsers.addAll(samUsers)
+    this
+  }
 
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): TestUserServiceBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
@@ -98,6 +104,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
     mockDirectoryDaoBuilder
       .withExistingUsers(existingUsers)
       .withEnabledUsers(enabledUsers)
+      .withDisabledUsers(disabledUsers)
       .build
   }
 
@@ -105,6 +112,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
     val mockCloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
     mockCloudExtensionsBuilder
       .withEnabledUsers(enabledUsers)
+      .withDisabledUsers(disabledUsers)
       .build
   }
 

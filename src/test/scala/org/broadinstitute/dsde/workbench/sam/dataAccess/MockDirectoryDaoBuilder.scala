@@ -115,6 +115,17 @@ case class MockDirectoryDaoBuilder() {
     this
   }
 
+  def withDisabledUser(samUser: SamUser): MockDirectoryDaoBuilder = withDisabledUsers(Set(samUser))
+
+  def withDisabledUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
+    samUsers.toSet.foreach { u: SamUser =>
+      makeUserExist(u)
+      makeUserEnabled(u)
+      makeUserDisabled(u)
+    }
+    this
+  }
+
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): MockDirectoryDaoBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
 
