@@ -148,7 +148,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
         ProviderVerificationOption.SHOW_STACKTRACE,
         // Exclude these Consumers from Pact Broker
         ProviderVerificationOption.FILTER_CONSUMERS
-          .apply(Seq("Example App", "GoAdminService", "cbas-ui").toList)
+          .apply(Seq("Example App", "GoAdminService", "cbas-ui", "consent-consumer").toList)
       ).toList,
       verificationTimeout = Some(10.seconds)
     )
