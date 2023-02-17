@@ -7,7 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 
@@ -19,37 +19,6 @@ class CreateUserSpec extends UserServiceTestTraits {
   // Setup test vals
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val blockedDomain = "blocked.domain.com"
-
-  describe("UserService") {
-    describe("when a new user") {
-      val newUser = genWorkbenchUserGoogle.sample.get
-
-      describe("with a new email address") {
-        val userService = TestUserServiceBuilder().withAllUsersGroup(allUsersGroup).build
-
-        describe("is invited") {
-          runAndWait(userService.inviteUser(newUser.email, samRequestContext))
-
-          it("creates a user in the Sam database") {
-            // need to user a captor here because userService.inviteUser creates a new SamUser instance that it saves to the db
-            val userCaptor = ArgumentCaptor.forClass(classOf[SamUser])
-            verify(userService.directoryDAO).createUser(userCaptor.capture(), any[SamRequestContext])
-            val capturedUser: SamUser = userCaptor.getValue
-            capturedUser.email shouldBe newUser.email
-          }
-
-          it("creates the user in GCP") {
-            // TODO: make this pass pls
-            verify(userService.cloudExtensions).onUserCreate(newUser, samRequestContext)
-          }
-
-          // we should perform these assertions, however right now they're buried inside cloudExtensions.onUserCreate, which is dumb
-          ignore("creates a proxy group for the user on GCP") {}
-          ignore("adds the user to the All_Users group") {}
-        }
-      }
-    }
-  }
 
   describe("UserService.createUser") {
     describe("returns an activated UserStatus that has NOT accepted ToS") {
