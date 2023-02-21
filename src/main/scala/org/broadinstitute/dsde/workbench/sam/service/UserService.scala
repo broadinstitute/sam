@@ -139,6 +139,18 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext)
 
+  // Get User Status v1
+  // This endpoint/method should probably be deprecated.
+  // Getting the user status returns _some_ information about the user itself:
+  //   - User's Sam ID (may or may not be the same value as the user's google subject ID)
+  //   - User email
+  // In addition, this endpoint also returns some information about various states of "enablement" for the user:
+  //   - "ldap" - this is deprecated and should be removed
+  //   - "allUsersGroup" - boolean indicating a whether a user is a member of the All Users Group in Sam.  When users
+  //     register in Sam, they should be added to this group
+  //   - "google" - boolean indicating whether the user's email address is listed as a member of their proxy group on
+  //     Google
+  //   - "adminEnabled" - boolean value read directly from the Sam User table
   def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     openTelemetry.time("api.v1.user.getStatus.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
@@ -185,6 +197,14 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       status <- getUserStatus(userId, false, samRequestContext)
     } yield status
 
+  // `UserStatusInfo` is too complicated.  Yes seriously.  What the heck is the difference between "enabled" and
+  // "adminEnabled"? Do our consumers know?  Do they care?  Should they care?  I think the answer is "no".  This class
+  // should just have the user details and just a single boolean indicating if the user may or may not use the system.
+  // Then again, why does this class have user details in it at all?  The caller knows who they are making the request
+  // for, why are we returning user details in the response?  This whole object can go away and we can just return a
+  // single boolean response indicating whether the user can use the system.
+  // Then there can be a simple, separate endpoint for `getUserInfo` that just returns the user record and that's it.
+  // Mixing up the endpoint to return user info AND status information is only causing problems and confusion
   def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] =
     for {
       tosAcceptanceDetails <- tosService.getTosComplianceStatus(user)

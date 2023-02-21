@@ -50,8 +50,8 @@ abstract class UserServiceTestTraits extends AnyFunSpec with Matchers with TestS
         case Some(status) =>
           MatchResult(
             status,
-            s"$componentName is not true",
-            s"$componentName is true "
+            s"$componentName is not true, but expected it to be ",
+            s"$componentName is true, but shouldn't be "
           )
         case None =>
           val failureMsg = s"No entry found for $componentName"
