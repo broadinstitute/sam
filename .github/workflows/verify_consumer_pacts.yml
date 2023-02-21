@@ -6,14 +6,9 @@ name: Verify consumer pacts
 # - PACT_BROKER_USERNAME - the Pact Broker username
 # - PACT_BROKER_PASSWORD - the Pact Broker password
 on:
-  pull_request:
-    branches:
-      - develop
-    paths-ignore:
-      - 'README.md'
   push:
     branches:
-      - develop
+      - QA-2050
     paths-ignore:
       - 'README.md'
 env:
