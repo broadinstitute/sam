@@ -66,16 +66,18 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
     .when(mockedDirectoryDAO)
     .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
 
-  doAnswer { (invocation: InvocationOnMock) =>
-    val subject = invocation.getArgument[WorkbenchUserId](0)
-    val samRequestContext = invocation.getArgument[SamRequestContext](1)
-    val maybeUser = mockedDirectoryDAO.loadUser(subject, samRequestContext).unsafeRunSync()
-    maybeUser match {
-      case Some(samUser) => makeUserDisabled(samUser)
-      case None => throw new RuntimeException("Mocking error when trying to disable a user that does not exist")
+  lenient()
+    .doAnswer { (invocation: InvocationOnMock) =>
+      val subject = invocation.getArgument[WorkbenchUserId](0)
+      val samRequestContext = invocation.getArgument[SamRequestContext](1)
+      val maybeUser = mockedDirectoryDAO.loadUser(subject, samRequestContext).unsafeRunSync()
+      maybeUser match {
+        case Some(samUser) => makeUserDisabled(samUser)
+        case None => throw new RuntimeException("Mocking error when trying to disable a user that does not exist")
+      }
+      IO.unit
     }
-    IO.unit
-  }.when(mockedDirectoryDAO)
+    .when(mockedDirectoryDAO)
     .disableIdentity(any[WorkbenchSubject], any[SamRequestContext])
 
   // No users "exist" so there are a bunch of queries that should return false/None if they depend on "existing" users
