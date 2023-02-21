@@ -1,12 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers
+import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceComplianceStatus}
+import org.mockito.{ArgumentMatcher, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, doReturn}
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, doAnswer, doReturn}
 import org.scalatestplus.mockito.MockitoSugar.mock
 
 case class MockTosServiceBuilder() {
@@ -26,24 +24,24 @@ case class MockTosServiceBuilder() {
   }
 
   def withAcceptedStateForUser(samUser: SamUser, isAccepted: Boolean): MockTosServiceBuilder = {
-    setAcceptedStateForUserTo(samUser.id, isAccepted)
-    this
-  }
-
-  def withAcceptedStateForUser(userId: WorkbenchUserId, isAccepted: Boolean): MockTosServiceBuilder = {
-    setAcceptedStateForUserTo(userId, isAccepted)
+    setAcceptedStateForUserTo(samUser, isAccepted)
     this
   }
 
   private def setAcceptedStateForAllTo(isAccepted: Boolean) =
-    doReturn(IO(Option(isAccepted)))
+    doAnswer(i => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, isAccepted, isAccepted)))
       .when(tosService)
-      .getTosStatus(any[WorkbenchUserId], any[SamRequestContext])
+      .getTosComplianceStatus(any[SamUser])
 
-  private def setAcceptedStateForUserTo(userId: WorkbenchUserId, isAccepted: Boolean) =
-    doReturn(IO(Option(isAccepted)))
+  private def setAcceptedStateForUserTo(samUser: SamUser, isAccepted: Boolean) = {
+    val matchesUser = new ArgumentMatcher[SamUser] {
+      override def matches(argument: SamUser): Boolean =
+        argument.id.equals(samUser.id)
+    }
+    doReturn(IO.pure(TermsOfServiceComplianceStatus(samUser.id, isAccepted, isAccepted)))
       .when(tosService)
-      .getTosStatus(ArgumentMatchers.eq(userId), any[SamRequestContext])
+      .getTosComplianceStatus(ArgumentMatchers.argThat(matchesUser))
+  }
 
   def build: TosService = tosService
 }

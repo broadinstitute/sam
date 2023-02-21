@@ -1,17 +1,23 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
+import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
+import org.broadinstitute.dsde.workbench.sam.TestSupport.tosConfig
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, verify, when}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatestplus.mockito.MockitoSugar.mock
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll with BeforeAndAfter with PropertyBasedTesting {
+class TosServiceSpec extends AnyFreeSpec with TestSupport with BeforeAndAfterAll with BeforeAndAfter with PropertyBasedTesting {
 
-  lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
+  lazy val dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
   val defaultUser = Generator.genWorkbenchUserBoth.sample.get
   val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
@@ -29,82 +35,118 @@ class TosServiceSpec extends AnyFlatSpec with TestSupport with BeforeAndAfterAll
   protected def clearDatabase(): Unit =
     TestSupport.truncateAll
 
-  "TosService" should "accept, get, and reject the ToS for a user" in {
-    assume(databaseEnabled, databaseEnabledClue)
+  "TosService" - {
+    "accepts the ToS for a user" in {
+      when(dirDAO.acceptTermsOfService(any[WorkbenchUserId], any[String], any[SamRequestContext]))
+        .thenReturn(IO.pure(true))
 
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    val tosServiceEnabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true))
+      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
 
-    // accept and get ToS status
-    val acceptTosStatusResult = tosServiceEnabled.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
-    assert(acceptTosStatusResult.get, s"acceptTosStatus(${defaultUser.id}) should accept the tos for the user")
-    val getTosStatusResult = tosServiceEnabled.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
-    assert(getTosStatusResult.get, s"getTosStatus(${defaultUser.id}) should get the tos for the user")
+      // accept and get ToS status
+      val acceptTosStatusResult = tosService.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
+      acceptTosStatusResult shouldBe true
 
-    // reject and get ToS status
-    val rejectTosStatusResult = tosServiceEnabled.rejectTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
-    assert(rejectTosStatusResult.get, s"rejectTosStatus(${defaultUser.id}) should reject the tos for the user")
-    val getTosStatusResultRejected = tosServiceEnabled.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
-    assertResult(expected = false, s"getTosStatus(${defaultUser.id}) should have returned false")(actual = getTosStatusResultRejected.get)
-  }
+      verify(dirDAO).acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext)
+    }
 
-  it should "allow users to accept new version of ToS" in {
-    assume(databaseEnabled, databaseEnabledClue)
+    "rejects the ToS for a user" in {
+      when(dirDAO.rejectTermsOfService(any[WorkbenchUserId], any[SamRequestContext]))
+        .thenReturn(IO.pure(true))
 
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
+      // reject and get ToS status
+      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+      val rejectTosStatusResult = tosService.rejectTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
 
-    val tosServiceEnabledV0 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "0"))
-    tosServiceEnabledV0.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(false)
-    tosServiceEnabledV0.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(true)
-    tosServiceEnabledV0.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(true)
+      rejectTosStatusResult shouldBe true
+      verify(dirDAO).rejectTermsOfService(defaultUser.id, samRequestContext)
+    }
 
-    val tosServiceEnabledV2 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2"))
-    tosServiceEnabledV2.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(false)
-    tosServiceEnabledV2.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(true)
-    tosServiceEnabledV2.getTosStatus(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Option(true)
-  }
+    "always allows service account users to use the system" in {
+      val tosService =
+        new TosService(dirDAO, TestSupport.tosConfig.copy(version = "2"))
+      val complianceStatus = tosService.getTosComplianceStatus(serviceAccountUser).unsafeRunSync()
+      complianceStatus.permitsSystemUsage shouldBe true
+    }
 
-  "TosService.isTermsOfServiceStatusAcceptable" should "allow all requests to the API if TOS is disabled" in {
-    assume(databaseEnabled, databaseEnabledClue)
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    val tosServiceDisabled = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = false))
-    tosServiceDisabled.isTermsOfServiceStatusAcceptable(defaultUser) should be(true)
-  }
+    val withoutGracePeriod = "without the grace period enabled"
+    val withGracePeriod = " with the grace period enabled"
+    val cannotUseTheSystem = "says the user cannot use the system"
+    val canUseTheSystem = "says the user can use the system"
+    val tosServiceV2 = new TosService(dirDAO, TestSupport.tosConfig.copy(version = "2"))
+    val tosServiceV2GracePeriodEnabled =
+      new TosService(dirDAO, TestSupport.tosConfig.copy(version = "2", isGracePeriodEnabled = true))
 
-  it should "not allow users who have never accepted a ToS version to use the API, even with a grace period enabled" in {
-    assume(databaseEnabled, databaseEnabledClue)
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    val tosServiceGracePeriodEnabled =
-      new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2", isGracePeriodEnabled = true))
-    tosServiceGracePeriodEnabled.isTermsOfServiceStatusAcceptable(defaultUser) should be(false)
-  }
+    /** | Case | Grace Period Enabled | Accepted Version | Current Version | User accepted latest | Permits system usage |
+      * |:-----|:---------------------|:-----------------|:----------------|:---------------------|:---------------------|
+      * | 1    | false                | null             | "2"             | false                | false                |
+      * | 2    | false                | "0"              | "2"             | false                | false                |
+      * | 3    | false                | "2"              | "2"             | true                 | true                 |
+      * | 4    | true                 | null             | "2"             | false                | false                |
+      * | 5    | true                 | "0"              | "2"             | false                | true                 |
+      * | 6    | true                 | "2"              | "2"             | true                 | true                 |
+      */
 
-  it should "allow users that have accepted a previous ToS version to use the API when the grace period is enabled" in {
-    assume(databaseEnabled, databaseEnabledClue)
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    dirDAO.acceptTermsOfService(defaultUser.id, "1", samRequestContext).unsafeRunSync()
-    val userAcceptedPreviousVersion = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().orNull
-
-    val tosServiceGracePeriodEnabled =
-      new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2", isGracePeriodEnabled = true))
-    tosServiceGracePeriodEnabled.isTermsOfServiceStatusAcceptable(userAcceptedPreviousVersion) should be(true)
-  }
-
-  it should "not allow users that have accepted a previous ToS to use the API without a grace period" in {
-    assume(databaseEnabled, databaseEnabledClue)
-    dirDAO.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    dirDAO.acceptTermsOfService(defaultUser.id, "1", samRequestContext).unsafeRunSync()
-    val userAcceptedPreviousVersion = dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().orNull
-
-    val tosServiceEnabledV2 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "2"))
-    tosServiceEnabledV2.isTermsOfServiceStatusAcceptable(userAcceptedPreviousVersion) should be(false)
-  }
-
-  it should "exclude service accounts from ToS checks" in {
-    assume(databaseEnabled, databaseEnabledClue)
-    dirDAO.createUser(serviceAccountUser, samRequestContext).unsafeRunSync()
-
-    val tosServiceEnabledV0 = new TosService(dirDAO, "example.com", TestSupport.tosConfig.copy(enabled = true, version = "0"))
-    tosServiceEnabledV0.isTermsOfServiceStatusAcceptable(serviceAccountUser) should be(true)
+    "when the user has not accepted any ToS version" - {
+      "says the user has not accepted the latest version" in {
+        val complianceStatus = tosServiceV2.getTosComplianceStatus(defaultUser).unsafeRunSync()
+        complianceStatus.userHasAcceptedLatestTos shouldBe false
+      }
+      withoutGracePeriod - {
+        cannotUseTheSystem in {
+          // CASE 1
+          val complianceStatus = tosServiceV2.getTosComplianceStatus(defaultUser).unsafeRunSync()
+          complianceStatus.permitsSystemUsage shouldBe false
+        }
+      }
+      withGracePeriod - {
+        cannotUseTheSystem in {
+          // CASE 4
+          val complianceStatus = tosServiceV2GracePeriodEnabled.getTosComplianceStatus(defaultUser).unsafeRunSync()
+          complianceStatus.permitsSystemUsage shouldBe false
+        }
+      }
+    }
+    "when the user has accepted a non-current ToS version" - {
+      val userAcceptedV0 = defaultUser.copy(acceptedTosVersion = Option("0"))
+      "says the user has not accepted the latest version" in {
+        val complianceStatus = tosServiceV2.getTosComplianceStatus(userAcceptedV0).unsafeRunSync()
+        complianceStatus.userHasAcceptedLatestTos shouldBe false
+      }
+      withoutGracePeriod - {
+        cannotUseTheSystem in {
+          // CASE 2
+          val complianceStatus = tosServiceV2.getTosComplianceStatus(userAcceptedV0).unsafeRunSync()
+          complianceStatus.permitsSystemUsage shouldBe false
+        }
+      }
+      withGracePeriod - {
+        canUseTheSystem in {
+          // CASE 5
+          val complianceStatus = tosServiceV2GracePeriodEnabled.getTosComplianceStatus(userAcceptedV0).unsafeRunSync()
+          complianceStatus.permitsSystemUsage shouldBe true
+        }
+      }
+    }
+    "when the user has accepted the current ToS version" - {
+      val userAcceptedCurrentVersion = defaultUser.copy(acceptedTosVersion = Option("2"))
+      "says the user has accepted the latest version" in {
+        val complianceStatus = tosServiceV2.getTosComplianceStatus(userAcceptedCurrentVersion).unsafeRunSync()
+        complianceStatus.userHasAcceptedLatestTos shouldBe true
+      }
+      withoutGracePeriod - {
+        canUseTheSystem in {
+          // CASE 3
+          val complianceStatus = tosServiceV2.getTosComplianceStatus(userAcceptedCurrentVersion).unsafeRunSync()
+          complianceStatus.permitsSystemUsage shouldBe true
+        }
+      }
+      withGracePeriod - {
+        canUseTheSystem in {
+          // CASE 6
+          val complianceStatus = tosServiceV2GracePeriodEnabled.getTosComplianceStatus(userAcceptedCurrentVersion).unsafeRunSync()
+          complianceStatus.permitsSystemUsage shouldBe true
+        }
+      }
+    }
   }
 }

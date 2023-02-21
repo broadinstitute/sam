@@ -29,12 +29,18 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getActiveSamUser(oidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
+    }.tmap { samUser =>
+      logger.info(s"Handling request for active Sam User: $samUser")
+      samUser
     }
   }
 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getSamUser(oidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
+    }.tmap { samUser =>
+      logger.info(s"Handling request for (in)active Sam User: $samUser")
+      samUser
     }
   }
 
@@ -55,7 +61,12 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       externalIdFromHeaders &
       headerValueByName(emailHeader).as(WorkbenchEmail) &
       optionalHeaderValueByName(googleIdFromAzureHeader).map(_.map(GoogleSubjectId)) &
-      optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId))).as(OIDCHeaders)
+      optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId)))
+      .as(OIDCHeaders)
+      .map { oidcHeaders =>
+        logger.info(s"Auth Headers: $oidcHeaders")
+        oidcHeaders
+      }
 
   private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
     Try(BigInt(idString)).fold(
@@ -101,11 +112,10 @@ object StandardSamUserDirectives {
   def getActiveSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
       user <- getSamUser(oidcHeaders, directoryDAO, samRequestContext)
+      tosComplianceDetails <- tosService.getTosComplianceStatus(user)
     } yield {
-      // service account users do not need to accept ToS
-      val tosStatusAcceptable = tosService.isTermsOfServiceStatusAcceptable(user)
-      if (!tosStatusAcceptable) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User has not accepted the terms of service."))
+      if (!tosComplianceDetails.permitsSystemUsage) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User must accept the latest terms of service."))
       }
       if (!user.enabled) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
@@ -152,4 +162,18 @@ final case class OIDCHeaders(
     email: WorkbenchEmail,
     googleSubjectIdFromAzure: Option[GoogleSubjectId],
     managedIdentityObjectId: Option[ManagedIdentityObjectId] = None
-)
+) {
+
+  // Customized toString method so that fields are labeled and we must ensure that we do not log the Bearer Token
+  override def toString: String = {
+    val extId = externalId match {
+      case Left(googleSubjectId) => s"GoogleSubjectId($googleSubjectId)"
+      case Right(azureB2CId) => s"AzureB2CId($azureB2CId)"
+    }
+    s"OIDCHeaders(" +
+      s"externalId: $extId, " +
+      s"email: $email, " +
+      s"googleSubjectIdFromAzure: $googleSubjectIdFromAzure, " +
+      s"managedIdentityObjectId: $managedIdentityObjectId)"
+  }
+}

@@ -28,7 +28,7 @@ class CreateUserSpec extends UserServiceTestTraits {
   val blockedDomain = "blocked.domain.com"
 
   describe("UserService.createUser") {
-    describe("returns an activated UserStatus that has NOT accepted ToS") {
+    describe("returns an enabled UserStatus that has NOT accepted ToS") {
       it("when user has an AzureB2CId and a GoogleSubjectId") {
         // Setup
         val userWithBothIds = genWorkbenchUserBoth.sample.get
@@ -200,7 +200,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val enabledAzureUser = genWorkbenchUserAzure.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withFullyActivatedUser(enabledAzureUser)
+          .withEnabledUser(enabledAzureUser)
           .build
         val newUser = genWorkbenchUserAzure.sample.get.copy(azureB2CId = enabledAzureUser.azureB2CId)
 
@@ -215,7 +215,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val enabledGoogleUser = genWorkbenchUserGoogle.sample.get
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
-          .withFullyActivatedUser(enabledGoogleUser)
+          .withEnabledUser(enabledGoogleUser)
           .build
         val newUser = genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = enabledGoogleUser.googleSubjectId)
 

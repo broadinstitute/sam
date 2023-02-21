@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, googleServicesConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{enabledMapNoTosAccepted, genSamDependencies, genSamRoutes}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAcceptance, UserStatus, UserStatusDetails}
@@ -25,7 +25,7 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
     val (user, getRoutes) = setUpAdminTest()
     Get(s"/api/admin/v1/user/${user.id}") ~> getRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), enabledMapNoTosAccepted)
     }
   }
 
@@ -40,7 +40,7 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
 
     Get(s"/api/admin/v1/user/email/${user.email}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), enabledMapNoTosAccepted)
     }
   }
 
@@ -67,12 +67,15 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
 
     Put(s"/api/admin/v1/user/${user.id}/disable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> false, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(
+        UserStatusDetails(user.id, user.email),
+        enabledMapNoTosAccepted + ("ldap" -> false) + ("adminEnabled" -> false)
+      )
     }
 
     Put(s"/api/admin/v1/user/${user.id}/enable") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), enabledMapNoTosAccepted)
     }
   }
 
@@ -144,7 +147,8 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
     val cloudExtensions = new NoExtensions {
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
-    val (_, _, routes) = createTestUser(testUser = adminUser, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO))
+    val (_, _, routes) =
+      createTestUser(testUser = adminUser, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO), tosAccepted = true)
     val user = Generator.genWorkbenchUserGoogle.sample.get
     runAndWait(routes.userService.createUser(user, samRequestContext))
     (user.copy(enabled = true), routes) // userService.createUser enables the user
@@ -154,29 +158,26 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
       testUser: SamUser = Generator.genWorkbenchUserBoth.sample.get,
       cloudExtensions: Option[CloudExtensions] = None,
       googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
-      tosEnabled: Boolean = false,
       tosAccepted: Boolean = false
   ): (SamUser, SamDependencies, SamRoutes) = {
-    val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO, tosEnabled = tosEnabled)
+    val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO)
     val routes = genSamRoutes(samDependencies, testUser)
 
     Post("/register/user/v1/") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
       res.userInfo.userEmail shouldBe testUser.email
-      val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
-
-      if (tosEnabled) res.enabled shouldBe enabledBaseArray + ("tosAccepted" -> false) + ("adminEnabled" -> true)
-      else res.enabled shouldBe enabledBaseArray
+      val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)
+      res.enabled shouldBe enabledBaseArray
     }
 
-    if (tosEnabled && tosAccepted) {
+    if (tosAccepted) {
       Post("/register/user/v1/termsofservice", TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")) ~> routes.route ~> check {
         status shouldEqual StatusCodes.OK
         val res = responseAs[UserStatus]
         res.userInfo.userEmail shouldBe testUser.email
-        val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
-        res.enabled shouldBe enabledBaseArray + ("tosAccepted" -> true) + ("adminEnabled" -> true)
+        val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+        res.enabled shouldBe enabledBaseArray
       }
     }
 
@@ -186,6 +187,7 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
   def withAdminRoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
+    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
 
     val adminGroupEmail = runAndWait(setupAdminsGroup(googleDirectoryDAO))
 
@@ -194,8 +196,8 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
     }
 
     directoryDAO.createUser(adminUser, samRequestContext).unsafeRunSync()
+    tosService.acceptTosStatus(adminUser.id, samRequestContext).unsafeRunSync()
 
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
     val samRoutes = new TestSamRoutes(
       null,
       null,

@@ -31,7 +31,7 @@ object OpenCensusIOUtils {
   ): IO[T] =
     for {
       span <- spanIO
-      result <- f(samRequestContext.copy(parentSpan = Option(span), None)).attempt
+      result <- f(samRequestContext.copy(parentSpan = Option(span))).attempt
       _ <- IO(endSpan(span, Status.OK))
     } yield result.toTry.get
 }
