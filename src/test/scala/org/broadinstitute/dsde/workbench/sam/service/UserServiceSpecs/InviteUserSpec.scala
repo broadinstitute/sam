@@ -2,13 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserBoth, genWorkbenchUserGoogle}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service.GenEmail.genBadChar
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TestUserServiceBuilder}
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.verify
 
 import scala.concurrent.ExecutionContextExecutor
 
@@ -33,23 +29,7 @@ class InviteUserSpec extends UserServiceTestTraits {
           invitedUserStatus.userEmail shouldBe invitedUserEmail
         }
 
-        it("creates a user in the Sam database") {
-          // need to user a captor here because userService.inviteUser creates a new SamUser instance using the email
-          // address that is passed to it, and that new instance is what it saves to the db
-          val userCaptor = ArgumentCaptor.forClass(classOf[SamUser])
-          verify(userService.directoryDAO).createUser(userCaptor.capture(), any[SamRequestContext])
-          val capturedInvitedUser: SamUser = userCaptor.getValue
-          capturedInvitedUser.email shouldBe invitedUserEmail
-        }
-
-        it("creates the user in GCP") {
-          // need to user a captor here because userService.inviteUser creates a new SamUser instance using the email
-          // address that is passed to it, and that new instance is what is sent to Google
-          val userCaptor = ArgumentCaptor.forClass(classOf[SamUser])
-          verify(userService.cloudExtensions).onUserCreate(userCaptor.capture(), any[SamRequestContext])
-          val capturedInvitedUser: SamUser = userCaptor.getValue
-          capturedInvitedUser.email shouldBe invitedUserEmail
-        }
+        it should behave like createdUserInSam(newUser, userService)
 
         // we should perform these assertions, however right now they're buried inside cloudExtensions.onUserCreate, which is dumb
         ignore("creates a proxy group for the user on GCP") {}

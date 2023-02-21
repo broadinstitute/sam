@@ -2,6 +2,11 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model.{SamUser, UserStatus}
+import org.broadinstitute.dsde.workbench.sam.service.UserService
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.verify
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
@@ -59,4 +64,25 @@ abstract class UserServiceTestTraits extends AnyFunSpec with Matchers with TestS
       }
   }
   def beEnabledIn(userStatus: UserStatus) = new BeEnabledInMatcher(userStatus)
+
+
+  def createdUserInSam(user: SamUser, userService: UserService): Unit = {
+    it("creates a user in the Sam database") {
+      // need to user a captor here because userService.inviteUser creates a new SamUser instance using the email
+      // address that is passed to it, and that new instance is what it saves to the db
+      val userCaptor = ArgumentCaptor.forClass(classOf[SamUser])
+      verify(userService.directoryDAO).createUser(userCaptor.capture(), any[SamRequestContext])
+      val capturedInvitedUser: SamUser = userCaptor.getValue
+      capturedInvitedUser.email shouldBe user.email
+    }
+
+    it("creates the user in GCP") {
+      // need to user a captor here because userService.inviteUser creates a new SamUser instance using the email
+      // address that is passed to it, and that new instance is what is sent to Google
+      val userCaptor = ArgumentCaptor.forClass(classOf[SamUser])
+      verify(userService.cloudExtensions).onUserCreate(userCaptor.capture(), any[SamRequestContext])
+      val capturedInvitedUser: SamUser = userCaptor.getValue
+      capturedInvitedUser.email shouldBe user.email
+    }
+  }
 }

@@ -2,14 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.Generator.{
-  genBasicWorkbenchGroup,
-  genPetServiceAccount,
-  genPolicy,
-  genWorkbenchUserAzure,
-  genWorkbenchUserBoth,
-  genWorkbenchUserGoogle
-}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genPetServiceAccount, genPolicy, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -27,71 +20,42 @@ class CreateUserSpec extends UserServiceTestTraits {
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val blockedDomain = "blocked.domain.com"
 
+  val userWithBoth = (genWorkbenchUserBoth.sample.get, "user with google and azure ids")
+  val userWithGoogle = (genWorkbenchUserGoogle.sample.get, "user with google id")
+  val userWithAzure = (genWorkbenchUserAzure.sample.get, "user with azure id")
+  val newUsers = Vector(userWithBoth, userWithGoogle, userWithAzure)
+
+
+  describe("when a new user is created") {
+    describe("that does not already exist") {
+      newUsers.foreach { userTuple =>
+        val (newUser, description) = userTuple
+        describe(s"UserService.createUser with a $description") {
+          val userService = TestUserServiceBuilder()
+            .withAllUsersGroup(allUsersGroup)
+            .build
+
+          val userStatus = runAndWait(userService.createUser(newUser, samRequestContext))
+
+          it should behave like createdUserInSam(newUser, userService)
+
+          it("should return a user status with all statuses enabled besides TOS") {
+            inside(userStatus) { status =>
+              status should beForUser(newUser)
+              "google" should beEnabledIn(status)
+              "ldap" should beEnabledIn(status)
+              "allUsersGroup" should beEnabledIn(status)
+              "adminEnabled" should beEnabledIn(status)
+              "tosAccepted" shouldNot beEnabledIn(status)
+            }
+          }
+        }
+      }
+    }
+  }
+
   describe("UserService.createUser") {
     describe("returns an enabled UserStatus that has NOT accepted ToS") {
-      it("when user has an AzureB2CId and a GoogleSubjectId") {
-        // Setup
-        val userWithBothIds = genWorkbenchUserBoth.sample.get
-        val userService = TestUserServiceBuilder()
-          .withAllUsersGroup(allUsersGroup)
-          .build
-
-        // Act
-        val userStatus = runAndWait(userService.createUser(userWithBothIds, samRequestContext))
-
-        // Assert
-        inside(userStatus) { status =>
-          status should beForUser(userWithBothIds)
-          "google" should beEnabledIn(status)
-          "ldap" should beEnabledIn(status)
-          "allUsersGroup" should beEnabledIn(status)
-          "adminEnabled" should beEnabledIn(status)
-          "tosAccepted" shouldNot beEnabledIn(status)
-        }
-      }
-
-      it("when user has an AzureB2CId but no GoogleSubjectId") {
-        // Setup
-        val userWithOnlyB2CId = genWorkbenchUserAzure.sample.get
-        val userService = TestUserServiceBuilder()
-          .withAllUsersGroup(allUsersGroup)
-          .build
-
-        // Act
-        val userStatus = runAndWait(userService.createUser(userWithOnlyB2CId, samRequestContext))
-
-        // Assert
-        inside(userStatus) { status =>
-          status should beForUser(userWithOnlyB2CId)
-          "google" should beEnabledIn(status)
-          "ldap" should beEnabledIn(status)
-          "allUsersGroup" should beEnabledIn(status)
-          "adminEnabled" should beEnabledIn(status)
-          "tosAccepted" shouldNot beEnabledIn(status)
-        }
-      }
-
-      it("when user has GoogleSubjectId but no AzureB2CId") {
-        // Setup
-        val userWithOnlyGoogleId = genWorkbenchUserGoogle.sample.get
-        val userService = TestUserServiceBuilder()
-          .withAllUsersGroup(allUsersGroup)
-          .build
-
-        // Act
-        val userStatus = runAndWait(userService.createUser(userWithOnlyGoogleId, samRequestContext))
-
-        // Assert
-        inside(userStatus) { status =>
-          status should beForUser(userWithOnlyGoogleId)
-          "google" should beEnabledIn(status)
-          "ldap" should beEnabledIn(status)
-          "allUsersGroup" should beEnabledIn(status)
-          "adminEnabled" should beEnabledIn(status)
-          "tosAccepted" shouldNot beEnabledIn(status)
-        }
-      }
-
       it("when called for an already invited user") {
         // Setup
         val invitedUser = genWorkbenchUserBoth.sample.get
