@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec}
+import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito
@@ -32,6 +32,7 @@ class UserServiceSpec extends Suite {
   override def nestedSuites: IndexedSeq[Suite] =
     IndexedSeq(
       new CreateUserSpec,
+      new InviteUserSpec,
       new GetUserStatusSpec,
       new OldUserServiceSpec,
       new OldUserServiceMockSpec
@@ -461,33 +462,6 @@ class OldUserServiceSpec
       equal(invitedUser.id) and
         not equal newRegisteringUserId
     }
-  }
-
-  "UserService inviteUser" should "create a new user" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    val userEmail = genNonPetEmail.sample.get
-    service.inviteUser(userEmail, samRequestContext).unsafeRunSync()
-    val userId = dirDAO.loadSubjectFromEmail(userEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
-    val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
-    res shouldBe Some(SamUser(userId, None, userEmail, None, false, None))
-  }
-
-  it should "reject blocked domain" in {
-    intercept[WorkbenchExceptionWithErrorReport] {
-      service.inviteUser(WorkbenchEmail(s"user@$blockedDomain"), samRequestContext).unsafeRunSync()
-    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
-  }
-
-  it should "return conflict when there's an existing subject for a given email" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    val user = genWorkbenchUserGoogle.sample.get
-    dirDAO.createUser(user, samRequestContext).unsafeRunSync()
-    val res = intercept[WorkbenchExceptionWithErrorReport] {
-      service.inviteUser(user.email, samRequestContext).unsafeRunSync()
-    }
-    res.errorReport.statusCode shouldBe Option(StatusCodes.Conflict)
   }
 
   "GetStatus for an invited user" should "return a status that is enabled after the invited user registers" in {
