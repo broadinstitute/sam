@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.util.health.Subsystems.Database
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse}
 import org.scalatest.concurrent.Eventually._
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.mockito.MockitoSugar
+import org.mockito.scalatest.MockitoSugar
 
 import scala.concurrent.duration._
 

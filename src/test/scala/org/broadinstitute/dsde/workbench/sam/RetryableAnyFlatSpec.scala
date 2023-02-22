@@ -7,7 +7,7 @@ trait RetryableAnyFlatSpec extends AnyFlatSpec with Retries {
 
   val retries = 3
 
-  override def withFixture(test: NoArgTest): Outcome =
+  override protected def withFixture(test: NoArgTest): Outcome =
     withFixture(test, 1)
 
   def withFixture(test: NoArgTest, count: Int): Outcome = {

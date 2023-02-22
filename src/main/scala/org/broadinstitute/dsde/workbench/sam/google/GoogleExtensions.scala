@@ -644,33 +644,21 @@ class GoogleExtensions(
 }
 
 case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {
-  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] = {
-    system.actorOf(
-      GoogleGroupSyncMonitorSupervisor.props(
-        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.pollInterval,
-        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.pollJitter,
-        cloudExtensions.googleGroupSyncPubSubDAO,
-        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.topic,
-        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.subscription,
-        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.workerCount,
-        googleGroupSynchronizer
-      )
-    )
-    system.actorOf(
-      DisableUsersMonitorSupervisor.props(
-        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.pollInterval,
-        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.pollJitter,
-        cloudExtensions.googleDisableUsersPubSubDAO,
-        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.topic,
-        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.subscription,
-        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig.workerCount,
-        samApplication.userService
-      )
-    )
-
+  override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] =
     for {
       _ <- googleGroupSynchronizer.init()
-      onBootResult <- cloudExtensions.onBoot(samApplication)
-    } yield onBootResult
-  }
+      _ <- new GooglePubSubMonitor(
+        cloudExtensions.googleGroupSyncPubSubDAO,
+        cloudExtensions.googleServicesConfig.groupSyncPubSubConfig,
+        cloudExtensions.googleServicesConfig.serviceAccountCredentialJson,
+        new GoogleGroupSyncMessageReceiver(googleGroupSynchronizer)
+      ).startAndRegisterTermination()
+      _ <- new GooglePubSubMonitor(
+        cloudExtensions.googleDisableUsersPubSubDAO,
+        cloudExtensions.googleServicesConfig.disableUsersPubSubConfig,
+        cloudExtensions.googleServicesConfig.serviceAccountCredentialJson,
+        new DisableUserMessageReceiver(samApplication.userService)
+      ).startAndRegisterTermination()
+      _ <- cloudExtensions.onBoot(samApplication)
+    } yield ()
 }
