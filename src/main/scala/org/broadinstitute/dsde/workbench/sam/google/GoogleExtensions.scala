@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.unsafe.IORuntimeBuilder
+import cats.effect.unsafe.{IORuntime, IORuntimeBuilder}
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Clock, IO}
 import cats.implicits._
@@ -21,7 +21,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.Work
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{GooglePubSubConfig, GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LockDetails, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -648,21 +648,21 @@ class GoogleExtensions(
 case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] =
     for {
-      messageExecutor <- IO(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.workerCount)))
-      messageIoRuntime = IORuntimeBuilder().setCompute(messageExecutor, () => ()).build()
-      _ = system.registerOnTermination(messageIoRuntime.shutdown())
+      googleGroupSyncIoRuntime <- GooglePubSubMonitor.createReceiverIORuntime(cloudExtensions.googleServicesConfig.groupSyncPubSubConfig)
       _ <- googleGroupSynchronizer.init()
       _ <- new GooglePubSubMonitor(
         cloudExtensions.googleGroupSyncPubSubDAO,
         cloudExtensions.googleServicesConfig.groupSyncPubSubConfig,
         cloudExtensions.googleServicesConfig.serviceAccountCredentialJson,
-        new GoogleGroupSyncMessageReceiver(googleGroupSynchronizer)(messageIoRuntime)
+        new GoogleGroupSyncMessageReceiver(googleGroupSynchronizer)(googleGroupSyncIoRuntime)
       ).startAndRegisterTermination()
+
+      disableUserIoRuntime <- GooglePubSubMonitor.createReceiverIORuntime(cloudExtensions.googleServicesConfig.disableUsersPubSubConfig)
       _ <- new GooglePubSubMonitor(
         cloudExtensions.googleDisableUsersPubSubDAO,
         cloudExtensions.googleServicesConfig.disableUsersPubSubConfig,
         cloudExtensions.googleServicesConfig.serviceAccountCredentialJson,
-        new DisableUserMessageReceiver(samApplication.userService)
+        new DisableUserMessageReceiver(samApplication.userService)(disableUserIoRuntime)
       ).startAndRegisterTermination()
       _ <- cloudExtensions.onBoot(samApplication)
     } yield ()
