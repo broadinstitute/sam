@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.unsafe.IORuntimeBuilder
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Clock, IO}
 import cats.implicits._
@@ -33,6 +34,7 @@ import spray.json._
 
 import java.io.ByteArrayInputStream
 import java.util.Date
+import java.util.concurrent.Executors
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -646,12 +648,15 @@ class GoogleExtensions(
 case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] =
     for {
+      messageExecutor <- IO(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(cloudExtensions.googleServicesConfig.groupSyncPubSubConfig.workerCount)))
+      messageIoRuntime = IORuntimeBuilder().setCompute(messageExecutor, () => ()).build()
+      _ = system.registerOnTermination(messageIoRuntime.shutdown())
       _ <- googleGroupSynchronizer.init()
       _ <- new GooglePubSubMonitor(
         cloudExtensions.googleGroupSyncPubSubDAO,
         cloudExtensions.googleServicesConfig.groupSyncPubSubConfig,
         cloudExtensions.googleServicesConfig.serviceAccountCredentialJson,
-        new GoogleGroupSyncMessageReceiver(googleGroupSynchronizer)
+        new GoogleGroupSyncMessageReceiver(googleGroupSynchronizer)(messageIoRuntime)
       ).startAndRegisterTermination()
       _ <- new GooglePubSubMonitor(
         cloudExtensions.googleDisableUsersPubSubDAO,
