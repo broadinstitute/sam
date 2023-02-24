@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.protobuf.ByteString
 import com.google.pubsub.v1.PubsubMessage

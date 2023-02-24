@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.unsafe.implicits.global
+import cats.effect.unsafe.IORuntime
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver}
 import com.google.common.annotations.VisibleForTesting
 import com.google.pubsub.v1.PubsubMessage
@@ -18,7 +18,7 @@ import scala.util.Try
 
 /** Created by dvoet on 12/6/16.
   */
-class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer) extends MessageReceiver with LazyLogging {
+class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)(implicit ioRuntime: IORuntime) extends MessageReceiver with LazyLogging {
   override def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit =
     traceIO("GoogleGroupSyncMessageReceiver-PubSubMessage", SamRequestContext()) { samRequestContext =>
       val groupId: WorkbenchGroupIdentity = parseMessage(message)

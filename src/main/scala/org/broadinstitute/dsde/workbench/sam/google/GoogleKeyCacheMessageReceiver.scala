@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import cats.data.OptionT
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
+import cats.effect.unsafe.IORuntime
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver}
 import com.google.pubsub.v1.PubsubMessage
@@ -15,7 +15,7 @@ import spray.json._
 
 /** Created by mbemis on 1/19/18.
   */
-class GoogleKeyCacheMessageReceiver(googleIamDAO: GoogleIamDAO) extends MessageReceiver with LazyLogging {
+class GoogleKeyCacheMessageReceiver(googleIamDAO: GoogleIamDAO)(implicit ioRuntime: IORuntime) extends MessageReceiver with LazyLogging {
 
   override def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit =
     OpenCensusIOUtils

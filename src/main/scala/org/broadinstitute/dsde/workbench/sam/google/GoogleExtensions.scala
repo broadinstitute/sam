@@ -646,18 +646,21 @@ class GoogleExtensions(
 case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] =
     for {
+      googleGroupSyncIoRuntime <- GooglePubSubMonitor.createReceiverIORuntime(cloudExtensions.googleServicesConfig.groupSyncPubSubConfig)
       _ <- googleGroupSynchronizer.init()
       _ <- new GooglePubSubMonitor(
         cloudExtensions.googleGroupSyncPubSubDAO,
         cloudExtensions.googleServicesConfig.groupSyncPubSubConfig,
         cloudExtensions.googleServicesConfig.serviceAccountCredentialJson,
-        new GoogleGroupSyncMessageReceiver(googleGroupSynchronizer)
+        new GoogleGroupSyncMessageReceiver(googleGroupSynchronizer)(googleGroupSyncIoRuntime)
       ).startAndRegisterTermination()
+
+      disableUserIoRuntime <- GooglePubSubMonitor.createReceiverIORuntime(cloudExtensions.googleServicesConfig.disableUsersPubSubConfig)
       _ <- new GooglePubSubMonitor(
         cloudExtensions.googleDisableUsersPubSubDAO,
         cloudExtensions.googleServicesConfig.disableUsersPubSubConfig,
         cloudExtensions.googleServicesConfig.serviceAccountCredentialJson,
-        new DisableUserMessageReceiver(samApplication.userService)
+        new DisableUserMessageReceiver(samApplication.userService)(disableUserIoRuntime)
       ).startAndRegisterTermination()
       _ <- cloudExtensions.onBoot(samApplication)
     } yield ()

@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
 import cats.effect.IO
+import cats.effect.unsafe.{IORuntime, IORuntimeBuilder}
 import com.google.api.gax.core.{FixedCredentialsProvider, InstantiatingExecutorProvider}
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.pubsub.v1.{MessageReceiver, Subscriber}
@@ -10,6 +11,8 @@ import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO
 import org.broadinstitute.dsde.workbench.sam.config.{GooglePubSubConfig, ServiceAccountCredentialJson}
 
 import java.io.FileInputStream
+import java.util.concurrent.Executors
+import scala.concurrent.ExecutionContext
 
 class GooglePubSubMonitor(
     pubSubDao: GooglePubSubDAO,
@@ -44,4 +47,15 @@ class GooglePubSubMonitor(
     _ <- IO.fromFuture(IO(pubSubDao.createTopic(config.topic)))
     _ <- IO.fromFuture(IO(pubSubDao.createSubscription(config.topic, config.subscription)))
   } yield ()
+}
+
+object GooglePubSubMonitor {
+  def createReceiverIORuntime(config: GooglePubSubConfig)(implicit system: ActorSystem): IO[IORuntime] =
+    for {
+      executor <- IO(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(config.workerCount)))
+      ioRuntime = IORuntimeBuilder().setCompute(executor, () => ()).build()
+    } yield {
+      system.registerOnTermination(ioRuntime.shutdown())
+      ioRuntime
+    }
 }

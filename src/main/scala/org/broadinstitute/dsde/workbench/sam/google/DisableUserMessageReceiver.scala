@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import cats.effect.unsafe.implicits.global
+import cats.effect.unsafe.IORuntime
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver}
 import com.google.pubsub.v1.PubsubMessage
 import com.typesafe.scalalogging.LazyLogging
@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{OpenCensusIOUtils, SamRequest
 
 /** Created by srubenst on 02/04/21.
   */
-class DisableUserMessageReceiver(userService: UserService) extends MessageReceiver with LazyLogging {
+class DisableUserMessageReceiver(userService: UserService)(implicit ioRuntime: IORuntime) extends MessageReceiver with LazyLogging {
   override def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit =
     OpenCensusIOUtils
       .traceIO("DisableUsersMonitor-PubSubMessage", SamRequestContext()) { samRequestContext =>

@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.effect.unsafe.implicits.global
 import com.google.api.client.googleapis.json.{GoogleJsonError, GoogleJsonResponseException}
 import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.cloud.pubsub.v1.AckReplyConsumer
