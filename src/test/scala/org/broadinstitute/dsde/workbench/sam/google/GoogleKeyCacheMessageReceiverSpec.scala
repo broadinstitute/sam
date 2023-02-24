@@ -8,7 +8,14 @@ import com.google.cloud.pubsub.v1.AckReplyConsumer
 import com.google.protobuf.ByteString
 import com.google.pubsub.v1.PubsubMessage
 import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
-import org.broadinstitute.dsde.workbench.model.google.{ServiceAccount, ServiceAccountDisplayName, ServiceAccountKey, ServiceAccountKeyId, ServiceAccountPrivateKeyData, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.model.google.{
+  ServiceAccount,
+  ServiceAccountDisplayName,
+  ServiceAccountKey,
+  ServiceAccountKeyId,
+  ServiceAccountPrivateKeyData,
+  ServiceAccountSubjectId
+}
 import org.broadinstitute.dsde.workbench.sam.Generator
 import org.mockito.Mockito.RETURNS_SMART_NULLS
 import org.mockito.scalatest.{MockitoSugar, ResetMocksAfterEachTest}
