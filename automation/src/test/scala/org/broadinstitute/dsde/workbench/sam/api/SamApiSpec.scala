@@ -55,39 +55,6 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
     Thurloe.keyValuePairs.deleteAll(subjectId)
   }
 
-  "Sam test utilities" - {
-    "should be idempotent for removal of user's registration" in {
-
-      // use a temp user because they should not be registered.  Remove them after!
-
-      val tempUser: Credentials = UserPool.chooseTemp
-      val tempAuthToken: AuthToken = tempUser.makeAuthToken()
-
-      // Register user if the user is not registered
-      val tempUserInfo = Sam.user.status()(tempAuthToken) match {
-        case Some(user) =>
-          logger.info(s"User ${user.userInfo.userEmail} was already registered.")
-          user.userInfo
-        case None =>
-          logger.info(s"User ${tempUser.email} does not yet exist! Registering user.")
-          Sam.user.registerSelf()(tempAuthToken)
-          Sam.user.status()(tempAuthToken).get.userInfo
-      }
-
-      tempUserInfo.userEmail shouldBe tempUser.email
-
-      // Remove user
-
-      removeUser(tempUserInfo.userSubjectId)
-      Sam.user.status()(tempAuthToken) shouldBe None
-
-      // OK to re-remove
-
-      removeUser(tempUserInfo.userSubjectId)
-      Sam.user.status()(tempAuthToken) shouldBe None
-    }
-  }
-
   "Sam" - {
     "should return terms of services with auth token" in {
       val anyUser: Credentials = UserPool.chooseAnyUser

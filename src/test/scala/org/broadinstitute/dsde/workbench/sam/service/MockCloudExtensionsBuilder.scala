@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -68,6 +68,12 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends Mockit
     .doReturn(Future.successful(()))
     .when(mockedCloudExtensions)
     .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
+
+  lenient()
+    .doReturn(IO.unit)
+    .when(mockedCloudExtensions)
+    .onUserDelete(any[WorkbenchUserId], any[SamRequestContext])
+
 
   def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withEnabledUsers(Set(samUser))
   def withEnabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {

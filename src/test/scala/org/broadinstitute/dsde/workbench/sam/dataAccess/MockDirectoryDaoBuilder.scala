@@ -107,6 +107,16 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
     .when(mockedDirectoryDAO)
     .setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext])
 
+  lenient()
+    .doReturn(IO(true))
+    .when(mockedDirectoryDAO)
+    .removeGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext])
+
+  lenient()
+    .doReturn(IO.unit)
+    .when(mockedDirectoryDAO)
+    .deleteUser(any[WorkbenchUserId], any[SamRequestContext])
+
   def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = withExistingUsers(Set(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
     samUsers.toSet.foreach(makeUserExist)
