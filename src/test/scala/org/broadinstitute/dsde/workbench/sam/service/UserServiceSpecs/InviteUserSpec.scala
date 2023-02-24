@@ -7,8 +7,6 @@ import org.broadinstitute.dsde.workbench.sam.service.GenEmail.genBadChar
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TestUserServiceBuilder}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.verify
 
 import scala.concurrent.ExecutionContextExecutor
 
