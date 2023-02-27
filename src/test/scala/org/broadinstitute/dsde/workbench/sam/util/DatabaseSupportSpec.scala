@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.util
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.db.{PSQLStateExtensions, TestDbReference}
+import org.broadinstitute.dsde.workbench.sam.db.PSQLStateExtensions
 import org.postgresql.util.PSQLException
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.freespec.AnyFreeSpec
@@ -20,8 +20,8 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TestSupport {
   implicit val ec = scala.concurrent.ExecutionContext.global
   object DatabaseSupport extends DatabaseSupport {
-    override protected lazy val writeDbRef: TestDbReference = TestSupport.dbRef
-    override protected lazy val readDbRef: TestDbReference = TestSupport.dbRef
+    override protected lazy val writeDbRef = TestSupport.dbRef
+    override protected lazy val readDbRef = TestSupport.dbRef
 
     override def serializableWriteTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext, maxTries: Int = 3)(
         databaseFunction: DBSession => A

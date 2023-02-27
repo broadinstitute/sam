@@ -71,7 +71,7 @@ object TestSupport extends TestSupport {
   val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val adminConfig = config.as[AdminConfig]("admin")
-  val databaseEnabled = config.getBoolean("db.enabled")
+  val databaseEnabled = true
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
 
   lazy val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
