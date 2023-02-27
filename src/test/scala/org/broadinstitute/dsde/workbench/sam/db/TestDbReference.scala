@@ -5,6 +5,7 @@ import com.google.common.base.Throwables
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import io.opencensus.trace.AttributeValue
+import io.zonky.test.db.postgres.embedded.{EmbeddedPostgres, LiquibasePreparer}
 import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
@@ -13,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.db.TestDbReference.databaseEnabled
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import scalikejdbc.config.DBs
-import scalikejdbc.{ConnectionPool, DBSession, IsolationLevel}
+import scalikejdbc.{DBSession, IsolationLevel}
 
 import java.security.cert.CertPathBuilderException
 import java.sql.SQLTimeoutException
@@ -22,11 +23,18 @@ import scala.concurrent.ExecutionContext
 object TestDbReference extends LazyLogging {
   private val config = ConfigFactory.load()
   private val databaseEnabled = config.getBoolean("db.enabled")
+  val liquibaseChangelog = "liquibase/changelog.xml"
+  lazy val liquibasePreparer = LiquibasePreparer.forClasspathLocation(liquibaseChangelog)
+
+  lazy val embeddedDb = EmbeddedPostgres
+    .builder()
+    .setPort(5432)
+    .start()
 
   // This code is copied over from DbReference. We didnt want to have to refactor DbReference to be able to use it in tests.
   private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: Symbol, changelogParameters: Map[String, AnyRef] = Map.empty): Unit =
     if (databaseEnabled) {
-      val dbConnection = ConnectionPool.borrow(dbName)
+      val dbConnection = embeddedDb.getPostgresDatabase.getConnection
       try {
         val liquibaseConnection = new JdbcConnection(dbConnection)
         val resourceAccessor: ResourceAccessor = new ClassLoaderResourceAccessor()

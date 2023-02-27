@@ -283,8 +283,6 @@ class OldUserServiceSpec
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(WorkbenchGroupName("All_Users"), Set(), WorkbenchEmail("all_users@fake.com"))
 
   before {
-    clearDatabase()
-
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     if (databaseEnabled) {
       when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))

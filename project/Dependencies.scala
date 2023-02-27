@@ -152,6 +152,21 @@ object Dependencies {
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
 
+  val embeddedPostgres = ("io.zonky.test" % "embedded-postgres" % "2.0.3")
+    .exclude("io.zonky.test", "postgres")
+
+  val embeddedPgOsVersion =
+    System.getProperty("os.name").toLowerCase match {
+      case osName if osName.contains("mac") =>
+        "embedded-postgres-binaries-darwin-amd64"
+      case osName if osName.contains("win") =>
+        "embedded-postgres-binaries-windows-amd64"
+      case osName if osName.contains("linux") =>
+        "embedded-postgres-binaries-linux-amd64"
+      case osName => throw new RuntimeException(s"Unknown operating system $osName")
+    }
+  val embeddedPgBinaries = "io.zonky.test.postgres" % embeddedPgOsVersion % "9.6.24"
+  val junit = "junit" % "junit" % "4.13.1" % "test"
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
@@ -201,6 +216,9 @@ object Dependencies {
     postgres,
     cloudResourceLib,
     nettyAll,
-    azureManagedApplications
+    azureManagedApplications,
+    embeddedPostgres,
+    embeddedPgBinaries,
+    junit
   ) ++ openCensusDependencies
 }
