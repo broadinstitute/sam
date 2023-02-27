@@ -46,6 +46,4 @@ class DeleteUserSpec extends UserServiceTestTraits {
     }
   }
 
-
-
 }
