@@ -90,7 +90,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     ).filter(_.nonEmpty) // If the final Seq is empty, filter it out and just return a None
 
   // user record has to have a GoogleSubjectId and/or an AzureB2CId
-  private def validateUserIds(user: SamUser): Option[ErrorReport] = ???
+  private def validateUserIds(user: SamUser): Option[ErrorReport] =
+    if(user.googleSubjectId.isEmpty && user.azureB2CId.isEmpty) {
+      Option(ErrorReport("cannot create user when neither google subject id nor azure b2c id exists"))
+    } else None
 
   private def validateEmail(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): Option[ErrorReport] =
     if(!email.value.matches(UserService.emailRegex)) {
@@ -157,19 +160,19 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def makeUserEnabled(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     enableUserInternal(user, samRequestContext).map(_ => user.copy(enabled = true))
 
-//  def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
-//    openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
-//      for {
-//        _ <- validateEmailAddress(user.email, blockedEmailDomains)
-//        createdUser <- registerUser(user, samRequestContext)
-//        _ <- enableUserInternal(createdUser, samRequestContext)
-//        _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
-//        userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
-//        res <- IO
-//          .fromOption(userStatus)(new WorkbenchException("getUserStatus returned None after user was created"))
-//          .withInfoLogMessage(s"New user ${createdUser.toUserIdInfo} was successfully created")
-//      } yield res
-//    }
+  def OLDcreateUser(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
+    openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
+      for {
+        _ <- validateEmailAddress(user.email, blockedEmailDomains)
+        createdUser <- registerUser(user, samRequestContext)
+        _ <- enableUserInternal(createdUser, samRequestContext)
+        _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
+        userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
+        res <- IO
+          .fromOption(userStatus)(new WorkbenchException("getUserStatus returned None after user was created"))
+          .withInfoLogMessage(s"New user ${createdUser.toUserIdInfo} was successfully created")
+      } yield res
+    }
 
   def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.addToAllUsersGroup.time", API_TIMING_DURATION_BUCKET) {
