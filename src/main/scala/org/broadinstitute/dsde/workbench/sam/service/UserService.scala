@@ -36,22 +36,16 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors)))
       }
 
-      // Verify that the user is not already registered, short circuit if they are
-      loadRegisteredUser(possibleNewUser).map {
-        case Some(user) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")))
+      verifyUserIsNotAlreadyRegistered(possibleNewUser).map {
+        case Some(errorReport) => IO.raiseError(new WorkbenchExceptionWithErrorReport(errorReport))
         case None => _
       }
 
-      //Based on whether the email address is already in the Sam database, either
-      //  - finish registering the invited user
-      //  - or, create a brand new registered user
+      // Note: this block is not broken out into its own method because it raises an error, and we are trying to keep
+      // all the side effects isolated to createUser
       val newlyRegisteredUser: IO[SamUser] = loadUserIdFromEmail(possibleNewUser.email).flatMap {
-        // If successfully found a User Id, then the user was previously invited
-        case Success(Some(userId)) => handleInvitedUser(possibleNewUser, userId)
-        // If nothing was found, then we can just create a brand new user
-        case Success(None) => handleBrandNewUser(possibleNewUser)
-        // If "errored" then the email address is already used as some other Workbench Subject and cannot be registered
-        // as a user
+        case Success(maybeUserId) => handleUserRegistration(possibleNewUser, maybeUserId)
+        // Fails if email is found but it matches a non-User subject
         case Failure(message) => IO.raiseError(
           new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, message))
         )
@@ -63,7 +57,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext = ???)
       } yield registeredAndEnabledUser
 
-      // We will only make it this far if we successfully perform all of the above steps to set all of the
+      // We should only make it this far if we successfully perform all of the above steps to set all of the
       // UserStatus.enabled fields to true, with the exception of ToS.  So we should be able to safely just return true
       // for all of these things without needing to go recalculate them.
       fullyCreatedUser.map(user => UserStatus(
@@ -76,6 +70,16 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         )))
     }
 
+    // If the user's ID already exists, then they were invited and we just need to update their record to complete
+    // their registration
+    // If the user does not already have an ID, then they're a new user and we need to create a new record for them
+    private def handleUserRegistration(user: SamUser, maybeUserId: Option[WorkbenchUserId]): IO[SamUser] = {
+      maybeUserId match {
+        case Some(invitedUserId) => handleInvitedUser(user, invitedUserId)
+        case None => handleBrandNewUser(user)
+      }
+    }
+
     private def validateUser(user: SamUser): Seq[ErrorReport] = {
       validateUserIds(user) ++ validateEmail(user.email)
     }
@@ -84,6 +88,14 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     private def validateUserIds(user: SamUser): Seq[ErrorReport] = ???
 
     private def validateEmail(email: WorkbenchEmail): Seq[ErrorReport] = ???
+
+    private def verifyUserIsNotAlreadyRegistered(user: SamUser): IO[Option[ErrorReport]] = {
+      loadRegisteredUser(user).map { maybeUser =>
+        maybeUser.map { user =>
+          ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")
+        }
+      }
+    }
 
     // Try to find user by GoogleSubject, AzureB2CId
     // A registered user is one that has a record in the database and has a Cloud Identifier specified
@@ -124,9 +136,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
 
     // TODO: Side effect :(
-    private def handleInvitedUser(possibleNewUser: SamUser, existingUserId: WorkbenchUserId): IO[SamUser] = {
+    private def handleInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId): IO[SamUser] = {
         for {
-          updatedUser <- updateUser(existingUserId, possibleNewUser)
+          updatedUser <- updateUser(invitedUserId, invitedUser)
           groups <- directoryDAO.listUserDirectMemberships(updatedUser.id, samRequestContext = ???)
           _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext = ???)))
         } yield {
