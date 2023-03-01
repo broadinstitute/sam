@@ -16,6 +16,7 @@ on:
       - develop
     paths-ignore:
       - 'README.md'
+  workflow_dispatch:
 env:
   PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
 
