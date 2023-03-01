@@ -9,6 +9,7 @@ on:
     branches:
       - develop
     paths-ignore: ['**.md']
+  workflow_dispatch:
 
 jobs:
   sam-build-tag-publish-job:
