@@ -16,7 +16,6 @@ import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, S
 
 import java.security.SecureRandom
 import javax.naming.NameNotFoundException
-import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
@@ -33,26 +32,21 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
       if (validationErrors.nonEmpty) {
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors)))
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors.get)))
       }
 
       verifyUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext).map {
         case Some(errorReport) => IO.raiseError(new WorkbenchExceptionWithErrorReport(errorReport))
-        case None => _
-      }
-
-      // Note: this block is not broken out into its own method because it raises an error, and we are trying to keep
-      // all the side effects isolated to createUser
-      val newlyRegisteredUser: IO[SamUser] = loadUserIdFromEmail(possibleNewUser.email, samRequestContext).flatMap {
-        case Success(maybeUserId) => handleUserRegistration(possibleNewUser, maybeUserId, samRequestContext)
-        // Fails if email is found but it matches a non-User subject
-        case Failure(message) => IO.raiseError(
-          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, message))
-        )
+        case None => ()
       }
 
       val fullyCreatedUser = for {
-        registeredUser <- newlyRegisteredUser
+        attemptToFindUserId <- tryToFindUserIdWithEmail(possibleNewUser.email, samRequestContext)
+        maybeUserId = attemptToFindUserId match {
+          case Success(maybeUserId) => maybeUserId
+          case Failure(exception) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, exception))
+        }
+        registeredUser <- handleUserRegistration(possibleNewUser, maybeUserId, samRequestContext)
         registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
       } yield registeredAndEnabledUser
@@ -96,7 +90,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } else None
 
   private def validateEmail(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): Option[ErrorReport] =
-    if(!email.value.matches(UserService.emailRegex)) {
+    if(!UserService.emailRegex.matches(email.value)) {
       Option(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]"))
     } else if(blockedEmailDomains.exists(domain => email.value.endsWith("@" + domain) || email.value.endsWith("." + domain))) {
       Option(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]"))
@@ -105,8 +99,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   private def verifyUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] = {
     loadRegisteredUser(user, samRequestContext).map {
-      case Some(user) => ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")
-      case None => _
+      case Some(user) => Some(ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered"))
+      case None => None
     }
   }
 
@@ -125,7 +119,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // Failure is returned if the email address already exists as a non-user subject's email
   // Success[None] is returned if the email address is not already in Sam for any Subject type (including Users)
   // Success[Some[WorkbenchUserId]] is returned if the email address was found for a record in the User table
-  private def loadUserIdFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Try[Option[WorkbenchUserId]]] = {
+  private def tryToFindUserIdWithEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Try[Option[WorkbenchUserId]]] = {
     directoryDAO.loadSubjectFromEmail(email, samRequestContext).map {
       case Some(userId: WorkbenchUserId) => Success(Option(userId))
       case None => Success(None)
