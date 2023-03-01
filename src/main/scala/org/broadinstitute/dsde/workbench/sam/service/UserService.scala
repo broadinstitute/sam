@@ -16,6 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, S
 
 import java.security.SecureRandom
 import javax.naming.NameNotFoundException
+import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
@@ -80,20 +81,24 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
   }
 
-  private def validateUser(user: SamUser): Seq[ErrorReport] = {
-    validateUserIds(user) ++ validateEmail(user.email)
-  }
+  private def validateUser(user: SamUser): Option[Seq[ErrorReport]] =
+    Option(
+      Seq(
+        validateUserIds(user),
+        validateEmail(user.email, blockedEmailDomains)
+      ).flatten // flatten to get rid of Nones
+    ).filter(_.nonEmpty) // If the final Seq is empty, filter it out and just return a None
 
   // user record has to have a GoogleSubjectId and/or an AzureB2CId
-  private def validateUserIds(user: SamUser): Seq[ErrorReport] = ???
+  private def validateUserIds(user: SamUser): Option[ErrorReport] = ???
 
-  private def validateEmail(email: WorkbenchEmail): Seq[ErrorReport] =
-    Seq(email.value match {
-      case emailString if blockedEmailDomains.exists(domain => emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)) =>
-        ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")
-      case UserService.emailRegex() => IO.unit
-      case _ => ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")
-    })
+  private def validateEmail(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): Option[ErrorReport] =
+    if(!email.value.matches(UserService.emailRegex)) {
+      Option(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]"))
+    } else if(blockedEmailDomains.exists(domain => email.value.endsWith("@" + domain) || email.value.endsWith("." + domain))) {
+      Option(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]"))
+    } else None
+
 
   private def verifyUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] = {
     loadRegisteredUser(user, samRequestContext).map {
