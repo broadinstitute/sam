@@ -67,32 +67,31 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
       }
     }
 
-    it("should not be able to register with an invalid email address") {
-      // Arrange
-      val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail("potato"))
+    describe("should not be able to register ") {
 
-      // Act and Assert
-      intercept[WorkbenchExceptionWithErrorReport] {
-        runAndWait(userService.createUser(newUser, samRequestContext))
+      it("should not be able to register with an invalid email address") {
+        // Arrange
+        val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail("potato"))
+
+        // Act and Assert
+        intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userService.createUser(newUser, samRequestContext))
+        }
       }
-    }
 
-    it("should not be able to register with a valid email address for a blocked domain") {
-      // Arrange
-      val blockedDomain: String = "evilCorp.com"
-      val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail(s"BadGuyBob@$blockedDomain"))
-      val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(blockedDomain), tosService)
+      it("should not be able to register with a valid email address for a blocked domain") {
+        // Arrange
+        val blockedDomain: String = "evilCorp.com"
+        val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail(s"BadGuyBob@$blockedDomain"))
+        val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(blockedDomain), tosService)
 
-      // Act and Assert
-      intercept[WorkbenchExceptionWithErrorReport] {
-        runAndWait(userService.createUser(newUser, samRequestContext))
+        // Act and Assert
+        intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userService.createUser(newUser, samRequestContext))
+        }
       }
-    }
-  }
 
-  describe("An already registered User") {
-    describe("with a Google Subject Id") {
-      it("should not be able to register") {
+      it("if their GoogleSubjectId matches an already registered user") {
         // Arrange
         val newUser = genWorkbenchUserBoth.sample.get
         doReturn(IO(Some(genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = newUser.googleSubjectId))))

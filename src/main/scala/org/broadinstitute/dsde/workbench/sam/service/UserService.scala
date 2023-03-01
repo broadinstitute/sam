@@ -17,7 +17,6 @@ import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, S
 import java.security.SecureRandom
 import javax.naming.NameNotFoundException
 import scala.concurrent.ExecutionContext
-import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
 
 /** Created by dvoet on 7/14/17.
@@ -69,19 +68,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
   }
 
-  // If the user's ID already exists, then they were invited and we just need to update their record to complete
-  // their registration
-  // If the user does not already have an ID, then they're a new user and we need to create a new record for them
-  private def handleUserRegistration(user: SamUser, maybeUserId: Option[WorkbenchUserId], samRequestContext: SamRequestContext): IO[SamUser] = {
-    maybeUserId match {
-      case Some(invitedUserId) => handleInvitedUser(user, invitedUserId, samRequestContext)
-      case None => handleBrandNewUser(user, samRequestContext)
-    }
-  }
-
   private def validateUser(user: SamUser): Option[Seq[ErrorReport]] =
-    Option(
-      Seq(
+    Option(Seq(
         validateUserIds(user),
         validateEmail(user.email, blockedEmailDomains)
       ).flatten // flatten to get rid of Nones
@@ -100,14 +88,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       Option(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]"))
     } else None
 
-
-  private def verifyUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] = {
-    checkIfUserIsAlreadyRegistered(user, samRequestContext).map {
-      case Some(user) => Some(ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered"))
-      case None => None
-    }
-  }
-
   // Try to find user by GoogleSubject, AzureB2CId
   // A registered user is one that has a record in the database and has a Cloud Identifier specified
   private def checkIfUserIsAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
@@ -120,17 +100,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     }
   }
 
-  // Failure is returned if the email address already exists as a non-user subject's email
-  // Success[None] is returned if the email address is not already in Sam for any Subject type (including Users)
-  // Success[Some[WorkbenchUserId]] is returned if the email address was found for a record in the User table
-  private def tryToFindUserIdWithEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Try[Option[WorkbenchUserId]]] = {
-    directoryDAO.loadSubjectFromEmail(email, samRequestContext).map {
-      case Some(userId: WorkbenchUserId) => Success(Option(userId))
-      case None => Success(None)
-      case Some(_) => Failure(new WorkbenchException(s"$email is not a regular user. Please use a different endpoint"))
-    }
-  }
-
   // TODO: Add a simple "updateUser" method to directoryDAO so we can do all this in one call and return the updated user record
   private def updateUser(existingUserId: WorkbenchUserId, user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
     for {
@@ -139,7 +108,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     } yield user.copy(id = existingUserId)
   }
 
-  // TODO: Side effect :(
   private def handleInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] = {
       for {
         updatedUser <- updateUser(invitedUserId, invitedUser, samRequestContext)
