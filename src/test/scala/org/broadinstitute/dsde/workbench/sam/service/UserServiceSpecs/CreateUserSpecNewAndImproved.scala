@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserBoth, genWorkbenchUserGoogle}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosService, UserService}
@@ -93,10 +93,23 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
 
       it("if their GoogleSubjectId matches an already registered user") {
         // Arrange
-        val newUser = genWorkbenchUserBoth.sample.get
+        val newUser = genWorkbenchUserGoogle.sample.get
         doReturn(IO(Some(genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = newUser.googleSubjectId))))
           .when(directoryDAO)
           .loadUserByGoogleSubjectId(ArgumentMatchers.eq(newUser.googleSubjectId.get), any[SamRequestContext])
+
+        // Act and Assert
+        intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userService.createUser(newUser, samRequestContext))
+        }
+      }
+
+      it("if their AzureB2CId matches an already registered user") {
+        // Arrange
+        val newUser = genWorkbenchUserAzure.sample.get
+        doReturn(IO(Some(genWorkbenchUserGoogle.sample.get.copy(azureB2CId = newUser.azureB2CId))))
+          .when(directoryDAO)
+          .loadUserByAzureB2CId(ArgumentMatchers.eq(newUser.azureB2CId.get), any[SamRequestContext])
 
         // Act and Assert
         intercept[WorkbenchExceptionWithErrorReport] {
