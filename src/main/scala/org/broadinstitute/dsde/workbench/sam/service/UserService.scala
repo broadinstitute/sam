@@ -32,15 +32,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
       if (validationErrors.nonEmpty) {
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors.get)))
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors.get))
       }
 
-      verifyUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext).map {
-        case Some(errorReport) => IO.raiseError(new WorkbenchExceptionWithErrorReport(errorReport))
-        case None => ()
-      }
-
-      val fullyCreatedUser = for {
+      for {
+        _ <- checkIfUserIsAlreadyRegistered(possibleNewUser, samRequestContext).map{_.map { registeredUser =>
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered"))
+        }}
         attemptToFindUserId <- tryToFindUserIdWithEmail(possibleNewUser.email, samRequestContext)
         maybeUserId = attemptToFindUserId match {
           case Success(maybeUserId) => maybeUserId
@@ -49,19 +47,20 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         registeredUser <- handleUserRegistration(possibleNewUser, maybeUserId, samRequestContext)
         registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
-      } yield registeredAndEnabledUser
-
-      // We should only make it this far if we successfully perform all of the above steps to set all of the
-      // UserStatus.enabled fields to true, with the exception of ToS.  So we should be able to safely just return true
-      // for all of these things without needing to go recalculate them.
-      fullyCreatedUser.map(user => UserStatus(
-        UserStatusDetails(user.id, user.email),
-        Map("ldap" -> true,
-          "allUsersGroup" -> true,
-          "google" -> true,
-          "adminEnabled" -> true,
-          "tosAccepted" -> false // Not sure about this one, but pretty sure this should always be false for a newly created user
-        )))
+      } yield {
+        // We should only make it this far if we successfully perform all of the above steps to set all of the
+        // UserStatus.enabled fields to true, with the exception of ToS.  So we should be able to safely just return true
+        // for all of these things without needing to go recalculate them.
+        UserStatus(
+          UserStatusDetails(registeredAndEnabledUser.id, registeredAndEnabledUser.email),
+          Map("ldap" -> true,
+            "allUsersGroup" -> true,
+            "google" -> true,
+            "adminEnabled" -> true,
+            "tosAccepted" -> false // Not sure about this one, but pretty sure this should always be false for a newly created user
+          )
+        )
+      }
     }
   }
 
@@ -98,7 +97,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
 
   private def verifyUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] = {
-    loadRegisteredUser(user, samRequestContext).map {
+    checkIfUserIsAlreadyRegistered(user, samRequestContext).map {
       case Some(user) => Some(ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered"))
       case None => None
     }
@@ -106,7 +105,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   // Try to find user by GoogleSubject, AzureB2CId
   // A registered user is one that has a record in the database and has a Cloud Identifier specified
-  private def loadRegisteredUser(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
+  private def checkIfUserIsAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     if(user.googleSubjectId.nonEmpty) {
       directoryDAO.loadUserByGoogleSubjectId(user.googleSubjectId.get, samRequestContext)
     } else if(user.azureB2CId.nonEmpty) {
