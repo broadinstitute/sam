@@ -76,6 +76,18 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         runAndWait(userService.createUser(newUser, samRequestContext))
       }
     }
+
+    it("should not be able to register with a valid email address for a blocked domain") {
+      // Arrange
+      val blockedDomain: String = "evilCorp.com"
+      val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail(s"BadGuyBob@$blockedDomain"))
+      val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(blockedDomain), tosService)
+
+      // Act and Assert
+      intercept[WorkbenchExceptionWithErrorReport] {
+        runAndWait(userService.createUser(newUser, samRequestContext))
+      }
+    }
   }
 
   describe("An already registered User") {

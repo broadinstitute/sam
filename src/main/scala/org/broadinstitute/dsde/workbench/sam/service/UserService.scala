@@ -39,12 +39,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- checkIfUserIsAlreadyRegistered(possibleNewUser, samRequestContext).map{_.map { registeredUser =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered"))
         }}
-        attemptToFindUserId <- tryToFindUserIdWithEmail(possibleNewUser.email, samRequestContext)
-        maybeUserId = attemptToFindUserId match {
-          case Success(maybeUserId) => maybeUserId
-          case Failure(exception) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, exception))
+
+        maybeWorkbenchSubject <- directoryDAO.loadSubjectFromEmail(possibleNewUser.email, samRequestContext)
+        registeredUser <- maybeWorkbenchSubject match {
+          // If a WorkbenchUserId was found, then the user was previously invited
+          case Some(invitedUserId: WorkbenchUserId) => handleInvitedUser(possibleNewUser, invitedUserId, samRequestContext)
+          // If no subject was found, they're a new user and we can proceed to register them
+          case None => handleBrandNewUser(possibleNewUser, samRequestContext)
+          // If any other type of WorkbenchSubject was found, then we have to stop the user from registering with this email address
+          case Some(_) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Email ${possibleNewUser.email} is already used."))
         }
-        registeredUser <- handleUserRegistration(possibleNewUser, maybeUserId, samRequestContext)
+
         registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
       } yield {
