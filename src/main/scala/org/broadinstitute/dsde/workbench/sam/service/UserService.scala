@@ -87,7 +87,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // user record has to have a GoogleSubjectId and/or an AzureB2CId
   private def validateUserIds(user: SamUser): Seq[ErrorReport] = ???
 
-  private def validateEmail(email: WorkbenchEmail): Seq[ErrorReport] = ???
+  private def validateEmail(email: WorkbenchEmail): Seq[ErrorReport] =
+    Seq(email.value match {
+      case emailString if blockedEmailDomains.exists(domain => emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)) =>
+        ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")
+      case UserService.emailRegex() => IO.unit
+      case _ => ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")
+    })
 
   private def verifyUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] = {
     loadRegisteredUser(user, samRequestContext).map {
