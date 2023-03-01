@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupIdentity}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.RETURNS_SMART_NULLS
 
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 
 class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
@@ -114,6 +114,82 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         // Act and Assert
         intercept[WorkbenchExceptionWithErrorReport] {
           runAndWait(userService.createUser(newUser, samRequestContext))
+        }
+      }
+    }
+  }
+
+  describe("An invited User") {
+    val invitedUser = genWorkbenchUserBoth.sample.get
+
+    describe("should be able to register") {
+      doReturn(IO(Option(invitedUser.id)))
+        .when(directoryDAO)
+        .loadSubjectFromEmail(ArgumentMatchers.eq(invitedUser.email), any[SamRequestContext])
+      doReturn(IO(LazyList(allUsersGroup.id)))
+        .when(directoryDAO)
+        .listUserDirectMemberships(ArgumentMatchers.eq(invitedUser.id), any[SamRequestContext])
+      doReturn(IO.unit)
+        .when(directoryDAO)
+        .enableIdentity(ArgumentMatchers.eq(invitedUser.id), any[SamRequestContext])
+      doReturn(IO(true))
+        .when(directoryDAO)
+        .addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), ArgumentMatchers.eq(invitedUser.id), any[SamRequestContext])
+      doReturn(Future.successful(()))
+        .when(cloudExtensions)
+        .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
+
+      it("with a GoogleSubjectId") {
+        // Arrange
+        val invitedGoogleUser = invitedUser.copy(azureB2CId = None)
+        doReturn(IO(None))
+          .when(directoryDAO)
+          .loadUserByGoogleSubjectId(ArgumentMatchers.eq(invitedGoogleUser.googleSubjectId.get), any[SamRequestContext])
+        doReturn(IO.unit)
+          .when(directoryDAO)
+          .setGoogleSubjectId(ArgumentMatchers.eq(invitedGoogleUser.id), ArgumentMatchers.eq(invitedGoogleUser.googleSubjectId.get), any[SamRequestContext])
+        doReturn(IO.unit)
+          .when(cloudExtensions)
+          .onUserEnable(ArgumentMatchers.eq(invitedGoogleUser), any[SamRequestContext])
+
+        // Act
+        val newUsersStatus = runAndWait(userService.createUser(invitedGoogleUser, samRequestContext))
+
+        // Assert
+        inside(newUsersStatus) { status =>
+          status should beForUser(invitedGoogleUser)
+          "google" should beEnabledIn(status)
+          "ldap" should beEnabledIn(status)
+          "allUsersGroup" should beEnabledIn(status)
+          "adminEnabled" should beEnabledIn(status)
+          "tosAccepted" shouldNot beEnabledIn(status)
+        }
+      }
+
+      it("with an AzureB2CId") {
+        // Arrange
+        val invitedAzureUser = invitedUser.copy(googleSubjectId = None)
+        doReturn(IO(None))
+          .when(directoryDAO)
+          .loadUserByAzureB2CId(ArgumentMatchers.eq(invitedAzureUser.azureB2CId.get), any[SamRequestContext])
+        doReturn(IO.unit)
+          .when(directoryDAO)
+          .setUserAzureB2CId(ArgumentMatchers.eq(invitedAzureUser.id), ArgumentMatchers.eq(invitedAzureUser.azureB2CId.get), any[SamRequestContext])
+        doReturn(IO.unit)
+          .when(cloudExtensions)
+          .onUserEnable(ArgumentMatchers.eq(invitedAzureUser), any[SamRequestContext])
+
+        // Act
+        val newUsersStatus = runAndWait(userService.createUser(invitedAzureUser, samRequestContext))
+
+        // Assert
+        inside(newUsersStatus) { status =>
+          status should beForUser(invitedAzureUser)
+          "google" should beEnabledIn(status)
+          "ldap" should beEnabledIn(status)
+          "allUsersGroup" should beEnabledIn(status)
+          "adminEnabled" should beEnabledIn(status)
+          "tosAccepted" shouldNot beEnabledIn(status)
         }
       }
     }
