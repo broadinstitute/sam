@@ -27,12 +27,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging {
 
-
-  class Greg {
-    def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] = {
+  def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] = {
+    openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
-      if(validationErrors.nonEmpty) {
+      if (validationErrors.nonEmpty) {
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors)))
       }
 
@@ -63,111 +62,111 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       fullyCreatedUser.map(user => UserStatus(
         UserStatusDetails(user.id, user.email),
         Map("ldap" -> true,
-            "allUsersGroup" -> true,
-            "google" -> true,
-            "adminEnabled" -> true,
-            "tosAccepted" -> false // Not sure about this one, but pretty sure this should always be false for a newly created user
+          "allUsersGroup" -> true,
+          "google" -> true,
+          "adminEnabled" -> true,
+          "tosAccepted" -> false // Not sure about this one, but pretty sure this should always be false for a newly created user
         )))
     }
-
-    // If the user's ID already exists, then they were invited and we just need to update their record to complete
-    // their registration
-    // If the user does not already have an ID, then they're a new user and we need to create a new record for them
-    private def handleUserRegistration(user: SamUser, maybeUserId: Option[WorkbenchUserId]): IO[SamUser] = {
-      maybeUserId match {
-        case Some(invitedUserId) => handleInvitedUser(user, invitedUserId)
-        case None => handleBrandNewUser(user)
-      }
-    }
-
-    private def validateUser(user: SamUser): Seq[ErrorReport] = {
-      validateUserIds(user) ++ validateEmail(user.email)
-    }
-
-    // user record has to have a GoogleSubjectId and/or an AzureB2CId
-    private def validateUserIds(user: SamUser): Seq[ErrorReport] = ???
-
-    private def validateEmail(email: WorkbenchEmail): Seq[ErrorReport] = ???
-
-    private def verifyUserIsNotAlreadyRegistered(user: SamUser): IO[Option[ErrorReport]] = {
-      loadRegisteredUser(user).map { maybeUser =>
-        maybeUser.map { user =>
-          ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")
-        }
-      }
-    }
-
-    // Try to find user by GoogleSubject, AzureB2CId
-    // A registered user is one that has a record in the database and has a Cloud Identifier specified
-    private def loadRegisteredUser(user: SamUser): IO[Option[SamUser]] = {
-      if(user.googleSubjectId.nonEmpty) {
-        directoryDAO.loadUserByGoogleSubjectId(user.googleSubjectId.get, samRequestContext = ???)
-      } else if(user.azureB2CId.nonEmpty) {
-        directoryDAO.loadUserByAzureB2CId(user.azureB2CId.get, samRequestContext = ???)
-      } else {
-        IO(None)
-      }
-    }
-
-    private def validateUserCanRegister(user: SamUser): IO[Seq[ErrorReport]] = {
-      loadRegisteredUser(user).map {
-        case Some(_) => Seq(ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists"))
-        case None => ???
-      }
-    }
-
-    // Failure is returned if the email address already exists as a non-user subject's email
-    // Success[None] is returned if the email address is not already in Sam for any Subject type (including Users)
-    // Success[Some[WorkbenchUserId]] is returned if the email address was found for a record in the User table
-    private def loadUserIdFromEmail(email: WorkbenchEmail): IO[Try[Option[WorkbenchUserId]]] = {
-      directoryDAO.loadSubjectFromEmail(email, samRequestContext = ???).map {
-        case Some(userId: WorkbenchUserId) => Success(Option(userId))
-        case None => Success(None)
-        case Some(_) => Failure(new WorkbenchException(s"$email is not a regular user. Please use a different endpoint"))
-      }
-    }
-
-    // TODO: Add a simple "updateUser" method to directoryDAO so we can do all this in one call and return the updated user record
-    private def updateUser(existingUserId: WorkbenchUserId, user: SamUser): IO[SamUser] = {
-      for {
-        _ <- if(user.googleSubjectId.nonEmpty) directoryDAO.setGoogleSubjectId(existingUserId, user.googleSubjectId.get, samRequestContext = ???) else IO.unit
-        _ <- if(user.azureB2CId.nonEmpty) directoryDAO.setUserAzureB2CId(existingUserId, user.azureB2CId.get, samRequestContext = ???) else IO.unit
-      } yield user.copy(id = existingUserId)
-    }
-
-    // TODO: Side effect :(
-    private def handleInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId): IO[SamUser] = {
-        for {
-          updatedUser <- updateUser(invitedUserId, invitedUser)
-          groups <- directoryDAO.listUserDirectMemberships(updatedUser.id, samRequestContext = ???)
-          _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext = ???)))
-        } yield {
-          updatedUser
-        }
-    }
-
-    // For now, it looks like createUserInternal does what we need here, but added a new alias method here for naming
-    // consistency and just in case things change more as we are refactoring
-    private def handleBrandNewUser(possibleSamUser: SamUser): IO[SamUser] =
-      createUserInternal(possibleSamUser, samRequestContext = ???)
-
-    private def makeUserEnabled(user: SamUser): IO[SamUser] =
-      enableUserInternal(user, samRequestContext = ???).map(_ => user.copy(enabled = true))
   }
 
-  def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
-    openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        _ <- validateEmailAddress(user.email, blockedEmailDomains)
-        createdUser <- registerUser(user, samRequestContext)
-        _ <- enableUserInternal(createdUser, samRequestContext)
-        _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
-        userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
-        res <- IO
-          .fromOption(userStatus)(new WorkbenchException("getUserStatus returned None after user was created"))
-          .withInfoLogMessage(s"New user ${createdUser.toUserIdInfo} was successfully created")
-      } yield res
+  // If the user's ID already exists, then they were invited and we just need to update their record to complete
+  // their registration
+  // If the user does not already have an ID, then they're a new user and we need to create a new record for them
+  private def handleUserRegistration(user: SamUser, maybeUserId: Option[WorkbenchUserId]): IO[SamUser] = {
+    maybeUserId match {
+      case Some(invitedUserId) => handleInvitedUser(user, invitedUserId)
+      case None => handleBrandNewUser(user)
     }
+  }
+
+  private def validateUser(user: SamUser): Seq[ErrorReport] = {
+    validateUserIds(user) ++ validateEmail(user.email)
+  }
+
+  // user record has to have a GoogleSubjectId and/or an AzureB2CId
+  private def validateUserIds(user: SamUser): Seq[ErrorReport] = ???
+
+  private def validateEmail(email: WorkbenchEmail): Seq[ErrorReport] = ???
+
+  private def verifyUserIsNotAlreadyRegistered(user: SamUser): IO[Option[ErrorReport]] = {
+    loadRegisteredUser(user).map { maybeUser =>
+      maybeUser.map { user =>
+        ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")
+      }
+    }
+  }
+
+  // Try to find user by GoogleSubject, AzureB2CId
+  // A registered user is one that has a record in the database and has a Cloud Identifier specified
+  private def loadRegisteredUser(user: SamUser): IO[Option[SamUser]] = {
+    if(user.googleSubjectId.nonEmpty) {
+      directoryDAO.loadUserByGoogleSubjectId(user.googleSubjectId.get, samRequestContext = ???)
+    } else if(user.azureB2CId.nonEmpty) {
+      directoryDAO.loadUserByAzureB2CId(user.azureB2CId.get, samRequestContext = ???)
+    } else {
+      IO(None)
+    }
+  }
+
+  private def validateUserCanRegister(user: SamUser): IO[Seq[ErrorReport]] = {
+    loadRegisteredUser(user).map {
+      case Some(_) => Seq(ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists"))
+      case None => ???
+    }
+  }
+
+  // Failure is returned if the email address already exists as a non-user subject's email
+  // Success[None] is returned if the email address is not already in Sam for any Subject type (including Users)
+  // Success[Some[WorkbenchUserId]] is returned if the email address was found for a record in the User table
+  private def loadUserIdFromEmail(email: WorkbenchEmail): IO[Try[Option[WorkbenchUserId]]] = {
+    directoryDAO.loadSubjectFromEmail(email, samRequestContext = ???).map {
+      case Some(userId: WorkbenchUserId) => Success(Option(userId))
+      case None => Success(None)
+      case Some(_) => Failure(new WorkbenchException(s"$email is not a regular user. Please use a different endpoint"))
+    }
+  }
+
+  // TODO: Add a simple "updateUser" method to directoryDAO so we can do all this in one call and return the updated user record
+  private def updateUser(existingUserId: WorkbenchUserId, user: SamUser): IO[SamUser] = {
+    for {
+      _ <- if(user.googleSubjectId.nonEmpty) directoryDAO.setGoogleSubjectId(existingUserId, user.googleSubjectId.get, samRequestContext = ???) else IO.unit
+      _ <- if(user.azureB2CId.nonEmpty) directoryDAO.setUserAzureB2CId(existingUserId, user.azureB2CId.get, samRequestContext = ???) else IO.unit
+    } yield user.copy(id = existingUserId)
+  }
+
+  // TODO: Side effect :(
+  private def handleInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId): IO[SamUser] = {
+      for {
+        updatedUser <- updateUser(invitedUserId, invitedUser)
+        groups <- directoryDAO.listUserDirectMemberships(updatedUser.id, samRequestContext = ???)
+        _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext = ???)))
+      } yield {
+        updatedUser
+      }
+  }
+
+  // For now, it looks like createUserInternal does what we need here, but added a new alias method here for naming
+  // consistency and just in case things change more as we are refactoring
+  private def handleBrandNewUser(possibleSamUser: SamUser): IO[SamUser] =
+    createUserInternal(possibleSamUser, samRequestContext = ???)
+
+  private def makeUserEnabled(user: SamUser): IO[SamUser] =
+    enableUserInternal(user, samRequestContext = ???).map(_ => user.copy(enabled = true))
+
+//  def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
+//    openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
+//      for {
+//        _ <- validateEmailAddress(user.email, blockedEmailDomains)
+//        createdUser <- registerUser(user, samRequestContext)
+//        _ <- enableUserInternal(createdUser, samRequestContext)
+//        _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
+//        userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
+//        res <- IO
+//          .fromOption(userStatus)(new WorkbenchException("getUserStatus returned None after user was created"))
+//          .withInfoLogMessage(s"New user ${createdUser.toUserIdInfo} was successfully created")
+//      } yield res
+//    }
 
   def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.addToAllUsersGroup.time", API_TIMING_DURATION_BUCKET) {
