@@ -35,15 +35,15 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors)))
       }
 
-      verifyUserIsNotAlreadyRegistered(possibleNewUser).map {
+      verifyUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext).map {
         case Some(errorReport) => IO.raiseError(new WorkbenchExceptionWithErrorReport(errorReport))
         case None => _
       }
 
       // Note: this block is not broken out into its own method because it raises an error, and we are trying to keep
       // all the side effects isolated to createUser
-      val newlyRegisteredUser: IO[SamUser] = loadUserIdFromEmail(possibleNewUser.email).flatMap {
-        case Success(maybeUserId) => handleUserRegistration(possibleNewUser, maybeUserId)
+      val newlyRegisteredUser: IO[SamUser] = loadUserIdFromEmail(possibleNewUser.email, samRequestContext).flatMap {
+        case Success(maybeUserId) => handleUserRegistration(possibleNewUser, maybeUserId, samRequestContext)
         // Fails if email is found but it matches a non-User subject
         case Failure(message) => IO.raiseError(
           new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, message))
@@ -52,8 +52,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
       val fullyCreatedUser = for {
         registeredUser <- newlyRegisteredUser
-        registeredAndEnabledUser <- makeUserEnabled(registeredUser)
-        _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext = ???)
+        registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
+        _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
       } yield registeredAndEnabledUser
 
       // We should only make it this far if we successfully perform all of the above steps to set all of the
@@ -73,10 +73,10 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // If the user's ID already exists, then they were invited and we just need to update their record to complete
   // their registration
   // If the user does not already have an ID, then they're a new user and we need to create a new record for them
-  private def handleUserRegistration(user: SamUser, maybeUserId: Option[WorkbenchUserId]): IO[SamUser] = {
+  private def handleUserRegistration(user: SamUser, maybeUserId: Option[WorkbenchUserId], samRequestContext: SamRequestContext): IO[SamUser] = {
     maybeUserId match {
-      case Some(invitedUserId) => handleInvitedUser(user, invitedUserId)
-      case None => handleBrandNewUser(user)
+      case Some(invitedUserId) => handleInvitedUser(user, invitedUserId, samRequestContext)
+      case None => handleBrandNewUser(user, samRequestContext)
     }
   }
 
@@ -89,38 +89,30 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   private def validateEmail(email: WorkbenchEmail): Seq[ErrorReport] = ???
 
-  private def verifyUserIsNotAlreadyRegistered(user: SamUser): IO[Option[ErrorReport]] = {
-    loadRegisteredUser(user).map { maybeUser =>
-      maybeUser.map { user =>
-        ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")
-      }
+  private def verifyUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[ErrorReport]] = {
+    loadRegisteredUser(user, samRequestContext).map {
+      case Some(user) => ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")
+      case None => _
     }
   }
 
   // Try to find user by GoogleSubject, AzureB2CId
   // A registered user is one that has a record in the database and has a Cloud Identifier specified
-  private def loadRegisteredUser(user: SamUser): IO[Option[SamUser]] = {
+  private def loadRegisteredUser(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     if(user.googleSubjectId.nonEmpty) {
-      directoryDAO.loadUserByGoogleSubjectId(user.googleSubjectId.get, samRequestContext = ???)
+      directoryDAO.loadUserByGoogleSubjectId(user.googleSubjectId.get, samRequestContext)
     } else if(user.azureB2CId.nonEmpty) {
-      directoryDAO.loadUserByAzureB2CId(user.azureB2CId.get, samRequestContext = ???)
+      directoryDAO.loadUserByAzureB2CId(user.azureB2CId.get, samRequestContext)
     } else {
       IO(None)
-    }
-  }
-
-  private def validateUserCanRegister(user: SamUser): IO[Seq[ErrorReport]] = {
-    loadRegisteredUser(user).map {
-      case Some(_) => Seq(ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists"))
-      case None => ???
     }
   }
 
   // Failure is returned if the email address already exists as a non-user subject's email
   // Success[None] is returned if the email address is not already in Sam for any Subject type (including Users)
   // Success[Some[WorkbenchUserId]] is returned if the email address was found for a record in the User table
-  private def loadUserIdFromEmail(email: WorkbenchEmail): IO[Try[Option[WorkbenchUserId]]] = {
-    directoryDAO.loadSubjectFromEmail(email, samRequestContext = ???).map {
+  private def loadUserIdFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Try[Option[WorkbenchUserId]]] = {
+    directoryDAO.loadSubjectFromEmail(email, samRequestContext).map {
       case Some(userId: WorkbenchUserId) => Success(Option(userId))
       case None => Success(None)
       case Some(_) => Failure(new WorkbenchException(s"$email is not a regular user. Please use a different endpoint"))
@@ -128,19 +120,19 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   }
 
   // TODO: Add a simple "updateUser" method to directoryDAO so we can do all this in one call and return the updated user record
-  private def updateUser(existingUserId: WorkbenchUserId, user: SamUser): IO[SamUser] = {
+  private def updateUser(existingUserId: WorkbenchUserId, user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
     for {
-      _ <- if(user.googleSubjectId.nonEmpty) directoryDAO.setGoogleSubjectId(existingUserId, user.googleSubjectId.get, samRequestContext = ???) else IO.unit
-      _ <- if(user.azureB2CId.nonEmpty) directoryDAO.setUserAzureB2CId(existingUserId, user.azureB2CId.get, samRequestContext = ???) else IO.unit
+      _ <- if(user.googleSubjectId.nonEmpty) directoryDAO.setGoogleSubjectId(existingUserId, user.googleSubjectId.get, samRequestContext) else IO.unit
+      _ <- if(user.azureB2CId.nonEmpty) directoryDAO.setUserAzureB2CId(existingUserId, user.azureB2CId.get, samRequestContext) else IO.unit
     } yield user.copy(id = existingUserId)
   }
 
   // TODO: Side effect :(
-  private def handleInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId): IO[SamUser] = {
+  private def handleInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] = {
       for {
-        updatedUser <- updateUser(invitedUserId, invitedUser)
-        groups <- directoryDAO.listUserDirectMemberships(updatedUser.id, samRequestContext = ???)
-        _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext = ???)))
+        updatedUser <- updateUser(invitedUserId, invitedUser, samRequestContext)
+        groups <- directoryDAO.listUserDirectMemberships(updatedUser.id, samRequestContext)
+        _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
       } yield {
         updatedUser
       }
@@ -148,11 +140,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   // For now, it looks like createUserInternal does what we need here, but added a new alias method here for naming
   // consistency and just in case things change more as we are refactoring
-  private def handleBrandNewUser(possibleSamUser: SamUser): IO[SamUser] =
-    createUserInternal(possibleSamUser, samRequestContext = ???)
+  private def handleBrandNewUser(possibleSamUser: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
+    createUserInternal(possibleSamUser, samRequestContext)
 
-  private def makeUserEnabled(user: SamUser): IO[SamUser] =
-    enableUserInternal(user, samRequestContext = ???).map(_ => user.copy(enabled = true))
+  private def makeUserEnabled(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
+    enableUserInternal(user, samRequestContext).map(_ => user.copy(enabled = true))
 
 //  def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
 //    openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
