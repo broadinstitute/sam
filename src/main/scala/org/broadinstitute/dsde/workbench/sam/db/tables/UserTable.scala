@@ -12,7 +12,7 @@ final case class UserRecord(
     enabled: Boolean,
     azureB2cId: Option[AzureB2CId],
     acceptedTosVersion: Option[String],
-    auth0Id: Optional[Auth0Id]
+    auth0Id: Option[Auth0Id]
 )
 
 object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
