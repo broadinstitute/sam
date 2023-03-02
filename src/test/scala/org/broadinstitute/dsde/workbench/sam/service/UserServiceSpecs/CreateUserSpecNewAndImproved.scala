@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupIdentity, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -31,27 +31,14 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
     it("should be able to register") {
       // Arrange
       val newUser = genWorkbenchUserBoth.sample.get
-      doReturn(IO(None))
-        .when(directoryDAO)
-        .loadUserByGoogleSubjectId(ArgumentMatchers.eq(newUser.googleSubjectId.get), any[SamRequestContext])
-      doReturn(IO(None))
-        .when(directoryDAO)
-        .loadSubjectFromEmail(ArgumentMatchers.eq(newUser.email), any[SamRequestContext])
-      doReturn(IO(newUser))
-        .when(directoryDAO)
-        .createUser(ArgumentMatchers.eq(newUser), any[SamRequestContext])
-      doReturn(IO.unit)
-        .when(directoryDAO)
-        .enableIdentity(ArgumentMatchers.eq(newUser.id), any[SamRequestContext])
-      doReturn(IO(true))
-        .when(directoryDAO)
-        .addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), ArgumentMatchers.eq(newUser.id), any[SamRequestContext])
+      val dirDao = MockDirectoryDaoBuilder(allUsersGroup).build
       doReturn(IO.unit)
         .when(cloudExtensions)
         .onUserCreate(ArgumentMatchers.eq(newUser), any[SamRequestContext])
       doReturn(IO.unit)
         .when(cloudExtensions)
         .onUserEnable(ArgumentMatchers.eq(newUser), any[SamRequestContext])
+      val userService = new UserService(dirDao, cloudExtensions, Seq.empty, tosService)
 
       // Act
       val newUsersStatus = runAndWait(userService.createUser(newUser, samRequestContext))

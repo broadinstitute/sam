@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -9,6 +8,11 @@ import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
+
+object MockDirectoryDaoBuilder {
+  def apply(allUsersGroup: WorkbenchGroup) =
+    new MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup)
+}
 
 case class MockDirectoryDaoBuilder() extends MockitoSugar {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
@@ -23,7 +27,7 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
   lenient()
     .doReturn(IO(None))
     .when(mockedDirectoryDAO)
-    .loadSubjectFromGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
+    .loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
 
   lenient()
     .doReturn(IO(None))
