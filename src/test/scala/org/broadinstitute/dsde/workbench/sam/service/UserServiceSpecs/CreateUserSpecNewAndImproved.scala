@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupIdentity}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupIdentity, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -69,7 +69,7 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
 
     describe("should not be able to register ") {
 
-      it("should not be able to register with an invalid email address") {
+      it("with an invalid email address") {
         // Arrange
         val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail("potato"))
 
@@ -79,11 +79,28 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         }
       }
 
-      it("should not be able to register with a valid email address for a blocked domain") {
+      it("with an email address in a blocked domain") {
         // Arrange
         val blockedDomain: String = "evilCorp.com"
         val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail(s"BadGuyBob@$blockedDomain"))
         val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(blockedDomain), tosService)
+
+        // Act and Assert
+        intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userService.createUser(newUser, samRequestContext))
+        }
+      }
+
+      it("with an email address that is already used by a non-user") {
+        // Arrange
+        val newUser = genWorkbenchUserBoth.sample.get
+        // For example, when we look up a subject by email it might return a Workbench Group named "potato"
+        doReturn(IO(Option(WorkbenchGroupName("potato"))))
+          .when(directoryDAO)
+          .loadSubjectFromEmail(ArgumentMatchers.eq(newUser.email), any[SamRequestContext])
+        doReturn(IO(None))
+          .when(directoryDAO)
+          .loadUserByGoogleSubjectId(ArgumentMatchers.eq(newUser.googleSubjectId.get), any[SamRequestContext])
 
         // Act and Assert
         intercept[WorkbenchExceptionWithErrorReport] {
@@ -185,6 +202,38 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         // Assert
         inside(newUsersStatus) { status =>
           status should beForUser(invitedAzureUser)
+          "google" should beEnabledIn(status)
+          "ldap" should beEnabledIn(status)
+          "allUsersGroup" should beEnabledIn(status)
+          "adminEnabled" should beEnabledIn(status)
+          "tosAccepted" shouldNot beEnabledIn(status)
+        }
+      }
+
+      it("with both a GoogleSubjectId and an AzureB2CId") {
+        // Arrange
+        doReturn(IO(None))
+          .when(directoryDAO)
+          .loadUserByAzureB2CId(ArgumentMatchers.eq(invitedUser.azureB2CId.get), any[SamRequestContext])
+        doReturn(IO.unit)
+          .when(directoryDAO)
+          .setUserAzureB2CId(ArgumentMatchers.eq(invitedUser.id), ArgumentMatchers.eq(invitedUser.azureB2CId.get), any[SamRequestContext])
+        doReturn(IO(None))
+          .when(directoryDAO)
+          .loadUserByGoogleSubjectId(ArgumentMatchers.eq(invitedUser.googleSubjectId.get), any[SamRequestContext])
+        doReturn(IO.unit)
+          .when(directoryDAO)
+          .setGoogleSubjectId(ArgumentMatchers.eq(invitedUser.id), ArgumentMatchers.eq(invitedUser.googleSubjectId.get), any[SamRequestContext])
+        doReturn(IO.unit)
+          .when(cloudExtensions)
+          .onUserEnable(ArgumentMatchers.eq(invitedUser), any[SamRequestContext])
+
+        // Act
+        val newUsersStatus = runAndWait(userService.createUser(invitedUser, samRequestContext))
+
+        // Assert
+        inside(newUsersStatus) { status =>
+          status should beForUser(invitedUser)
           "google" should beEnabledIn(status)
           "ldap" should beEnabledIn(status)
           "allUsersGroup" should beEnabledIn(status)
