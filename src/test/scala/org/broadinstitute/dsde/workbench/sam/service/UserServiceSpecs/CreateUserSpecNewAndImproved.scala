@@ -1,10 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{AzureB2CId, GoogleSubjectId, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, MockTosServiceBuilder, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchers
 import org.scalatest.DoNotDiscover
 
 import scala.concurrent.ExecutionContextExecutor
@@ -249,6 +251,30 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
           "adminEnabled" should beEnabledIn(status)
           "tosAccepted" shouldNot beEnabledIn(status)
         }
+      }
+
+      // Test arose out of: https://broadworkbench.atlassian.net/browse/PROD-677
+      it("and keep the same user ID") {
+        // Arrange
+        val invitedUser = genWorkbenchUserBoth.sample.get
+        val disregardedId = WorkbenchUserId("122333444455555")
+        val registeringUser = invitedUser.copy(id = disregardedId)
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+          .withInvitedUser(invitedUser)
+          .build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+        // Act
+        runAndWait(userService.createUser(registeringUser, samRequestContext))
+
+        // Assert
+        verify(directoryDAO, never)
+          .createUser(any[SamUser], any[SamRequestContext])
+        verify(directoryDAO, never)
+          .setGoogleSubjectId(ArgumentMatchers.eq(disregardedId), any[GoogleSubjectId], any[SamRequestContext])
+        verify(directoryDAO, never)
+          .setUserAzureB2CId(ArgumentMatchers.eq(disregardedId), any[AzureB2CId], any[SamRequestContext])
       }
     }
   }
