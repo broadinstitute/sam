@@ -20,7 +20,7 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues, Suite}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, DoNotDiscover, OptionValues, Suite}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -44,6 +44,7 @@ class UserServiceSpec extends Suite {
 // into smaller, more focused suites which should then be added to the `nestedSuites` of `UserServiceSpec`
 // This class does not connect to a real database (hence "mock" in the name (naming is hard, don't judge me)), but its
 // tests should still be broken out to individual Spec files and rewritten
+@DoNotDiscover
 class OldUserServiceMockSpec
     extends AnyFlatSpec
     with Matchers
@@ -247,6 +248,7 @@ object GenEmail {
 // into smaller, more focused suites which should then be added to the `nestedSuites` of `UserServiceSpec`
 // This class DOES connect to a real database and its tests should be broken out to individual Spec files
 // and rewritten
+@DoNotDiscover
 class OldUserServiceSpec
     extends AnyFlatSpec
     with Matchers

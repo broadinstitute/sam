@@ -7,9 +7,11 @@ import org.broadinstitute.dsde.workbench.sam.service.GenEmail.genBadChar
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TestUserServiceBuilder}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentCaptor
+import org.scalatest.DoNotDiscover
 
 import scala.concurrent.ExecutionContextExecutor
 
+@DoNotDiscover
 class InviteUserSpec extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 

@@ -5,9 +5,11 @@ import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, g
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, MockTosServiceBuilder, TosService, UserService}
+import org.scalatest.DoNotDiscover
 
 import scala.concurrent.ExecutionContextExecutor
 
+@DoNotDiscover
 class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 

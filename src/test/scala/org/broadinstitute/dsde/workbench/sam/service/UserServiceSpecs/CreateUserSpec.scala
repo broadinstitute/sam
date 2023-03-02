@@ -2,22 +2,17 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.Generator.{
-  genBasicWorkbenchGroup,
-  genPetServiceAccount,
-  genPolicy,
-  genWorkbenchUserAzure,
-  genWorkbenchUserBoth,
-  genWorkbenchUserGoogle
-}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genPetServiceAccount, genPolicy, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.StatefulMockDirectoryDaoBuilder
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
+import org.scalatest.DoNotDiscover
 
 import scala.concurrent.ExecutionContextExecutor
 
+@DoNotDiscover
 class CreateUserSpec extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
