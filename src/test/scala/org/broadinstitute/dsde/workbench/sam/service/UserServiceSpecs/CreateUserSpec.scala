@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator.{
   genWorkbenchUserBoth,
   genWorkbenchUserGoogle
 }
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
+import org.broadinstitute.dsde.workbench.sam.dataAccess.StatefulMockDirectoryDaoBuilder
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -123,7 +123,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         // a user, yuck.
         // Setup
         val samUser: SamUser = genWorkbenchUserBoth.sample.get
-        val mockedDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
+        val mockedDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
         val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
@@ -141,7 +141,7 @@ class CreateUserSpec extends UserServiceTestTraits {
       it("by calling the directoryDAO.addGroupMember method") {
         // Setup
         val samUser: SamUser = genWorkbenchUserBoth.sample.get
-        val mockedDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
+        val mockedDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
         val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
         val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
@@ -229,7 +229,7 @@ class CreateUserSpec extends UserServiceTestTraits {
           val somePolicy: AccessPolicy = genPolicy.sample.get
           val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = somePolicy.email)
 
-          val mockDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
+          val mockDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
           when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(somePolicy.email), any[SamRequestContext]))
             .thenReturn(IO(Option(somePolicy.id)))
 
@@ -248,7 +248,7 @@ class CreateUserSpec extends UserServiceTestTraits {
           val existingPetSA = genPetServiceAccount.sample.get
           val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = existingPetSA.serviceAccount.email)
 
-          val mockDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
+          val mockDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
           when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(existingPetSA.serviceAccount.email), any[SamRequestContext]))
             .thenReturn(IO(Option(existingPetSA.id)))
 
@@ -267,7 +267,7 @@ class CreateUserSpec extends UserServiceTestTraits {
           val existingGroup = genBasicWorkbenchGroup.sample.get
           val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = existingGroup.email)
 
-          val mockDirectoryDao = MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
+          val mockDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
           when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(existingGroup.email), any[SamRequestContext]))
             .thenReturn(IO(Option(existingGroup.id)))
 

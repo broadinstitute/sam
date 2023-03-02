@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroup
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, StatefulMockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 
 import scala.collection.mutable
@@ -94,7 +94,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   }
 
   private def buildDirectoryDao(): DirectoryDAO = {
-    val mockDirectoryDaoBuilder = MockDirectoryDaoBuilder()
+    val mockDirectoryDaoBuilder = StatefulMockDirectoryDaoBuilder()
 
     maybeAllUsersGroup match {
       case Some(g) => mockDirectoryDaoBuilder.withAllUsersGroup(g)
