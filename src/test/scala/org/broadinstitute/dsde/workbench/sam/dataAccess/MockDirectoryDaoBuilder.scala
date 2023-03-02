@@ -15,12 +15,6 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
 
   val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
-  // Default constructor state is an "empty" database.
-  // Get/load requests should not return anything.
-  // Inserts into tables without foreign keys should succeed
-  // Inserts into tables with foreign keys should fail
-
-  // Attempting to load any user should not find anything
   lenient()
     .doReturn(IO(None))
     .when(mockedDirectoryDAO)
@@ -41,46 +35,23 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
     .when(mockedDirectoryDAO)
     .loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext])
 
-  // Create/Insert user should succeed and then make the user appear to "exist" in the Mock
   lenient()
     .doAnswer { (invocation: InvocationOnMock) =>
-      val samUser = invocation.getArgument[SamUser](0)
-      makeUserExist(samUser)
-      IO(samUser)
+      IO(invocation.getArgument[SamUser](0))
     }
     .when(mockedDirectoryDAO)
     .createUser(any[SamUser], any[SamRequestContext])
 
-  // Default behavior can check if the user "exists" in the Mock and respond accordingly
   lenient()
-    .doAnswer { (invocation: InvocationOnMock) =>
-      val samUserId = invocation.getArgument[WorkbenchUserId](0)
-      val samRequestContext = invocation.getArgument[SamRequestContext](1)
-      val maybeUser = mockedDirectoryDAO.loadUser(samUserId, samRequestContext).unsafeRunSync()
-      maybeUser match {
-        case Some(samUser) => makeUserEnabled(samUser)
-        case None => throw new RuntimeException("Mocking error when trying to enable a user that does not exist")
-      }
-      IO.unit
-    }
+    .doReturn(IO.unit)
     .when(mockedDirectoryDAO)
     .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
 
   lenient()
-    .doAnswer { (invocation: InvocationOnMock) =>
-      val subject = invocation.getArgument[WorkbenchUserId](0)
-      val samRequestContext = invocation.getArgument[SamRequestContext](1)
-      val maybeUser = mockedDirectoryDAO.loadUser(subject, samRequestContext).unsafeRunSync()
-      maybeUser match {
-        case Some(samUser) => makeUserDisabled(samUser)
-        case None => throw new RuntimeException("Mocking error when trying to disable a user that does not exist")
-      }
-      IO.unit
-    }
+    .doReturn(IO.unit)
     .when(mockedDirectoryDAO)
     .disableIdentity(any[WorkbenchSubject], any[SamRequestContext])
 
-  // No users "exist" so there are a bunch of queries that should return false/None if they depend on "existing" users
   lenient()
     .doReturn(IO(false))
     .when(mockedDirectoryDAO)
@@ -96,12 +67,11 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
     .when(mockedDirectoryDAO)
     .listUserDirectMemberships(any[WorkbenchUserId], any[SamRequestContext])
 
-  // Note, these methods don't actually set any "state" in the mocked DAO.  If you need some sort of coordinated
-  // state in your mocks, you should mock these methods yourself in your tests
   lenient()
     .doReturn(IO.unit)
     .when(mockedDirectoryDAO)
     .setGoogleSubjectId(any[WorkbenchUserId], any[GoogleSubjectId], any[SamRequestContext])
+
   lenient()
     .doReturn(IO.unit)
     .when(mockedDirectoryDAO)
@@ -173,7 +143,8 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
   // - does not have an azureB2CId
   // - is not enabled
   private def makeUserExist(samUser: SamUser): Unit = {
-    doThrow(new RuntimeException(s"User $samUser is mocked to already exist"))
+    lenient()
+      .doThrow(new RuntimeException(s"User $samUser is mocked to already exist"))
       .when(mockedDirectoryDAO)
       .createUser(ArgumentMatchers.eq(samUser), any[SamRequestContext])
 
