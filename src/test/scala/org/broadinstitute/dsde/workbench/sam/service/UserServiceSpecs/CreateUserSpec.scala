@@ -124,7 +124,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         // Setup
         val samUser: SamUser = genWorkbenchUserBoth.sample.get
         val mockedDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
-        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
+        val mockedCloudExtensions: CloudExtensions = StatefulMockCloudExtensionsBuilder(mockedDirectoryDao).build
         val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
 
@@ -142,7 +142,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         // Setup
         val samUser: SamUser = genWorkbenchUserBoth.sample.get
         val mockedDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
-        val mockedCloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(mockedDirectoryDao).build
+        val mockedCloudExtensions: CloudExtensions = StatefulMockCloudExtensionsBuilder(mockedDirectoryDao).build
         val baseMockTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
         val userService = new UserService(mockedDirectoryDao, mockedCloudExtensions, Seq(blockedDomain), baseMockTosService)
 
@@ -233,7 +233,7 @@ class CreateUserSpec extends UserServiceTestTraits {
           when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(somePolicy.email), any[SamRequestContext]))
             .thenReturn(IO(Option(somePolicy.id)))
 
-          val mockCloudExtensions = MockCloudExtensionsBuilder(mockDirectoryDao).build
+          val mockCloudExtensions = StatefulMockCloudExtensionsBuilder(mockDirectoryDao).build
           val mockTosService = MockTosServiceBuilder().withAllAccepted().build
           val baseUserService = new UserService(mockDirectoryDao, mockCloudExtensions, Seq(blockedDomain), mockTosService)
 
@@ -252,7 +252,7 @@ class CreateUserSpec extends UserServiceTestTraits {
           when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(existingPetSA.serviceAccount.email), any[SamRequestContext]))
             .thenReturn(IO(Option(existingPetSA.id)))
 
-          val mockCloudExtensions = MockCloudExtensionsBuilder(mockDirectoryDao).build
+          val mockCloudExtensions = StatefulMockCloudExtensionsBuilder(mockDirectoryDao).build
           val mockTosService = MockTosServiceBuilder().withAllAccepted().build
           val baseUserService = new UserService(mockDirectoryDao, mockCloudExtensions, Seq(blockedDomain), mockTosService)
 
@@ -271,7 +271,7 @@ class CreateUserSpec extends UserServiceTestTraits {
           when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(existingGroup.email), any[SamRequestContext]))
             .thenReturn(IO(Option(existingGroup.id)))
 
-          val mockCloudExtensions = MockCloudExtensionsBuilder(mockDirectoryDao).build
+          val mockCloudExtensions = StatefulMockCloudExtensionsBuilder(mockDirectoryDao).build
           val mockTosService = MockTosServiceBuilder().withAllAccepted().build
           val baseUserService = new UserService(mockDirectoryDao, mockCloudExtensions, Seq(blockedDomain), mockTosService)
 

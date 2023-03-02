@@ -15,7 +15,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 // It is probably not a good thing that GoogleExtensions (the implementation of CloudExtensions) needs a DirectoryDAO
 // so that it can _update_ the database, but it does.  It makes things more complicated here.
-case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends MockitoSugar {
+case class StatefulMockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends MockitoSugar {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
   val mockedCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
 
@@ -74,8 +74,8 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends Mockit
     .when(mockedCloudExtensions)
     .onUserDelete(any[WorkbenchUserId], any[SamRequestContext])
 
-  def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withEnabledUsers(Set(samUser))
-  def withEnabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
+  def withEnabledUser(samUser: SamUser): StatefulMockCloudExtensionsBuilder = withEnabledUsers(Set(samUser))
+  def withEnabledUsers(samUsers: Iterable[SamUser]): StatefulMockCloudExtensionsBuilder = {
     samUsers.foreach(makeUserAppearEnabled)
     this
   }
@@ -92,9 +92,9 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends Mockit
       .getUserStatus(argThat(IsSameUserAs(samUser)))
   }
 
-  def withDisabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withDisabledUsers(Set(samUser))
+  def withDisabledUser(samUser: SamUser): StatefulMockCloudExtensionsBuilder = withDisabledUsers(Set(samUser))
 
-  def withDisabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
+  def withDisabledUsers(samUsers: Iterable[SamUser]): StatefulMockCloudExtensionsBuilder = {
     samUsers.foreach(makeUserAppearDisabled)
     this
   }
