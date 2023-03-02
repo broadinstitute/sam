@@ -1461,6 +1461,8 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "accept the terms of service for a user who has already accepted a previous version of the terms of service" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, "0", samRequestContext).unsafeRunSync() shouldBe true
         dao.acceptTermsOfService(defaultUser.id, "2", samRequestContext).unsafeRunSync() shouldBe true
