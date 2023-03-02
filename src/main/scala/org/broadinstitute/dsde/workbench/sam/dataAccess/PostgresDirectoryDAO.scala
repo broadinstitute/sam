@@ -341,7 +341,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userColumn = UserTable.column
 
       val insertUserQuery =
-        samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}, ${userColumn.acceptedTosVersion}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, ${user.enabled}, ${user.azureB2CId}, ${user.acceptedTosVersion})"
+        samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}, ${userColumn.acceptedTosVersion}), ${userColumn.auth0Id} values (${user.id}, ${user.email}, ${user.googleSubjectId}, ${user.enabled}, ${user.azureB2CId}, ${user.acceptedTosVersion}, ${user.auth0Id})"
 
       Try {
         insertUserQuery.update().apply()
@@ -399,6 +399,35 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       if (results != 1) {
         throw new WorkbenchException(
           s"Cannot update azureB2cId for user ${userId} because user does not exist or the azureB2cId has already been set for this user"
+        )
+      } else {
+        ()
+      }
+    }
+
+  override def loadUserByAuth0Id(userId: Auth0Id, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    readOnlyTransaction("loadUserByAuth0Id", samRequestContext) { implicit session =>
+      val userTable = UserTable.syntax
+
+      val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.auth0Id} = ${userId}"
+      loadUserQuery
+        .map(UserTable(userTable))
+        .single()
+        .apply()
+        .map(UserTable.unmarshalUserRecord)
+    }
+
+  override def setUserByAuth0Id(userId: WorkbenchUserId, auth0Id: Auth0Id, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("setUserByAuth0Id", samRequestContext) { implicit session =>
+      val u = UserTable.column
+      val results =
+        samsql"update ${UserTable.table} set ${u.auth0Id} = $auth0Id where ${u.id} = $userId and (${u.auth0Id} is null or ${u.auth0Id} = $auth0Id)"
+          .update()
+          .apply()
+
+      if (results != 1) {
+        throw new WorkbenchException(
+          s"Cannot update auth0Id for user ${userId} because user does not exist or the auth0Id has already been set for this user"
         )
       } else {
         ()
