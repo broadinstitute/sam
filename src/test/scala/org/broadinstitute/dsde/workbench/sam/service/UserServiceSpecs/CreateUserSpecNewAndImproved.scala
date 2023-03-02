@@ -31,14 +31,14 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
     it("should be able to register") {
       // Arrange
       val newUser = genWorkbenchUserBoth.sample.get
-      val dirDao = MockDirectoryDaoBuilder(allUsersGroup).build
+      val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
       doReturn(IO.unit)
         .when(cloudExtensions)
         .onUserCreate(ArgumentMatchers.eq(newUser), any[SamRequestContext])
       doReturn(IO.unit)
         .when(cloudExtensions)
         .onUserEnable(ArgumentMatchers.eq(newUser), any[SamRequestContext])
-      val userService = new UserService(dirDao, cloudExtensions, Seq.empty, tosService)
+      val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
       // Act
       val newUsersStatus = runAndWait(userService.createUser(newUser, samRequestContext))
@@ -124,37 +124,21 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
   }
 
   describe("An invited User") {
-    val invitedUser = genWorkbenchUserBoth.sample.get
-
     describe("should be able to register") {
-      doReturn(IO(Option(invitedUser.id)))
-        .when(directoryDAO)
-        .loadSubjectFromEmail(ArgumentMatchers.eq(invitedUser.email), any[SamRequestContext])
-      doReturn(IO(LazyList(allUsersGroup.id)))
-        .when(directoryDAO)
-        .listUserDirectMemberships(ArgumentMatchers.eq(invitedUser.id), any[SamRequestContext])
-      doReturn(IO.unit)
-        .when(directoryDAO)
-        .enableIdentity(ArgumentMatchers.eq(invitedUser.id), any[SamRequestContext])
-      doReturn(IO(true))
-        .when(directoryDAO)
-        .addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), ArgumentMatchers.eq(invitedUser.id), any[SamRequestContext])
       doReturn(Future.successful(()))
         .when(cloudExtensions)
         .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
 
       it("with a GoogleSubjectId") {
         // Arrange
-        val invitedGoogleUser = invitedUser.copy(azureB2CId = None)
-        doReturn(IO(None))
-          .when(directoryDAO)
-          .loadUserByGoogleSubjectId(ArgumentMatchers.eq(invitedGoogleUser.googleSubjectId.get), any[SamRequestContext])
-        doReturn(IO.unit)
-          .when(directoryDAO)
-          .setGoogleSubjectId(ArgumentMatchers.eq(invitedGoogleUser.id), ArgumentMatchers.eq(invitedGoogleUser.googleSubjectId.get), any[SamRequestContext])
+        val invitedGoogleUser = genWorkbenchUserGoogle.sample.get
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+          .withInvitedUser(invitedGoogleUser)
+          .build
         doReturn(IO.unit)
           .when(cloudExtensions)
           .onUserEnable(ArgumentMatchers.eq(invitedGoogleUser), any[SamRequestContext])
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(invitedGoogleUser, samRequestContext))
@@ -172,16 +156,14 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
 
       it("with an AzureB2CId") {
         // Arrange
-        val invitedAzureUser = invitedUser.copy(googleSubjectId = None)
-        doReturn(IO(None))
-          .when(directoryDAO)
-          .loadUserByAzureB2CId(ArgumentMatchers.eq(invitedAzureUser.azureB2CId.get), any[SamRequestContext])
-        doReturn(IO.unit)
-          .when(directoryDAO)
-          .setUserAzureB2CId(ArgumentMatchers.eq(invitedAzureUser.id), ArgumentMatchers.eq(invitedAzureUser.azureB2CId.get), any[SamRequestContext])
+        val invitedAzureUser = genWorkbenchUserAzure.sample.get
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+          .withInvitedUser(invitedAzureUser)
+          .build
         doReturn(IO.unit)
           .when(cloudExtensions)
           .onUserEnable(ArgumentMatchers.eq(invitedAzureUser), any[SamRequestContext])
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(invitedAzureUser, samRequestContext))
@@ -199,21 +181,14 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
 
       it("with both a GoogleSubjectId and an AzureB2CId") {
         // Arrange
-        doReturn(IO(None))
-          .when(directoryDAO)
-          .loadUserByAzureB2CId(ArgumentMatchers.eq(invitedUser.azureB2CId.get), any[SamRequestContext])
-        doReturn(IO.unit)
-          .when(directoryDAO)
-          .setUserAzureB2CId(ArgumentMatchers.eq(invitedUser.id), ArgumentMatchers.eq(invitedUser.azureB2CId.get), any[SamRequestContext])
-        doReturn(IO(None))
-          .when(directoryDAO)
-          .loadUserByGoogleSubjectId(ArgumentMatchers.eq(invitedUser.googleSubjectId.get), any[SamRequestContext])
-        doReturn(IO.unit)
-          .when(directoryDAO)
-          .setGoogleSubjectId(ArgumentMatchers.eq(invitedUser.id), ArgumentMatchers.eq(invitedUser.googleSubjectId.get), any[SamRequestContext])
+        val invitedUser = genWorkbenchUserBoth.sample.get
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+          .withInvitedUser(invitedUser)
+          .build
         doReturn(IO.unit)
           .when(cloudExtensions)
           .onUserEnable(ArgumentMatchers.eq(invitedUser), any[SamRequestContext])
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(invitedUser, samRequestContext))
