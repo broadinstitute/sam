@@ -34,6 +34,11 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
   lenient()
     .doReturn(IO(None))
     .when(mockedDirectoryDAO)
+    .loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
+
+  lenient()
+    .doReturn(IO(None))
+    .when(mockedDirectoryDAO)
     .loadUserByAzureB2CId(any[AzureB2CId], any[SamRequestContext])
 
   lenient()
@@ -212,6 +217,11 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
         .doReturn(IO(Option(samUser.id)))
         .when(mockedDirectoryDAO)
         .loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext])
+
+      lenient()
+        .doReturn(IO(Option(samUser)))
+        .when(mockedDirectoryDAO)
+        .loadUserByGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext])
     }
 
     if (maybeAllUsersGroup.nonEmpty) {
