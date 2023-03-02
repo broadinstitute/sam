@@ -32,6 +32,13 @@ object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
   def apply(o: SyntaxProvider[UserRecord])(rs: WrappedResultSet): UserRecord = apply(o.resultName)(rs)
 
   def unmarshalUserRecord(userRecord: UserRecord): SamUser =
-    SamUser(userRecord.id, userRecord.googleSubjectId, userRecord.email, userRecord.azureB2cId, userRecord.enabled, userRecord.acceptedTosVersion,
-      userRecord.auth0Id)
+    SamUser(
+      userRecord.id,
+      userRecord.googleSubjectId,
+      userRecord.email,
+      userRecord.azureB2cId,
+      userRecord.enabled,
+      userRecord.acceptedTosVersion,
+      userRecord.auth0Id
+    )
 }
