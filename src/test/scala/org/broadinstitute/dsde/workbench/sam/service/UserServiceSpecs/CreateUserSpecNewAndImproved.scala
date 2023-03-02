@@ -1,44 +1,26 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
-import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupIdentity, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosService, UserService}
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers
-import org.mockito.Mockito.RETURNS_SMART_NULLS
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, MockTosServiceBuilder, TosService, UserService}
 
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+import scala.concurrent.ExecutionContextExecutor
 
 class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-
-  val directoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
-  val cloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
-  val tosService: TosService = mock[TosService](RETURNS_SMART_NULLS)
-  val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
-
-  // Begin mocks for CloudExtensions
-  doReturn(IO(allUsersGroup))
-    .when(cloudExtensions)
-    .getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext])
+  val defaultTosService: TosService = MockTosServiceBuilder().build
 
   describe("A new User") {
     it("should be able to register") {
       // Arrange
       val newUser = genWorkbenchUserBoth.sample.get
-      val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
-      doReturn(IO.unit)
-        .when(cloudExtensions)
-        .onUserCreate(ArgumentMatchers.eq(newUser), any[SamRequestContext])
-      doReturn(IO.unit)
-        .when(cloudExtensions)
-        .onUserEnable(ArgumentMatchers.eq(newUser), any[SamRequestContext])
-      val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+      val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+      val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+      val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
       // Act
       val newUsersStatus = runAndWait(userService.createUser(newUser, samRequestContext))
@@ -59,6 +41,9 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
       it("with an invalid email address") {
         // Arrange
         val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail("potato"))
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
         intercept[WorkbenchExceptionWithErrorReport] {
@@ -70,7 +55,9 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         // Arrange
         val blockedDomain: String = "evilCorp.com"
         val newUser = genWorkbenchUserBoth.sample.get.copy(email = WorkbenchEmail(s"BadGuyBob@$blockedDomain"))
-        val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(blockedDomain), tosService)
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(blockedDomain), defaultTosService)
 
         // Act and Assert
         intercept[WorkbenchExceptionWithErrorReport] {
@@ -81,13 +68,12 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
       it("with an email address that is already used by a non-user") {
         // Arrange
         val newUser = genWorkbenchUserBoth.sample.get
-        // For example, when we look up a subject by email it might return a Workbench Group named "potato"
-        doReturn(IO(Option(WorkbenchGroupName("potato"))))
-          .when(directoryDAO)
-          .loadSubjectFromEmail(ArgumentMatchers.eq(newUser.email), any[SamRequestContext])
-        doReturn(IO(None))
-          .when(directoryDAO)
-          .loadUserByGoogleSubjectId(ArgumentMatchers.eq(newUser.googleSubjectId.get), any[SamRequestContext])
+        val conflictingWorkbenchSubjectEmail = newUser.email
+        val directoryDAO = MockDirectoryDaoBuilder()
+          .withWorkbenchSubject(WorkbenchGroupName("potato"), conflictingWorkbenchSubjectEmail)
+          .build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
         intercept[WorkbenchExceptionWithErrorReport] {
@@ -98,9 +84,12 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
       it("if their GoogleSubjectId matches an already registered user") {
         // Arrange
         val newUser = genWorkbenchUserGoogle.sample.get
-        doReturn(IO(Some(genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = newUser.googleSubjectId))))
-          .when(directoryDAO)
-          .loadUserByGoogleSubjectId(ArgumentMatchers.eq(newUser.googleSubjectId.get), any[SamRequestContext])
+        val somebodyElse = genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = newUser.googleSubjectId)
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+          .withEnabledUser(somebodyElse)
+          .build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
         intercept[WorkbenchExceptionWithErrorReport] {
@@ -111,9 +100,12 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
       it("if their AzureB2CId matches an already registered user") {
         // Arrange
         val newUser = genWorkbenchUserAzure.sample.get
-        doReturn(IO(Some(genWorkbenchUserGoogle.sample.get.copy(azureB2CId = newUser.azureB2CId))))
-          .when(directoryDAO)
-          .loadUserByAzureB2CId(ArgumentMatchers.eq(newUser.azureB2CId.get), any[SamRequestContext])
+        val somebodyElse = genWorkbenchUserAzure.sample.get.copy(azureB2CId = newUser.azureB2CId)
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+          .withEnabledUser(somebodyElse)
+          .build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
         intercept[WorkbenchExceptionWithErrorReport] {
@@ -124,10 +116,8 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
   }
 
   describe("An invited User") {
+
     describe("should be able to register") {
-      doReturn(Future.successful(()))
-        .when(cloudExtensions)
-        .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
 
       it("with a GoogleSubjectId") {
         // Arrange
@@ -135,10 +125,8 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
           .withInvitedUser(invitedGoogleUser)
           .build
-        doReturn(IO.unit)
-          .when(cloudExtensions)
-          .onUserEnable(ArgumentMatchers.eq(invitedGoogleUser), any[SamRequestContext])
-        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(invitedGoogleUser, samRequestContext))
@@ -160,10 +148,8 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
           .withInvitedUser(invitedAzureUser)
           .build
-        doReturn(IO.unit)
-          .when(cloudExtensions)
-          .onUserEnable(ArgumentMatchers.eq(invitedAzureUser), any[SamRequestContext])
-        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(invitedAzureUser, samRequestContext))
@@ -185,10 +171,8 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
           .withInvitedUser(invitedUser)
           .build
-        doReturn(IO.unit)
-          .when(cloudExtensions)
-          .onUserEnable(ArgumentMatchers.eq(invitedUser), any[SamRequestContext])
-        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(invitedUser, samRequestContext))

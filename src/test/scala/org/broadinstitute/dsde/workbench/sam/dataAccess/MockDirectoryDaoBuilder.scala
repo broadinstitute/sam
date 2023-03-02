@@ -113,8 +113,18 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
     this
   }
 
-  def withDisabledUser(samUser: SamUser): MockDirectoryDaoBuilder = withDisabledUsers(Set(samUser))
+  // WorkbenchSubjects are weird, they are not full multi-parameter objects, but just identifiers.
+  // Most or all objects identified with a WorkbenchSubject id also have an email.
+  def withWorkbenchSubject(subject: WorkbenchSubject, subjectsEmail: WorkbenchEmail): MockDirectoryDaoBuilder = {
+    lenient()
+      .doReturn (IO(Option(subject)))
+      .when(mockedDirectoryDAO)
+      .loadSubjectFromEmail(ArgumentMatchers.eq(subjectsEmail), any[SamRequestContext])
 
+    this
+  }
+
+  def withDisabledUser(samUser: SamUser): MockDirectoryDaoBuilder = withDisabledUsers(Set(samUser))
   def withDisabledUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
     samUsers.toSet.foreach { u: SamUser =>
       makeUserExist(u)
@@ -180,6 +190,11 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
         .doReturn(IO(Option(samUser.copy(enabled = true))))
         .when(mockedDirectoryDAO)
         .loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext])
+
+      lenient()
+        .doReturn(IO(Some(samUser)))
+        .when(mockedDirectoryDAO)
+        .loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext])
     }
 
     if (samUser.googleSubjectId.nonEmpty) {
@@ -187,6 +202,12 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
         .doReturn(IO(Option(samUser.id)))
         .when(mockedDirectoryDAO)
         .loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext])
+
+      lenient()
+        .doReturn(IO(Some(samUser)))
+        .when(mockedDirectoryDAO)
+        .loadUserByGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext])
+
     }
 
     if (maybeAllUsersGroup.nonEmpty) {
