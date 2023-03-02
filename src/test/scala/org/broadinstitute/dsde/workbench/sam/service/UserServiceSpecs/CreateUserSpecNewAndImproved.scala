@@ -94,7 +94,7 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
-        intercept[WorkbenchExceptionWithErrorReport] {
+        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -108,7 +108,7 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(blockedDomain), defaultTosService)
 
         // Act and Assert
-        intercept[WorkbenchExceptionWithErrorReport] {
+        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -124,7 +124,7 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
-        intercept[WorkbenchExceptionWithErrorReport] {
+        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -140,7 +140,7 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
-        intercept[WorkbenchExceptionWithErrorReport] {
+        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -156,7 +156,7 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
-        intercept[WorkbenchExceptionWithErrorReport] {
+        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
