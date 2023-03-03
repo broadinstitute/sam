@@ -2735,26 +2735,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
-  /exception:
-    get:
-      summary: throws an exception
-      operationId: exception
-      responses:
-        200:
-          description: this will never happen
-          content:
-            text/plain:
-              schema:
-                type: string
-                example: what
-        500:
-          description: oh no
-          content:
-            text/plain:
-              schema:
-                type: string
-                example: exception!
-
   /register/user/v1/termsofservice:
     post:
       tags:

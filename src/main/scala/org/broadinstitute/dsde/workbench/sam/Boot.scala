@@ -44,11 +44,10 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
-  val sentryDsn: Option[String] = Option("https://1624d7d0c2a440c594fc2dc20f8e43e8@o54426.ingest.sentry.io/4504057056526336")
+  val sentryDsn: Option[String] = sys.env.get("SENTRY_DSN")
   private def initSentry(): Unit = sentryDsn.fold(logger.warn("No SENTRY_DSN found, not initializing Sentry.")) { dsn =>
     val options = new SentryOptions()
     options.setDsn(dsn)
-    options.setDebug(true)
     options.setEnvironment(sys.env.getOrElse("SENTRY_ENVIRONMENT", "unknown"))
     Sentry.init(options)
     logger.info("Sentry initialized")

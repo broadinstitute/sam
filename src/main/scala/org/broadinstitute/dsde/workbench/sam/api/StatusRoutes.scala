@@ -41,7 +41,6 @@ trait StatusRoutes {
             }
           }
         }
-
       }
     } ~
       pathPrefix("version") {
@@ -49,15 +48,6 @@ trait StatusRoutes {
           get {
             complete {
               (StatusCodes.OK, BuildTimeVersion.versionJson)
-            }
-          }
-        }
-      } ~
-      pathPrefix("exception") {
-        pathEndOrSingleSlash {
-          get {
-            complete {
-              throw new Exception("This is a test exception")
             }
           }
         }
