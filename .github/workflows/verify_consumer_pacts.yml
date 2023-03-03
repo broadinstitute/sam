@@ -38,10 +38,6 @@ on:
         description: 'the list of tag names for the most recent consumer version associated with the pact content, separated by ", "'
         required: true
         type: string
-      provider-version-tags:
-        description: 'the list of tag names for the provider version associated with the verification result, separated by ", "'
-        required: true
-        type: string
       consumer-version-branch:
         description: 'the name of the branch for most recent consumer version associated with the pact content'
         required: true
@@ -58,18 +54,11 @@ on:
         description: 'the list of labels for the provider associated with the pact content, separated by ", "'
         required: true
         type: string
-      github-verification-status:
-        description: 'the verification status using the correct keywords for posting to the the Github commit status API'
-        required: true
-        type: string
       pact-url:
         description: 'the "permalink" URL to the newly published pact (the URL specifying the consumer version URL, rather than the "/latest" format'
         required: true
         type: string
-      verification-result-url:
-        description: 'the URL to the relevant verification result'
-        required: true
-        type: string
+
 env:
   PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
 
