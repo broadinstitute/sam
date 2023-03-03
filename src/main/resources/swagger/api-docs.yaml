@@ -2735,6 +2735,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+
+  /status/throwException:
+    get:
+      tags:
+        - Status
+      summary: throws an exception
+      operationId: throwException
+      responses:
+        500:
+          description: oh no
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: exception!
+
   /register/user/v1/termsofservice:
     post:
       tags:
