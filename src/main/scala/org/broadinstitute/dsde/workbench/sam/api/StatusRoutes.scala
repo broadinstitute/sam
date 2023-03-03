@@ -27,11 +27,6 @@ trait StatusRoutes {
   def statusRoutes: server.Route =
     pathPrefix("status") {
       pathEndOrSingleSlash {
-        path("throwException") {
-          get {
-            throw new Exception("This is a test exception")
-          }
-        }
         get {
           complete {
             statusService.getStatus().map { statusResponse =>
@@ -54,6 +49,15 @@ trait StatusRoutes {
           get {
             complete {
               (StatusCodes.OK, BuildTimeVersion.versionJson)
+            }
+          }
+        }
+      } ~
+      pathPrefix("exception") {
+        pathEndOrSingleSlash {
+          get {
+            complete {
+              throw new Exception("This is a test exception")
             }
           }
         }

@@ -44,23 +44,24 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
-  val sentryDsn: Option[String] = sys.env.get("SENTRY_DSN")
+  val sentryDsn: Option[String] = Option("https://1624d7d0c2a440c594fc2dc20f8e43e8@o54426.ingest.sentry.io/4504057056526336")
 
   private def initSentry(): Unit = sentryDsn.fold(logger.warn("No SENTRY_DSN found, not initializing Sentry.")) { dsn =>
     val options = new SentryOptions()
     options.setDsn(dsn)
-    Sentry.init()
+    options.setDebug(true)
+    options.setEnvironment(sys.env.getOrElse("SENTRY_ENVIRONMENT", "unknown"))
+    Sentry.init(options)
+    logger.info("Sentry initialized")
   }
-  def run(args: List[String]): IO[ExitCode] = {
-    initSentry()
+  def run(args: List[String]): IO[ExitCode] =
     (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
       logger.error("sam failed to start, trying again in 5s", t)
       IO.sleep(5 seconds) *> run(args)
     }
-  }
 
   private def startup(): IO[Unit] = {
-
+    initSentry()
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
     livenessServerStartup()
