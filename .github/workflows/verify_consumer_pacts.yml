@@ -17,6 +17,59 @@ on:
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
+    inputs:
+      pb-event-type:
+        description: 'the PB event type that triggers this workflow'
+        required: true
+        type: string
+      consumer-name:
+        description: 'the consumer name'
+        required: true
+        type: string
+      consumer-version-number:
+        description: 'the version number of the most recent consumer version associated with the pact content'
+        required: true
+        type: string
+      provider-version-number:
+        description: 'the provider version number for the verification result'
+        required: true
+        type: string
+      consumer-version-tags:
+        description: 'the list of tag names for the most recent consumer version associated with the pact content, separated by ", "'
+        required: true
+        type: string
+      provider-version-tags:
+        description: 'the list of tag names for the provider version associated with the verification result, separated by ", "'
+        required: true
+        type: string
+      consumer-version-branch:
+        description: 'the name of the branch for most recent consumer version associated with the pact content'
+        required: true
+        type: string
+      provider-version-branch:
+        description: 'the name of the branch for the provider version associated with the verification result'
+        required: true
+        type: string
+      consumer-labels:
+        description: 'the list of labels for the consumer associated with the pact content, separated by ", "'
+        required: true
+        type: string
+      provider-labels:
+        description: 'the list of labels for the provider associated with the pact content, separated by ", "'
+        required: true
+        type: string
+      github-verification-status:
+        description: 'the verification status using the correct keywords for posting to the the Github commit status API'
+        required: true
+        type: string
+      pact-url:
+        description: 'the "permalink" URL to the newly published pact (the URL specifying the consumer version URL, rather than the "/latest" format'
+        required: true
+        type: string
+      verification-result-url:
+        description: 'the URL to the relevant verification result'
+        required: true
+        type: string
 env:
   PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
 
@@ -49,6 +102,11 @@ jobs:
           echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "branch=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_OUTPUT
+
+      - name: "This step will only run when the workflow is triggered by Pact Broker 'contract requiring verification published' event type"
+        if: ${{ inputs.pb-event-type == 'contract-requiring-verification-published' }}
+        run: |
+          echo ${{ inputs }}
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
