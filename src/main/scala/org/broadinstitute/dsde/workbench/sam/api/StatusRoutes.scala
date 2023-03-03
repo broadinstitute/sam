@@ -27,9 +27,13 @@ trait StatusRoutes {
   def statusRoutes: server.Route =
     pathPrefix("status") {
       pathEndOrSingleSlash {
+        path("throwException") {
+          get {
+            throw new Exception("This is a test exception")
+          }
+        }
         get {
           complete {
-            throw new RuntimeException("Oh noes!")
             statusService.getStatus().map { statusResponse =>
               val httpStatus = if (statusResponse.ok) {
                 openTelemetry.incrementCounter("checkStatus-success", tags = openTelemetryTags).unsafeToFuture()
@@ -42,6 +46,7 @@ trait StatusRoutes {
             }
           }
         }
+
       }
     } ~
       pathPrefix("version") {
