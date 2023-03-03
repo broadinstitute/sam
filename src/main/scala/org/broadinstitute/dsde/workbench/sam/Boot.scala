@@ -45,7 +45,6 @@ import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
   val sentryDsn: Option[String] = Option("https://1624d7d0c2a440c594fc2dc20f8e43e8@o54426.ingest.sentry.io/4504057056526336")
-
   private def initSentry(): Unit = sentryDsn.fold(logger.warn("No SENTRY_DSN found, not initializing Sentry.")) { dsn =>
     val options = new SentryOptions()
     options.setDsn(dsn)
