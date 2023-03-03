@@ -29,6 +29,7 @@ trait StatusRoutes {
       pathEndOrSingleSlash {
         get {
           complete {
+            throw new RuntimeException("Oh noes!")
             statusService.getStatus().map { statusResponse =>
               val httpStatus = if (statusResponse.ok) {
                 openTelemetry.incrementCounter("checkStatus-success", tags = openTelemetryTags).unsafeToFuture()
