@@ -46,8 +46,9 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
     val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(user)
     val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && user.acceptedTosVersion.isDefined
     val userIsServiceAccount = StandardSamUserDirectives.SAdomain.matches(user.email.value) // Service Account users do not need to accept ToS
+    val tosDisabled = !tosConfig.isTosEnabled
 
-    userHasAcceptedLatestVersion || userCanUseSystemUnderGracePeriod || userIsServiceAccount
+    userHasAcceptedLatestVersion || userCanUseSystemUnderGracePeriod || userIsServiceAccount || tosDisabled
   }
 
   private def userHasAcceptedLatestTosVersion(samUser: SamUser): Boolean =

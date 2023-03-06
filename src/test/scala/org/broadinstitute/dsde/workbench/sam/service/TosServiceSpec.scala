@@ -35,6 +35,10 @@ class TosServiceSpec extends AnyFreeSpec with TestSupport with BeforeAndAfterAll
     TestSupport.truncateAll
 
   "TosService" - {
+    "is enabled by default" in {
+      TestSupport.tosConfig.isTosEnabled shouldBe true
+    }
+
     "accepts the ToS for a user" in {
       when(dirDAO.acceptTermsOfService(any[WorkbenchUserId], any[String], any[SamRequestContext]))
         .thenReturn(IO.pure(true))
