@@ -9,20 +9,12 @@ import com.typesafe.scalalogging.LazyLogging
 import io.sentry.{Sentry, SentryOptions}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google.{
-  GoogleDirectoryDAO,
-  GoogleKmsInterpreter,
-  GoogleKmsService,
-  HttpGoogleDirectoryDAO,
-  HttpGoogleIamDAO,
-  HttpGoogleProjectDAO,
-  HttpGooglePubSubDAO,
-  HttpGoogleStorageDAO
-}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleKmsInterpreter, GoogleKmsService, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO, HttpGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
+import org.broadinstitute.dsde.workbench.sam.api.BuildTimeVersion.getClass
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -45,12 +37,12 @@ import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
   val sentryDsn: Option[String] = sys.env.get("SENTRY_DSN")
-  val releaseHash: Option[String] = sys.env.get("GIT_SHA")
+  val version: Option[String] = Option(getClass.getPackage.getImplementationVersion)
   private def initSentry(): Unit = sentryDsn.fold(logger.warn("No SENTRY_DSN found, not initializing Sentry.")) { dsn =>
     val options = new SentryOptions()
     options.setDsn(dsn)
     options.setEnvironment(sys.env.getOrElse("SENTRY_ENVIRONMENT", "unknown"))
-    releaseHash.foreach(options.setRelease)
+    options.setRelease(version.getOrElse("unknown"))
 
     Sentry.init(options)
     logger.info("Sentry initialized")
