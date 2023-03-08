@@ -9,18 +9,12 @@ import scalikejdbc._
 
 import scala.concurrent.duration._
 import cats.effect.Temporal
-import io.sentry.Sentry
 
 trait DatabaseSupport {
   protected val writeDbRef: DbReference
   protected val readDbRef: DbReference
 
   protected def readOnlyTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A): IO[A] = {
-    samRequestContext.samUser foreach { user =>
-      val sentryUser = new io.sentry.protocol.User()
-      sentryUser.setId(user.id.value)
-      Sentry.setUser(sentryUser)
-    }
     val databaseIO = IO(readDbRef.readOnly(databaseFunction))
     readDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO)
   }
@@ -52,11 +46,6 @@ trait DatabaseSupport {
   protected def serializableWriteTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext, maxTries: Int = 100)(
       databaseFunction: DBSession => A
   )(implicit timer: Temporal[IO]): IO[A] = {
-    samRequestContext.samUser foreach { user =>
-      val sentryUser = new io.sentry.protocol.User()
-      sentryUser.setId(user.id.value)
-      Sentry.setUser(sentryUser)
-    }
     val transactionIO = IO(writeDbRef.inLocalTransactionWithIsolationLevel(IsolationLevel.Serializable) { session =>
       databaseFunction(session)
     })
