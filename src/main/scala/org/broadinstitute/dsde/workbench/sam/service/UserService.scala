@@ -30,24 +30,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
       if (validationErrors.nonEmpty) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors.get))
+        return IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors.get)))
       }
 
       for {
-        _ <- checkIfUserIsAlreadyRegistered(possibleNewUser, samRequestContext).map{_.map { registeredUser =>
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered"))
-        }}
-
-        maybeWorkbenchSubject <- directoryDAO.loadSubjectFromEmail(possibleNewUser.email, samRequestContext)
-        registeredUser <- maybeWorkbenchSubject match {
-          // If a WorkbenchUserId was found, then the user was previously invited
-          case Some(invitedUserId: WorkbenchUserId) => registerInvitedUser(possibleNewUser, invitedUserId, samRequestContext)
-          // If no subject was found, they're a new user and we can proceed to register them
-          case None => registerBrandNewUser(possibleNewUser, samRequestContext)
-          // If any other type of WorkbenchSubject was found, then we have to stop the user from registering with this email address
-          case Some(_) => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Email ${possibleNewUser.email} is already used."))
-        }
-
+        newUser <- assertUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext)
+        maybeWorkbenchSubject <- directoryDAO.loadSubjectFromEmail(newUser.email, samRequestContext)
+        registeredUser <- attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject, newUser, samRequestContext)
         registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
       } yield {
@@ -64,6 +53,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           )
         )
       }
+    }
+  }
+
+  private def attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject: Option[WorkbenchSubject], possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
+    maybeWorkbenchSubject match {
+      // If a WorkbenchUserId was found, then the user was previously invited
+      case Some(invitedUserId: WorkbenchUserId) => registerInvitedUser(possibleNewUser, invitedUserId, samRequestContext)
+      // If no subject was found, they're a new user and we can proceed to register them
+      case None => registerBrandNewUser(possibleNewUser, samRequestContext)
+      // If any other type of WorkbenchSubject was found, then we have to stop the user from registering with this email address
+      case Some(_) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Email ${possibleNewUser.email} is already used.")))
     }
   }
 
@@ -89,8 +89,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   // Try to find user by GoogleSubject, AzureB2CId
   // A registered user is one that has a record in the database and has a Cloud Identifier specified
-  private def checkIfUserIsAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
-    openTelemetry.time("api.v1.user.checkIfUserIsAlreadyRegistered.time", API_TIMING_DURATION_BUCKET) {
+  private def tryToFindUserByCloudId(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    openTelemetry.time("api.v1.user.tryToFindUserByCloudId.time", API_TIMING_DURATION_BUCKET) {
       if (user.googleSubjectId.nonEmpty) {
         directoryDAO.loadUserByGoogleSubjectId(user.googleSubjectId.get, samRequestContext)
       } else if (user.azureB2CId.nonEmpty) {
@@ -98,6 +98,12 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       } else {
         IO(None)
       }
+    }
+
+  private def assertUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
+    tryToFindUserByCloudId(user, samRequestContext).flatMap {
+      case Some(registeredUser) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered")))
+      case None => IO(user)
     }
 
   // TODO: Add a simple "updateUser" method to directoryDAO so we can do all this in one call and return the updated user record
@@ -125,6 +131,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   private def registerBrandNewUser(possibleSamUser: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     createUserInternal(possibleSamUser, samRequestContext)
 
+  // Would love to just call this "enableUser" but that name is already used
   private def makeUserEnabled(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     enableUserInternal(user, samRequestContext).map(_ => user.copy(enabled = true))
 
