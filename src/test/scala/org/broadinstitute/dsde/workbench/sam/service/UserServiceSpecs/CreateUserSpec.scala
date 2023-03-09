@@ -7,7 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.StatefulMockDirectoryDao
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.scalatest.DoNotDiscover
 
 import scala.concurrent.ExecutionContextExecutor
@@ -127,8 +127,10 @@ class CreateUserSpec extends UserServiceTestTraits {
         runAndWait(userService.createUser(samUser, samRequestContext))
 
         // Assert
-        verify(mockedCloudExtensions)
-          .onUserEnable(ArgumentMatchers.eq(samUser), any[SamRequestContext])
+        mockedCloudExtensions.onUserEnable(
+          eqTo(samUser),
+          any[SamRequestContext]
+        ) wasCalled once
       }
     }
 
@@ -145,8 +147,11 @@ class CreateUserSpec extends UserServiceTestTraits {
         runAndWait(userService.createUser(samUser, samRequestContext))
 
         // Assert
-        verify(mockedDirectoryDao)
-          .addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+        mockedDirectoryDao.addGroupMember(
+          eqTo(allUsersGroup.id),
+          eqTo(samUser.id),
+          any[SamRequestContext]
+        ) wasCalled once
       }
     }
 
@@ -225,15 +230,17 @@ class CreateUserSpec extends UserServiceTestTraits {
           val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = somePolicy.email)
 
           val mockDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
-          when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(somePolicy.email), any[SamRequestContext]))
-            .thenReturn(IO(Option(somePolicy.id)))
+          mockDirectoryDao.loadSubjectFromEmail(
+            eqTo(somePolicy.email),
+            any[SamRequestContext]
+          ) returns IO(Option(somePolicy.id))
 
           val mockCloudExtensions = StatefulMockCloudExtensionsBuilder(mockDirectoryDao).build
           val mockTosService = MockTosServiceBuilder().withAllAccepted().build
           val baseUserService = new UserService(mockDirectoryDao, mockCloudExtensions, Seq(blockedDomain), mockTosService)
 
           // Act and Assert
-          assertThrows[WorkbenchExceptionWithErrorReport] {
+          a [WorkbenchExceptionWithErrorReport] should be thrownBy {
             runAndWait(baseUserService.createUser(newUser, samRequestContext))
           }
         }
@@ -244,15 +251,17 @@ class CreateUserSpec extends UserServiceTestTraits {
           val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = existingPetSA.serviceAccount.email)
 
           val mockDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
-          when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(existingPetSA.serviceAccount.email), any[SamRequestContext]))
-            .thenReturn(IO(Option(existingPetSA.id)))
+          mockDirectoryDao.loadSubjectFromEmail(
+            eqTo(existingPetSA.serviceAccount.email),
+            any[SamRequestContext]
+          ) returns IO(Option(existingPetSA.id))
 
           val mockCloudExtensions = StatefulMockCloudExtensionsBuilder(mockDirectoryDao).build
           val mockTosService = MockTosServiceBuilder().withAllAccepted().build
           val baseUserService = new UserService(mockDirectoryDao, mockCloudExtensions, Seq(blockedDomain), mockTosService)
 
           // Act and Assert
-          assertThrows[WorkbenchExceptionWithErrorReport] {
+          a [WorkbenchExceptionWithErrorReport] should be thrownBy {
             runAndWait(baseUserService.createUser(newUser, samRequestContext))
           }
         }
@@ -263,15 +272,17 @@ class CreateUserSpec extends UserServiceTestTraits {
           val newUser: SamUser = genWorkbenchUserBoth.sample.get.copy(email = existingGroup.email)
 
           val mockDirectoryDao = StatefulMockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup).build
-          when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(existingGroup.email), any[SamRequestContext]))
-            .thenReturn(IO(Option(existingGroup.id)))
+          mockDirectoryDao.loadSubjectFromEmail(
+            eqTo(existingGroup.email),
+            any[SamRequestContext]
+          ) returns IO(Option(existingGroup.id))
 
           val mockCloudExtensions = StatefulMockCloudExtensionsBuilder(mockDirectoryDao).build
           val mockTosService = MockTosServiceBuilder().withAllAccepted().build
           val baseUserService = new UserService(mockDirectoryDao, mockCloudExtensions, Seq(blockedDomain), mockTosService)
 
           // Act and Assert
-          assertThrows[WorkbenchExceptionWithErrorReport] {
+          a [WorkbenchExceptionWithErrorReport] should be thrownBy {
             runAndWait(baseUserService.createUser(newUser, samRequestContext))
           }
         }

@@ -1,12 +1,12 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
-import org.broadinstitute.dsde.workbench.model.{AzureB2CId, GoogleSubjectId, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.scalatest.DoNotDiscover
 
 import scala.concurrent.ExecutionContextExecutor
@@ -178,13 +178,53 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         }
       }
     }
+
+    describe("should be added to the All Users group") {
+
+      describe("when successfully registering") {
+
+        it("a new User") {
+          // Arrange
+          val newGoogleUser = genWorkbenchUserGoogle.sample.get
+          val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+          val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+          val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+          // Act
+          runAndWait(userService.createUser(newGoogleUser, samRequestContext))
+
+          // Assert
+          directoryDAO.addGroupMember(
+            allUsersGroup.id,
+            newGoogleUser.id,
+            samRequestContext) wasCalled once
+        }
+
+        it("an invited User") {
+          // Arrange
+          val invitedUser = genWorkbenchUserGoogle.sample.get
+          val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).withInvitedUser(invitedUser).build
+          val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+          val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+          // Act
+          runAndWait(userService.createUser(invitedUser, samRequestContext))
+
+          // Assert
+          directoryDAO.addGroupMember(
+            allUsersGroup.id,
+            invitedUser.id,
+            samRequestContext) wasCalled once
+        }
+      }
+    }
   }
 
   describe("An invited User") {
 
     describe("should be able to register") {
 
-      it("with a GoogleSubjectId") {
+      it("after authenticating with Google") {
         // Arrange
         val invitedGoogleUser = genWorkbenchUserGoogle.sample.get
         val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
@@ -207,7 +247,7 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         }
       }
 
-      it("with an AzureB2CId") {
+      it("after authenticating with Microsoft") {
         // Arrange
         val invitedAzureUser = genWorkbenchUserAzure.sample.get
         val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
@@ -269,12 +309,17 @@ class CreateUserSpecNewAndImproved extends UserServiceTestTraits {
         runAndWait(userService.createUser(registeringUser, samRequestContext))
 
         // Assert
-        verify(directoryDAO, never)
-          .createUser(any[SamUser], any[SamRequestContext])
-        verify(directoryDAO, never)
-          .setGoogleSubjectId(ArgumentMatchers.eq(disregardedId), any[GoogleSubjectId], any[SamRequestContext])
-        verify(directoryDAO, never)
-          .setUserAzureB2CId(ArgumentMatchers.eq(disregardedId), any[AzureB2CId], any[SamRequestContext])
+        directoryDAO.createUser(
+          any[SamUser],
+          any[SamRequestContext]) wasNever called
+        directoryDAO.setGoogleSubjectId(
+          eqTo(disregardedId),
+          any[GoogleSubjectId],
+          any[SamRequestContext]) wasNever called
+        directoryDAO.setUserAzureB2CId(
+          eqTo(disregardedId),
+          any[AzureB2CId],
+          any[SamRequestContext]) wasNever called
       }
     }
   }
