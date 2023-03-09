@@ -116,6 +116,7 @@ object AppConfig {
 
   implicit val termsOfServiceConfigReader: ValueReader[TermsOfServiceConfig] = ValueReader.relative { config =>
     TermsOfServiceConfig(
+      config.getAs[Boolean]("isTosEnabled").getOrElse(true),
       config.getBoolean("isGracePeriodEnabled"),
       config.getString("version"),
       config.getString("url")

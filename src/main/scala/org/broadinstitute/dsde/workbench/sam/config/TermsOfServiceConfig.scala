@@ -9,4 +9,4 @@ package org.broadinstitute.dsde.workbench.sam.config
   *   The url to the Terra Terms of Service. Used for validation and will be displayed to user in error messages
   */
 
-case class TermsOfServiceConfig(isGracePeriodEnabled: Boolean, version: String, url: String)
+case class TermsOfServiceConfig(isTosEnabled: Boolean, isGracePeriodEnabled: Boolean, version: String, url: String)
