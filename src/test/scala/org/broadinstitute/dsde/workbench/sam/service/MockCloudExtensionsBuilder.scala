@@ -6,13 +6,12 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, argThat}
-import org.mockito.IdiomaticMockito.StubbingOps
+import org.mockito.IdiomaticMockito
 import org.mockito.Mockito.RETURNS_SMART_NULLS
-import org.mockito.MockitoSugar
 
 import scala.concurrent.{ExecutionContext, Future}
 
-case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends MockitoSugar {
+case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends IdiomaticMockito {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
   val mockedCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
 
