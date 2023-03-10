@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, CreateUserSpecNewAndImproved, GetUserStatusSpec, InviteUserSpec}
+import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito
 import org.mockito.Mockito._
@@ -32,7 +32,6 @@ class UserServiceSpec extends Suite {
   override def nestedSuites: IndexedSeq[Suite] =
     IndexedSeq(
       new CreateUserSpec,
-      new CreateUserSpecNewAndImproved,
       new InviteUserSpec,
       new GetUserStatusSpec,
       new OldUserServiceSpec,
