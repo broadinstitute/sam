@@ -90,7 +90,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
       null,
       null,
       new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef),
+      new StatusService(directoryDAO, NoExtensions),
       null,
       defaultUser,
       directoryDAO,

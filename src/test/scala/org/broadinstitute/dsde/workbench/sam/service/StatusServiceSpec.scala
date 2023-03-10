@@ -30,15 +30,10 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
     system.terminate()
 
   private def newStatusService(directoryDAO: DirectoryDAO) =
-    new StatusService(
-      directoryDAO,
-      new NoExtensions {
+    new StatusService(directoryDAO, new NoExtensions {
         override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] =
           Map(Subsystems.GoogleGroups -> Future.successful(SubsystemStatus(true, None)))
-      },
-      dbReference,
-      pollInterval = 10 milliseconds
-    )
+      }, pollInterval = 10 milliseconds)
 
   private def directoryDAOWithAllUsersGroup(response: Boolean = true) = {
     val directoryDAO = new MockDirectoryDAO {
@@ -53,22 +48,17 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
   private def ok = newStatusService(directoryDAOWithAllUsersGroup())
 
   private def failingExtension = {
-    val service = new StatusService(
-      directoryDAOWithAllUsersGroup(),
-      new NoExtensions {
+    val service = new StatusService(directoryDAOWithAllUsersGroup(), new NoExtensions {
         override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] =
           Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
-      },
-      dbReference,
-      pollInterval = 10 milliseconds
-    )
+      }, pollInterval = 10 milliseconds)
     service
   }
 
   private def failingDatabase = {
     // background database configured to connect to non existent database
     val dbReferenceOverride = new TestDbReference(appConfig.samDatabaseConfig.samBackground.dbName, TestSupport.blockingEc)
-    val service = new StatusService(directoryDAOWithAllUsersGroup(false), NoExtensions, dbReferenceOverride, pollInterval = 10 milliseconds)
+    val service = new StatusService(directoryDAOWithAllUsersGroup(false), NoExtensions, pollInterval = 10 milliseconds)
     service
   }
 

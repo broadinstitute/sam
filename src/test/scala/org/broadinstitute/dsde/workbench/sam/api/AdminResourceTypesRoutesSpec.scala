@@ -69,7 +69,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
 
     val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
-    val mockStatusService = new StatusService(directoryDAO, cloudExtensions, TestSupport.dbRef)
+    val mockStatusService = new StatusService(directoryDAO, cloudExtensions)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 

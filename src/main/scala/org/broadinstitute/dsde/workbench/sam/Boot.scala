@@ -370,7 +370,7 @@ object Boot extends IOApp with LazyLogging {
     val tosService = new TosService(directoryDAO, config.termsOfServiceConfig)
     val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService)
     val statusService =
-      new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, DbReference(config.samDatabaseConfig.samRead.dbName, implicitly), 10 seconds)
+      new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds, 1 minute)
     val managedGroupService =
       new ManagedGroupService(
         resourceService,

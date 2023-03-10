@@ -7,7 +7,6 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, Subsystem}
@@ -17,9 +16,8 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 class StatusService(
-    val directoryDAO: DirectoryDAO,
-    val cloudExtensions: CloudExtensions,
-    val dbReference: DbReference,
+    directoryDAO: DirectoryDAO,
+    cloudExtensions: CloudExtensions,
     initialDelay: FiniteDuration = Duration.Zero,
     pollInterval: FiniteDuration = 1 minute
 )(implicit system: ActorSystem, executionContext: ExecutionContext)

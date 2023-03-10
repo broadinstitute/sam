@@ -154,7 +154,7 @@ object TestSupport extends TestSupport {
       policyEvaluatorService,
       tosService,
       new UserService(directoryDAO, googleExt, Seq.empty, tosService),
-      new StatusService(directoryDAO, googleExt, dbRef),
+      new StatusService(directoryDAO, googleExt),
       mockManagedGroupService,
       directoryDAO,
       policyDAO,
