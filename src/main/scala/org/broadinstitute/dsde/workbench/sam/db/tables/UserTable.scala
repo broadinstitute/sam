@@ -11,7 +11,8 @@ final case class UserRecord(
     googleSubjectId: Option[GoogleSubjectId],
     enabled: Boolean,
     azureB2cId: Option[AzureB2CId],
-    acceptedTosVersion: Option[String]
+    acceptedTosVersion: Option[String],
+    auth0Id: Option[Auth0Id]
 )
 
 object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
@@ -24,11 +25,20 @@ object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
     rs.stringOpt(e.googleSubjectId).map(GoogleSubjectId),
     rs.get(e.enabled),
     rs.stringOpt(e.azureB2cId).map(AzureB2CId),
-    rs.stringOpt(e.acceptedTosVersion)
+    rs.stringOpt(e.acceptedTosVersion),
+    rs.stringOpt(e.auth0Id).map(Auth0Id)
   )
 
   def apply(o: SyntaxProvider[UserRecord])(rs: WrappedResultSet): UserRecord = apply(o.resultName)(rs)
 
   def unmarshalUserRecord(userRecord: UserRecord): SamUser =
-    SamUser(userRecord.id, userRecord.googleSubjectId, userRecord.email, userRecord.azureB2cId, userRecord.enabled, userRecord.acceptedTosVersion)
+    SamUser(
+      userRecord.id,
+      userRecord.googleSubjectId,
+      userRecord.email,
+      userRecord.azureB2cId,
+      userRecord.enabled,
+      userRecord.acceptedTosVersion,
+      userRecord.auth0Id
+    )
 }

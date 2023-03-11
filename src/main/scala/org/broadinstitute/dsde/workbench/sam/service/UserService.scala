@@ -102,6 +102,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- user.azureB2CId.traverse { azureB2CId =>
           directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
         }
+        _ <- user.auth0Id.traverse { auth0Id =>
+          directoryDAO.setUserAuth0Id(uid, auth0Id, samRequestContext)
+        }
         _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
         updatedUser <- directoryDAO.loadUser(uid, samRequestContext)
       } yield updatedUser.getOrElse(

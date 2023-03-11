@@ -42,6 +42,8 @@ trait DirectoryDAO {
   def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
   def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
   def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit]
+  def loadUserByAuth0Id(userId: Auth0Id, samRequestContext: SamRequestContext): IO[Option[SamUser]]
+  def setUserAuth0Id(userId: WorkbenchUserId, auth0Id: Auth0Id, samRequestContext: SamRequestContext): IO[Unit]
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
 
   def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]
