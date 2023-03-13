@@ -48,11 +48,11 @@ on:
         type: string
       consumer-labels:
         description: 'the list of labels for the consumer associated with the pact content, separated by ", "'
-        required: true
+        required: false
         type: string
       provider-labels:
         description: 'the list of labels for the provider associated with the pact content, separated by ", "'
-        required: true
+        required: false
         type: string
       pact-url:
         description: 'the "permalink" URL to the newly published pact (the URL specifying the consumer version URL, rather than the "/latest" format'
@@ -98,7 +98,13 @@ jobs:
       - name: "This step will only run when the workflow is triggered by Pact Broker 'contract requiring verification published' event type"
         if: ${{ inputs.pb-event-type == 'contract-requiring-verification-published' }}
         run: |
-          echo ${{ inputs }}
+          echo "pb-event-type=${{ inputs.pb-event-type }}"
+          echo "consumer-name=${{ inputs.consumer-name }}"
+          echo "consumer-version-number=${{ inputs.consumer-version-number }}"
+          echo "provider-version-number=${{ inputs.provider-version-number }}"
+          echo "consumer-version-branch=${{ inputs.consumer-version-branch }}"
+          echo "provider-version-branch=${{ inputs.provider-version-branch }}"
+          echo "pact-url=${{ inputs.pact-url }}"
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
