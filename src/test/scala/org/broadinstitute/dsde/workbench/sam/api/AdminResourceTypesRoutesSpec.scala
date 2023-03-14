@@ -14,12 +14,12 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
-import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, when}
+import org.mockito.ArgumentMatchers.{eq => mockitoEq}
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.AppendedClues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.mockito.MockitoSugar
 import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.Future
@@ -62,7 +62,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
     val mockResourceService = mock[ResourceService](RETURNS_SMART_NULLS)
     resourceTypes.map { case (resourceTypeName, resourceType) =>
-      when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
+      lenient().when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
 
     val cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin)

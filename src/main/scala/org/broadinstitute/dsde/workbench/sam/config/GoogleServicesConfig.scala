@@ -39,8 +39,6 @@ object GoogleServicesConfig {
   implicit val googlePubSubConfigReader: ValueReader[GooglePubSubConfig] = ValueReader.relative { config =>
     GooglePubSubConfig(
       config.getString("pubSubProject"),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("pollInterval")),
-      org.broadinstitute.dsde.workbench.util.toScalaDuration(config.getDuration("pollJitter")),
       config.getString("pubSubTopic"),
       config.getString("pubSubSubscription"),
       config.getInt("workerCount")

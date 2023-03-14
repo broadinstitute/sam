@@ -4,17 +4,15 @@ import akka.actor.ActorSystem
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.GoogleUtilities
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LastQuotaErrorDAO
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{verify, when}
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.mockito.MockitoSugar.mock
 
-import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
-class CoordinatedBackoffHttpGoogleDirectoryDAOSpec extends AnyFreeSpec with Matchers {
+class CoordinatedBackoffHttpGoogleDirectoryDAOSpec extends AnyFreeSpec with Matchers with MockitoSugar {
   implicit val system = ActorSystem("CoordinatedBackoffHttpGoogleDirectoryDAOSpec")
 
   "CoordinatedBackoffHttpGoogleDirectoryDAO" - {

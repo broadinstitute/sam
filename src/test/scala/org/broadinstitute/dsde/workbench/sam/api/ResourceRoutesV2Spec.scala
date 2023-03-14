@@ -17,11 +17,11 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFlatSpec, TestSupport, model}
 import org.mockito.ArgumentMatcher
-import org.mockito.ArgumentMatchers.{any, argThat, eq => mockitoEq}
+import org.mockito.ArgumentMatchers.{eq => mockitoEq}
 import org.mockito.Mockito._
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.AppendedClues
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.mockito.MockitoSugar
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
 
@@ -1775,15 +1775,21 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       override def matches(argument: Iterable[ResourceAction]): Boolean = actionsOnResource.intersect(argument.toSet).isEmpty
     }
 
-    when(
-      samRoutes.policyEvaluatorService.hasPermissionOneOf(mockitoEq(resource), argThat(actionAllowed), mockitoEq(defaultUserInfo.id), any[SamRequestContext])
-    ).thenReturn(IO.pure(true))
+    lenient()
+      .when(
+        samRoutes.policyEvaluatorService.hasPermissionOneOf(mockitoEq(resource), argThat(actionAllowed), mockitoEq(defaultUserInfo.id), any[SamRequestContext])
+      )
+      .thenReturn(IO.pure(true))
 
-    when(
-      samRoutes.policyEvaluatorService.hasPermissionOneOf(mockitoEq(resource), argThat(actionNotAllowed), mockitoEq(defaultUserInfo.id), any[SamRequestContext])
-    ).thenReturn(IO.pure(false))
+    lenient()
+      .when(
+        samRoutes.policyEvaluatorService
+          .hasPermissionOneOf(mockitoEq(resource), argThat(actionNotAllowed), mockitoEq(defaultUserInfo.id), any[SamRequestContext])
+      )
+      .thenReturn(IO.pure(false))
 
-    when(samRoutes.policyEvaluatorService.listUserResourceActions(mockitoEq(resource), mockitoEq(defaultUserInfo.id), any[SamRequestContext]))
+    lenient()
+      .when(samRoutes.policyEvaluatorService.listUserResourceActions(mockitoEq(resource), mockitoEq(defaultUserInfo.id), any[SamRequestContext]))
       .thenReturn(IO.pure(actionsOnResource))
   }
 
@@ -1803,27 +1809,32 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     // mock responses for current parent resource
     currentParentOpt match {
       case Some(currentParent) =>
-        when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+        lenient()
+          .when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
           .thenReturn(IO(Option(currentParent)))
-        when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+        lenient()
+          .when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
           .thenReturn(IO.pure(true))
         mockPermissionsForResource(samRoutes, currentParent, actionsOnResource = actionsOnCurrentParent)
       case None =>
-        when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+        lenient()
+          .when(samRoutes.resourceService.getResourceParent(mockitoEq(childResource), any[SamRequestContext]))
           .thenReturn(IO(None))
-        when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
+        lenient()
+          .when(samRoutes.resourceService.deleteResourceParent(mockitoEq(childResource), any[SamRequestContext]))
           .thenReturn(IO.pure(false))
     }
 
     // mock responses for new parent resource
     newParentOpt.map { newParent =>
-      when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), mockitoEq(newParent), any[SamRequestContext]))
+      lenient()
+        .when(samRoutes.resourceService.setResourceParent(mockitoEq(childResource), mockitoEq(newParent), any[SamRequestContext]))
         .thenReturn(IO.unit)
       mockPermissionsForResource(samRoutes, newParent, actionsOnResource = actionsOnNewParent)
     }
 
     if (actionsOnChild.contains(SamResourceActions.delete)) {
-      when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(IO.unit)
+      lenient().when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(IO.unit)
     }
   }
 
@@ -2484,9 +2495,6 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val samRoutes = createSamRoutes()
     mockPermissionsForResource(samRoutes, resource, actionsOnResource = Set(SamResourceActions.delete))
 
-    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext]))
-      .thenReturn(IO(LazyList(response)))
-
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
@@ -2500,9 +2508,6 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val samRoutes = createSamRoutes()
     mockPermissionsForResource(samRoutes, resource, actionsOnResource = Set.empty)
-
-    when(samRoutes.resourceService.listResourcePolicies(mockitoEq(resource), any[SamRequestContext]))
-      .thenReturn(IO(LazyList(response)))
 
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound

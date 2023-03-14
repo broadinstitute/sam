@@ -10,17 +10,17 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec}
+import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito
 import org.mockito.Mockito._
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.scalatest.MockitoSugar
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues, Suite}
-import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -32,6 +32,7 @@ class UserServiceSpec extends Suite {
   override def nestedSuites: IndexedSeq[Suite] =
     IndexedSeq(
       new CreateUserSpec,
+      new InviteUserSpec,
       new GetUserStatusSpec,
       new OldUserServiceSpec,
       new OldUserServiceMockSpec
@@ -107,56 +108,9 @@ class OldUserServiceMockSpec
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
     when(mockTosService.getTosComplianceStatus(any[SamUser]))
-      .thenAnswer(i => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, true, true)))
+      .thenAnswer((i: InvocationOnMock) => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, true, true)))
 
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
-  }
-
-  "getUserStatus" should "get user status for a user that exists and is enabled" in {
-    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync()
-    status.value shouldBe enabledDefaultUserStatus
-  }
-
-  it should "return UserStatus.ldap and UserStatus.adminEnabled as false if user is disabled" in {
-    when(dirDAO.isEnabled(disabledUser.id, samRequestContext)).thenReturn(IO(false))
-    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync()
-    status.value.enabled("ldap") shouldBe false
-    status.value.enabled("adminEnabled") shouldBe false
-  }
-
-  it should "return UserStatus.allUsersGroup as false if user is not in the All_Users group" in {
-    when(dirDAO.isGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)).thenReturn(IO(false))
-    val status = service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync()
-    status.value.enabled("allUsersGroup") shouldBe false
-  }
-
-  it should "return UserStatus.google as false if user is not a member of their proxy group on Google" in {
-    when(googleExtensions.getUserStatus(enabledUser)).thenReturn(IO(false))
-    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).unsafeRunSync()
-    status.value.enabled("google") shouldBe false
-  }
-
-  it should "still return UserStatus.tosAccepted or UserStatus.adminEnabled if user's TOS status is false" in {
-    when(mockTosService.getTosComplianceStatus(enabledUser)).thenReturn(IO.pure(TermsOfServiceComplianceStatus(enabledUser.id, false, false)))
-    val status = service.getUserStatus(enabledUser.id, samRequestContext = samRequestContext).unsafeRunSync()
-    status.value.enabled.keys should contain("tosAccepted")
-    status.value.enabled.keys should contain("adminEnabled")
-  }
-
-  it should "return no status for a user that does not exist" in {
-    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
-    service.getUserStatus(defaultUser.id, samRequestContext = samRequestContext).unsafeRunSync() shouldBe None
-  }
-
-  it should "return userDetailsOnly status when told to" in {
-    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).unsafeRunSync()
-    statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
-  }
-
-  it should "return userDetailsOnly status for a disabled user" in {
-    when(dirDAO.isEnabled(disabledUser.id, samRequestContext)).thenReturn(IO(false))
-    val statusNoEnabled = service.getUserStatus(defaultUser.id, true, samRequestContext).unsafeRunSync()
-    statusNoEnabled shouldBe Some(UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map.empty))
   }
 
   "getUserStatusDiagnostics" should "return UserStatusDiagnostics for a user that exists and is enabled" in {
@@ -510,47 +464,7 @@ class OldUserServiceSpec
     }
   }
 
-  "UserService inviteUser" should "create a new user" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    val userEmail = genNonPetEmail.sample.get
-    service.inviteUser(userEmail, samRequestContext).unsafeRunSync()
-    val userId = dirDAO.loadSubjectFromEmail(userEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
-    val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
-    res shouldBe Some(SamUser(userId, None, userEmail, None, false, None))
-  }
-
-  it should "reject blocked domain" in {
-    intercept[WorkbenchExceptionWithErrorReport] {
-      service.inviteUser(WorkbenchEmail(s"user@$blockedDomain"), samRequestContext).unsafeRunSync()
-    }.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
-  }
-
-  it should "return conflict when there's an existing subject for a given email" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    val user = genWorkbenchUserGoogle.sample.get
-    dirDAO.createUser(user, samRequestContext).unsafeRunSync()
-    val res = intercept[WorkbenchExceptionWithErrorReport] {
-      service.inviteUser(user.email, samRequestContext).unsafeRunSync()
-    }
-    res.errorReport.statusCode shouldBe Option(StatusCodes.Conflict)
-  }
-
-  "GetStatus for an invited user" should "return a user status that is disabled" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    // Invite an email
-    val emailToInvite = genNonPetEmail.sample.get
-    val invitedUserDetails = service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
-
-    // Check the status of the invited user
-    val invitedUserStatus = service.getUserStatus(invitedUserDetails.userSubjectId, false, samRequestContext).unsafeRunSync()
-    val disabledUserStatus = Map("ldap" -> false, "allUsersGroup" -> false, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> false)
-    invitedUserStatus.value shouldBe UserStatus(invitedUserDetails, disabledUserStatus)
-  }
-
-  it should "return a status that is enabled after the invited user registers" in {
+  "GetStatus for an invited user" should "return a status that is enabled after the invited user registers" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     // Invite an email

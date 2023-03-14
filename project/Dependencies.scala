@@ -9,7 +9,7 @@ object Dependencies {
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.5.0"
-  val sentryVersion = "6.6.0"
+  val sentryVersion = "6.15.0"
 
   val workbenchLibV = "abd44a6"
   val workbenchUtilV = s"0.6-$workbenchLibV"
@@ -38,6 +38,7 @@ object Dependencies {
   val excludeJerseyMedia = ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
 
   val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
+  val sentryLogback: ModuleID = "io.sentry" % "sentry-logback" % sentryVersion
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID = "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV
@@ -74,7 +75,7 @@ object Dependencies {
 
   val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
   val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-15" % s"${scalaTestV}.0-RC2" % Test
-  val scalaTestMockito = "org.scalatestplus" %% "mockito-4-5" % s"${scalaTestV}.0" % Test
+  val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "1.17.12" % Test
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -155,7 +156,6 @@ object Dependencies {
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
-    sentry,
     ioGrpc,
     logbackClassic,
     logstashLogback,
@@ -178,7 +178,7 @@ object Dependencies {
     scalaTest,
     scalaTestScalaCheck,
     scalaCheck,
-    scalaTestMockito,
+    mockitoScalaTest,
     workbenchUtil,
     workbenchModel,
     workbenchGoogle,
@@ -201,6 +201,8 @@ object Dependencies {
     postgres,
     cloudResourceLib,
     nettyAll,
-    azureManagedApplications
+    azureManagedApplications,
+    sentry,
+    sentryLogback
   ) ++ openCensusDependencies
 }

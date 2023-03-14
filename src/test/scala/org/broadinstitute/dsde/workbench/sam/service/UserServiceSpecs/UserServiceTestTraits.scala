@@ -2,12 +2,12 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.model.{SamUser, UserStatus}
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.matchers.{MatchResult, Matcher}
 import org.scalatest.{Inside, OptionValues}
-import org.scalatestplus.mockito.MockitoSugar
 
 import scala.collection.mutable.ListBuffer
 
@@ -50,8 +50,8 @@ abstract class UserServiceTestTraits extends AnyFunSpec with Matchers with TestS
         case Some(status) =>
           MatchResult(
             status,
-            s"$componentName is not true",
-            s"$componentName is true "
+            s"$componentName is not true, but expected it to be ",
+            s"$componentName is true, but shouldn't be "
           )
         case None =>
           val failureMsg = s"No entry found for $componentName"

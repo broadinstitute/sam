@@ -7,16 +7,16 @@ import com.azure.core.util.Context
 import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.managedapplications.models.{Application, Applications, Plan}
 import com.azure.resourcemanager.msi.MsiManager
-import com.azure.resourcemanager.msi.models.{Identities, Identity}
 import com.azure.resourcemanager.msi.models.Identity.DefinitionStages
+import com.azure.resourcemanager.msi.models.{Identities, Identity}
 import com.azure.resourcemanager.resources.ResourceManager
 import com.azure.resourcemanager.resources.models.{ResourceGroup, ResourceGroups}
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, SamResourceTypes, SamUser}
 import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.{any, anyString}
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, when}
-import org.scalatestplus.mockito.MockitoSugar
+import org.mockito.ArgumentMatchers.anyString
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
+import org.mockito.scalatest.MockitoSugar
 
 import scala.jdk.CollectionConverters._
 
@@ -35,17 +35,21 @@ object MockCrlService extends MockitoSugar {
     val mockRm = mockResourceManager(mrgName, includeBillingProfileTag)
     val mockAppMgr = mockApplicationManager(user, mrgName, managedAppPlan)
 
-    when(mockCrlService.buildResourceManager(any[TenantId], any[SubscriptionId]))
+    lenient()
+      .when(mockCrlService.buildResourceManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockRm))
 
     val mockMsi = mockMsiManager
-    when(mockCrlService.buildMsiManager(any[TenantId], any[SubscriptionId]))
+    lenient()
+      .when(mockCrlService.buildMsiManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockMsi))
 
-    when(mockCrlService.getManagedAppPlans)
+    lenient()
+      .when(mockCrlService.getManagedAppPlans)
       .thenReturn(Seq(managedAppPlan))
 
-    when(mockCrlService.buildApplicationManager(any[TenantId], any[SubscriptionId]))
+    lenient()
+      .when(mockCrlService.buildApplicationManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockAppMgr))
 
     mockCrlService
@@ -55,21 +59,26 @@ object MockCrlService extends MockitoSugar {
     // Mock get resource group
     val mockResourceGroup = mock[ResourceGroup](RETURNS_SMART_NULLS)
     if (includeBillingProfileTag) {
-      when(mockResourceGroup.tags())
+      lenient()
+        .when(mockResourceGroup.tags())
         .thenReturn(Map("terra.billingProfileId" -> mockSamSpendProfileResource.resourceId.value).asJava)
     }
-    when(mockResourceGroup.id())
+    lenient()
+      .when(mockResourceGroup.id())
       .thenReturn(mrgName.value)
 
     val mockResourceGroups = mock[ResourceGroups](RETURNS_SMART_NULLS)
-    when(mockResourceGroups.getByName(anyString))
+    lenient()
+      .when(mockResourceGroups.getByName(anyString))
       .thenThrow(new RuntimeException("resource group not found"))
-    when(mockResourceGroups.getByName(ArgumentMatchers.eq(mrgName.value)))
+    lenient()
+      .when(mockResourceGroups.getByName(ArgumentMatchers.eq(mrgName.value)))
       .thenReturn(mockResourceGroup)
 
     // Mock resource manager
     val mockResourceManager = mock[ResourceManager](RETURNS_SMART_NULLS)
-    when(mockResourceManager.resourceGroups())
+    lenient()
+      .when(mockResourceManager.resourceGroups())
       .thenReturn(mockResourceGroups)
 
     mockResourceManager
@@ -78,32 +87,40 @@ object MockCrlService extends MockitoSugar {
   private def mockMsiManager: MsiManager = {
     // Mock create identity
     val mockIdentity = mock[Identity](RETURNS_SMART_NULLS)
-    when(mockIdentity.name())
+    lenient()
+      .when(mockIdentity.name())
       .thenReturn("mock-uami")
-    when(mockIdentity.id())
+    lenient()
+      .when(mockIdentity.id())
       .thenReturn("tenant/sub/mrg/uami")
 
     val createIdentityStage3 = mock[DefinitionStages.WithCreate](RETURNS_SMART_NULLS)
-    when(createIdentityStage3.create(any[Context]))
+    lenient()
+      .when(createIdentityStage3.create(any[Context]))
       .thenReturn(mockIdentity)
-    when(createIdentityStage3.withTags(any[java.util.Map[String, String]]))
+    lenient()
+      .when(createIdentityStage3.withTags(any[java.util.Map[String, String]]))
       .thenReturn(createIdentityStage3)
 
     val createIdentityStage2 = mock[DefinitionStages.WithGroup](RETURNS_SMART_NULLS)
-    when(createIdentityStage2.withExistingResourceGroup(anyString))
+    lenient()
+      .when(createIdentityStage2.withExistingResourceGroup(anyString))
       .thenReturn(createIdentityStage3)
 
     val createIdentityStage1 = mock[DefinitionStages.Blank](RETURNS_SMART_NULLS)
-    when(createIdentityStage1.withRegion(any[Region]()))
+    lenient()
+      .when(createIdentityStage1.withRegion(any[Region]))
       .thenReturn(createIdentityStage2)
 
     val mockIdentities = mock[Identities](RETURNS_SMART_NULLS)
-    when(mockIdentities.define(anyString))
+    lenient()
+      .when(mockIdentities.define(anyString))
       .thenReturn(createIdentityStage1)
 
     // Mock MsiManager
     val mockMsiManager = mock[MsiManager](RETURNS_SMART_NULLS)
-    when(mockMsiManager.identities())
+    lenient()
+      .when(mockMsiManager.identities())
       .thenReturn(mockIdentities)
 
     mockMsiManager
@@ -113,25 +130,31 @@ object MockCrlService extends MockitoSugar {
     val appParameters =
       user.map(u => Map[String, Map[String, String]](managedAppPlan.authorizedUserKey -> Map("value" -> u.email.value)).view.mapValues(_.asJava).toMap.asJava)
     val mockApplication = mock[Application](RETURNS_SMART_NULLS)
-    when(mockApplication.managedResourceGroupId())
+    lenient()
+      .when(mockApplication.managedResourceGroupId())
       .thenReturn(mrgName.value)
-    when(mockApplication.plan())
+    lenient()
+      .when(mockApplication.plan())
       .thenReturn(new Plan().withName(managedAppPlan.name).withPublisher(managedAppPlan.publisher))
-    when(mockApplication.parameters())
+    lenient()
+      .when(mockApplication.parameters())
       .thenReturn(appParameters.orNull)
 
     val mockApplicationIterator = mock[PagedIterable[Application]](RETURNS_SMART_NULLS)
     // use thenAnswer instead of thenReturn so we get a new iterator ever time
     // otherwise you get something like an up-only elevator, you only get 1 ride
-    when(mockApplicationIterator.iterator())
+    lenient()
+      .when(mockApplicationIterator.iterator())
       .thenAnswer(_ => List(mockApplication).iterator.asJava)
 
     val mockApplications = mock[Applications](RETURNS_SMART_NULLS)
-    when(mockApplications.list())
+    lenient()
+      .when(mockApplications.list())
       .thenReturn(mockApplicationIterator)
 
     val mockAppMgr = mock[ApplicationManager](RETURNS_SMART_NULLS)
-    when(mockAppMgr.applications())
+    lenient()
+      .when(mockAppMgr.applications())
       .thenReturn(mockApplications)
 
     mockAppMgr

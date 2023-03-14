@@ -14,6 +14,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
+import io.sentry.Sentry
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
@@ -114,8 +115,10 @@ object SamRoutes {
 
     ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport =>
+        Sentry.captureException(withErrorReport)
         complete((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
       case e: Throwable =>
+        Sentry.captureException(e)
         complete((StatusCodes.InternalServerError, ErrorReport(e)))
     }
   }
