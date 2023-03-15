@@ -74,6 +74,16 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends Mockit
     .when(mockedCloudExtensions)
     .onUserDelete(any[WorkbenchUserId], any[SamRequestContext])
 
+  lenient()
+    .doReturn(Set.empty)
+    .when(mockedCloudExtensions)
+    .allSubSystems
+
+  lenient()
+    .doReturn(Map.empty)
+    .when(mockedCloudExtensions)
+    .checkStatus
+
   def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withEnabledUsers(Set(samUser))
   def withEnabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
     samUsers.foreach(makeUserAppearEnabled)
