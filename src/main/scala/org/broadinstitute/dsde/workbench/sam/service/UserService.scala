@@ -3,6 +3,7 @@ package service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import cats.implicits.catsSyntaxParallelSequence1
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
@@ -119,10 +120,15 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // error has occurred, then there is probably a different problem that needs to be resolved.
   private def updateUser(existingUserId: WorkbenchUserId, user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     openTelemetry.time("api.v1.user.updateUser.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        _ <- if (user.googleSubjectId.nonEmpty) directoryDAO.setGoogleSubjectId(existingUserId, user.googleSubjectId.get, samRequestContext) else IO.unit
-        _ <- if (user.azureB2CId.nonEmpty) directoryDAO.setUserAzureB2CId(existingUserId, user.azureB2CId.get, samRequestContext) else IO.unit
-      } yield user.copy(id = existingUserId)
+      val googleSubjectIdUpdate = if (user.googleSubjectId.nonEmpty) {
+        directoryDAO.setGoogleSubjectId(existingUserId, user.googleSubjectId.get, samRequestContext)
+      } else IO.unit
+
+      val azureB2CIdUpdate =  if (user.azureB2CId.nonEmpty) {
+        directoryDAO.setUserAzureB2CId(existingUserId, user.azureB2CId.get, samRequestContext)
+      } else IO.unit
+
+      List(googleSubjectIdUpdate, azureB2CIdUpdate).parSequence.map { _ => user.copy(id = existingUserId) }
     }
 
   private def registerInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
