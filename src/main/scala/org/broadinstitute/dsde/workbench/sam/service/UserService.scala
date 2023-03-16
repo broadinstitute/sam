@@ -106,7 +106,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case None => IO(user)
     }
 
-  // TODO: Add a simple "updateUser" method to directoryDAO so we can do all this in one call and return the updated user record
+  // Logic here is a little weird.  We should never call this method if all of the user's Cloud Ids are `None`, but if
+  // we do it is not a problem and it just returns.  Therefore, usually we will have a scenario where 1 or more Cloud
+  // Ids are set.  For any Cloud Ids that are `Some(id)`, we should try to update the database with that id.  At this
+  // point it will either successfully set the id or throw an exception if the user could not be found or if the id is
+  // already set to a different value.
+  //
+  // In the error scenario, this code will short circuit and bubble up the exception, meaning there may be additional
+  // updates that are not attempted.  That is OK.  If some updates are run and others are not, that does not mean those
+  // updated values are invalid.  Similarly, if there are values that would have been updated after the exception was
+  // thrown and they are not updated, that is also OK, at this point the user record is incomplete anyway and if an
+  // error has occurred, then there is probably a different problem that needs to be resolved.
   private def updateUser(existingUserId: WorkbenchUserId, user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     openTelemetry.time("api.v1.user.updateUser.time", API_TIMING_DURATION_BUCKET) {
       for {
