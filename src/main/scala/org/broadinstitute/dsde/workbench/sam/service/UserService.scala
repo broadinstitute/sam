@@ -120,7 +120,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       for {
         updatedUser <- updateUser(invitedUserId, invitedUser, samRequestContext)
         groups <- directoryDAO.listUserDirectMemberships(updatedUser.id, samRequestContext)
-        _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(groups, samRequestContext)))
+        _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
       } yield {
         updatedUser
       }

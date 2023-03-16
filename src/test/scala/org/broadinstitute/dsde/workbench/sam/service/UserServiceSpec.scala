@@ -20,11 +20,11 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, DoNotDiscover, OptionValues, Suite}
+import org.scalatest._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
 
 // TODO: continue breaking down old UserServiceSpec tests into nested suites
 // See: https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
@@ -105,7 +105,7 @@ class OldUserServiceMockSpec
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
     when(mockTosService.getTosComplianceStatus(any[SamUser]))
@@ -277,7 +277,7 @@ class OldUserServiceSpec
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO.pure(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
     tos = new TosService(dirDAO, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)

@@ -11,7 +11,7 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.mockito.{ArgumentMatcher, ArgumentMatchers}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 // It is probably not a good thing that GoogleExtensions (the implementation of CloudExtensions) needs a DirectoryDAO
 // so that it can _update_ the database, but it does.  It makes things more complicated here.
@@ -65,7 +65,7 @@ case class StatefulMockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extend
     .onUserEnable(any[SamUser], any[SamRequestContext])
 
   lenient()
-    .doReturn(Future.successful(()))
+    .doReturn(IO.unit)
     .when(mockedCloudExtensions)
     .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
 

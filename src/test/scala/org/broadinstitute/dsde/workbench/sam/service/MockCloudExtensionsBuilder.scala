@@ -9,7 +9,7 @@ import org.mockito.ArgumentMatchersSugar.{any, argThat}
 import org.mockito.IdiomaticMockito
 import org.mockito.Mockito.RETURNS_SMART_NULLS
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends IdiomaticMockito {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
@@ -19,7 +19,7 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
   mockedCloudExtensions.onUserCreate(any[SamUser], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.getUserStatus(any[SamUser]) returns IO(false)
   mockedCloudExtensions.onUserEnable(any[SamUser], any[SamRequestContext]) returns IO.unit
-  mockedCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext]) returns Future.successful(())
+  mockedCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
 
   def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withEnabledUsers(Set(samUser))

@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 
@@ -918,7 +917,7 @@ class ResourceServiceSpec
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicy(any[AccessPolicy], any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
 
     // overwrite policy with members in memberPolicy
     val memberPolicy = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testMemberR")), AccessPolicyName("testB"))
@@ -961,7 +960,7 @@ class ResourceServiceSpec
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
 
     // overwrite policy with no members
     runAndWait(
@@ -1144,7 +1143,7 @@ class ResourceServiceSpec
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
 
     // overwrite policy members with empty set
     runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
@@ -1644,7 +1643,7 @@ class ResourceServiceSpec
 
     // return value true at the end indicates group changed
     when(mockDirectoryDAO.addGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
@@ -1697,7 +1696,7 @@ class ResourceServiceSpec
 
     // return value true at the end indicates group changed
     when(mockDirectoryDAO.removeGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))

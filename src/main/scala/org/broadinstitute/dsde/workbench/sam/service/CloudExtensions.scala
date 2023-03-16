@@ -30,7 +30,7 @@ trait CloudExtensions {
 
   def publishGroup(id: WorkbenchGroupName): Future[Unit]
 
-  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit]
+  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit]
 
   def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit]
 
@@ -73,7 +73,7 @@ trait NoExtensions extends CloudExtensions {
 
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit] = Future.successful(())
+  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit] = IO.unit
 
