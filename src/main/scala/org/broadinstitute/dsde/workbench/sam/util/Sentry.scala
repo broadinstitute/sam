@@ -25,8 +25,7 @@ object Sentry extends LazyLogging {
 
     options.setBeforeSend { (event: SentryEvent, hint: Hint) =>
       event.getThrowable match {
-        case workbenchException: WorkbenchExceptionWithErrorReport
-          if workbenchException.errorReport.statusCode.exists(statusCodesToSkip.contains) => null
+        case workbenchException: WorkbenchExceptionWithErrorReport if workbenchException.errorReport.statusCode.exists(statusCodesToSkip.contains) => null
         case _ => event
       }
     }
