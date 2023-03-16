@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import akka.http.scaladsl.model.StatusCodes
 import com.typesafe.scalalogging.LazyLogging
-import io.sentry.{Hint, SentryEvent, SentryOptions, Sentry => SentryClient}
+import io.sentry.{Hint, Sentry => SentryClient, SentryEvent, SentryOptions}
 import org.broadinstitute.dsde.workbench.model.WorkbenchExceptionWithErrorReport
 
 object Sentry extends LazyLogging {
@@ -23,13 +23,12 @@ object Sentry extends LazyLogging {
     options.setEnvironment(sys.env.getOrElse("SENTRY_ENVIRONMENT", "unknown"))
     options.setRelease(version.getOrElse("unknown"))
 
-
-    options.setBeforeSend((event: SentryEvent, hint: Hint) => {
+    options.setBeforeSend { (event: SentryEvent, hint: Hint) =>
       event.getThrowable match {
         case workbenchException: WorkbenchExceptionWithErrorReport if workbenchException.errorReport.statusCode.map(statusCodesToSkip.contains) => null
         case _ => event
       }
-    })
+    }
 
     SentryClient.init(options)
     logger.info("Sentry initialized")
