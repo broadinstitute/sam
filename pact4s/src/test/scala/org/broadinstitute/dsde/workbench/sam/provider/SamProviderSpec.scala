@@ -124,6 +124,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   lazy val pactBrokerPass: String = sys.env.getOrElse("PACT_BROKER_PASSWORD", "")
   lazy val branch: String = sys.env.getOrElse("BRANCH", "")
   lazy val gitShaShort: String = sys.env.getOrElse("GIT_SHA_SHORT", "")
+  lazy val gitSha: String = sys.env.getOrElse("GIT_SHA", "")
 
   override def provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
@@ -140,7 +141,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
       publishVerificationResults = Some(
-        PublishVerificationResults(gitShaShort, ProviderTags(branch))
+        PublishVerificationResults(gitSha, ProviderTags(branch))
       ),
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE,

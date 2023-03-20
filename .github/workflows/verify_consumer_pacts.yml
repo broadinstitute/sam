@@ -32,7 +32,7 @@ on:
         type: string
       provider-version-number:
         description: 'the provider version number for the verification result'
-        required: true
+        required: false
         type: string
       consumer-version-tags:
         description: 'the list of tag names for the most recent consumer version associated with the pact content, separated by ", "'
@@ -44,7 +44,7 @@ on:
         type: string
       provider-version-branch:
         description: 'the name of the branch for the provider version associated with the verification result'
-        required: true
+        required: false
         type: string
       consumer-labels:
         description: 'the list of labels for the consumer associated with the pact content, separated by ", "'
@@ -94,9 +94,11 @@ jobs:
           echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "branch=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_OUTPUT
+          echo "BRANCH=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_ENV
+          echo "GIT_SHA=$GITHUB_SHA" >> $GITHUB_ENV
 
-      - name: "This step will only run when the workflow is triggered by Pact Broker 'contract requiring verification published' event type"
-        if: ${{ inputs.pb-event-type == 'contract-requiring-verification-published' }}
+      - name: "This step will only run when this workflow is triggered by a Pact Broker webhook event"
+        if: ${{ inputs.pb-event-type != '' }}
         run: |
           echo "pb-event-type=${{ inputs.pb-event-type }}"
           echo "consumer-name=${{ inputs.consumer-name }}"
@@ -105,15 +107,24 @@ jobs:
           echo "consumer-version-branch=${{ inputs.consumer-version-branch }}"
           echo "provider-version-branch=${{ inputs.provider-version-branch }}"
           echo "pact-url=${{ inputs.pact-url }}"
+          if [[ "${{ inputs.provider-version-branch }}" != "" ]]; then
+            echo "BRANCH=${{ inputs.provider-version-branch }}" >> $GITHUB_ENV
+          fi
+          if [[ "${{ inputs.provider-version-number }}" != "" ]]; then
+            echo "GIT_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
+          fi
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
+          echo "${{ env.BRANCH }}
+          echo "${{ env.GIT_SHA }}
           docker run --rm -v $PWD:/working \
                           -v jar-cache:/root/.ivy \
                           -v jar-cache:/root/.ivy2 \
                           -w /working \
                           -e BRANCH=${{ steps.extract-branch.outputs.branch }} \
                           -e GIT_SHA_SHORT=${{ steps.extract-branch.outputs.sha_short }} \
+                          -e GIT_SHA=${{ steps.extract-branch.outputs.sha }} \
                           -e PACT_BROKER_URL=${{ env.PACT_BROKER_URL }} \
                           -e PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }} \
                           -e PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }} \
