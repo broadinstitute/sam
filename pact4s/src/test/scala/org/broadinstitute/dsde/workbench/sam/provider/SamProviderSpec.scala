@@ -138,7 +138,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     case _ => None
   }
 
-  println(consumerVersionSelectors)
+  println(consumerVersionSelectors.toString)
 
   // if (!consumerBranch.isBlank()) {
   //  println(consumerName)
