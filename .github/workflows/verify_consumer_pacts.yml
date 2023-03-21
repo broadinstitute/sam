@@ -84,8 +84,8 @@ jobs:
             GITHUB_REF=refs/heads/${{ github.head_ref }}
             GITHUB_SHA=${{ github.event.pull_request.head.sha }}
           elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            GITHUB_REF=${{ github.ref }}
-            GITHUB_SHA=${{ github.sha }}
+            GITHUB_REF=${{ github.ref }} # The Git Ref that this workflow runs on
+            GITHUB_SHA=${{ github.sha }} # The Git Sha that this workflow runs on
           else
             echo "Failed to extract branch information"
             exit 1
@@ -102,22 +102,24 @@ jobs:
         run: |
           echo "pb-event-type=${{ inputs.pb-event-type }}"
           echo "consumer-name=${{ inputs.consumer-name }}"
-          echo "consumer-version-number=${{ inputs.consumer-version-number }}"
-          echo "provider-version-number=${{ inputs.provider-version-number }}"
-          echo "consumer-version-branch=${{ inputs.consumer-version-branch }}"
-          echo "provider-version-branch=${{ inputs.provider-version-branch }}"
-          echo "pact-url=${{ inputs.pact-url }}"
+          echo "consumer-version-branch/consumer-version-number=${{ inputs.consumer-version-branch }}/${{ inputs.consumer-version-number }}"
+          echo "provider-version-branch/provider-version-number=${{ inputs.provider-version-branch }}/${{ inputs.provider-version-number }}"
+          echo "pact-url=${{ inputs.pact-url }}" # Practically the provider-version-branch/provider-version-number is sufficient. It's included here in case future client supports it.
           if [[ "${{ inputs.provider-version-branch }}" != "" ]]; then
             echo "BRANCH=${{ inputs.provider-version-branch }}" >> $GITHUB_ENV
           fi
           if [[ "${{ inputs.provider-version-number }}" != "" ]]; then
             echo "GIT_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
           fi
+          echo "CONSUMER_BRANCH=${{ inputs.consumer-version-branch }}" >> $GITHUB_ENV
+          echo "CONSUMER_SHA=${{ inputs.consumer-version-number }}" >> $GITHUB_ENV
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
-          echo "${{ env.BRANCH }}
-          echo "${{ env.GIT_SHA }}
+          echo "${{ env.BRANCH }} # This should reflect the provider branch for pact verification
+          echo "${{ env.GIT_SHA }} # This should reflect the provider version for pact verification
+          echo "${{ env.CONSUMER_BRANCH }} # This should reflect the consumer branch for pact verification
+          echo "${{ env.CONSUMER_SHA }} # This should reflect the consumer version for pact verification
           docker run --rm -v $PWD:/working \
                           -v jar-cache:/root/.ivy \
                           -v jar-cache:/root/.ivy2 \
@@ -125,6 +127,8 @@ jobs:
                           -e BRANCH=${{ steps.extract-branch.outputs.branch }} \
                           -e GIT_SHA_SHORT=${{ steps.extract-branch.outputs.sha_short }} \
                           -e GIT_SHA=${{ steps.extract-branch.outputs.sha }} \
+                          -e CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} \
+                          -e CONSUMER_SHA=${{ env.CONSUMER_SHA }} \
                           -e PACT_BROKER_URL=${{ env.PACT_BROKER_URL }} \
                           -e PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }} \
                           -e PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }} \
