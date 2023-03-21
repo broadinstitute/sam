@@ -131,8 +131,8 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
 
   println(consumerName)
 
-  val consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
-  consumerVersionSelectors.mainBranch
+  var consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
+  consumerVersionSelectors = consumerVersionSelectors.mainBranch
   // if (!consumerBranch.isBlank()) {
   //  println(consumerName)
   //  consumerVersionSelectors.branch(consumerBranch, consumerName)
@@ -145,7 +145,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .PactBrokerWithSelectors(
         brokerUrl = pactBrokerUrl
       )
-      .withConsumerVersionSelectors(ConsumerVersionSelectors.mainBranch)
+      .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
 
