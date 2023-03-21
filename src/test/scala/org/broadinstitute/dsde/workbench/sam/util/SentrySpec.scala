@@ -21,7 +21,7 @@ class SentrySpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with 
         filterException(event, new Hint()) shouldEqual null
       }
 
-      "should not events when status code is not in statusCodesToSkip" in {
+      "should not drop events when status code is not in statusCodesToSkip" in {
         val throwable: Throwable = new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, "test 123"))
         val event = new SentryEvent(throwable)
 
