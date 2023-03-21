@@ -11,10 +11,11 @@ object Sentry extends LazyLogging {
   val version: Option[String] = Option(getClass.getPackage.getImplementationVersion)
 
   private val statusCodesToSkip = List(
-    StatusCodes.NotFound,
-    StatusCodes.Forbidden,
-    StatusCodes.Unauthorized,
-    StatusCodes.Conflict
+    Option(StatusCodes.BadRequest),
+    Option(StatusCodes.NotFound),
+    Option(StatusCodes.Forbidden),
+    Option(StatusCodes.Unauthorized),
+    Option(StatusCodes.Conflict)
   )
 
   def initSentry(): Unit = sentryDsn.fold(logger.warn("No SENTRY_DSN found, not initializing Sentry.")) { dsn =>
@@ -23,14 +24,15 @@ object Sentry extends LazyLogging {
     options.setEnvironment(sys.env.getOrElse("SENTRY_ENVIRONMENT", "unknown"))
     options.setRelease(version.getOrElse("unknown"))
 
-    options.setBeforeSend { (event: SentryEvent, hint: Hint) =>
-      event.getThrowable match {
-        case workbenchException: WorkbenchExceptionWithErrorReport if workbenchException.errorReport.statusCode.exists(statusCodesToSkip.contains) => null
-        case _ => event
-      }
-    }
+    options.setBeforeSend(filterException)
 
     SentryClient.init(options)
     logger.info("Sentry initialized")
   }
+
+  def filterException(event: SentryEvent, hint: Hint): SentryEvent =
+    event.getThrowable match {
+      case workbenchException: WorkbenchExceptionWithErrorReport if statusCodesToSkip.contains(workbenchException.errorReport.statusCode) => null
+      case _ => event
+    }
 }
