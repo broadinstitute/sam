@@ -111,6 +111,7 @@ jobs:
           if [[ "${{ inputs.provider-version-number }}" != "" ]]; then
             echo "GIT_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
           fi
+          echo "CONSUMER_NAME=${{ inputs.consumer-name }}" >> $GITHUB_ENV
           echo "CONSUMER_BRANCH=${{ inputs.consumer-version-branch }}" >> $GITHUB_ENV
           echo "CONSUMER_SHA=${{ inputs.consumer-version-number }}" >> $GITHUB_ENV
 
@@ -127,6 +128,7 @@ jobs:
                           -e BRANCH=${{ env.BRANCH }} \
                           -e GIT_SHA_SHORT=${{ steps.extract-branch.outputs.sha_short }} \
                           -e GIT_SHA=${{ env.GIT_SHA }} \
+                          -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \
                           -e CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} \
                           -e CONSUMER_SHA=${{ env.CONSUMER_SHA }} \
                           -e PACT_BROKER_URL=${{ env.PACT_BROKER_URL }} \

@@ -125,14 +125,18 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   lazy val branch: String = sys.env.getOrElse("BRANCH", "")
   lazy val gitShaShort: String = sys.env.getOrElse("GIT_SHA_SHORT", "")
   lazy val gitSha: String = sys.env.getOrElse("GIT_SHA", "")
+  lazy val consumerName: Option[String] = sys.env.get("CONSUMER_NAME")
   lazy val consumerBranch: String = sys.env.getOrElse("CONSUMER_BRANCH", "")
   lazy val consumerSha: String = sys.env.getOrElse("CONSUMER_SHA", "")
 
+  println(consumerName)
+
   val consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
   consumerVersionSelectors.mainBranch
-  if (!consumerBranch.isBlank()) {
-    consumerVersionSelectors.branch(consumerBranch)
-  }
+  // if (!consumerBranch.isBlank()) {
+  //  println(consumerName)
+  //  consumerVersionSelectors.branch(consumerBranch, consumerName)
+  // }
 
   override def provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
