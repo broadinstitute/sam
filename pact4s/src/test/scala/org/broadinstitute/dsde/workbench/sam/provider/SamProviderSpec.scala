@@ -125,6 +125,15 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   lazy val branch: String = sys.env.getOrElse("BRANCH", "")
   lazy val gitShaShort: String = sys.env.getOrElse("GIT_SHA_SHORT", "")
   lazy val gitSha: String = sys.env.getOrElse("GIT_SHA", "")
+  lazy val consumerBranch: String = sys.env.getOrElse("CONSUMER_BRANCH", "")
+  lazy val consumerSha: String = sys.env.getOrElse("CONSUMER_SHA", "")
+
+  val consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
+  if (!consumerBranch.isBlank()) {
+    consumerVersionSelectors.branch(consumerBranch)
+  } else {
+    consumerVersionSelectors.mainBranch
+  }
 
   override def provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
@@ -133,7 +142,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .PactBrokerWithSelectors(
         brokerUrl = pactBrokerUrl
       )
-      .withConsumerVersionSelectors(ConsumerVersionSelectors.mainBranch)
+      .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
 

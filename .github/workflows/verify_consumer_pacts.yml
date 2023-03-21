@@ -116,17 +116,17 @@ jobs:
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
-          echo "${{ env.BRANCH }} # This should reflect the provider branch for pact verification
-          echo "${{ env.GIT_SHA }} # This should reflect the provider version for pact verification
-          echo "${{ env.CONSUMER_BRANCH }} # This should reflect the consumer branch for pact verification
-          echo "${{ env.CONSUMER_SHA }} # This should reflect the consumer version for pact verification
+          echo "env.BRANCH=${{ env.BRANCH }} # This should reflect the provider branch for pact verification"
+          echo "env.GIT_SHA=${{ env.GIT_SHA }} # This should reflect the provider version for pact verification"
+          echo "env.CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} # This should reflect the consumer branch for pact verification"
+          echo "env.CONSUMER_SHA=${{ env.CONSUMER_SHA }} # This should reflect the consumer version for pact verification"
           docker run --rm -v $PWD:/working \
                           -v jar-cache:/root/.ivy \
                           -v jar-cache:/root/.ivy2 \
                           -w /working \
-                          -e BRANCH=${{ steps.extract-branch.outputs.branch }} \
+                          -e BRANCH=${{ env.BRANCH }} \
                           -e GIT_SHA_SHORT=${{ steps.extract-branch.outputs.sha_short }} \
-                          -e GIT_SHA=${{ steps.extract-branch.outputs.sha }} \
+                          -e GIT_SHA=${{ env.GIT_SHA }} \
                           -e CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} \
                           -e CONSUMER_SHA=${{ env.CONSUMER_SHA }} \
                           -e PACT_BROKER_URL=${{ env.PACT_BROKER_URL }} \
