@@ -129,15 +129,9 @@ jobs:
           echo "$USE_PROVIDER_SHA"
           echo "USE_PROVIDER_SHA=$USE_PROVIDER_SHA" >> $GITHUB_ENV
 
-      - name: Checkout current code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          ref: ${{ env.USE_PROVIDER_SHA }}
-
       - name: Sanity check
         run: |
-          git branch
+          git checkout ${{ env.USE_PROVIDER_SHA }}
           cat pact4s/src/test/scala/org/broadinstitute/dsde/workbench/sam/provider/SamProviderSpec.scala
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
