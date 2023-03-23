@@ -122,29 +122,20 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   lazy val pactBrokerUrl: String = sys.env.getOrElse("PACT_BROKER_URL", "")
   lazy val pactBrokerUser: String = sys.env.getOrElse("PACT_BROKER_USERNAME", "")
   lazy val pactBrokerPass: String = sys.env.getOrElse("PACT_BROKER_PASSWORD", "")
-  lazy val branch: String = sys.env.getOrElse("BRANCH", "")
-  lazy val gitShaShort: String = sys.env.getOrElse("GIT_SHA_SHORT", "")
-  lazy val gitSha: String = sys.env.getOrElse("GIT_SHA", "")
+  lazy val branch: String = sys.env.getOrElse("PROVIDER_BRANCH", "")
+  // lazy val gitShaShort: String = sys.env.getOrElse("GIT_SHA_SHORT", "")
+  lazy val gitSha: String = sys.env.getOrElse("PROVIDER_SHA", "")
   lazy val consumerName: Option[String] = sys.env.get("CONSUMER_NAME")
   lazy val consumerBranch: Option[String] = sys.env.get("CONSUMER_BRANCH")
-  lazy val consumerSha: String = sys.env.getOrElse("CONSUMER_SHA", "")
-
-  println(consumerName)
+  // This matches the latest commit of the consumer branch that triggered the webhook event
+  lazy val consumerSha: Option[String] = sys.env.get("CONSUMER_SHA")
 
   var consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
-  consumerVersionSelectors = consumerVersionSelectors.mainBranch
+  // consumerVersionSelectors = consumerVersionSelectors.mainBranch
   consumerBranch match {
     case Some(s) if !s.isBlank() => consumerVersionSelectors = consumerVersionSelectors.branch(s, consumerName)
-    case _ => None
+    case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased
   }
-  consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased
-
-  println(consumerVersionSelectors.toString)
-
-  // if (!consumerBranch.isBlank()) {
-  //  println(consumerName)
-  //  consumerVersionSelectors.branch(consumerBranch, consumerName)
-  // }
 
   override def provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
@@ -165,11 +156,8 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       ),
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE,
-        // Exclude these Consumers from Pact Broker
-        // ProviderVerificationOption.FILTER_CONSUMERS
-        //  .apply(Seq("Example App", "GoAdminService").toList)
       ).toList,
-      verificationTimeout = Some(10.seconds)
+      verificationTimeout = Some(30.seconds)
     )
   }
 }

@@ -2,6 +2,10 @@ name: Verify consumer pacts
 # The purpose of this workflow is to verify Leo consumer contract
 # using the Pact framework.
 #
+# This workflow can be triggered when
+# 1. Consumer makes a change (will verify only the changed pact, and publishes the verification results back to the broker)
+# 2. Provider makes a change (runs pact verification tests, publishes verification results. The pacts with recorded deployment would be verified during this job)
+
 # The workflow requires Pact broker credentials
 # - PACT_BROKER_USERNAME - the Pact Broker username
 # - PACT_BROKER_PASSWORD - the Pact Broker password
@@ -90,12 +94,12 @@ jobs:
             echo "Failed to extract branch information"
             exit 1
           fi
-          echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
-          echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "branch=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_OUTPUT
-          echo "BRANCH=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_ENV
-          echo "GIT_SHA=$GITHUB_SHA" >> $GITHUB_ENV
+          # echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
+          # echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
+          # echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          # echo "branch=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_OUTPUT
+          echo "PROVIDER_BRANCH=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_ENV
+          echo "PROVIDER_SHA=$GITHUB_SHA" >> $GITHUB_ENV
 
       - name: "This step will only run when this workflow is triggered by a Pact Broker webhook event"
         if: ${{ inputs.pb-event-type != '' }}
@@ -104,12 +108,14 @@ jobs:
           echo "consumer-name=${{ inputs.consumer-name }}"
           echo "consumer-version-branch/consumer-version-number=${{ inputs.consumer-version-branch }}/${{ inputs.consumer-version-number }}"
           echo "provider-version-branch/provider-version-number=${{ inputs.provider-version-branch }}/${{ inputs.provider-version-number }}"
-          echo "pact-url=${{ inputs.pact-url }}" # Practically the provider-version-branch/provider-version-number is sufficient. It's included here in case future client supports it.
+          # The consumer-version-branch/consumer-version-number is practically sufficient.
+          # The pact-url is included here in case future pact4s client supports it.
+          echo "pact-url=${{ inputs.pact-url }}"
           if [[ "${{ inputs.provider-version-branch }}" != "" ]]; then
-            echo "BRANCH=${{ inputs.provider-version-branch }}" >> $GITHUB_ENV
+            echo "PROVIDER_BRANCH=${{ inputs.provider-version-branch }}" >> $GITHUB_ENV
           fi
           if [[ "${{ inputs.provider-version-number }}" != "" ]]; then
-            echo "GIT_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
+            echo "PROVIDER_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
           fi
           echo "CONSUMER_NAME=${{ inputs.consumer-name }}" >> $GITHUB_ENV
           echo "CONSUMER_BRANCH=${{ inputs.consumer-version-branch }}" >> $GITHUB_ENV
@@ -117,17 +123,16 @@ jobs:
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
-          echo "env.BRANCH=${{ env.BRANCH }} # This should reflect the provider branch for pact verification"
-          echo "env.GIT_SHA=${{ env.GIT_SHA }} # This should reflect the provider version for pact verification"
+          echo "env.PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} # This should reflect the provider branch for pact verification"
+          echo "env.PROVIDER_SHA=${{ env.PROVIDER_SHA }}       # This should reflect the provider version for pact verification"
           echo "env.CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} # This should reflect the consumer branch for pact verification"
-          echo "env.CONSUMER_SHA=${{ env.CONSUMER_SHA }} # This should reflect the consumer version for pact verification"
+          echo "env.CONSUMER_SHA=${{ env.CONSUMER_SHA }}       # This should reflect the consumer version for pact verification"
           docker run --rm -v $PWD:/working \
                           -v jar-cache:/root/.ivy \
                           -v jar-cache:/root/.ivy2 \
                           -w /working \
-                          -e BRANCH=${{ env.BRANCH }} \
-                          -e GIT_SHA_SHORT=${{ steps.extract-branch.outputs.sha_short }} \
-                          -e GIT_SHA=${{ env.GIT_SHA }} \
+                          -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
+                          -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
                           -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \
                           -e CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} \
                           -e CONSUMER_SHA=${{ env.CONSUMER_SHA }} \
