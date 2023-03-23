@@ -92,13 +92,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // A registered user is one that has a record in the database and has a Cloud Identifier specified
   private def tryToFindUserByCloudId(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     openTelemetry.time("api.v1.user.tryToFindUserByCloudId.time", API_TIMING_DURATION_BUCKET) {
-      if (user.googleSubjectId.nonEmpty) {
-        directoryDAO.loadUserByGoogleSubjectId(user.googleSubjectId.get, samRequestContext)
-      } else if (user.azureB2CId.nonEmpty) {
-        directoryDAO.loadUserByAzureB2CId(user.azureB2CId.get, samRequestContext)
-      } else {
-        IO(None)
-      }
+      // running these IOs sequentially.  Could be parallelized but I can't imagine the performance hit here is all that
+      // bad.  If we wanted to optimize it, the better thing to do would be to write a single query that searches via
+      // either cloud ID
+      for {
+        maybeGoogleUser <- user.googleSubjectId.map(directoryDAO.loadUserByGoogleSubjectId(_, samRequestContext)).getOrElse(IO(None))
+        maybeAzureUser <- user.azureB2CId.map(directoryDAO.loadUserByAzureB2CId(_, samRequestContext)).getOrElse(IO(None))
+      } yield maybeGoogleUser.orElse(maybeAzureUser)
     }
 
   private def assertUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =

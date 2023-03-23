@@ -135,7 +135,7 @@ class CreateUserSpec extends UserServiceTestTraits {
 
       it("if their GoogleSubjectId matches an already registered user") {
         // Arrange
-        val newUser = genWorkbenchUserGoogle.sample.get
+        val newUser = genWorkbenchUserBoth.sample.get
         val somebodyElse = genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = newUser.googleSubjectId)
         val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
           .withEnabledUser(somebodyElse)
@@ -151,7 +151,7 @@ class CreateUserSpec extends UserServiceTestTraits {
 
       it("if their AzureB2CId matches an already registered user") {
         // Arrange
-        val newUser = genWorkbenchUserAzure.sample.get
+        val newUser = genWorkbenchUserBoth.sample.get
         val somebodyElse = genWorkbenchUserAzure.sample.get.copy(azureB2CId = newUser.azureB2CId)
         val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
           .withEnabledUser(somebodyElse)
@@ -161,6 +161,24 @@ class CreateUserSpec extends UserServiceTestTraits {
 
         // Act and Assert
         a [WorkbenchExceptionWithErrorReport] should be thrownBy {
+          runAndWait(userService.createUser(newUser, samRequestContext))
+        }
+      }
+
+      it("if their AzureB2CId and GoogleSubjectId each match different users") {
+        // Arrange
+        val newUser = genWorkbenchUserBoth.sample.get
+        val existingUserWithSameAzureId = genWorkbenchUserAzure.sample.get.copy(azureB2CId = newUser.azureB2CId)
+        val existingUserWithSameGoogleId = genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = newUser.googleSubjectId)
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+          .withEnabledUser(existingUserWithSameAzureId)
+          .withEnabledUser(existingUserWithSameGoogleId)
+          .build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+        // Act and Assert
+        a[WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
