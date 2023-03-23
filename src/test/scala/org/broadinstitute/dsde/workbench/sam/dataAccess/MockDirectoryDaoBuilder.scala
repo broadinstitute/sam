@@ -74,7 +74,9 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
 
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): MockDirectoryDaoBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
-    mockedDirectoryDAO.loadGroup(eqTo(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext]) returns IO(Some(BasicWorkbenchGroup(allUsersGroup)))
+    mockedDirectoryDAO.loadGroup(eqTo(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext]) returns IO(
+      Some(BasicWorkbenchGroup(allUsersGroup))
+    )
     mockedDirectoryDAO.addGroupMember(eqTo(allUsersGroup.id), any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
     this
   }

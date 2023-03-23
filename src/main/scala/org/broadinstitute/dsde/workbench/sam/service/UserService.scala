@@ -25,7 +25,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging {
 
-  def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] = {
+  def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
@@ -39,36 +39,40 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         registeredUser <- attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject, newUser, samRequestContext)
         registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
-      } yield {
-        // We should only make it this far if we successfully perform all of the above steps to set all of the
-        // UserStatus.enabled fields to true, with the exception of ToS.  So we should be able to safely just return true
-        // for all of these things without needing to go recalculate them.
-        UserStatus(
-          UserStatusDetails(registeredAndEnabledUser.id, registeredAndEnabledUser.email),
-          Map("ldap" -> true,
-            "allUsersGroup" -> true,
-            "google" -> true,
-            "adminEnabled" -> true,
-            "tosAccepted" -> false // Not sure about this one, but pretty sure this should always be false for a newly created user
-          )
+      } yield
+      // We should only make it this far if we successfully perform all of the above steps to set all of the
+      // UserStatus.enabled fields to true, with the exception of ToS.  So we should be able to safely just return true
+      // for all of these things without needing to go recalculate them.
+      UserStatus(
+        UserStatusDetails(registeredAndEnabledUser.id, registeredAndEnabledUser.email),
+        Map(
+          "ldap" -> true,
+          "allUsersGroup" -> true,
+          "google" -> true,
+          "adminEnabled" -> true,
+          "tosAccepted" -> false // Not sure about this one, but pretty sure this should always be false for a newly created user
         )
-      }
+      )
     }
-  }
 
-  private def attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject: Option[WorkbenchSubject], possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
+  private def attemptToRegisterSubjectAsAUser(
+      maybeWorkbenchSubject: Option[WorkbenchSubject],
+      possibleNewUser: SamUser,
+      samRequestContext: SamRequestContext
+  ): IO[SamUser] =
     maybeWorkbenchSubject match {
       // If a WorkbenchUserId was found, then the user was previously invited
       case Some(invitedUserId: WorkbenchUserId) => registerInvitedUser(possibleNewUser, invitedUserId, samRequestContext)
       // If no subject was found, they're a new user and we can proceed to register them
       case None => registerBrandNewUser(possibleNewUser, samRequestContext)
       // If any other type of WorkbenchSubject was found, then we have to stop the user from registering with this email address
-      case Some(_) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Email ${possibleNewUser.email} is already used.")))
+      case Some(_) =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Email ${possibleNewUser.email} is already used.")))
     }
-  }
 
   private def validateUser(user: SamUser): Option[Seq[ErrorReport]] =
-    Option(Seq(
+    Option(
+      Seq(
         validateUserIds(user),
         validateEmail(user.email, blockedEmailDomains)
       ).flatten // flatten to get rid of Nones
@@ -76,14 +80,14 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   // user record has to have a GoogleSubjectId and/or an AzureB2CId
   private def validateUserIds(user: SamUser): Option[ErrorReport] =
-    if(user.googleSubjectId.isEmpty && user.azureB2CId.isEmpty) {
+    if (user.googleSubjectId.isEmpty && user.azureB2CId.isEmpty) {
       Option(ErrorReport("cannot create user when neither google subject id nor azure b2c id exists"))
     } else None
 
   private def validateEmail(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): Option[ErrorReport] =
-    if(!UserService.emailRegex.matches(email.value)) {
+    if (!UserService.emailRegex.matches(email.value)) {
       Option(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]"))
-    } else if(blockedEmailDomains.exists(domain => email.value.endsWith("@" + domain) || email.value.endsWith("." + domain))) {
+    } else if (blockedEmailDomains.exists(domain => email.value.endsWith("@" + domain) || email.value.endsWith("." + domain))) {
       Option(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]"))
     } else None
 
@@ -102,7 +106,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   private def assertUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     tryToFindUserByCloudId(user, samRequestContext).flatMap {
-      case Some(registeredUser) => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered")))
+      case Some(registeredUser) =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered")))
       case None => IO(user)
     }
 
@@ -134,9 +139,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- updateUser(userToRegister, samRequestContext)
         groups <- directoryDAO.listUserDirectMemberships(userToRegister.id, samRequestContext)
         _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
-      } yield {
-        userToRegister
-      }
+      } yield userToRegister
     }
 
   // For now, it looks like createUserInternal does what we need here, but added a new alias method here for naming
