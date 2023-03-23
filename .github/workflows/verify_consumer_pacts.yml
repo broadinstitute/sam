@@ -135,6 +135,11 @@ jobs:
           fetch-depth: 0
           ref: ${{ env.USE_PROVIDER_SHA }}
 
+      - name: Sanity check
+        run: |
+          git branch
+          cat pact4s/src/test/scala/org/broadinstitute/dsde/workbench/sam/provider/SamProviderSpec.scala
+
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
           echo "env.PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} # This should reflect the provider branch for pact verification"
