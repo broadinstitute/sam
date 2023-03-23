@@ -74,9 +74,6 @@ jobs:
       id-token: 'write'
 
     steps:
-      - name: Checkout current code
-        uses: actions/checkout@v3
-
       - name: Extract branch
         id: extract-branch
         run: |
@@ -120,6 +117,11 @@ jobs:
           echo "CONSUMER_NAME=${{ inputs.consumer-name }}" >> $GITHUB_ENV
           echo "CONSUMER_BRANCH=${{ inputs.consumer-version-branch }}" >> $GITHUB_ENV
           echo "CONSUMER_SHA=${{ inputs.consumer-version-number }}" >> $GITHUB_ENV
+
+      - name: Checkout current code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.PROVIDER_SHA }}
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
