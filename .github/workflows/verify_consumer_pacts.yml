@@ -77,7 +77,7 @@ jobs:
       - name: Checkout current code
         uses: actions/checkout@v3
         with:
-          fetch_depth: 0
+          fetch-depth: 0
 
       - name: Extract branch
         id: extract-branch
@@ -127,7 +127,7 @@ jobs:
       - name: Checkout current code
         uses: actions/checkout@v3
         with:
-          fetch_depth: 0
+          fetch-depth: 0
           ref: ${{ env.PROVIDER_BRANCH }}
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
