@@ -1,11 +1,13 @@
 name: Verify consumer pacts
-# The purpose of this workflow is to verify Leo consumer contract
-# using the Pact framework.
+# The purpose of this workflow is to verify Leo consumer contract using Pact framework.
+#
+# The workflow fulfills Pact Broker Platinum described in https://docs.pact.io/pact_nirvana/step_6
 #
 # This workflow can be triggered when
 # 1. Consumer makes a change (will verify only the changed pact, and publishes the verification results back to the broker)
 # 2. Provider makes a change (runs pact verification tests, publishes verification results. The pacts with recorded deployment would be verified during this job)
-
+#
+#
 # The workflow requires Pact broker credentials
 # - PACT_BROKER_USERNAME - the Pact Broker username
 # - PACT_BROKER_PASSWORD - the Pact Broker password
@@ -17,7 +19,7 @@ on:
       - 'README.md'
   push:
     branches:
-      - QA-2056
+      - develop
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
