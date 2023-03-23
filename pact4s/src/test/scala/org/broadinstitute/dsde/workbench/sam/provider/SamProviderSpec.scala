@@ -152,12 +152,6 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
 
-  println(branch)
-  println(gitSha)
-  println(consumerName)
-  println(consumerBranch)
-  println(consumerSha)
-
   it should "Verify pacts" in {
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),

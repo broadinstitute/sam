@@ -132,7 +132,6 @@ jobs:
             echo "PROVIDER_SHA=${{ env.CHECKOUT_SHA }}" >> $GITHUB_ENV
           fi
           git checkout ${{ env.CHECKOUT_BRANCH }}
-          cat pact4s/src/test/scala/org/broadinstitute/dsde/workbench/sam/provider/SamProviderSpec.scala
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
