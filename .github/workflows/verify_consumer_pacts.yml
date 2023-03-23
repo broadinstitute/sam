@@ -100,13 +100,12 @@ jobs:
           # echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
           # echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           # echo "branch=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_OUTPUT
-          echo "PROVIDER_BRANCH=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_ENV
-          echo "PROVIDER_SHA=$GITHUB_SHA" >> $GITHUB_ENV
+          echo "CHECKOUT_BRANCH=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_ENV
+          echo "CHECKOUT_SHA=$GITHUB_SHA" >> $GITHUB_ENV
 
       - name: "This step will only run when this workflow is triggered by a Pact Broker webhook event"
         if: ${{ inputs.pb-event-type != '' }}
         run: |
-          PROVIDER_FULL_SHA=""
           echo "pb-event-type=${{ inputs.pb-event-type }}"
           echo "consumer-name=${{ inputs.consumer-name }}"
           echo "consumer-version-branch/consumer-version-number=${{ inputs.consumer-version-branch }}/${{ inputs.consumer-version-number }}"
@@ -114,28 +113,31 @@ jobs:
           # The consumer-version-branch/consumer-version-number is practically sufficient.
           # The pact-url is included here in case future pact4s client supports it.
           echo "pact-url=${{ inputs.pact-url }}"
-          if [[ "${{ inputs.provider-version-branch }}" != "" ]]; then
+          if [[ ! -z "${{ inputs.provider-version-branch }}" ]]; then
             echo "PROVIDER_BRANCH=${{ inputs.provider-version-branch }}" >> $GITHUB_ENV
           fi
-          if [[ "${{ inputs.provider-version-number }}" != "" ]]; then
+          if [[ ! -z "${{ inputs.provider-version-number }}" ]]; then
             echo "PROVIDER_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
-            PROVIDER_FULL_SHA=$(git rev-parse --all | grep ${{ inputs.provider-version-number }} | sort -u)
-            echo "PROVIDER_FULL_SHA=$PROVIDER_FULL_SHA"
           fi
           echo "CONSUMER_NAME=${{ inputs.consumer-name }}" >> $GITHUB_ENV
           echo "CONSUMER_BRANCH=${{ inputs.consumer-version-branch }}" >> $GITHUB_ENV
           echo "CONSUMER_SHA=${{ inputs.consumer-version-number }}" >> $GITHUB_ENV
-          USE_PROVIDER_SHA=$PROVIDER_FULL_SHA || $PROVIDER_SHA
-          echo "$USE_PROVIDER_SHA"
-          echo "USE_PROVIDER_SHA=$USE_PROVIDER_SHA" >> $GITHUB_ENV
 
-      - name: Sanity check
+      - name: Switch to appropriate branch
         run: |
-          git checkout ${{ env.USE_PROVIDER_SHA }}
+          if [[ -z "${{ env.PROVIDER_BRANCH }} ]]; then
+            echo "PROVIDER_BRANCH=${{ env.CHECKOUT_BRANCH }}" >> $GITHUB_ENV
+          fi
+          if [[ -z "${{ env.PROVIDER_SHA }} ]]; then
+            echo "PROVIDER_SHA=${{ env.CHECKOUT_SHA }}" >> $GITHUB_ENV
+          fi
+          git checkout ${{ env.CHECKOUT_BRANCH }}
           cat pact4s/src/test/scala/org/broadinstitute/dsde/workbench/sam/provider/SamProviderSpec.scala
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
+          echo "env.CHECKOUT_BRANCH=${{ env.CHECKOUT_BRANCH }} # This should reflect the code branch this workflow runs on"
+          echo "env.CHECKOUT_SHA=${{ env.CHECKOUT_SHA }}       # This should reflect the git hash of the branch this workflows runs on"
           echo "env.PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} # This should reflect the provider branch for pact verification"
           echo "env.PROVIDER_SHA=${{ env.PROVIDER_SHA }}       # This should reflect the provider version for pact verification"
           echo "env.CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} # This should reflect the consumer branch for pact verification"
