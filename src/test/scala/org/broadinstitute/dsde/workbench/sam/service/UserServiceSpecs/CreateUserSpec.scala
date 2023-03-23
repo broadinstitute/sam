@@ -98,7 +98,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
-        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
+        a[WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -112,7 +112,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(blockedDomain), defaultTosService)
 
         // Act and Assert
-        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
+        a[WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -128,7 +128,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
-        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
+        a[WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -144,7 +144,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
-        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
+        a[WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -160,7 +160,7 @@ class CreateUserSpec extends UserServiceTestTraits {
         val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         // Act and Assert
-        a [WorkbenchExceptionWithErrorReport] should be thrownBy {
+        a[WorkbenchExceptionWithErrorReport] should be thrownBy {
           runAndWait(userService.createUser(newUser, samRequestContext))
         }
       }
@@ -212,10 +212,7 @@ class CreateUserSpec extends UserServiceTestTraits {
           runAndWait(userService.createUser(newGoogleUser, samRequestContext))
 
           // Assert
-          directoryDAO.addGroupMember(
-            allUsersGroup.id,
-            newGoogleUser.id,
-            samRequestContext) wasCalled once
+          directoryDAO.addGroupMember(allUsersGroup.id, newGoogleUser.id, samRequestContext) wasCalled once
         }
 
         it("as an invited User") {
@@ -229,10 +226,7 @@ class CreateUserSpec extends UserServiceTestTraits {
           runAndWait(userService.createUser(invitedUser, samRequestContext))
 
           // Assert
-          directoryDAO.addGroupMember(
-            allUsersGroup.id,
-            invitedUser.id,
-            samRequestContext) wasCalled once
+          directoryDAO.addGroupMember(allUsersGroup.id, invitedUser.id, samRequestContext) wasCalled once
         }
       }
     }
@@ -367,17 +361,9 @@ class CreateUserSpec extends UserServiceTestTraits {
         runAndWait(userService.createUser(registeringUser, samRequestContext))
 
         // Assert
-        directoryDAO.createUser(
-          any[SamUser],
-          any[SamRequestContext]) wasNever called
-        directoryDAO.setGoogleSubjectId(
-          eqTo(disregardedId),
-          any[GoogleSubjectId],
-          any[SamRequestContext]) wasNever called
-        directoryDAO.setUserAzureB2CId(
-          eqTo(disregardedId),
-          any[AzureB2CId],
-          any[SamRequestContext]) wasNever called
+        directoryDAO.createUser(any[SamUser], any[SamRequestContext]) wasNever called
+        directoryDAO.setGoogleSubjectId(eqTo(disregardedId), any[GoogleSubjectId], any[SamRequestContext]) wasNever called
+        directoryDAO.setUserAzureB2CId(eqTo(disregardedId), any[AzureB2CId], any[SamRequestContext]) wasNever called
       }
     }
   }
