@@ -122,9 +122,10 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   lazy val pactBrokerUrl: String = sys.env.getOrElse("PACT_BROKER_URL", "")
   lazy val pactBrokerUser: String = sys.env.getOrElse("PACT_BROKER_USERNAME", "")
   lazy val pactBrokerPass: String = sys.env.getOrElse("PACT_BROKER_PASSWORD", "")
+  // Provider branch, sha
   lazy val branch: String = sys.env.getOrElse("PROVIDER_BRANCH", "")
-  // lazy val gitShaShort: String = sys.env.getOrElse("GIT_SHA_SHORT", "")
   lazy val gitSha: String = sys.env.getOrElse("PROVIDER_SHA", "")
+  // Consumer name, bran, sha (used for webhook events only)
   lazy val consumerName: Option[String] = sys.env.get("CONSUMER_NAME")
   lazy val consumerBranch: Option[String] = sys.env.get("CONSUMER_BRANCH")
   // This matches the latest commit of the consumer branch that triggered the webhook event
@@ -132,6 +133,9 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
 
   var consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
   // consumerVersionSelectors = consumerVersionSelectors.mainBranch
+  // The following match condition basically says
+  // 1. If verification is triggered by consumer pact change, verifies only the changed pact.
+  // 2. For normal Sam workflow, verify all pact versions that have been deployed.
   consumerBranch match {
     case Some(s) if !s.isBlank() => consumerVersionSelectors = consumerVersionSelectors.branch(s, consumerName)
     case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased
