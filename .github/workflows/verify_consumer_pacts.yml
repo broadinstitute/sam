@@ -74,6 +74,11 @@ jobs:
       id-token: 'write'
 
     steps:
+      - name: Checkout current code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Extract branch
         id: extract-branch
         run: |
@@ -101,6 +106,7 @@ jobs:
       - name: "This step will only run when this workflow is triggered by a Pact Broker webhook event"
         if: ${{ inputs.pb-event-type != '' }}
         run: |
+          PROVIDER_FULL_SHA=""
           echo "pb-event-type=${{ inputs.pb-event-type }}"
           echo "consumer-name=${{ inputs.consumer-name }}"
           echo "consumer-version-branch/consumer-version-number=${{ inputs.consumer-version-branch }}/${{ inputs.consumer-version-number }}"
@@ -113,17 +119,21 @@ jobs:
           fi
           if [[ "${{ inputs.provider-version-number }}" != "" ]]; then
             echo "PROVIDER_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
+            PROVIDER_FULL_SHA=$(git rev-parse --all | grep ${{ inputs.provider-version-number }} | sort -u)
+            echo "PROVIDER_FULL_SHA=$PROVIDER_FULL_SHA"
           fi
           echo "CONSUMER_NAME=${{ inputs.consumer-name }}" >> $GITHUB_ENV
           echo "CONSUMER_BRANCH=${{ inputs.consumer-version-branch }}" >> $GITHUB_ENV
           echo "CONSUMER_SHA=${{ inputs.consumer-version-number }}" >> $GITHUB_ENV
-          # git rev-parse --all | grep ${{ inputs.provider-version-number }} | sort -u
+          USE_PROVIDER_SHA=$PROVIDER_FULL_SHA || $PROVIDER_SHA
+          echo "$USE_PROVIDER_SHA"
+          echo "USE_PROVIDER_SHA=$USE_PROVIDER_SHA" >> $GITHUB_ENV
 
       - name: Checkout current code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ env.PROVIDER_SHA }}
+          ref: ${{ env.USE_PROVIDER_SHA }}
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         run: |
