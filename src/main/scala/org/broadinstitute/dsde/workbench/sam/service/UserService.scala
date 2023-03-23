@@ -3,7 +3,6 @@ package service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
-import cats.implicits.catsSyntaxParallelSequence1
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
@@ -107,38 +106,36 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case None => IO(user)
     }
 
-  // Logic here is a little weird.  We should never call this method if all of the user's Cloud Ids are `None`, but if
-  // we do it is not a problem and it just returns.  Therefore, usually we will have a scenario where 1 or more Cloud
-  // Ids are set.  For any Cloud Ids that are `Some(id)`, we should try to update the database with that id.  At this
-  // point it will either successfully set the id or throw an exception if the user could not be found or if the id is
-  // already set to a different value.
+  // In most cases when this is called we will have a scenario where 1 or more Cloud Ids are set.  For any Cloud Ids
+  // that are `Some(id)`, we should try to update the User record in the database with that id.  At this point it will
+  // either successfully set the id or throw an exception if the user could not be found or if the id is already set to
+  // a different value.
   //
   // In the error scenario, this code will short circuit and bubble up the exception, meaning there may be additional
   // updates that are not attempted.  That is OK.  If some updates are run and others are not, that does not mean those
-  // updated values are invalid.  Similarly, if there are values that would have been updated after the exception was
-  // thrown and they are not updated, that is also OK, at this point the user record is incomplete anyway and if an
-  // error has occurred, then there is probably a different problem that needs to be resolved.
-  private def updateUser(existingUserId: WorkbenchUserId, user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
+  // that succeeded are invalid.  Similarly, if there are additional updates that failed to run due to the exception
+  // that is OK.
+  private def updateUser(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.updateUser.time", API_TIMING_DURATION_BUCKET) {
-      val googleSubjectIdUpdate = if (user.googleSubjectId.nonEmpty) {
-        directoryDAO.setGoogleSubjectId(existingUserId, user.googleSubjectId.get, samRequestContext)
-      } else IO.unit
-
-      val azureB2CIdUpdate =  if (user.azureB2CId.nonEmpty) {
-        directoryDAO.setUserAzureB2CId(existingUserId, user.azureB2CId.get, samRequestContext)
-      } else IO.unit
-
-      List(googleSubjectIdUpdate, azureB2CIdUpdate).parSequence.map { _ => user.copy(id = existingUserId) }
+      for {
+        _ <- user.googleSubjectId
+          .map(directoryDAO.setGoogleSubjectId(user.id, _, samRequestContext))
+          .getOrElse(IO.unit)
+        _ <- user.azureB2CId
+          .map(directoryDAO.setUserAzureB2CId(user.id, _, samRequestContext))
+          .getOrElse(IO.unit)
+      } yield ()
     }
 
   private def registerInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     openTelemetry.time("api.v1.user.registerInvitedUser.time", API_TIMING_DURATION_BUCKET) {
+      val userToRegister = invitedUser.copy(id = invitedUserId)
       for {
-        updatedUser <- updateUser(invitedUserId, invitedUser, samRequestContext)
-        groups <- directoryDAO.listUserDirectMemberships(updatedUser.id, samRequestContext)
+        _ <- updateUser(userToRegister, samRequestContext)
+        groups <- directoryDAO.listUserDirectMemberships(userToRegister.id, samRequestContext)
         _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
       } yield {
-        updatedUser
+        userToRegister
       }
     }
 
