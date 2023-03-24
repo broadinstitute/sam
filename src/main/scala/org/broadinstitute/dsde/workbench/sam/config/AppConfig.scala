@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.config
 import cats.data.NonEmptyList
 import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
-import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -32,7 +31,7 @@ final case class AppConfig(
     prometheusConfig: PrometheusConfig
 )
 
-object AppConfig extends LazyLogging {
+object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
     OidcConfig(
       config.getString("authorityEndpoint"),
@@ -197,7 +196,6 @@ object AppConfig extends LazyLogging {
     // Combine the two sets of configs.  If a value is defined in both sets of configs, the ones in `samConfig` will
     // take precedence over those in `config`
     val combinedConfig = samConfig.withFallback(config)
-    logger.error(s"****** LZ REUSE IDS = ${combinedConfig.getConfig("resourceTypes").getConfig("landing-zone").getBoolean("reuseIds")}")
     AppConfig.readConfig(combinedConfig)
   }
 
