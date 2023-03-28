@@ -21,7 +21,7 @@ on:
       - 'README.md'
   push:
     branches:
-      - QA-2056
+      - develop
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
