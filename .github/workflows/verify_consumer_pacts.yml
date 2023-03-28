@@ -25,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       pb-event-type:
-        description: 'the PB event type that triggers this workflow'
+        description: 'the Pact Broker event type that triggers this workflow'
         required: true
         type: string
       consumer-name:
@@ -158,16 +158,16 @@ jobs:
                           sbtscala/scala-sbt:openjdk-17.0.2_1.7.2_2.13.10 \
                           sbt "project pact4s" "testOnly *SamProviderSpec"
 
-  can-i-deploy: # We only need this if Sam makes a change
+  can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest
     needs: [ verify-consumer-pact ]
     steps:
       - name: Dispatch to terra-github-workflows
         if: ${{ inputs.pb-event-type == '' }}
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        uses: broadinstitute/workflow-dispatch@v3
         with:
           workflow: can-i-deploy.yaml
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/QA-2056
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
-          inputs: '{ "pacticipant": "sam-provider", "version": "${{ needs.verify-consumer-pact.outputs.provider-sha }}", "environment": "alpha" }'
+          inputs: '{ "pacticipant": "sam-provider", "version": "${{ needs.verify-consumer-pact.outputs.provider-sha }}" }'

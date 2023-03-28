@@ -134,8 +134,8 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   var consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
   // consumerVersionSelectors = consumerVersionSelectors.mainBranch
   // The following match condition basically says
-  // 1. If verification is triggered by consumer pact change, verifies only the changed pact.
-  // 2. For normal Sam workflow, verify all pact versions that have been deployed.
+  // 1. If verification is triggered by consumer pact change, verify only the changed pact.
+  // 2. For normal Sam PR, verify all consumer pacts in Pact Broker labelled with a deployed environment (alpha, dev, prod, staging).
   consumerBranch match {
     case Some(s) if !s.isBlank() => consumerVersionSelectors = consumerVersionSelectors.branch(s, consumerName)
     case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased
