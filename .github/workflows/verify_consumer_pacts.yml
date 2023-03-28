@@ -170,6 +170,6 @@ jobs:
         with:
           workflow: can-i-deploy.yaml
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/develop
+          ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
           inputs: '{ "pacticipant": "sam-provider", "version": "${{ needs.verify-consumer-pact.outputs.provider-sha }}" }'
