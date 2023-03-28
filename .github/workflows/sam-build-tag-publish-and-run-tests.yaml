@@ -125,7 +125,7 @@ jobs:
       - name: dispatch to terra-github-workflows
         uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
         with:
-          workflow: sam-swat-tests
+          workflow: .github/workflows/sam-smoke-tests.yaml
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
