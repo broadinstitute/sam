@@ -1,11 +1,13 @@
 name: Verify consumer pacts
-# The purpose of this workflow is to verify Leo consumer contract using Pact framework.
+# The purpose of this workflow is to verify ANY consumer contract(s) dependent on Sam provider using Pact framework.
 #
-# The workflow fulfills Pact Broker Platinum described in https://docs.pact.io/pact_nirvana/step_6
+# The workflow meets Pact Broker's definition of *Platinum* as described in https://docs.pact.io/pact_nirvana/step_6.
+# The can-i-deploy job has been added to this workflow to gate the merge of PRs into develop branch.
 #
-# This workflow can be triggered when
-# 1. Consumer makes a change (will verify only the changed pact, and publishes the verification results back to the broker)
-# 2. Provider makes a change (runs pact verification tests, publishes verification results. The pacts with recorded deployment would be verified during this job)
+# This workflow is triggered when
+#
+# 1. Consumer makes a change that results in a new pact published to Pact Broker (will verify ONLY the changed pact and publish the verification results back to the broker)
+# 2. Provider makes a change (runs verification tests against ALL DEPLOYED consumer pact versions and publishes corresponding verification results)
 #
 #
 # The workflow requires Pact broker credentials
@@ -19,7 +21,7 @@ on:
       - 'README.md'
   push:
     branches:
-      - develop
+      - QA-2056
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
@@ -168,6 +170,6 @@ jobs:
         with:
           workflow: can-i-deploy.yaml
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/QA-2056
+          ref: refs/heads/develop
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
           inputs: '{ "pacticipant": "sam-provider", "version": "${{ needs.verify-consumer-pact.outputs.provider-sha }}" }'
