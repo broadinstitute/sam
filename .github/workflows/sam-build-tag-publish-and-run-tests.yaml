@@ -125,7 +125,7 @@ jobs:
       - name: dispatch to terra-github-workflows
         uses: broadinstitute/workflow-dispatch@v3
         with:
-          workflow: .github/workflows/sam-smoke-tests.yaml
+          workflow: .github/workflows/sam-swat-tests.yaml
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
