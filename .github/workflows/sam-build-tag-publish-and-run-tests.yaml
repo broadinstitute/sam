@@ -49,7 +49,7 @@ jobs:
           echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
 
       - name: dispatch build to terra-github-workflows
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        uses: broadinstitute/workflow-dispatch@v3
         with:
           workflow: sam-build
           repo: broadinstitute/terra-github-workflows
@@ -80,7 +80,7 @@ jobs:
           echo '${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}'
 
       - name: dispatch to terra-github-workflows
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        uses: broadinstitute/workflow-dispatch@v3
         with:
           workflow: bee-create
           repo: broadinstitute/terra-github-workflows
@@ -101,7 +101,7 @@ jobs:
       id-token: 'write'
     steps:
       - name: dispatch to terra-github-workflows
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        uses: broadinstitute/workflow-dispatch@v3
         with:
           workflow: .github/workflows/sam-smoke-tests.yaml
           repo: broadinstitute/terra-github-workflows
@@ -123,7 +123,7 @@ jobs:
       id-token: 'write'
     steps:
       - name: dispatch to terra-github-workflows
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        uses: broadinstitute/workflow-dispatch@v3
         with:
           workflow: .github/workflows/sam-smoke-tests.yaml
           repo: broadinstitute/terra-github-workflows
@@ -144,7 +144,7 @@ jobs:
       id-token: 'write'
     steps:
       - name: dispatch to terra-github-workflows
-        uses: aurelien-baudet/workflow-dispatch@93e95b157d791ae7f42aef8f8a0d3d723eba1c31 #commit sha for v2.1.1
+        uses: broadinstitute/workflow-dispatch@v3
         with:
           workflow: bee-destroy
           repo: broadinstitute/terra-github-workflows
