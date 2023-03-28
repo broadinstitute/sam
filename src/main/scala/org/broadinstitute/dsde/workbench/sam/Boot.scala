@@ -59,7 +59,7 @@ object Boot extends IOApp with LazyLogging {
     val appConfig = AppConfig.load
 
     val appDependencies = createAppDependencies(appConfig)
-    logger.info("IGNORE")
+
     appDependencies.use { dependencies => // this is where the resource is used
       for {
         _ <- dependencies.samApplication.resourceService.initResourceTypes().onError { case t: Throwable =>
