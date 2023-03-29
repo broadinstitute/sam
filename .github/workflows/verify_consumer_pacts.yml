@@ -1,7 +1,7 @@
 name: Verify consumer pacts
 # The purpose of this workflow is to verify ANY consumer contract(s) dependent on Sam provider using Pact framework.
 #
-# The workflow meets Pact Broker's definition of *Platinum* as described in https://docs.pact.io/pact_nirvana/step_6.
+# The workflow meets the criteria of Pact Broker *Platinum* as described in https://docs.pact.io/pact_nirvana/step_6.
 # The can-i-deploy job has been added to this workflow to gate the merge of PRs into develop branch.
 #
 # This workflow is triggered when
@@ -168,7 +168,7 @@ jobs:
         if: ${{ inputs.pb-event-type == '' }}
         uses: broadinstitute/workflow-dispatch@v3
         with:
-          workflow: can-i-deploy.yaml
+          workflow: .github/workflows/can-i-deploy.yaml
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
