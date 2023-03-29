@@ -117,9 +117,11 @@ jobs:
           echo "pact-url=${{ inputs.pact-url }}"
           if [[ ! -z "${{ inputs.provider-version-branch }}" ]]; then
             echo "PROVIDER_BRANCH=${{ inputs.provider-version-branch }}" >> $GITHUB_ENV
+            echo "CHECKOUT_BRANCH=${{ inputs.provider-version-branch }}" >> $GITHUB_ENV
           fi
           if [[ ! -z "${{ inputs.provider-version-number }}" ]]; then
             echo "PROVIDER_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
+            echo "CHECKOUT_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
           fi
           echo "CONSUMER_NAME=${{ inputs.consumer-name }}" >> $GITHUB_ENV
           echo "CONSUMER_BRANCH=${{ inputs.consumer-version-branch }}" >> $GITHUB_ENV
@@ -133,7 +135,10 @@ jobs:
           if [[ -z "${{ env.PROVIDER_SHA }}" ]]; then
             echo "PROVIDER_SHA=${{ env.CHECKOUT_SHA }}" >> $GITHUB_ENV
           fi
-          git checkout ${{ env.CHECKOUT_BRANCH }}
+          echo "Checking out ${{ env.CHECKOUT_BRANCH }}@${{ env.CHECKOUT_SHA }}"
+          git fetch
+          git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}
+          git branch
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
