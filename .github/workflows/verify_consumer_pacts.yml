@@ -135,10 +135,13 @@ jobs:
           if [[ -z "${{ env.PROVIDER_SHA }}" ]]; then
             echo "PROVIDER_SHA=${{ env.CHECKOUT_SHA }}" >> $GITHUB_ENV
           fi
-          echo "Checking out ${{ env.CHECKOUT_BRANCH }}@${{ env.CHECKOUT_SHA }}"
           git fetch
+          echo "git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}"
           git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}
+          echo "git branch"
           git branch
+          echo "git rev-parse HEAD"
+          git rev-parse HEAD
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
