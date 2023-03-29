@@ -1,6 +1,14 @@
 name: Verify consumer pacts
-# The purpose of this workflow is to verify Leo consumer contract
-# using the Pact framework.
+# The purpose of this workflow is to verify ANY consumer contract(s) dependent on Sam provider using Pact framework.
+#
+# The workflow meets the criteria of Pact Broker *Platinum* as described in https://docs.pact.io/pact_nirvana/step_6.
+# The can-i-deploy job has been added to this workflow to gate the merge of PRs into develop branch.
+#
+# This workflow is triggered when
+#
+# 1. Consumer makes a change that results in a new pact published to Pact Broker (will verify ONLY the changed pact and publish the verification results back to the broker)
+# 2. Provider makes a change (runs verification tests against ALL DEPLOYED consumer pact versions and publishes corresponding verification results)
+#
 #
 # The workflow requires Pact broker credentials
 # - PACT_BROKER_USERNAME - the Pact Broker username
@@ -19,7 +27,7 @@ on:
   workflow_dispatch:
     inputs:
       pb-event-type:
-        description: 'the PB event type that triggers this workflow'
+        description: 'the Pact Broker event type that triggers this workflow'
         required: true
         type: string
       consumer-name:
@@ -32,7 +40,7 @@ on:
         type: string
       provider-version-number:
         description: 'the provider version number for the verification result'
-        required: true
+        required: false
         type: string
       consumer-version-tags:
         description: 'the list of tag names for the most recent consumer version associated with the pact content, separated by ", "'
@@ -44,7 +52,7 @@ on:
         type: string
       provider-version-branch:
         description: 'the name of the branch for the provider version associated with the verification result'
-        required: true
+        required: false
         type: string
       consumer-labels:
         description: 'the list of labels for the consumer associated with the pact content, separated by ", "'
@@ -68,10 +76,14 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+    outputs:
+      provider-sha: ${{ steps.verification-test.outputs.provider-sha }}
 
     steps:
       - name: Checkout current code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Extract branch
         id: extract-branch
@@ -84,38 +96,80 @@ jobs:
             GITHUB_REF=refs/heads/${{ github.head_ref }}
             GITHUB_SHA=${{ github.event.pull_request.head.sha }}
           elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            GITHUB_REF=${{ github.ref }}
-            GITHUB_SHA=${{ github.sha }}
+            GITHUB_REF=${{ github.ref }} # The Git Ref that this workflow runs on
+            GITHUB_SHA=${{ github.sha }} # The Git Sha that this workflow runs on
           else
             echo "Failed to extract branch information"
             exit 1
           fi
-          echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
-          echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "branch=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_OUTPUT
+          echo "CHECKOUT_BRANCH=${GITHUB_REF/refs\/heads\//""}" >> $GITHUB_ENV
+          echo "CHECKOUT_SHA=$GITHUB_SHA" >> $GITHUB_ENV
 
-      - name: "This step will only run when the workflow is triggered by Pact Broker 'contract requiring verification published' event type"
-        if: ${{ inputs.pb-event-type == 'contract-requiring-verification-published' }}
+      - name: "This step will only run when this workflow is triggered by a Pact Broker webhook event"
+        if: ${{ inputs.pb-event-type != '' }}
         run: |
           echo "pb-event-type=${{ inputs.pb-event-type }}"
           echo "consumer-name=${{ inputs.consumer-name }}"
-          echo "consumer-version-number=${{ inputs.consumer-version-number }}"
-          echo "provider-version-number=${{ inputs.provider-version-number }}"
-          echo "consumer-version-branch=${{ inputs.consumer-version-branch }}"
-          echo "provider-version-branch=${{ inputs.provider-version-branch }}"
+          echo "consumer-version-branch/consumer-version-number=${{ inputs.consumer-version-branch }}/${{ inputs.consumer-version-number }}"
+          echo "provider-version-branch/provider-version-number=${{ inputs.provider-version-branch }}/${{ inputs.provider-version-number }}"
+          # The consumer-version-branch/consumer-version-number is practically sufficient.
+          # The pact-url is included here in case future pact4s client supports it.
           echo "pact-url=${{ inputs.pact-url }}"
+          if [[ ! -z "${{ inputs.provider-version-branch }}" ]]; then
+            echo "PROVIDER_BRANCH=${{ inputs.provider-version-branch }}" >> $GITHUB_ENV
+          fi
+          if [[ ! -z "${{ inputs.provider-version-number }}" ]]; then
+            echo "PROVIDER_SHA=${{ inputs.provider-version-number }}" >> $GITHUB_ENV
+          fi
+          echo "CONSUMER_NAME=${{ inputs.consumer-name }}" >> $GITHUB_ENV
+          echo "CONSUMER_BRANCH=${{ inputs.consumer-version-branch }}" >> $GITHUB_ENV
+          echo "CONSUMER_SHA=${{ inputs.consumer-version-number }}" >> $GITHUB_ENV
+
+      - name: Switch to appropriate branch
+        run: |
+          if [[ -z "${{ env.PROVIDER_BRANCH }}" ]]; then
+            echo "PROVIDER_BRANCH=${{ env.CHECKOUT_BRANCH }}" >> $GITHUB_ENV
+          fi
+          if [[ -z "${{ env.PROVIDER_SHA }}" ]]; then
+            echo "PROVIDER_SHA=${{ env.CHECKOUT_SHA }}" >> $GITHUB_ENV
+          fi
+          git checkout ${{ env.CHECKOUT_BRANCH }}
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
+        id: verification-test
         run: |
+          echo "provider-sha=${{ env.PROVIDER_SHA }}" >> $GITHUB_OUTPUT
+          echo "env.CHECKOUT_BRANCH=${{ env.CHECKOUT_BRANCH }} # This should reflect the code branch this workflow runs on"
+          echo "env.CHECKOUT_SHA=${{ env.CHECKOUT_SHA }}       # This should reflect the git hash of the branch this workflows runs on"
+          echo "env.PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} # This should reflect the provider branch for pact verification"
+          echo "env.PROVIDER_SHA=${{ env.PROVIDER_SHA }}       # This should reflect the provider version for pact verification"
+          echo "env.CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} # This should reflect the consumer branch for pact verification"
+          echo "env.CONSUMER_SHA=${{ env.CONSUMER_SHA }}       # This should reflect the consumer version for pact verification"
           docker run --rm -v $PWD:/working \
                           -v jar-cache:/root/.ivy \
                           -v jar-cache:/root/.ivy2 \
                           -w /working \
-                          -e BRANCH=${{ steps.extract-branch.outputs.branch }} \
-                          -e GIT_SHA_SHORT=${{ steps.extract-branch.outputs.sha_short }} \
+                          -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
+                          -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
+                          -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \
+                          -e CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} \
+                          -e CONSUMER_SHA=${{ env.CONSUMER_SHA }} \
                           -e PACT_BROKER_URL=${{ env.PACT_BROKER_URL }} \
                           -e PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }} \
                           -e PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }} \
                           sbtscala/scala-sbt:openjdk-17.0.2_1.7.2_2.13.10 \
                           sbt "project pact4s" "testOnly *SamProviderSpec"
+
+  can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
+    runs-on: ubuntu-latest
+    needs: [ verify-consumer-pact ]
+    steps:
+      - name: Dispatch to terra-github-workflows
+        if: ${{ inputs.pb-event-type == '' }}
+        uses: broadinstitute/workflow-dispatch@v3
+        with:
+          workflow: .github/workflows/can-i-deploy.yaml
+          repo: broadinstitute/terra-github-workflows
+          ref: refs/heads/main
+          token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
+          inputs: '{ "pacticipant": "sam-provider", "version": "${{ needs.verify-consumer-pact.outputs.provider-sha }}" }'

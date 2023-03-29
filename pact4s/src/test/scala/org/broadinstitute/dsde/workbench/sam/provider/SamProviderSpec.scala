@@ -122,8 +122,24 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   lazy val pactBrokerUrl: String = sys.env.getOrElse("PACT_BROKER_URL", "")
   lazy val pactBrokerUser: String = sys.env.getOrElse("PACT_BROKER_USERNAME", "")
   lazy val pactBrokerPass: String = sys.env.getOrElse("PACT_BROKER_PASSWORD", "")
-  lazy val branch: String = sys.env.getOrElse("BRANCH", "")
-  lazy val gitShaShort: String = sys.env.getOrElse("GIT_SHA_SHORT", "")
+  // Provider branch, sha
+  lazy val branch: String = sys.env.getOrElse("PROVIDER_BRANCH", "")
+  lazy val gitSha: String = sys.env.getOrElse("PROVIDER_SHA", "")
+  // Consumer name, bran, sha (used for webhook events only)
+  lazy val consumerName: Option[String] = sys.env.get("CONSUMER_NAME")
+  lazy val consumerBranch: Option[String] = sys.env.get("CONSUMER_BRANCH")
+  // This matches the latest commit of the consumer branch that triggered the webhook event
+  lazy val consumerSha: Option[String] = sys.env.get("CONSUMER_SHA")
+
+  var consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
+  // consumerVersionSelectors = consumerVersionSelectors.mainBranch
+  // The following match condition basically says
+  // 1. If verification is triggered by consumer pact change, verify only the changed pact.
+  // 2. For normal Sam PR, verify all consumer pacts in Pact Broker labelled with a deployed environment (alpha, dev, prod, staging).
+  consumerBranch match {
+    case Some(s) if !s.isBlank() => consumerVersionSelectors = consumerVersionSelectors.branch(s, consumerName)
+    case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased
+  }
 
   override def provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
@@ -132,7 +148,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .PactBrokerWithSelectors(
         brokerUrl = pactBrokerUrl
       )
-      .withConsumerVersionSelectors(ConsumerVersionSelectors.mainBranch)
+      .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
 
@@ -140,15 +156,12 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
       publishVerificationResults = Some(
-        PublishVerificationResults(gitShaShort, ProviderTags(branch))
+        PublishVerificationResults(gitSha, ProviderTags(branch))
       ),
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE,
-        // Exclude these Consumers from Pact Broker
-        ProviderVerificationOption.FILTER_CONSUMERS
-          .apply(Seq("Example App", "GoAdminService").toList)
       ).toList,
-      verificationTimeout = Some(10.seconds)
+      verificationTimeout = Some(30.seconds)
     )
   }
 }
