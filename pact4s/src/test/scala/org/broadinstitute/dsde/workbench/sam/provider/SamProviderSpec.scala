@@ -27,7 +27,14 @@ import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
-class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging with MockitoSugar {
+class SamProviderSpec
+    extends AnyFlatSpec
+    with ScalatestRouteTest
+    with MockTestSupport
+    with BeforeAndAfterAll
+    with PactVerifier
+    with LazyLogging
+    with MockitoSugar {
   def genSamDependencies: MockSamDependencies = {
     val directoryDAO = mock[DirectoryDAO]
     val policyDAO = mock[AccessPolicyDAO]
