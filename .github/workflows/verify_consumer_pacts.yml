@@ -21,7 +21,7 @@ on:
       - 'README.md'
   push:
     branches:
-      - develop
+      - QA-2056-1
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
@@ -170,10 +170,10 @@ jobs:
 
   can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest
+    if: ${{ inputs.pb-event-type == '' }}
     needs: [ verify-consumer-pact ]
     steps:
       - name: Dispatch to terra-github-workflows
-        if: ${{ inputs.pb-event-type == '' }}
         uses: broadinstitute/workflow-dispatch@v3
         with:
           workflow: .github/workflows/can-i-deploy.yaml
