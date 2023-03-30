@@ -1,4 +1,5 @@
 # Github action to Build Sam artifact, add/promote semantic tagging and then run tests
+# This branch is used for IA walkthrough and IRWG demo.
 
 name: sam-build-tag-publish-and-run-tests
 
