@@ -136,8 +136,8 @@ jobs:
             echo "PROVIDER_SHA=${{ env.CHECKOUT_SHA }}" >> $GITHUB_ENV
           fi
           git fetch
-          echo "git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}"
-          git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}
+          echo "git checkout ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}"
+          git checkout ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}
           echo "git branch"
           git branch
           echo "git rev-parse HEAD"
