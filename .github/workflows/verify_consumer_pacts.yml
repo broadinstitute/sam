@@ -21,7 +21,7 @@ on:
       - 'README.md'
   push:
     branches:
-      - develop
+      - PB-platinum-demo
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
