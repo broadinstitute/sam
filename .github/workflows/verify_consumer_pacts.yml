@@ -141,12 +141,12 @@ jobs:
             git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}
             echo "git branch"
             git branch
-            echo "git rev-parse HEAD"
-            git rev-parse HEAD
           else
           echo "git checkout ${{ env.PROVIDER_BRANCH }}"
             git checkout ${{ env.PROVIDER_BRANCH }}
           fi
+          echo "git rev-parse HEAD"
+          git rev-parse HEAD
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
