@@ -1,5 +1,4 @@
 name: Verify consumer pacts
-# Use this for demoing provider changes
 # The purpose of this workflow is to verify ANY consumer contract(s) dependent on Sam provider using Pact framework.
 #
 # The workflow meets the criteria of Pact Broker *Platinum* as described in https://docs.pact.io/pact_nirvana/step_6.
