@@ -21,7 +21,7 @@ object Dependencies {
   val workbenchOauth2V = s"0.2-$workbenchLibV"
   val workbenchOpenTelemetryV = s"0.3-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.4-SNAPSHOT"
+  val crlVersion = "1.2.8-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -36,6 +36,7 @@ object Dependencies {
   val excludeSLF4J = ExclusionRule(organization = "org.slf4j")
   val excludeJerseyCore = ExclusionRule(organization = "org.glassfish.jersey.core", name = "*")
   val excludeJerseyMedia = ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
+  val excludeJsonSmart = ExclusionRule(organization = "net.minidev", name = "json-smart")
 
   val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
   val sentryLogback: ModuleID = "io.sentry" % "sentry-logback" % sentryVersion
@@ -146,7 +147,10 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J, excludeJsonSmart
+  )
+  val jsonSmart: ModuleID = "net.minidev" % "json-smart" % "2.4.10"
+
   val azureManagedApplications: ModuleID =
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
@@ -200,6 +204,7 @@ object Dependencies {
     scalikeCoreTest,
     postgres,
     cloudResourceLib,
+    jsonSmart,
     nettyAll,
     azureManagedApplications,
     sentry,
