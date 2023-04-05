@@ -755,9 +755,10 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val isSessionValid = session.connection.isValid((2 seconds).toSeconds.intValue())
       val canQuery =
         sql"""SELECT 1 from ${UserTable}"""
-        .map(rs => rs.int(1))
-        .single()
-        .apply().nonEmpty
+          .map(rs => rs.int(1))
+          .single()
+          .apply()
+          .nonEmpty
 
       isSessionValid && canQuery
     }
