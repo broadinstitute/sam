@@ -6,11 +6,13 @@ import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.mockito.{ArgumentMatcher, ArgumentMatchers}
 
+import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 
 // It is probably not a good thing that GoogleExtensions (the implementation of CloudExtensions) needs a DirectoryDAO
@@ -109,6 +111,19 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends Mockit
     this
   }
 
+  private val subsystemStatuses: mutable.Map[Subsystems.Subsystem, Future[SubsystemStatus]] = mutable.Map.empty
+
+  def withHealthySubsystem(subsystem: Subsystems.Subsystem): MockCloudExtensionsBuilder = {
+    subsystemStatuses.addOne(subsystem -> Future.successful(SubsystemStatus(true, None)))
+    this
+  }
+
+  def withUnhealthySubsystem(subsystem: Subsystems.Subsystem,
+                             messages: List[String]): MockCloudExtensionsBuilder = {
+    subsystemStatuses.addOne(subsystem -> Future.successful(SubsystemStatus(false, Some(messages))))
+    this
+  }
+
   private def makeUserAppearDisabled(samUser: SamUser): Unit = {
     // Real implementation just returns unit if the user already exists
     doReturn(IO.unit)
@@ -119,7 +134,14 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends Mockit
       .getUserStatus(argThat(IsSameUserAs(samUser)))
   }
 
-  def build: CloudExtensions = mockedCloudExtensions
+  def build: CloudExtensions = {
+    lenient()
+      .doReturn(subsystemStatuses.toMap)
+      .when(mockedCloudExtensions)
+      .checkStatus
+
+    mockedCloudExtensions
+  }
 }
 
 case class IsSameUserAs(user: SamUser) extends ArgumentMatcher[SamUser] {

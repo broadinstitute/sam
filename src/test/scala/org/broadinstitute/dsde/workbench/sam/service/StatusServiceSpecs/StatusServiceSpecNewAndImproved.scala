@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
 import org.broadinstitute.dsde.workbench.sam.service.{MockCloudExtensionsBuilder, StatusService}
-import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
+import org.broadinstitute.dsde.workbench.util.health.Subsystems
 import org.mockito.IdiomaticMockito
 import org.scalatest.Inspectors.forEvery
 import org.scalatest.concurrent.Eventually
@@ -12,8 +12,8 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, OptionValues}
 
+import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContextExecutor, Future}
 
 class StatusServiceSpecNewAndImproved extends AnyFunSpec
   with Matchers
@@ -32,12 +32,13 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
     super.afterAll()
   }
 
-  describe("Sam Status should be OK") {
+  describe("Sam Status should be OK when all critical subsystems are OK ") {
 
-    it("when there are no subsystems") {
+    it("and there are no other subsystems") {
       // Arrange
-      implicit val system = ActorSystem("StatusServiceSpec")
-      val directoryDAO = MockDirectoryDaoBuilder().build
+      val directoryDAO = MockDirectoryDaoBuilder()
+        .withHealthyDatabase // Database is a critical subsystem
+        .build
       val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
       val statusService = new StatusService(directoryDAO, cloudExtensions)
 
@@ -47,17 +48,21 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
 
         // Assert
         samStatus should beOk
-        samStatus.systems shouldBe empty
+        forEvery(StatusService.criticalSubsystems) { criticalSubsystem =>
+          criticalSubsystem should beOkIn(samStatus)
+        }
       }
     }
 
-    it("when there is 1 subsystem that is OK") {
+    it("and there is 1 non-critical subsystem and it is OK") {
       // Arrange
       val subsystem = Subsystems.GoogleGroups
-      val directoryDAO = MockDirectoryDaoBuilder().build
-      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
-      cloudExtensions.allSubSystems returns Set(subsystem)
-      cloudExtensions.checkStatus returns Map(subsystem -> Future.successful(SubsystemStatus(true, None)))
+      val directoryDAO = MockDirectoryDaoBuilder()
+        .withHealthyDatabase // Database is a critical subsystem
+        .build
+      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO)
+        .withHealthySubsystem(subsystem)
+        .build
       val statusService = new StatusService(directoryDAO, cloudExtensions)
 
       // Because of the Actors and the way statuses are cached, we want to use an 'eventually' here
@@ -71,13 +76,74 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
       }
     }
 
-    it("when there is more than 1 subsystem and they are all OK") {
+    it("and there is 1 non-critical subsystem and it is NOT OK") {
       // Arrange
+      val subsystem = Subsystems.GoogleGroups
+      val directoryDAO = MockDirectoryDaoBuilder()
+        .withHealthyDatabase // Database is a critical subsystem
+        .build
+
+      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO)
+        .withUnhealthySubsystem(subsystem, List("Because of...reasons"))
+        .build
+      val statusService = new StatusService(directoryDAO, cloudExtensions)
+
+      // Because of the Actors and the way statuses are cached, we want to use an 'eventually' here
+      eventually {
+        // Act
+        val samStatus = runAndWait(statusService.getStatus())
+
+        // Assert
+        samStatus should beOk
+        subsystem shouldNot beOkIn(samStatus)
+      }
+    }
+
+    it("and there are multiple non-critical subsystems and at least 1 is OK and at least 1 is NOT OK") {
+      // Arrange
+      val directoryDAO = MockDirectoryDaoBuilder()
+        .withHealthyDatabase
+        .build
+
+      val healthyNoncriticalSubsystem = Subsystems.GoogleGroups
+      val unhealthyNoncriticalSubsystem = Subsystems.GoogleBuckets
+      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO)
+        .withHealthySubsystem(healthyNoncriticalSubsystem)
+        .withUnhealthySubsystem(unhealthyNoncriticalSubsystem, List(s"Cuz $unhealthyNoncriticalSubsystem is broke"))
+        .build
+
+      val statusService = new StatusService(directoryDAO, cloudExtensions)
+
+      // Because of the Actors and the way statuses are cached, we want to use an 'eventually' here
+      eventually {
+        // Act
+        val samStatus = runAndWait(statusService.getStatus())
+
+        // Assert
+        samStatus should beOk
+
+        forEvery(StatusService.criticalSubsystems) { criticalSubsystem =>
+          criticalSubsystem should beOkIn(samStatus)
+        }
+
+        healthyNoncriticalSubsystem should beOkIn(samStatus)
+        unhealthyNoncriticalSubsystem shouldNot beOkIn(samStatus)
+      }
+    }
+
+    it("and there are multiple non-critical subsystems that are all OK") {
+      // Arrange
+      val directoryDAO = MockDirectoryDaoBuilder()
+        .withHealthyDatabase // Database is a critical subsystem
+        .build
+
       val subsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.Leonardo, Subsystems.Agora)
-      val directoryDAO = MockDirectoryDaoBuilder().build
-      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
-      cloudExtensions.allSubSystems returns subsystems
-      cloudExtensions.checkStatus returns subsystems.map(_ -> Future.successful(SubsystemStatus(true, None))).toMap
+      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
+      subsystems.foreach { subsystem =>
+        cloudExtensionsBuilder.withHealthySubsystem(subsystem)
+      }
+      val cloudExtensions = cloudExtensionsBuilder.build
+
       val statusService = new StatusService(directoryDAO, cloudExtensions)
 
       // Because of the Actors and the way statuses are cached, we want to use an 'eventually' here
@@ -92,14 +158,20 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
         }
       }
     }
-  }
 
-  describe("Sam Status should NOT be OK") {
-    it("when the Database system is NOT OK") {
+    it("and there are multiple non-critical subsystems that are all NOT OK") {
       // Arrange
-      val subsystem = Subsystems.Database
-      val directoryDAO = MockDirectoryDaoBuilder().build
-      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
+      val directoryDAO = MockDirectoryDaoBuilder()
+        .withHealthyDatabase
+        .build
+
+      val nonCriticalSubsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GoogleBuckets)
+      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
+      nonCriticalSubsystems.foreach { subsystem =>
+        cloudExtensionsBuilder.withUnhealthySubsystem(subsystem, List(s"Cuz $subsystem is broke"))
+      }
+      val cloudExtensions = cloudExtensionsBuilder.build
+
       val statusService = new StatusService(directoryDAO, cloudExtensions)
 
       // Because of the Actors and the way statuses are cached, we want to use an 'eventually' here
@@ -109,7 +181,48 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
 
         // Assert
         samStatus should beOk
-        Subsystems.Database should beOkIn(samStatus)
+
+        forEvery(StatusService.criticalSubsystems) { criticalSubsystem =>
+          criticalSubsystem should beOkIn(samStatus)
+        }
+
+        forEvery(nonCriticalSubsystems) { nonCriticalSubsystem =>
+          nonCriticalSubsystem shouldNot beOkIn(samStatus)
+        }
+      }
+    }
+  }
+
+  describe("Sam Status should NOT be OK") {
+    it("when at least 1 critical subsystem is NOT OK and all non-critical subsystems are OK") {
+      // Arrange
+      val directoryDAO = MockDirectoryDaoBuilder()
+        .withUnhealthyDatabase // Database is a critical subsystem
+        .build
+
+      val nonCriticalSubsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.Leonardo, Subsystems.Agora)
+      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
+      nonCriticalSubsystems.foreach { subsystem =>
+        cloudExtensionsBuilder.withHealthySubsystem(subsystem)
+      }
+      val cloudExtensions = cloudExtensionsBuilder.build
+
+      val statusService = new StatusService(directoryDAO, cloudExtensions)
+
+      // Because of the Actors and the way statuses are cached, we want to use an 'eventually' here
+      eventually {
+        // Act
+        val samStatus = runAndWait(statusService.getStatus())
+
+        // Assert
+        samStatus shouldNot beOk
+        forEvery(StatusService.criticalSubsystems) { criticalSubsystem =>
+          criticalSubsystem shouldNot beOkIn(samStatus)
+        }
+
+        forEvery(nonCriticalSubsystems) { nonCriticalSubsystem =>
+          nonCriticalSubsystem should beOkIn(samStatus)
+        }
       }
     }
   }
