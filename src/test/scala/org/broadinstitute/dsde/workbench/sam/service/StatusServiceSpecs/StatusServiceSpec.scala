@@ -15,7 +15,7 @@ import org.scalatest.{BeforeAndAfterAll, OptionValues}
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 
-class StatusServiceSpecNewAndImproved
+class StatusServiceSpec
     extends AnyFunSpec
     with Matchers
     with TestSupport
