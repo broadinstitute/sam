@@ -6,6 +6,7 @@ import akka.util.Timeout
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
+import io.sentry.Sentry
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
@@ -38,7 +39,14 @@ class StatusService(
         statusCheckResponse.systems.get(subsystem).exists(_.ok)
       }
 
-      statusCheckResponse.copy(ok = overallSamStatus)
+      val finalStatus = statusCheckResponse.copy(ok = overallSamStatus)
+
+      val unhealthySubsystems = statusCheckResponse.systems.filter(tuple => !tuple._2.ok)
+      unhealthySubsystems.foreach { case (subsystem, _) =>
+        Sentry.captureMessage(s"Sam service is degraded! $subsystem is NOT OK: $finalStatus")
+      }
+
+      finalStatus
     }
 
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
