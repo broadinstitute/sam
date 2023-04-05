@@ -27,6 +27,10 @@ class StatusService(
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems)(checkStatus _))
   system.scheduler.scheduleAtFixedRate(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
 
+  // There is a differentiation between "critical" and "non-critical" systems.
+  // The Database is the only critical system and if it is reporting "not OK", then Sam should report "not OK".
+  // If, however, any of the other (non-critical) Services are not reporting "OK", then Sam will still be "OK", but
+  // should be considered "degraded"
   def getStatus(): Future[StatusCheckResponse] =
     (healthMonitor ? GetCurrentStatus).mapTo[StatusCheckResponse].map { statusCheckResponse =>
       // Sam can still report OK if non-critical systems are not OK
