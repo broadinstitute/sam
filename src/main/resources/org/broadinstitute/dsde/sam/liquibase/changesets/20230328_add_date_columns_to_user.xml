@@ -7,17 +7,16 @@
 
   <changeSet logicalFilePath="dummy" author="kfeldman" id="add_date_columns_to_user_table">
     <addColumn tableName="sam_user">
-      <column name="created_at" type="timestamptz" defaultValue="now()">
+      <column name="created_at" type="timestamp with time zone" defaultValue="now()">
         <constraints nullable="false"/>
       </column>
     </addColumn>
     <addColumn tableName="sam_user">
-      <column name="registered_at" type="timestamptz" defaultValue="now()">
-        <constraints nullable="false"/>
+      <column name="registered_at" type="timestamp with time zone">
       </column>
     </addColumn>
     <addColumn tableName="sam_user">
-      <column name="updated_at" type="timestamptz" defaultValue="now()">
+      <column name="updated_at" type="timestamp with time zone" defaultValue="now()">
         <constraints nullable="false"/>
       </column>
     </addColumn>
