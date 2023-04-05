@@ -584,17 +584,15 @@ class GoogleExtensions(
   override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = {
     import HealthMonitor._
 
-    // TEMPORARY return ALWAYS OK for production incident: https://broadworkbench.atlassian.net/browse/PROD-791
-    def checkGroups: Future[SubsystemStatus] = Future.successful(OkStatus)
-//    {
-//      logger.debug("Checking Google Groups...")
-//      for {
-//        groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroupEmail)
-//      } yield groupOption match {
-//        case Some(_) => OkStatus
-//        case None => failedStatus(s"could not find group ${allUsersGroupEmail} in google")
-//      }
-//    }
+    def checkGroups: Future[SubsystemStatus] = {
+      logger.debug("Checking Google Groups...")
+      for {
+        groupOption <- googleDirectoryDAO.getGoogleGroup(allUsersGroupEmail)
+      } yield groupOption match {
+        case Some(_) => OkStatus
+        case None => failedStatus(s"could not find group ${allUsersGroupEmail} in google")
+      }
+    }
 
     def checkPubsub: Future[SubsystemStatus] = {
       logger.debug("Checking PubSub topics...")
