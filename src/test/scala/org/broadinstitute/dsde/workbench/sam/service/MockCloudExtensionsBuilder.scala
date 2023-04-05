@@ -118,8 +118,7 @@ case class MockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extends Mockit
     this
   }
 
-  def withUnhealthySubsystem(subsystem: Subsystems.Subsystem,
-                             messages: List[String]): MockCloudExtensionsBuilder = {
+  def withUnhealthySubsystem(subsystem: Subsystems.Subsystem, messages: List[String]): MockCloudExtensionsBuilder = {
     subsystemStatuses.addOne(subsystem -> Future.successful(SubsystemStatus(false, Some(messages))))
     this
   }

@@ -27,7 +27,7 @@ class StatusService(
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems)(checkStatus _))
   system.scheduler.scheduleAtFixedRate(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
 
-  def getStatus(): Future[StatusCheckResponse] = {
+  def getStatus(): Future[StatusCheckResponse] =
     (healthMonitor ? GetCurrentStatus).mapTo[StatusCheckResponse].map { statusCheckResponse =>
       // Sam can still report OK if non-critical systems are not OK
       val overallSamStatus: Boolean = StatusService.criticalSubsystems.forall { subsystem =>
@@ -36,7 +36,6 @@ class StatusService(
 
       statusCheckResponse.copy(ok = overallSamStatus)
     }
-  }
 
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
     cloudExtensions.checkStatus + (Database -> checkDatabase().unsafeToFuture())

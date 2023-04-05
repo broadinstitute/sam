@@ -30,10 +30,14 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
     system.terminate()
 
   private def newStatusService(directoryDAO: DirectoryDAO) =
-    new StatusService(directoryDAO, new NoExtensions {
+    new StatusService(
+      directoryDAO,
+      new NoExtensions {
         override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] =
           Map(Subsystems.GoogleGroups -> Future.successful(SubsystemStatus(true, None)))
-      }, pollInterval = 10 milliseconds)
+      },
+      pollInterval = 10 milliseconds
+    )
 
   private def directoryDAOWithAllUsersGroup(response: Boolean = true) = {
     val directoryDAO = new MockDirectoryDAO {
@@ -48,10 +52,14 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
   private def ok = newStatusService(directoryDAOWithAllUsersGroup())
 
   private def failingExtension = {
-    val service = new StatusService(directoryDAOWithAllUsersGroup(), new NoExtensions {
+    val service = new StatusService(
+      directoryDAOWithAllUsersGroup(),
+      new NoExtensions {
         override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] =
           Map(Subsystems.GoogleGroups -> Future.failed(new WorkbenchException("bad google")))
-      }, pollInterval = 10 milliseconds)
+      },
+      pollInterval = 10 milliseconds
+    )
     service
   }
 
@@ -68,7 +76,7 @@ class StatusServiceSpec extends AnyFreeSpec with Matchers with BeforeAndAfterAll
       (
         "failingExtension",
         failingExtension,
-        StatusCheckResponse(false, Map(GoogleGroups -> SubsystemStatus(false, Option(List(s"bad google"))), Database -> SubsystemStatus(true, None)))
+        StatusCheckResponse(true, Map(GoogleGroups -> SubsystemStatus(false, Option(List(s"bad google"))), Database -> SubsystemStatus(true, None)))
       ),
       (
         "failingDatabase",

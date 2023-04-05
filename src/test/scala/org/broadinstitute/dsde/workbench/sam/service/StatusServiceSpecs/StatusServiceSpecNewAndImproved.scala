@@ -15,14 +15,15 @@ import org.scalatest.{BeforeAndAfterAll, OptionValues}
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 
-class StatusServiceSpecNewAndImproved extends AnyFunSpec
-  with Matchers
-  with TestSupport
-  with IdiomaticMockito
-  with OptionValues
-  with Eventually
-  with BeforeAndAfterAll
-  with StatusServiceMatchers {
+class StatusServiceSpecNewAndImproved
+    extends AnyFunSpec
+    with Matchers
+    with TestSupport
+    with IdiomaticMockito
+    with OptionValues
+    with Eventually
+    with BeforeAndAfterAll
+    with StatusServiceMatchers {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
   implicit val system = ActorSystem("StatusServiceSpec")
   implicit override val patienceConfig = PatienceConfig(timeout = 1 second)
@@ -36,8 +37,7 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
 
     it("and there are no other subsystems") {
       // Arrange
-      val directoryDAO = MockDirectoryDaoBuilder()
-        .withHealthyDatabase // Database is a critical subsystem
+      val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase // Database is a critical subsystem
         .build
       val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
       val statusService = new StatusService(directoryDAO, cloudExtensions)
@@ -57,8 +57,7 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
     it("and there is 1 non-critical subsystem and it is OK") {
       // Arrange
       val subsystem = Subsystems.GoogleGroups
-      val directoryDAO = MockDirectoryDaoBuilder()
-        .withHealthyDatabase // Database is a critical subsystem
+      val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase // Database is a critical subsystem
         .build
       val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO)
         .withHealthySubsystem(subsystem)
@@ -79,8 +78,7 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
     it("and there is 1 non-critical subsystem and it is NOT OK") {
       // Arrange
       val subsystem = Subsystems.GoogleGroups
-      val directoryDAO = MockDirectoryDaoBuilder()
-        .withHealthyDatabase // Database is a critical subsystem
+      val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase // Database is a critical subsystem
         .build
 
       val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO)
@@ -101,9 +99,7 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
 
     it("and there are multiple non-critical subsystems and at least 1 is OK and at least 1 is NOT OK") {
       // Arrange
-      val directoryDAO = MockDirectoryDaoBuilder()
-        .withHealthyDatabase
-        .build
+      val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase.build
 
       val healthyNoncriticalSubsystem = Subsystems.GoogleGroups
       val unhealthyNoncriticalSubsystem = Subsystems.GoogleBuckets
@@ -133,8 +129,7 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
 
     it("and there are multiple non-critical subsystems that are all OK") {
       // Arrange
-      val directoryDAO = MockDirectoryDaoBuilder()
-        .withHealthyDatabase // Database is a critical subsystem
+      val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase // Database is a critical subsystem
         .build
 
       val subsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.Leonardo, Subsystems.Agora)
@@ -161,9 +156,7 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
 
     it("and there are multiple non-critical subsystems that are all NOT OK") {
       // Arrange
-      val directoryDAO = MockDirectoryDaoBuilder()
-        .withHealthyDatabase
-        .build
+      val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase.build
 
       val nonCriticalSubsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GoogleBuckets)
       val cloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
@@ -196,8 +189,7 @@ class StatusServiceSpecNewAndImproved extends AnyFunSpec
   describe("Sam Status should NOT be OK") {
     it("when at least 1 critical subsystem is NOT OK and all non-critical subsystems are OK") {
       // Arrange
-      val directoryDAO = MockDirectoryDaoBuilder()
-        .withUnhealthyDatabase // Database is a critical subsystem
+      val directoryDAO = MockDirectoryDaoBuilder().withUnhealthyDatabase // Database is a critical subsystem
         .build
 
       val nonCriticalSubsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.Leonardo, Subsystems.Agora)
