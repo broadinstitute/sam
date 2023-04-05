@@ -52,12 +52,12 @@ class StatusService(
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
     cloudExtensions.checkStatus + (Database -> checkDatabase().unsafeToFuture())
 
-  private def checkDatabase(): IO[SubsystemStatus] = IO {
+  private def checkDatabase(): IO[SubsystemStatus] = {
     logger.info("checking database connection")
-    if (directoryDAO.checkStatus(SamRequestContext()))
-      HealthMonitor.OkStatus
-    else
-      HealthMonitor.failedStatus("Postgres database connection invalid or timed out checking")
+    directoryDAO.checkStatus(SamRequestContext()).map {
+      case true => HealthMonitor.OkStatus
+      case false => HealthMonitor.failedStatus("Postgres database connection invalid or timed out checking")
+    }
   }
 }
 

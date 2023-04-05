@@ -297,7 +297,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     } yield users += user.id -> user.copy(azureB2CId = Option(b2CId))
   }
 
-  override def checkStatus(samRequestContext: SamRequestContext): Boolean = passStatusCheck
+  override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] = IO(passStatusCheck)
 
   override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(users.values.find(_.googleSubjectId.contains(userId)))

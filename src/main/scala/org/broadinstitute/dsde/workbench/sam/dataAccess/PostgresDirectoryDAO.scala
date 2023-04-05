@@ -750,9 +750,16 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       }
     }
 
-  override def checkStatus(samRequestContext: SamRequestContext): Boolean =
-    writeDbRef.inLocalTransaction { session =>
-      session.connection.isValid((2 seconds).toSeconds.intValue())
+  override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] =
+    readOnlyTransaction("checkStatus", samRequestContext) { implicit session =>
+      val isSessionValid = session.connection.isValid((2 seconds).toSeconds.intValue())
+      val canQuery =
+        sql"""SELECT 1 from ${UserTable}"""
+        .map(rs => rs.int(1))
+        .single()
+        .apply().nonEmpty
+
+      isSessionValid && canQuery
     }
 
   override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] =
