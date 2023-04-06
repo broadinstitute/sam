@@ -42,7 +42,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     when {
       userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
     } thenReturn {
-      // Add support for BPM consumer (Revision 2)
+      // Add support for BPM consumer (Revision 3)
       val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
       IO.pure(userStatusInfo)
     }
