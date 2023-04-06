@@ -40,9 +40,8 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     val azureService = mock[AzureService]
     val userService = mock[UserService]
     when {
-      userService.getUserStatusInfo(
-        SamUser(WorkbenchUserId("test"), None, WorkbenchEmail("test@test"), None, true, None), SamRequestContext()
-      )
+      userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+      // SamUser(WorkbenchUserId("test"), None, WorkbenchEmail("test@test"), None, true, None), SamRequestContext()
     } thenReturn {
       val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
       IO.pure(userStatusInfo)
