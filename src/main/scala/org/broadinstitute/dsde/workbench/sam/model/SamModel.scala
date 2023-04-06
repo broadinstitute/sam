@@ -316,12 +316,12 @@ object SamUser{
       azureB2CId,
       enabled,
       acceptedTosVersion,
-      Instant.now,
+      Instant.EPOCH,
       None,
       Instant.EPOCH)
   }
-
 }
+
 final case class SamUser(
     id: WorkbenchUserId,
     googleSubjectId: Option[GoogleSubjectId],
@@ -334,6 +334,19 @@ final case class SamUser(
     updatedAt: Instant
 ) {
   def toUserIdInfo = UserIdInfo(id, email, googleSubjectId)
+
+  override def equals(other: Any): Boolean = other match {
+    case user: SamUser =>
+        this.id == user.id &&
+        this.googleSubjectId == user.googleSubjectId &&
+        this.email == user.email &&
+        this.azureB2CId == user.azureB2CId &&
+        this.enabled == user.enabled &&
+        this.acceptedTosVersion == user.acceptedTosVersion &&
+        this.createdAt == user.createdAt &&
+        this.registeredAt == user.registeredAt
+    case _ => false
+  }
 }
 
 object SamLenses {

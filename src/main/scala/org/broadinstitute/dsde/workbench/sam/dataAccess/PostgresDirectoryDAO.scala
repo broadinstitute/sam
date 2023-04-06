@@ -338,19 +338,27 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
   override def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     serializableWriteTransaction("createUser", samRequestContext) { implicit session =>
+      val newUser = user.copy(
+        createdAt = maybeAdjustDate(user.createdAt),
+        updatedAt = maybeAdjustDate(user.updatedAt)
+      )
+
       val userColumn = UserTable.column
 
       val insertUserQuery =
-        samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}, ${userColumn.acceptedTosVersion}) values (${user.id}, ${user.email}, ${user.googleSubjectId}, ${user.enabled}, ${user.azureB2CId}, ${user.acceptedTosVersion})"
+        samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}, ${userColumn.acceptedTosVersion}, ${userColumn.createdAt}, ${userColumn.registeredAt}, ${userColumn.updatedAt}) values (${newUser.id}, ${newUser.email}, ${newUser.googleSubjectId}, ${newUser.enabled}, ${newUser.azureB2CId}, ${newUser.acceptedTosVersion}, ${newUser.createdAt}, ${newUser.registeredAt}, ${newUser.updatedAt})"
 
       Try {
         insertUserQuery.update().apply()
       }.recoverWith {
         case duplicateException: PSQLException if duplicateException.getSQLState == PSQLStateExtensions.UNIQUE_VIOLATION =>
-          Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${user.id} already exists")))
+          Failure(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"identity with id ${newUser.id} already exists")))
       }.get
-      user
+      newUser
     }
+
+  private def maybeAdjustDate(instant: Instant): Instant =
+    if (instant.equals(Instant.EPOCH) || instant.isBefore(Instant.EPOCH)) Instant.now() else instant
 
   override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     readOnlyTransaction("loadUser", samRequestContext) { implicit session =>

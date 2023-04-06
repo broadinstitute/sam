@@ -22,7 +22,6 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues, Suite}
 
-import java.time.temporal.ChronoUnit
 import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -322,17 +321,17 @@ class OldUserServiceSpec
 
   "createUser" should "record the date that the user record was created" in {
     assume(databaseEnabled, databaseEnabledClue)
-    // TODO: make the db persist the actual created at value
-    //  (overwrite epoch but not a real date) so this test passes
-    val user = genWorkbenchUserGoogle.sample.get.copy(createdAt = new Instant("2020-01-02"))
+    // Arrange
+    val expectedInstant = Instant.parse("2000-01-02T03:04:05Z")
+    val user = genWorkbenchUserGoogle.sample.get.copy(createdAt = expectedInstant)
+
+    // Act
     service.createUser(user, samRequestContext).unsafeRunSync()
+
+    // Assert
     val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     val userCreatedAt = maybeUser.value.createdAt
-    val currentDate = Instant.now()
-//    println(currentDate.toEpochMilli/1000)
-//    val difference: Long = ChronoUnit.SECONDS.between(userCreatedAt, currentDate)
-//    difference should be < 5L
-    userCreatedAt shouldBe new Instant("2020-01-02")
+    userCreatedAt shouldBe expectedInstant
   }
 
   /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
