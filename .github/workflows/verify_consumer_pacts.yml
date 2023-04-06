@@ -142,8 +142,8 @@ jobs:
             echo "git branch"
             git branch
           else
-          echo "git checkout ${{ env.PROVIDER_BRANCH }}"
-            git checkout ${{ env.PROVIDER_BRANCH }}
+            echo "git checkout ${{ env.PROVIDER_BRANCH }} ${{ env.PROVIDER_SHA }}"
+            git checkout -b ${{ env.PROVIDER_BRANCH }} ${{ env.PROVIDER_SHA }}
           fi
           echo "git rev-parse HEAD"
           git rev-parse HEAD
