@@ -352,7 +352,25 @@ class OldUserServiceSpec
     }
   }
 
-  it should "NOT record the date that the user registered if they are being invited" ignore {}
+  it should "NOT record the date that the user registered if they are being invited" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val inviteeEmail = genNonPetEmail.sample.get
+
+    // Act
+    service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeSubjectId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync()
+    maybeSubjectId.map {
+      case userId: WorkbenchUserId =>
+        val maybeInvitee = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
+        inside(maybeInvitee.value) { invitee =>
+          invitee.registeredAt shouldBe empty
+        }
+      case _ => fail("Something went wrong and test was unable to find user it just created")
+    }
+  }
 
   /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
     */
