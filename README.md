@@ -181,11 +181,16 @@ source src/main/resources/rendered/secrets.env
 sh docker/run-postgres.sh start
 ```
 
+#### Spin Up a Local Proxy
+```shell
+sh docker/run-proxy.sh start
+```
+
 #### Run Sam!
 ```shell
 sbt run
 ```
-Navigate to [Sam's Swagger page](http://localhost:8080/)
+Navigate to [Sam's (Proxy's) Swagger page](http://localhost:50443/)
 
 
 #### Debugging in IntelliJ
