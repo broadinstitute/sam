@@ -85,7 +85,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             IO.raiseError[SamUser](
               new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint"))
             )
-
         }
       } yield updated
     }

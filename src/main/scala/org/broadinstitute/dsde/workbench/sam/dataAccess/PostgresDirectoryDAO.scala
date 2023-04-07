@@ -403,12 +403,12 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("setUserAzureB2CId", samRequestContext) { implicit session =>
       val u = UserTable.column
-      val results =samsql"""update ${UserTable.table}
+      val results = samsql"""update ${UserTable.table}
                  set (${u.azureB2cId}, ${u.updatedAt}) =
                  ($b2cId, ${Instant.now()})
                  where ${u.id} = $userId and (${u.azureB2cId} is null or ${u.azureB2cId} = $b2cId)"""
-          .update()
-          .apply()
+        .update()
+        .apply()
 
       if (results != 1) {
         throw new WorkbenchException(
@@ -765,7 +765,16 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val u = UserTable.column
       val updateGoogleSubjectIdQuery =
         samsql"""update ${UserTable.table}
-                 set (${u.googleSubjectId}, ${u.updatedAt}) = (${googleSubjectId}, ${Instant.now()})
+                 set (${u.googleSubjectId}, ${u.updatedAt}, ${u.registeredAt}) =
+                 (${googleSubjectId},
+                   ${Instant.now()},
+                   (select coalesce(${u.registeredAt}, now())
+                     from ${UserTable.table}
+                     where ${u.id} = $userId
+                       and ${u.googleSubjectId} is null
+                       and ${u.azureB2cId} is null
+                   )
+                 )
                  where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
 
       if (updateGoogleSubjectIdQuery.update().apply() != 1) {

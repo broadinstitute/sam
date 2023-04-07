@@ -18,7 +18,7 @@ import java.time.Instant
 import java.util.Date
 import scala.concurrent.duration._
 
-class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues  {
+class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
@@ -414,7 +414,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         // Act
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
 
-        //Assert
+        // Assert
         inside(createdUser) { user =>
           user.id should equal(expectedUser.id)
           user.googleSubjectId should equal(expectedUser.googleSubjectId)
@@ -433,7 +433,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         // Act
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
 
-        //Assert
+        // Assert
         inside(createdUser) { user =>
           user.createdAt should beAround(Instant.now())
         }
@@ -447,7 +447,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         // Act
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
 
-        //Assert
+        // Assert
         inside(createdUser) { user =>
           user.createdAt shouldBe expectedInstant
         }
@@ -460,7 +460,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         // Act
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
 
-        //Assert
+        // Assert
         inside(createdUser) { user =>
           user.updatedAt should beAround(Instant.now())
         }
@@ -474,7 +474,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         // Act
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
 
-        //Assert
+        // Assert
         inside(createdUser) { user =>
           user.updatedAt shouldBe expectedInstant
         }
@@ -494,7 +494,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         // Act
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
 
-        //Assert
+        // Assert
         inside(createdUser) { user =>
           user.id should equal(expectedUser.id)
           user.googleSubjectId should equal(expectedUser.googleSubjectId)
@@ -531,7 +531,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
 
         // Assert
-        loadedUser.value should have (Symbol("azureB2CId")(None))
+        loadedUser.value should have(Symbol("azureB2CId")(None))
       }
     }
 
@@ -1261,6 +1261,61 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         // Assert
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
         loadedUser.value.updatedAt should beAround(Instant.now())
+      }
+
+      "sets the registeredAt datetime if all cloud ids for this user are blank" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = None)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt.value should beAround(Instant.now())
+        }
+      }
+
+      // This scenario really should never exist.  If one of the cloud IDs is set, then the registeredAt date should
+      // also already be set.  If this initial state exists, something probably went wrong.  Useful test though for
+      // making sure the sql is working correctly.
+      "does not set the registeredAt datetime if it is null and the azureB2CId is already set" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserAzure.sample.get.copy(registeredAt = None)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt shouldBe empty
+        }
+      }
+
+      // Making an assumption that this is the intended behavior/UX we want?  :shrug:  This is a weird scenario that I
+      // cannot imagine we would be in unless something went wrong.  The test is handy though to make sure the sql is
+      // working correctly.
+      "does not change the registeredAt datetime if it is already set" in {
+        // Arrange
+        val expectedRegisteredAt = Instant.parse("2022-02-22T22:22:22Z")
+        val user = Generator.genWorkbenchUserAzure.sample.get.copy(googleSubjectId = None, azureB2CId = None, registeredAt = Option(expectedRegisteredAt))
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt.value should equal(expectedRegisteredAt)
+        }
       }
     }
 

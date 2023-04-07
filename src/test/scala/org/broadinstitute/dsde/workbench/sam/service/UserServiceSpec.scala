@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -17,6 +18,7 @@ import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalacheck.{Arbitrary, Gen}
+import org.scalatest.Inside.inside
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -256,7 +258,8 @@ class OldUserServiceSpec
     with BeforeAndAfter
     with BeforeAndAfterAll
     with ScalaFutures
-    with OptionValues {
+    with OptionValues
+    with TimeMatchers {
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -322,17 +325,34 @@ class OldUserServiceSpec
   "createUser" should "record the date that the user record was created" in {
     assume(databaseEnabled, databaseEnabledClue)
     // Arrange
-    val expectedInstant = Instant.parse("2000-01-02T03:04:05Z")
-    val user = genWorkbenchUserGoogle.sample.get.copy(createdAt = expectedInstant)
+    val user = genWorkbenchUserGoogle.sample.get
 
     // Act
     service.createUser(user, samRequestContext).unsafeRunSync()
 
     // Assert
     val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    val userCreatedAt = maybeUser.value.createdAt
-    userCreatedAt shouldBe expectedInstant
+    inside(maybeUser.value) { user =>
+      user.createdAt should beAround(Instant.now())
+    }
   }
+
+  it should "record the date that the user registered if they are registering at the same time" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val user = genWorkbenchUserGoogle.sample.get
+
+    // Act
+    service.createUser(user, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    inside(maybeUser.value) { user =>
+      user.registeredAt.value should beAround(Instant.now())
+    }
+  }
+
+  it should "NOT record the date that the user registered if they are being invited" ignore {}
 
   /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
     */
