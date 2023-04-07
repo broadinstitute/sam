@@ -342,9 +342,7 @@ final case class SamUser(
         this.email == user.email &&
         this.azureB2CId == user.azureB2CId &&
         this.enabled == user.enabled &&
-        this.acceptedTosVersion == user.acceptedTosVersion &&
-        this.createdAt == user.createdAt &&
-        this.registeredAt == user.registeredAt
+        this.acceptedTosVersion == user.acceptedTosVersion
     case _ => false
   }
 }

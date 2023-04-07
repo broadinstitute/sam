@@ -448,7 +448,9 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
 
         //Assert
-        createdUser should have (createdAt (expectedInstant))
+        inside(createdUser) { user =>
+          user.createdAt shouldBe expectedInstant
+        }
       }
 
       "returns the samUser with the updatedAt datetime set to the current time if one is not specified" in {
@@ -982,6 +984,42 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.enableIdentity(defaultPolicy.id, samRequestContext).unsafeRunSync()
         dao.isEnabled(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe initialEnabledStatus
       }
+
+      "enableIdentity" - {
+        "sets the updatedAt datetime to the current datetime" in {
+          /// Arrange
+          val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+            enabled = false,
+            updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+          )
+          dao.createUser(user, samRequestContext).unsafeRunSync()
+
+          // Act
+          dao.enableIdentity(user.id, samRequestContext).unsafeRunSync()
+
+          // Assert
+          val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+          loadedUser.value.updatedAt should beAround(Instant.now())
+        }
+      }
+
+      "disableIdentity" - {
+        "sets the updatedAt datetime to the current datetime" in {
+          /// Arrange
+          val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+            enabled = true,
+            updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+          )
+          dao.createUser(user, samRequestContext).unsafeRunSync()
+
+          // Act
+          dao.disableIdentity(user.id, samRequestContext).unsafeRunSync()
+
+          // Assert
+          val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+          loadedUser.value.updatedAt should beAround(Instant.now())
+        }
+      }
     }
 
     "isEnabled" - {
@@ -1207,6 +1245,23 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
           dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
         }
       }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+          googleSubjectId = None,
+          updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
+      }
     }
 
     "loadSubjectFromEmail" - {
@@ -1341,6 +1396,23 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
           dao.setUserAzureB2CId(defaultUser.id, newAzureB2cId, samRequestContext).unsafeRunSync()
         }
       }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserAzure.sample.get.copy(
+          azureB2CId = None,
+          updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newAzureB2cId = AzureB2CId("newAzureB2cId")
+
+        // Act
+        dao.setUserAzureB2CId(user.id, newAzureB2cId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
+      }
     }
 
     "createPetManagedIdentity" - {
@@ -1374,6 +1446,21 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.acceptTermsOfService(defaultUser.id, "0", samRequestContext).unsafeRunSync() shouldBe true
         dao.acceptTermsOfService(defaultUser.id, "2", samRequestContext).unsafeRunSync() shouldBe true
       }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+          updatedAt = Instant.parse("2010-10-10T10:10:10Z")
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Act
+        dao.acceptTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
+      }
     }
 
     "rejectTermsOfService" - {
@@ -1386,6 +1473,22 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       "cannot reject the terms of service for a user who has not accepted terms of service previously" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
+      }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+          updatedAt = Instant.parse("2010-10-10T10:10:10Z"),
+          acceptedTosVersion = Option(tosConfig.version)
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Act
+        dao.rejectTermsOfService(user.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
       }
     }
   }

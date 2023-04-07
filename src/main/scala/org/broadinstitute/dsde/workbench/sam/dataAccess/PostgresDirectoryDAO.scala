@@ -396,11 +396,17 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         .map(UserTable.unmarshalUserRecord)
     }
 
+  // Note that this method is a little different from setGoogleSubjectId in that this method will still perform the
+  // update even if the azureB2CId is the same value.  This begs questions about the exception message and whether or
+  // not the `updatedAt` datetime should be set.  For now, we're going on the assumption that yes, the database is
+  // being updated (even if no values are changing) so we're setting the `updatedAt` datetime
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("setUserAzureB2CId", samRequestContext) { implicit session =>
       val u = UserTable.column
-      val results =
-        samsql"update ${UserTable.table} set ${u.azureB2cId} = $b2cId where ${u.id} = $userId and (${u.azureB2cId} is null or ${u.azureB2cId} = $b2cId)"
+      val results =samsql"""update ${UserTable.table}
+                 set (${u.azureB2cId}, ${u.updatedAt}) =
+                 ($b2cId, ${Instant.now()})
+                 where ${u.id} = $userId and (${u.azureB2cId} is null or ${u.azureB2cId} = $b2cId)"""
           .update()
           .apply()
 
@@ -553,7 +559,10 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       case userId: WorkbenchUserId =>
         serializableWriteTransaction("enableIdentity", samRequestContext) { implicit session =>
           val u = UserTable.column
-          samsql"update ${UserTable.table} set ${u.enabled} = true where ${u.id} = ${userId}".update().apply()
+          samsql"""update ${UserTable.table}
+                   set (${u.enabled}, ${u.updatedAt}) =
+                   (true, ${Instant.now()})
+                   where ${u.id} = ${userId}""".update().apply()
         }
       case _ => IO.unit // other types of WorkbenchSubjects cannot be enabled
     }
@@ -563,7 +572,10 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       subject match {
         case userId: WorkbenchUserId =>
           val u = UserTable.column
-          samsql"update ${UserTable.table} set ${u.enabled} = false where ${u.id} = ${userId}".update().apply()
+          samsql"""update ${UserTable.table}
+                   set (${u.enabled}, ${u.updatedAt}) =
+                   (false, ${Instant.now()})
+                   where ${u.id} = ${userId}""".update().apply()
         case _ => // other types of WorkbenchSubjects cannot be disabled
       }
     }
@@ -571,18 +583,22 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
     serializableWriteTransaction("acceptTermsOfService", samRequestContext) { implicit session =>
       val u = UserTable.column
-      samsql"""update ${UserTable.table} set ${u.acceptedTosVersion} = ${tosVersion}
-              where ${u.id} = ${userId}
-              and (${u.acceptedTosVersion} is null
+      samsql"""update ${UserTable.table}
+               set (${u.acceptedTosVersion}, ${u.updatedAt}) =
+               (${tosVersion}, ${Instant.now()})
+               where ${u.id} = ${userId}
+                and (${u.acceptedTosVersion} is null
                 or ${u.acceptedTosVersion} != ${tosVersion})""".update().apply() > 0
     }
 
   override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     serializableWriteTransaction("rejectTermsOfService", samRequestContext) { implicit session =>
       val u = UserTable.column
-      samsql"""update ${UserTable.table} set ${u.acceptedTosVersion} = null
-              where ${u.id} = ${userId}
-              and ${u.acceptedTosVersion} is not null""".update().apply() > 0
+      samsql"""update ${UserTable.table}
+               set (${u.acceptedTosVersion}, ${u.updatedAt}) =
+               (null, ${Instant.now()})
+               where ${u.id} = ${userId}
+                and ${u.acceptedTosVersion} is not null""".update().apply() > 0
     }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
@@ -748,8 +764,9 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     serializableWriteTransaction("setGoogleSubjectId", samRequestContext) { implicit session =>
       val u = UserTable.column
       val updateGoogleSubjectIdQuery =
-        samsql"""update ${UserTable.table} set ${u.googleSubjectId} = ${googleSubjectId}
-                where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
+        samsql"""update ${UserTable.table}
+                 set (${u.googleSubjectId}, ${u.updatedAt}) = (${googleSubjectId}, ${Instant.now()})
+                 where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
 
       if (updateGoogleSubjectIdQuery.update().apply() != 1) {
         throw new WorkbenchException(
