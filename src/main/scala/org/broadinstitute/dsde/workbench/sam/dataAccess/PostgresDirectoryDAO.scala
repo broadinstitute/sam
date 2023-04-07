@@ -408,12 +408,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                  set (${u.azureB2cId}, ${u.updatedAt}, ${u.registeredAt}) =
                  ($b2cId,
                    ${Instant.now()},
-                   (select coalesce(${u.registeredAt}, now())
-                     from ${UserTable.table}
-                     where ${u.id} = $userId
-                       and ${u.googleSubjectId} is null
-                       and ${u.azureB2cId} is null
-                    )
+                   ${coalesceUserRegisteredAt(userId)}
                  )
                  where ${u.id} = $userId and (${u.azureB2cId} is null or ${u.azureB2cId} = $b2cId)"""
           .update()
@@ -427,6 +422,19 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         ()
       }
     }
+
+  // Finds the specified user and if their googleSubjectId AND azureB2CId are both null, then it will select `now()`,
+  // the postgres function for getting the current datetime.  If either googleSubjectId or azureB2CId is set, it will
+  // return whatever the current value is for `registeredAt`
+  private def coalesceUserRegisteredAt(userId: WorkbenchUserId): SQLSyntax = {
+    val u = UserTable.column
+    samsqls"""(select coalesce(${u.registeredAt}, now())
+              from ${UserTable.table}
+              where ${u.id} = $userId
+                and ${u.googleSubjectId} is null
+                and ${u.azureB2cId} is null
+             )""".stripMargin
+  }
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteUser", samRequestContext) { implicit session =>
@@ -777,12 +785,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                  set (${u.googleSubjectId}, ${u.updatedAt}, ${u.registeredAt}) =
                  (${googleSubjectId},
                    ${Instant.now()},
-                   (select coalesce(${u.registeredAt}, now())
-                     from ${UserTable.table}
-                     where ${u.id} = $userId
-                       and ${u.googleSubjectId} is null
-                       and ${u.azureB2cId} is null
-                   )
+                   ${coalesceUserRegisteredAt(userId)}
                  )
                  where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
 
