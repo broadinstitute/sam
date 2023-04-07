@@ -47,5 +47,6 @@ object UserTable extends SQLSyntaxSupportWithDefaultSamDB[UserRecord] {
       userRecord.acceptedTosVersion,
       userRecord.createdAt,
       userRecord.registeredAt,
-      userRecord.updatedAt)
+      userRecord.updatedAt
+    )
 }

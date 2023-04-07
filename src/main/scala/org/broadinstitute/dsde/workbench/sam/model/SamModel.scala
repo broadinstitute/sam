@@ -302,24 +302,16 @@ object BasicWorkbenchGroup {
 @Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
-object SamUser{
-  def apply(id: WorkbenchUserId,
-            googleSubjectId: Option[GoogleSubjectId],
-            email: WorkbenchEmail,
-            azureB2CId: Option[AzureB2CId],
-            enabled: Boolean,
-            acceptedTosVersion: Option[String]): SamUser = {
-    SamUser(
-      id,
-      googleSubjectId,
-      email,
-      azureB2CId,
-      enabled,
-      acceptedTosVersion,
-      Instant.EPOCH,
-      None,
-      Instant.EPOCH)
-  }
+object SamUser {
+  def apply(
+      id: WorkbenchUserId,
+      googleSubjectId: Option[GoogleSubjectId],
+      email: WorkbenchEmail,
+      azureB2CId: Option[AzureB2CId],
+      enabled: Boolean,
+      acceptedTosVersion: Option[String]
+  ): SamUser =
+    SamUser(id, googleSubjectId, email, azureB2CId, enabled, acceptedTosVersion, Instant.EPOCH, None, Instant.EPOCH)
 }
 
 final case class SamUser(
@@ -337,12 +329,12 @@ final case class SamUser(
 
   override def equals(other: Any): Boolean = other match {
     case user: SamUser =>
-        this.id == user.id &&
-        this.googleSubjectId == user.googleSubjectId &&
-        this.email == user.email &&
-        this.azureB2CId == user.azureB2CId &&
-        this.enabled == user.enabled &&
-        this.acceptedTosVersion == user.acceptedTosVersion
+      this.id == user.id &&
+      this.googleSubjectId == user.googleSubjectId &&
+      this.email == user.email &&
+      this.azureB2CId == user.azureB2CId &&
+      this.enabled == user.enabled &&
+      this.acceptedTosVersion == user.acceptedTosVersion
     case _ => false
   }
 }
