@@ -312,7 +312,9 @@ object Boot extends IOApp with LazyLogging {
           case Some(directoryApiAccounts) =>
             logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
             directoryApiAccounts.map(makePem)
-          case None => NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
+          case None =>
+            logger.info(s"Using ${config.googleServicesConfig.subEmail} to talk to Google Directory API without impersonation")
+            NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
         }
       case Some(accounts) =>
         config.googleServicesConfig.directoryApiAccounts match {
