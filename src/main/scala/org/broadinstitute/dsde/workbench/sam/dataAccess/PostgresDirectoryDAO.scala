@@ -346,7 +346,26 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userColumn = UserTable.column
 
       val insertUserQuery =
-        samsql"insert into ${UserTable.table} (${userColumn.id}, ${userColumn.email}, ${userColumn.googleSubjectId}, ${userColumn.enabled}, ${userColumn.azureB2cId}, ${userColumn.acceptedTosVersion}, ${userColumn.createdAt}, ${userColumn.registeredAt}, ${userColumn.updatedAt}) values (${newUser.id}, ${newUser.email}, ${newUser.googleSubjectId}, ${newUser.enabled}, ${newUser.azureB2CId}, ${newUser.acceptedTosVersion}, ${newUser.createdAt}, ${newUser.registeredAt}, ${newUser.updatedAt})"
+        samsql"""insert into ${UserTable.table}
+                 (${userColumn.id},
+                  ${userColumn.email},
+                  ${userColumn.googleSubjectId},
+                  ${userColumn.enabled},
+                  ${userColumn.azureB2cId},
+                  ${userColumn.acceptedTosVersion},
+                  ${userColumn.createdAt},
+                  ${userColumn.registeredAt},
+                  ${userColumn.updatedAt})
+                 values
+                 (${newUser.id},
+                  ${newUser.email},
+                  ${newUser.googleSubjectId},
+                  ${newUser.enabled},
+                  ${newUser.azureB2CId},
+                  ${newUser.acceptedTosVersion},
+                  ${newUser.createdAt},
+                  ${newUser.registeredAt},
+                  ${newUser.updatedAt})"""
 
       Try {
         insertUserQuery.update().apply()
