@@ -9,16 +9,17 @@ object Dependencies {
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.5.0"
-  val sentryVersion = "6.6.0"
+  val sentryVersion = "6.15.0"
 
-  val workbenchUtilV = "0.6-74c9fc2"
-  val workbenchUtil2V = "0.2-447afa5"
-  val workbenchModelV = "0.15-f9f0d4c"
-  val workbenchGoogleV = "0.21-8ce5b9b"
-  val workbenchGoogle2V = "0.24-447afa5"
-  val workbenchNotificationsV = "0.3-d74ff96"
-  val workbenchOauth2V = "0.2-20f9225"
-  val workbenchOpenTelemetryV = "0.3-0096bac"
+  val workbenchLibV = "abd44a6"
+  val workbenchUtilV = s"0.6-$workbenchLibV"
+  val workbenchUtil2V = s"0.2-$workbenchLibV"
+  val workbenchModelV = s"0.15-$workbenchLibV"
+  val workbenchGoogleV = s"0.22-$workbenchLibV"
+  val workbenchGoogle2V = s"0.25-$workbenchLibV"
+  val workbenchNotificationsV = s"0.3-$workbenchLibV"
+  val workbenchOauth2V = s"0.2-$workbenchLibV"
+  val workbenchOpenTelemetryV = s"0.3-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.4-SNAPSHOT"
   val slf4jVersion = "2.0.6"
@@ -31,18 +32,20 @@ object Dependencies {
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
   val excludeGoogleCloudResourceManager = ExclusionRule(organization = "com.google.apis", name = "google-api-services-cloudresourcemanager")
+  val excludeGoogleServiceUsage = ExclusionRule(organization = "com.google.apis", name = "google-api-services-serviceusage")
   val excludeSLF4J = ExclusionRule(organization = "org.slf4j")
   val excludeJerseyCore = ExclusionRule(organization = "org.glassfish.jersey.core", name = "*")
   val excludeJerseyMedia = ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
 
   val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
+  val sentryLogback: ModuleID = "io.sentry" % "sentry-logback" % sentryVersion
 
   val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
   val jacksonDatabind: ModuleID = "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.2.11"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.5"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
@@ -72,7 +75,7 @@ object Dependencies {
 
   val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
   val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-15" % s"${scalaTestV}.0-RC2" % Test
-  val scalaTestMockito = "org.scalatestplus" %% "mockito-4-5" % s"${scalaTestV}.0" % Test
+  val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "1.17.12" % Test
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -90,8 +93,9 @@ object Dependencies {
   // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
   // workbench-libs dependency so exclude auto-value from there
   val excludGoogleAutoValue = ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
+  val excludeBouncyCastle = ExclusionRule("org.bouncycastle")
   val workbenchGoogle2: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludGoogleAutoValue)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludGoogleAutoValue, excludeBouncyCastle)
   val workbenchNotifications: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =
@@ -142,7 +146,7 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
   val azureManagedApplications: ModuleID =
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
@@ -152,7 +156,6 @@ object Dependencies {
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
-    sentry,
     ioGrpc,
     logbackClassic,
     logstashLogback,
@@ -175,7 +178,7 @@ object Dependencies {
     scalaTest,
     scalaTestScalaCheck,
     scalaCheck,
-    scalaTestMockito,
+    mockitoScalaTest,
     workbenchUtil,
     workbenchModel,
     workbenchGoogle,
@@ -198,6 +201,8 @@ object Dependencies {
     postgres,
     cloudResourceLib,
     nettyAll,
-    azureManagedApplications
+    azureManagedApplications,
+    sentry,
+    sentryLogback
   ) ++ openCensusDependencies
 }

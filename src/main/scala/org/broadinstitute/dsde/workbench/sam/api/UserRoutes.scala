@@ -66,12 +66,8 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
                 get {
                   withUserAllowInactive(samRequestContext) { samUser =>
                     complete {
-                      tosService.getTosStatus(samUser.id, samRequestContext).map { statusOption =>
-                        statusOption
-                          .map { status =>
-                            StatusCodes.OK -> Option(JsBoolean(status))
-                          }
-                          .getOrElse(StatusCodes.NotFound -> None)
+                      tosService.getTosComplianceStatus(samUser).map { tosAcceptanceStatus =>
+                        StatusCodes.OK -> Option(JsBoolean(tosAcceptanceStatus.permitsSystemUsage))
                       }
                     }
                   }
@@ -83,8 +79,8 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
                   withUserAllowInactive(samRequestContext) { samUser =>
                     withTermsOfServiceAcceptance {
                       complete {
-                        userService.acceptTermsOfService(samUser.id, samRequestContext).map { statusOption =>
-                          statusOption
+                        userService.acceptTermsOfService(samUser.id, samRequestContext).map { userStatusOption =>
+                          userStatusOption
                             .map { status =>
                               StatusCodes.OK -> Option(status)
                             }
@@ -97,8 +93,8 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
                   delete {
                     withUserAllowInactive(samRequestContext) { samUser =>
                       complete {
-                        userService.rejectTermsOfService(samUser.id, samRequestContext).map { statusOption =>
-                          statusOption
+                        userService.rejectTermsOfService(samUser.id, samRequestContext).map { userStatusOption =>
+                          userStatusOption
                             .map { status =>
                               StatusCodes.OK -> Option(status)
                             }
@@ -143,7 +139,12 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
                 } ~
                 path("termsOfServiceDetails") {
                   get {
-                    complete(tosService.getTosDetails(user.id, samRequestContext))
+                    complete(tosService.getTosDetails(user))
+                  }
+                } ~
+                path("termsOfServiceComplianceStatus") {
+                  get {
+                    complete(tosService.getTosComplianceStatus(user))
                   }
                 }
             }

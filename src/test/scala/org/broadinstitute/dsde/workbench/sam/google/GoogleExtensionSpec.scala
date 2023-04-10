@@ -25,13 +25,12 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
 import org.mockito.ArgumentMatcher
-import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
-import org.scalatestplus.mockito.MockitoSugar
 
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{Date, GregorianCalendar, UUID}
@@ -135,15 +134,14 @@ class GoogleExtensionSpec(_system: ActorSystem)
         case p: AccessPolicy =>
           when(mockAccessPolicyDAO.loadPolicy(p.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
       }
-      when(mockDirectoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext))
-        .thenReturn(IO.pure(Option(BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, ge.allUsersGroupEmail))))
       when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.unit)
       when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext]))
         .thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
 
-      val subGroups = Seq(inSamSubGroup, inGoogleSubGroup, inBothSubGroup)
-      subGroups.foreach(g => when(mockDirectoryDAO.loadSubjectEmail(g.id, samRequestContext)).thenReturn(IO.pure(Option(g.email))))
-      when(mockDirectoryDAO.loadSubjectEmail(CloudExtensions.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(ge.allUsersGroupEmail)))
+      when(mockDirectoryDAO.loadSubjectEmail(inSamSubGroup.id, samRequestContext)).thenReturn(IO.pure(Option(inSamSubGroup.email)))
+      when(mockDirectoryDAO.loadSubjectEmail(inBothSubGroup.id, samRequestContext)).thenReturn(IO.pure(Option(inBothSubGroup.email)))
+      // mockito calls this next stubbing unnecessary but it isn't... shrug
+      lenient().when(mockDirectoryDAO.loadSubjectEmail(CloudExtensions.allUsersGroupName, samRequestContext)).thenReturn(IO.pure(Option(ge.allUsersGroupEmail)))
 
       val added = Seq(inSamSubGroup.email, WorkbenchEmail(inSamUserProxyEmail)) ++ (target match {
         case _: BasicWorkbenchGroup => Seq.empty
@@ -165,7 +163,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
           )
         )
       )
-      when(mockGoogleDirectoryDAO.listGroupMembers(ge.allUsersGroupEmail)).thenReturn(Future.successful(Option(Seq.empty)))
       when(mockGoogleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
       when(mockGoogleDirectoryDAO.removeMemberFromGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
@@ -386,6 +383,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val (
       dirDAO: DirectoryDAO,
+      tosService: TosService,
       mockGoogleIamDAO: MockGoogleIamDAO,
       mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
       googleExtensions: GoogleExtensions,
@@ -395,8 +393,8 @@ class GoogleExtensionSpec(_system: ActorSystem)
     ) = initPetTest
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    val newUser = newUserWithAcceptedTos(service, tosService, defaultUser, samRequestContext)
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), TestSupport.enabledMapTosAccepted)
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
@@ -419,7 +417,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     googleExtensions.deleteUserPetServiceAccount(newUser.userInfo.userSubjectId, googleProject, samRequestContext).unsafeRunSync() shouldBe true
 
     // the user should still exist in DB
-    dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
+    dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true, acceptedTosVersion = Some("0")))
 
     // the pet should not exist in DB
     dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe None
@@ -429,7 +427,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
   }
 
-  private def initPetTest: (DirectoryDAO, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchEmail, SamUser) = {
+  private def initPetTest: (DirectoryDAO, TosService, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchEmail, SamUser) = {
     val dirDAO = newDirectoryDAO()
 
     clearDatabase()
@@ -457,12 +455,18 @@ class GoogleExtensionSpec(_system: ActorSystem)
       configResourceTypes,
       superAdminsGroup
     )
-    val tosService = new TosService(dirDAO, "example.com", TestSupport.tosConfig)
-    val service = new UserService(dirDAO, googleExtensions, Seq.empty, new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+    val service = new UserService(dirDAO, googleExtensions, Seq.empty, tosService)
 
     val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
     val defaultUserProxyEmail = WorkbenchEmail(s"PROXY_${defaultUser.id}@${googleServicesConfig.appsDomain}")
-    (dirDAO, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserProxyEmail, defaultUser)
+    (dirDAO, tosService, mockGoogleIamDAO, mockGoogleDirectoryDAO, googleExtensions, service, defaultUserProxyEmail, defaultUser)
+  }
+
+  def newUserWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
+    TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(userService.getUserStatus(samUser.id, samRequestContext = samRequestContext)).orNull
   }
 
   protected def newDirectoryDAO(): DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
@@ -473,6 +477,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val (
       dirDAO: DirectoryDAO,
+      tosService: TosService,
       mockGoogleIamDAO: MockGoogleIamDAO,
       mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
       googleExtensions: GoogleExtensions,
@@ -486,8 +491,8 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val serviceAccount = mockGoogleIamDAO.createServiceAccount(googleProject, saName, saDisplayName).futureValue
     // create a user
 
-    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    val newUser = newUserWithAcceptedTos(service, tosService, defaultUser, samRequestContext)
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), TestSupport.enabledMapTosAccepted)
 
     // create a pet service account
     val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
@@ -500,6 +505,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val (
       dirDAO: DirectoryDAO,
+      tosService: TosService,
       mockGoogleIamDAO: MockGoogleIamDAO,
       mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
       googleExtensions: GoogleExtensions,
@@ -509,8 +515,8 @@ class GoogleExtensionSpec(_system: ActorSystem)
     ) = initPetTest
 
     // create a user
-    val newUser = service.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    val newUser = newUserWithAcceptedTos(service, tosService, defaultUser, samRequestContext)
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), TestSupport.enabledMapTosAccepted)
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
@@ -817,7 +823,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockGoogleKeyCachePubSubDAO,
       googleServicesConfig,
       petServiceAccountConfig
-    )
+    ) {
+      // don't do any of the real boot stuff, it is all googley
+      override def onBoot()(implicit system: ActorSystem): IO[Unit] = IO.unit
+    }
 
     val ge = new GoogleExtensions(
       TestSupport.distributedLock,
@@ -840,10 +849,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
     )
 
     val app = SamApplication(
-      new UserService(mockDirectoryDAO, ge, Seq.empty, new TosService(mockDirectoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)),
+      new UserService(mockDirectoryDAO, ge, Seq.empty, new TosService(mockDirectoryDAO, TestSupport.tosConfig)),
       new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com", Set.empty),
       null,
-      new TosService(mockDirectoryDAO, "example.com", TestSupport.tosConfig)
+      new TosService(mockDirectoryDAO, TestSupport.tosConfig)
     )
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
@@ -996,8 +1005,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val testPolicy = BasicWorkbenchGroup(WorkbenchGroupName("blahblahblah"), Set.empty, WorkbenchEmail(s"blahblahblah@test.firecloud.org"))
 
-    when(mockDirectoryDAO.deleteGroup(testPolicy.id, samRequestContext)).thenReturn(IO.unit)
-
     when(mockGoogleDirectoryDAO.deleteGroup(testPolicy.email)).thenReturn(Future.successful(()))
 
     googleExtensions.onGroupDelete(testPolicy.email).unsafeRunSync()
@@ -1149,7 +1156,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
       .thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
-    when(mockDirectoryDAO.listAncestorGroups(ownerRPN, samRequestContext)).thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext))
@@ -1160,7 +1166,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[String]])
   }
 
-  private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService) = {
+  private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService, TosService) = {
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = newDirectoryDAO()
 
@@ -1202,23 +1208,24 @@ class GoogleExtensionSpec(_system: ActorSystem)
       configResourceTypes,
       superAdminsGroup
     )
-    val service = new UserService(dirDAO, googleExtensions, Seq.empty, new TosService(dirDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig))
+    val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+    val service = new UserService(dirDAO, googleExtensions, Seq.empty, tosService)
 
-    (googleExtensions, service)
+    (googleExtensions, service, tosService)
   }
 
   "GoogleKeyCache" should "create a service account key and return the same key when called again" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service) = setupGoogleKeyCacheTests
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
-    val newUser = service.createUser(createDefaultUser, samRequestContext).unsafeRunSync()
+    val newUser = newUserWithAcceptedTos(service, tosService, createDefaultUser, samRequestContext)
     newUser shouldBe UserStatus(
       UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
-      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      TestSupport.enabledMapTosAccepted
     )
 
     // create a pet service account
@@ -1236,14 +1243,14 @@ class GoogleExtensionSpec(_system: ActorSystem)
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service) = setupGoogleKeyCacheTests
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
-    val newUser = service.createUser(createDefaultUser, samRequestContext).unsafeRunSync()
+    val newUser = newUserWithAcceptedTos(service, tosService, createDefaultUser, samRequestContext)
     newUser shouldBe UserStatus(
       UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
-      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      TestSupport.enabledMapTosAccepted
     )
 
     // create a pet service account
@@ -1273,14 +1280,14 @@ class GoogleExtensionSpec(_system: ActorSystem)
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service) = setupGoogleKeyCacheTests
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
-    val newUser = service.createUser(createDefaultUser, samRequestContext).unsafeRunSync()
+    val newUser = newUserWithAcceptedTos(service, tosService, createDefaultUser, samRequestContext)
     newUser shouldBe UserStatus(
       UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
-      Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      TestSupport.enabledMapTosAccepted
     )
 
     // create a pet service account

@@ -136,7 +136,7 @@ object MockTestSupport extends MockTestSupport {
     )
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
+    val tosService = new TosService(directoryDAO, tosConfig)
     val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     MockSamDependencies(
       mockResourceService,
@@ -185,7 +185,7 @@ object MockTestSupport extends MockTestSupport {
           googleExtensions.googleDirectoryDAO,
           googleExtensions,
           googleExtensions.resourceTypes
-        )(executionContext)
+        )
       } else null
     val googleKeyCache = samDependencies.cloudExtensions match {
       case extensions: GoogleExtensions => extensions.googleKeyCache

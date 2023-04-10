@@ -3,7 +3,7 @@
 
     <if condition='!isDefined("SAM_LOG_APPENDER")'>
         <then>
-            <variable name="SAM_LOG_APPENDER" value="Console-Stackdriver" />
+            <variable name="SAM_LOG_APPENDER" value="Console-Standard" />
         </then>
     </if>
 
@@ -13,11 +13,6 @@
                 <level>severity</level>
             </fieldNames>
         </encoder>
-    </appender>
-
-    <appender name="Console-Stackdriver" class="com.google.cloud.logging.logback.LoggingAppender">
-        <enhancer>com.google.cloud.logging.logback.TraceLoggingEventEnhancer</enhancer>
-        <redirectToStdout>true</redirectToStdout>
     </appender>
 
     <appender name="Console-Standard" class="ch.qos.logback.core.ConsoleAppender">

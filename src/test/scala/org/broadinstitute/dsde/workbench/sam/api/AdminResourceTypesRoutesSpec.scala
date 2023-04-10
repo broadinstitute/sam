@@ -6,7 +6,6 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.implicits.catsSyntaxOptionId
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.TestSupport.googleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
@@ -15,12 +14,12 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
-import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, when}
+import org.mockito.ArgumentMatchers.{eq => mockitoEq}
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.AppendedClues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.mockito.MockitoSugar
 import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.Future
@@ -63,18 +62,19 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     val policyEvaluatorService = mock[PolicyEvaluatorService](RETURNS_SMART_NULLS)
     val mockResourceService = mock[ResourceService](RETURNS_SMART_NULLS)
     resourceTypes.map { case (resourceTypeName, resourceType) =>
-      when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
+      lenient().when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
 
     val cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin)
 
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, TestSupport.tosConfig)
+    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, cloudExtensions, TestSupport.dbRef)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
     runAndWait(mockUserService.createUser(user, samRequestContext))
+    runAndWait(tosService.acceptTosStatus(user.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,

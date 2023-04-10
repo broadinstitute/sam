@@ -14,10 +14,9 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicyMembership, SamResourceTypes, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
-import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.mockito.MockitoSugar
+import org.mockito.scalatest.MockitoSugar
 
 import scala.concurrent.duration._
 
@@ -84,7 +83,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
   it should "return 403 if the MRG exists but the user does not have access to the billing profile" in {
     // Don't create spend-profile resource
-    val samRoutes = genSamRoutes(createSpendProfile = false)
+    val samRoutes = genSamRoutes(createSpendProfile = false, crlService = Option(MockCrlService(includeBillingProfileTag = true)))
 
     // User has no access
     val request = GetOrCreatePetManagedIdentityRequest(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
@@ -186,7 +185,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   }
 
   it should "return 403 if the user does not have access to the billing profile" in {
-    val samRoutes = genSamRoutes()
+    val samRoutes = genSamRoutes(crlService = Option(MockCrlService(includeBillingProfileTag = true)))
     // Don't add second user to the spend-profile resource
     val newUser = createSecondUser(samRoutes, addToSpendProfile = false)
 

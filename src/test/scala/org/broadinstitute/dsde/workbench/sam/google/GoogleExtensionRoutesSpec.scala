@@ -18,12 +18,12 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
+import org.mockito.ArgumentMatchers.{eq => mockitoEq}
 import org.mockito.Mockito._
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.mockito.MockitoSugar
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -381,7 +381,16 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       status shouldEqual StatusCodes.Created
       val res = responseAs[UserStatus]
       res.userInfo.userEmail shouldBe user.email
-      res.enabled shouldBe Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+      res.enabled shouldBe TestSupport.enabledMapNoTosAccepted
+    }
+
+    // accept the tos
+    Post("/register/user/v1/termsofservice", TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")) ~> createRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val res = responseAs[UserStatus]
+      res.userInfo.userEmail shouldBe user.email
+      val enabledBaseArray = enabledMapTosAccepted
+      res.enabled shouldBe enabledBaseArray
     }
 
     (user, samDependencies, createRoutes)
@@ -390,20 +399,26 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
   def createMockGoogleIamDaoForSAKeyTests: (GoogleIamDAO, String) = {
     val googleIamDAO = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
     val expectedJson = """{"json":"yes I am"}"""
-    when(googleIamDAO.findServiceAccount(any[GoogleProject], any[ServiceAccountName])).thenReturn(Future.successful(None))
-    when(googleIamDAO.createServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName])).thenReturn(
-      Future.successful(
-        ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))
+    lenient().when(googleIamDAO.findServiceAccount(any[GoogleProject], any[ServiceAccountName])).thenReturn(Future.successful(None))
+    lenient()
+      .when(googleIamDAO.createServiceAccount(any[GoogleProject], any[ServiceAccountName], any[ServiceAccountDisplayName]))
+      .thenReturn(
+        Future.successful(
+          ServiceAccount(ServiceAccountSubjectId("12312341234"), WorkbenchEmail("pet@myproject.iam.gserviceaccount.com"), ServiceAccountDisplayName(""))
+        )
       )
-    )
-    when(googleIamDAO.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])).thenReturn(
-      Future.successful(
-        ServiceAccountKey(ServiceAccountKeyId("foo"), ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(expectedJson).encode), None, None)
+    lenient()
+      .when(googleIamDAO.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail]))
+      .thenReturn(
+        Future.successful(
+          ServiceAccountKey(ServiceAccountKeyId("foo"), ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(expectedJson).encode), None, None)
+        )
       )
-    )
-    when(googleIamDAO.removeServiceAccountKey(any[GoogleProject], any[WorkbenchEmail], any[ServiceAccountKeyId])).thenReturn(Future.successful(()))
-    when(googleIamDAO.listUserManagedServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(Seq.empty))
-    when(googleIamDAO.addServiceAccountUserRoleForUser(any[GoogleProject], any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
+    lenient().when(googleIamDAO.removeServiceAccountKey(any[GoogleProject], any[WorkbenchEmail], any[ServiceAccountKeyId])).thenReturn(Future.successful(()))
+    lenient().when(googleIamDAO.listUserManagedServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(Seq.empty))
+    lenient()
+      .when(googleIamDAO.addServiceAccountUserRoleForUser(any[GoogleProject], any[WorkbenchEmail], any[WorkbenchEmail]))
+      .thenReturn(Future.successful(()))
     (googleIamDAO, expectedJson)
   }
 
@@ -424,7 +439,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
           samDeps.userService,
           samDeps.resourceService,
           samDeps.statusService,
-          new TosService(samDeps.directoryDAO, "example.com", TestSupport.tosConfig)
+          new TosService(samDeps.directoryDAO, TestSupport.tosConfig)
         )
       )
       .unsafeRunSync()

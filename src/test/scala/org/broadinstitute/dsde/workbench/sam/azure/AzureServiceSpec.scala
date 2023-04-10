@@ -28,7 +28,7 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     // create dependencies
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
     val crlService = new CrlService(azureServicesConfig.get)
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig)
+    val tosService = new TosService(directoryDAO, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)

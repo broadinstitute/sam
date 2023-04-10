@@ -8,6 +8,7 @@ import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.storage.{BucketInfo, StorageException}
 import com.google.cloud.storage.BucketInfo.LifecycleRule
+import com.google.pubsub.v1.ProjectTopicName
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
@@ -38,20 +39,6 @@ class GoogleKeyCache(
   val utf8Charset = Charset.forName("UTF-8")
 
   override def onBoot()(implicit system: ActorSystem): IO[Unit] = {
-    system.actorOf(
-      GoogleKeyCacheMonitorSupervisor.props(
-        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.pollInterval,
-        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.pollJitter,
-        googleKeyCachePubSubDao,
-        googleIamDAO,
-        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.topic,
-        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.subscription,
-        googleServicesConfig.projectServiceAccount,
-        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.workerCount,
-        this
-      )
-    )
-
     googleStorageAlg
       .insertBucket(googleServicesConfig.serviceAccountClientProject, googleServicesConfig.googleKeyCacheConfig.bucketName)
       .recoverWith {
@@ -65,7 +52,45 @@ class GoogleKeyCache(
       val lifecycleRule = new LifecycleRule(LifecycleRule.LifecycleAction.newDeleteAction(), lifecycleCondition)
       googleStorageAlg.setBucketLifecycle(googleServicesConfig.googleKeyCacheConfig.bucketName, List(lifecycleRule))
     }
-  }.compile.drain
+  }.compile.drain.flatTap(_ => startPubSubMonitor)
+
+  private def startPubSubMonitor(implicit system: ActorSystem) = {
+    val projectTopicName = ProjectTopicName
+      .newBuilder()
+      .setProject(googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.project)
+      .setTopic(googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.topic)
+      .build()
+    for {
+      ioRuntime <- GooglePubSubMonitor.createReceiverIORuntime(googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig)
+      _ <- new GooglePubSubMonitor(
+        googleKeyCachePubSubDao,
+        googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig,
+        googleServicesConfig.serviceAccountCredentialJson,
+        new GoogleKeyCacheMessageReceiver(googleIamDAO)(ioRuntime)
+      ) {
+        override protected def init: IO[Unit] = for {
+          _ <- super.init
+          _ <- IO.fromFuture(
+            IO(
+              googleKeyCachePubSubDao.setTopicIamPermissions(
+                projectTopicName.getTopic,
+                Map(googleServicesConfig.projectServiceAccount -> "roles/pubsub.publisher")
+              )
+            )
+          )
+          _ <- IO.fromFuture(
+            IO(
+              googleStorageDAO.setObjectChangePubSubTrigger(
+                googleServicesConfig.googleKeyCacheConfig.bucketName,
+                projectTopicName.toString,
+                List("OBJECT_DELETE")
+              )
+            )
+          )
+        } yield ()
+      }.startAndRegisterTermination()
+    } yield ()
+  }
 
   override def getKey(pet: PetServiceAccount): IO[String] = {
     def maybeCreateKey(createKey: (List[GcsObjectName], List[ServiceAccountKey]) => IO[String]): IO[String] =

@@ -14,6 +14,7 @@ object Merging {
     case PathList("mozilla", "public-suffix-list.txt") => MergeStrategy.first
     case "module-info.class" =>
       MergeStrategy.discard
+    case x if x.endsWith("arrow-git.properties") => MergeStrategy.concat
     case x => oldStrategy(x)
   }
 }

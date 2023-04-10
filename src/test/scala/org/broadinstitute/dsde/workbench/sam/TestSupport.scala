@@ -87,8 +87,7 @@ object TestSupport extends TestSupport {
       googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
       policyAccessDAO: Option[AccessPolicyDAO] = None,
       policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-      resourceServiceOpt: Option[ResourceService] = None,
-      tosEnabled: Boolean = false
+      resourceServiceOpt: Option[ResourceService] = None
   )(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
@@ -109,7 +108,10 @@ object TestSupport extends TestSupport {
       googleKeyCachePubSubDAO,
       googleServicesConfig,
       petServiceAccountConfig
-    )
+    ) {
+      // don't do any of the real boot stuff, it is all googley
+      override def onBoot()(implicit system: ActorSystem): IO[Unit] = IO.unit
+    }
     val googleExt = cloudExtensions.getOrElse(
       new GoogleExtensions(
         distributedLock,
@@ -145,7 +147,7 @@ object TestSupport extends TestSupport {
     )
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, googleServicesConfig.appsDomain, tosConfig.copy(enabled = tosEnabled))
+    val tosService = new TosService(directoryDAO, tosConfig)
     val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     SamDependencies(
       mockResourceService,
@@ -194,7 +196,7 @@ object TestSupport extends TestSupport {
           googleExtensions.googleDirectoryDAO,
           googleExtensions,
           googleExtensions.resourceTypes
-        )(executionContext)
+        )
       } else null
     val googleKeyCache = samDependencies.cloudExtensions match {
       case extensions: GoogleExtensions => extensions.googleKeyCache
@@ -238,7 +240,8 @@ object TestSupport extends TestSupport {
           PetManagedIdentityTable,
           UserTable,
           AccessInstructionsTable,
-          GroupTable
+          GroupTable,
+          LastQuotaErrorTable
         )
 
         tables
@@ -252,6 +255,21 @@ object TestSupport extends TestSupport {
     } else {
       0
     }
+
+  def newUserWithAcceptedTos(services: StandardSamUserDirectives, samUser: SamUser, samRequestContext: SamRequestContext): SamUser = {
+    TestSupport.runAndWait(services.directoryDAO.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(services.tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(services.directoryDAO.loadUser(samUser.id, samRequestContext)).orNull
+  }
+
+  def newUserStatusWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
+    TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly = false, samRequestContext)).orNull
+  }
+
+  val enabledMapNoTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)
+  val enabledMapTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
 }
 
 final case class SamDependencies(

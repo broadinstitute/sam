@@ -216,9 +216,16 @@ trait PostgresGroupDAO {
                 and ${f.lastGroupMembershipElement} = (${workbenchGroupIdentityToGroupPK(groupId)})""".update().apply()
 
     // remove rows where groupId is directly followed by memberGroup in membership path, these are indirect memberships
+    // The condition that uses @> is for performance, it allows the query to hit an index. It finds all rows where
+    // f.groupMembershipPath contains both groupId and memberGroup but in no particular order or placement.
+    // The condition using array_position is sufficient however @> uses an index and array_position does not.
+    // Think of it like an efficient pre filter so that the real condition has less to do.
     samsql"""delete from ${GroupMemberFlatTable as f}
                 where array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(groupId)})) + 1 =
-                array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(memberGroup)}))""".update().apply()
+                array_position(${f.groupMembershipPath}, (${workbenchGroupIdentityToGroupPK(memberGroup)}))
+                and ${f.groupMembershipPath} @> array[(${workbenchGroupIdentityToGroupPK(groupId)}), (${workbenchGroupIdentityToGroupPK(memberGroup)})]"""
+      .update()
+      .apply()
   }
 
   private def removeMemberUserFromHierarchy(groupId: WorkbenchGroupIdentity, memberUser: WorkbenchUserId)(implicit session: DBSession) = {
