@@ -119,7 +119,7 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
 
   def withHealthyDatabase: MockDirectoryDaoBuilder = {
     lenient()
-      .doReturn(true)
+      .doReturn(IO(true))
       .when(mockedDirectoryDAO)
       .checkStatus(any[SamRequestContext])
     this
@@ -127,7 +127,7 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
 
   def withUnhealthyDatabase: MockDirectoryDaoBuilder = {
     lenient()
-      .doReturn(false)
+      .doReturn(IO(false))
       .when(mockedDirectoryDAO)
       .checkStatus(any[SamRequestContext])
     this
