@@ -15,6 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
 import java.security.SecureRandom
+import java.time.Instant
 import javax.naming.NameNotFoundException
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
@@ -30,7 +31,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       for {
         _ <- validateEmailAddress(user.email, blockedEmailDomains)
-        createdUser <- registerUser(user, samRequestContext)
+        createdUser <- registerUser(user.copy(registeredAt = Option(Instant.now())), samRequestContext)
         _ <- enableUserInternal(createdUser, samRequestContext)
         _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
         userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)

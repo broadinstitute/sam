@@ -347,8 +347,8 @@ class OldUserServiceSpec
 
     // Assert
     val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    inside(maybeUser.value) { user =>
-      user.registeredAt.value should beAround(Instant.now())
+    inside(maybeUser.value) { persistedUser =>
+      persistedUser.registeredAt.value should beAround(Instant.now())
     }
   }
 
