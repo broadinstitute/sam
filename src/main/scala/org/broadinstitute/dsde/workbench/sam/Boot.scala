@@ -6,7 +6,6 @@ import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import io.sentry.{Sentry, SentryOptions}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{
@@ -32,6 +31,7 @@ import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.Sentry.initSentry
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -44,14 +44,6 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
-  val sentryDsn: Option[String] = sys.env.get("SENTRY_DSN")
-  private def initSentry(): Unit = sentryDsn.fold(logger.warn("No SENTRY_DSN found, not initializing Sentry.")) { dsn =>
-    val options = new SentryOptions()
-    options.setDsn(dsn)
-    options.setEnvironment(sys.env.getOrElse("SENTRY_ENVIRONMENT", "unknown"))
-    Sentry.init(options)
-    logger.info("Sentry initialized")
-  }
   def run(args: List[String]): IO[ExitCode] =
     (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
       logger.error("sam failed to start, trying again in 5s", t)
@@ -320,7 +312,9 @@ object Boot extends IOApp with LazyLogging {
           case Some(directoryApiAccounts) =>
             logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
             directoryApiAccounts.map(makePem)
-          case None => NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
+          case None =>
+            logger.info(s"Using ${config.googleServicesConfig.subEmail} to talk to Google Directory API without impersonation")
+            NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
         }
       case Some(accounts) =>
         config.googleServicesConfig.directoryApiAccounts match {
