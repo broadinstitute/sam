@@ -39,10 +39,12 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     val tosService = mock[TosService]
     val azureService = mock[AzureService]
     val userService = mock[UserService]
+    // TODO: This mock currently worked for BPM contract.
+    // As BPM evolves or other consumers come into play
+    // we will need proper state handling.
     when {
       userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
     } thenReturn {
-      // Add support for BPM consumer (Revision 5)
       val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
       IO.pure(userStatusInfo)
     }
