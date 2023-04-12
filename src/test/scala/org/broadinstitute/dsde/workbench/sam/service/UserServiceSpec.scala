@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -17,11 +18,13 @@ import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalacheck.{Arbitrary, Gen}
+import org.scalatest.Inside.inside
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues, Suite}
 
+import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -255,7 +258,8 @@ class OldUserServiceSpec
     with BeforeAndAfter
     with BeforeAndAfterAll
     with ScalaFutures
-    with OptionValues {
+    with OptionValues
+    with TimeMatchers {
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -316,6 +320,56 @@ class OldUserServiceSpec
     val current2 = 25342533867225L
     val res2 = UserService.genWorkbenchUserId(current2).value
     res2.substring(0, current2.toString.length) shouldBe "25342533867225"
+  }
+
+  "createUser" should "record the date that the user record was created" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val user = genWorkbenchUserGoogle.sample.get
+
+    // Act
+    service.createUser(user, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    inside(maybeUser.value) { user =>
+      user.createdAt should beAround(Instant.now())
+    }
+  }
+
+  it should "record the date that the user registered if they are registering at the same time" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val user = genWorkbenchUserGoogle.sample.get
+
+    // Act
+    service.createUser(user, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    inside(maybeUser.value) { persistedUser =>
+      persistedUser.registeredAt.value should beAround(Instant.now())
+    }
+  }
+
+  it should "NOT record the date that the user registered if they are being invited" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val inviteeEmail = genNonPetEmail.sample.get
+
+    // Act
+    service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeSubjectId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync()
+    maybeSubjectId.map {
+      case userId: WorkbenchUserId =>
+        val maybeInvitee = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
+        inside(maybeInvitee.value) { invitee =>
+          invitee.registeredAt shouldBe empty
+        }
+      case _ => fail("Something went wrong and test was unable to find user it just created")
+    }
   }
 
   /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
