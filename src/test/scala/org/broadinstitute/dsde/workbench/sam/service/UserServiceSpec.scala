@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -17,12 +18,14 @@ import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalacheck.{Arbitrary, Gen}
+import org.scalatest.Inside.inside
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest._
 
 import scala.concurrent.ExecutionContext
+import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
@@ -237,7 +240,8 @@ class OldUserServiceSpec
     with BeforeAndAfter
     with BeforeAndAfterAll
     with ScalaFutures
-    with OptionValues {
+    with OptionValues
+    with TimeMatchers {
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -298,6 +302,202 @@ class OldUserServiceSpec
     val current2 = 25342533867225L
     val res2 = UserService.genWorkbenchUserId(current2).value
     res2.substring(0, current2.toString.length) shouldBe "25342533867225"
+  }
+
+  "createUser" should "record the date that the user record was created" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val user = genWorkbenchUserGoogle.sample.get
+
+    // Act
+    service.createUser(user, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    inside(maybeUser.value) { user =>
+      user.createdAt should beAround(Instant.now())
+    }
+  }
+
+  it should "record the date that the user registered if they are registering at the same time" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val user = genWorkbenchUserGoogle.sample.get
+
+    // Act
+    service.createUser(user, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    inside(maybeUser.value) { persistedUser =>
+      persistedUser.registeredAt.value should beAround(Instant.now())
+    }
+  }
+
+  it should "NOT record the date that the user registered if they are being invited" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val inviteeEmail = genNonPetEmail.sample.get
+
+    // Act
+    service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeSubjectId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync()
+    maybeSubjectId.map {
+      case userId: WorkbenchUserId =>
+        val maybeInvitee = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
+        inside(maybeInvitee.value) { invitee =>
+          invitee.registeredAt shouldBe empty
+        }
+      case _ => fail("Something went wrong and test was unable to find user it just created")
+    }
+  }
+
+  /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
+    */
+  "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserGoogle.sample.get
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    res shouldBe Some(user)
+  }
+
+  it should "create new user when there's no existing subject for a given azureB2CId and email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserAzure.sample.get
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
+    res shouldBe Some(user)
+  }
+
+  /** GoogleSubjectId Email no yes ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId
+    * field for this user.
+    */
+  it should "update googleSubjectId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserGoogle.sample.get
+    service.inviteUser(user.email, samRequestContext).unsafeRunSync()
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    val userId = dirDAO.loadSubjectFromEmail(user.email, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+    val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
+    res shouldBe Some(user.copy(id = userId))
+  }
+
+  it should "update azureB2CId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserAzure.sample.get
+    service.inviteUser(user.email, samRequestContext).unsafeRunSync()
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    val userId = dirDAO.loadSubjectFromEmail(user.email, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+    val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
+    res shouldBe Some(user.copy(id = userId))
+  }
+
+  /** GoogleSubjectId Email no yes ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId
+    * field for this user.
+    */
+  it should "return BadRequest when there's no existing subject for a given googleSubjectId and but there is one for email, and the returned subject is not a regular user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserGoogle.sample.get.copy(email = genNonPetEmail.sample.get)
+    val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
+    dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
+    val res = intercept[WorkbenchExceptionWithErrorReport] {
+      service.registerUser(user, samRequestContext).unsafeRunSync()
+    }
+    res.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
+  }
+
+  it should "return BadRequest when there's no existing subject for a given azureB2CId and but there is one for email, and the returned subject is not a regular user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserAzure.sample.get.copy(email = genNonPetEmail.sample.get)
+    val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
+    dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
+    val res = intercept[WorkbenchExceptionWithErrorReport] {
+      service.registerUser(user, samRequestContext).unsafeRunSync()
+    }
+    res.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
+  }
+
+  /** GoogleSubjectId Email different yes ---> The user's email has already been registered, but the googleSubjectId for the new user is different from what has
+    * already been registered. We should throw an exception to prevent the googleSubjectId from being overwritten
+    */
+  it should "throw an exception when trying to re-register a user with a changed googleSubjectId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserGoogle.sample.get
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    assertThrows[WorkbenchException] {
+      service.registerUser(user.copy(googleSubjectId = Option(genGoogleSubjectId.sample.get)), samRequestContext).unsafeRunSync()
+    }
+  }
+
+  it should "throw an exception when trying to re-register a user with a changed azureB2CId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserAzure.sample.get
+    service.registerUser(user, samRequestContext).unsafeRunSync()
+    assertThrows[WorkbenchException] {
+      service.registerUser(user.copy(azureB2CId = Option(genAzureB2CId.sample.get)), samRequestContext).unsafeRunSync()
+    }
+  }
+
+  /** GoogleSubjectId Email yes skip ---> User exists. Do nothing.
+    */
+  it should "return conflict when there's an existing subject for a given googleSubjectId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserGoogle.sample.get
+    dirDAO.createUser(user, samRequestContext).unsafeRunSync()
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      service.registerUser(user, samRequestContext).unsafeRunSync()
+    }
+    exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
+  }
+
+  it should "return conflict when there's an existing subject for a given azureB2CId" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val user = genWorkbenchUserAzure.sample.get
+    dirDAO.createUser(user, samRequestContext).unsafeRunSync()
+    val exception = intercept[WorkbenchExceptionWithErrorReport] {
+      service.registerUser(user, samRequestContext).unsafeRunSync()
+    }
+    exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
+  }
+
+  // Test arose out of: https://broadworkbench.atlassian.net/browse/PROD-677
+  "Register User" should "ignore the newly-created WorkbenchUserId on the request and use the previously created WorkbenchUserId for a previously-invited user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Invite a new user
+    val emailToInvite = genNonPetEmail.sample.get
+    service.inviteUser(emailToInvite, samRequestContext).unsafeRunSync()
+
+    // Lookup the invited user and their ID
+    val invitedUserId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+    val invitedUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
+    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false, None)
+
+    // Give them a fake GoogleSubjectId and a new WorkbenchUserId and use that to register them.
+    // The real code in org/broadinstitute/dsde/workbench/sam/api/UserRoutes.scala calls
+    // org.broadinstitute.dsde.workbench.sam.api.SamUserDirectives.withNewUser which will generate a new
+    // WorkbenchUserId for the SamUser on the request.
+    val googleSubjectId = Option(GoogleSubjectId("123456789"))
+    val newRegisteringUserId = WorkbenchUserId("11111111111111111")
+    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false, None)
+    val registeredUser = service.registerUser(registeringUser, samRequestContext).unsafeRunSync()
+    registeredUser.id should {
+      equal(invitedUser.id) and
+        not equal newRegisteringUserId
+    }
   }
 
   "GetStatus for an invited user" should "return a status that is enabled after the invited user registers" in {

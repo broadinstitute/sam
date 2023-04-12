@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
 import java.security.SecureRandom
+import java.time.Instant
 import javax.naming.NameNotFoundException
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
