@@ -43,12 +43,12 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     // TODO: This mock currently worked for BPM contract.
     // As BPM evolves or other consumers come into play
     // we will need proper state handling.
-    when {
-      userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    } thenReturn {
-      val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
-      IO.pure(userStatusInfo)
-    }
+    // when {
+    //   userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+    // } thenReturn {
+    //   val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
+    //   IO.pure(userStatusInfo)
+    // }
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
@@ -163,12 +163,17 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   ).withHost("localhost").withPort(8080)
     .withStateManagementFunction(
       StateManagementFunction {
-        case ProviderState("user exists", params) => {
+        case ProviderState("user exists", params) =>
           val userSubjectId: Option[String] = params.get("userSubjectId")
           val userEmail: Option[String] = params.get("userEmail")
           val enabled: Option[Boolean] = params.get("enabled").map(_.toBoolean)
           println("user exists provider state")
-        }
+          when {
+            genSamDependencies.userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+          } thenReturn {
+            val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
+            IO.pure(userStatusInfo)
+          }
         case _                                    => () // Nothing to do
       }
     )
