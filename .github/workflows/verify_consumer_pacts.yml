@@ -69,6 +69,7 @@ on:
 
 env:
   PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
+  pact_do_not_track: true
 
 jobs:
   verify-consumer-pact:
