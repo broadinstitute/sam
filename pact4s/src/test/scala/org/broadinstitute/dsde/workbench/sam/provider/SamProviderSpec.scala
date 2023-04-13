@@ -20,6 +20,7 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
+import pact4s.provider.StateManagement.StateManagementFunction
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
@@ -160,6 +161,16 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
+    .withStateManagementFunction(
+      StateManagementFunction {
+        case ProviderState("user exists", params) => {
+          val userSubjectId: Option[String] = params.get("userSubjectId")
+          val userEmail: Option[String] = params.get("userEmail")
+          val enabled: Option[Boolean] = params.get("enabled").map(_.toBoolean)
+        }
+        case _                                   c=> () // Nothing to do
+      }
+    )
 
   it should "Verify pacts" in {
     verifyPacts(
