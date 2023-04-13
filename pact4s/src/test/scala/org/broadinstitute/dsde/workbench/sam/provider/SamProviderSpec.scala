@@ -53,22 +53,20 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     // }
     when {
       userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    } thenAnswer(
-      new Answer[IO[UserStatusInfo]] {
+    } thenAnswer new Answer[IO[UserStatusInfo]] {
         override def answer(invocation: InvocationOnMock): IO[UserStatusInfo] = {
           val samUserArg = invocation.getArgument(0, classOf[SamUser])
           IO.pure(UserStatusInfo(samUserArg.googleSubjectId.get.value, samUserArg.email.value, samUserArg.enabled, false))
         }
-      })
+      }
     when {
       userService.createUser(any[SamUser], any[SamRequestContext])
-    } thenAnswer(
-      new Answer[IO[UserStatusInfo]] {
+    } thenAnswer new Answer[IO[UserStatusInfo]] {
         override def answer(invocation: InvocationOnMock): IO[UserStatusInfo] = {
           val samUserArg = invocation.getArgument(0, classOf[SamUser])
           IO.pure(UserStatusInfo(samUserArg.googleSubjectId.get.value, samUserArg.email.value, samUserArg.enabled, false))
         }
-      })
+      }
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
