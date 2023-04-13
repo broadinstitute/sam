@@ -18,7 +18,6 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, Mo
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
-import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
@@ -51,22 +50,15 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     //   val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
     //   IO.pure(userStatusInfo)
     // }
-    when {
+    when(
       userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    } thenAnswer new Answer[IO[UserStatusInfo]] {
-        override def answer(invocation: InvocationOnMock): IO[UserStatusInfo] = {
-          val samUserArg = invocation.getArgument(0, classOf[SamUser])
-          IO.pure(UserStatusInfo(samUserArg.googleSubjectId.get.value, samUserArg.email.value, samUserArg.enabled, false))
-        }
-      }
-    when {
-      userService.createUser(any[SamUser], any[SamRequestContext])
-    } thenAnswer new Answer[IO[UserStatusInfo]] {
-        override def answer(invocation: InvocationOnMock): IO[UserStatusInfo] = {
-          val samUserArg = invocation.getArgument(0, classOf[SamUser])
-          IO.pure(UserStatusInfo(samUserArg.googleSubjectId.get.value, samUserArg.email.value, samUserArg.enabled, false))
-        }
-      }
+    ).thenAnswer((i: InvocationOnMock) =>  {
+      val userSubjectIdArg = i.getArgument[SamUser](0).googleSubjectId.get.value
+      val emailArg = i.getArgument[SamUser](0).email.value
+      val enabledArg = i.getArgument[SamUser](0).enabled
+      IO.pure(UserStatusInfo(userSubjectIdArg, emailArg, enabledArg, false))
+    })
+
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
