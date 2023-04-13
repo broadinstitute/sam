@@ -16,7 +16,9 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
+import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
+import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
@@ -49,6 +51,24 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     //   val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
     //   IO.pure(userStatusInfo)
     // }
+    when {
+      userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+    } thenAnswer(
+      new Answer[IO[UserStatusInfo]] {
+        override def answer(invocation: InvocationOnMock): IO[UserStatusInfo] = {
+          val samUserArg = invocation.getArgument(0, classOf[SamUser])
+          IO.pure(UserStatusInfo(samUserArg.googleSubjectId.get.value, samUserArg.email.value, samUserArg.enabled, false))
+        }
+      })
+    when {
+      userService.createUser(any[SamUser], any[SamRequestContext])
+    } thenAnswer(
+      new Answer[IO[UserStatusInfo]] {
+        override def answer(invocation: InvocationOnMock): IO[UserStatusInfo] = {
+          val samUserArg = invocation.getArgument(0, classOf[SamUser])
+          IO.pure(UserStatusInfo(samUserArg.googleSubjectId.get.value, samUserArg.email.value, samUserArg.enabled, false))
+        }
+      })
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
@@ -164,16 +184,11 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     .withStateManagementFunction(
       StateManagementFunction {
         case ProviderState("user exists", params) =>
-          val userSubjectId: Option[String] = params.get("userSubjectId")
-          val userEmail: Option[String] = params.get("userEmail")
-          val enabled: Option[Boolean] = params.get("enabled").map(_.toBoolean)
-          println("user exists provider state")
-          when {
-            genSamDependencies.userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-          } thenReturn {
-            val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
-            IO.pure(userStatusInfo)
-          }
+          println("Prepare 'user exists' provider state")
+          // val userSubjectId: Option[String] = params.get("userSubjectId")
+          // val userEmail: Option[String] = params.get("userEmail")
+          // val enabled: Option[Boolean] = params.get("enabled").map(_.toBoolean)
+
         case _                                    => () // Nothing to do
       }
     )
