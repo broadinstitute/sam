@@ -6,19 +6,32 @@
   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
 
   <changeSet logicalFilePath="dummy" author="kfeldman" id="add_date_columns_to_user_table">
+
     <addColumn tableName="sam_user">
-      <column name="created_at" type="timestamp with time zone">
+      <!-- Default value initially set to set a default create_at date for all existing records -->
+      <column name="created_at" type="timestamp with time zone" defaultValue="1970-01-01 00:00:00-00">
         <constraints nullable="false"/>
       </column>
     </addColumn>
+    <!-- Once the column is created and the default value is set for existing records, we drop the defaultValue
+         attribute entirely for new records going forward.  In other words, we want all new records to have a created_at
+         date specified -->
+    <dropDefaultValue tableName="sam_user" columnName="created_at"/>
+
     <addColumn tableName="sam_user">
       <column name="registered_at" type="timestamp with time zone">
       </column>
     </addColumn>
+
     <addColumn tableName="sam_user">
-      <column name="updated_at" type="timestamp with time zone">
+      <!-- Default value initially set to set a default updated_at date for all existing records -->
+      <column name="updated_at" type="timestamp with time zone" defaultValue="1970-01-01 00:00:00-00">
         <constraints nullable="false"/>
       </column>
     </addColumn>
+    <!-- Once the column is created and the default value is set for existing records, we drop the defaultValue
+         attribute entirely for new records going forward -->
+    <dropDefaultValue tableName="sam_user" columnName="updated_at"/>
+
   </changeSet>
 </databaseChangeLog>
