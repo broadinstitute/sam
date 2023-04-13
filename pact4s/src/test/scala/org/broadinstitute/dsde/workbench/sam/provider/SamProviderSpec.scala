@@ -168,7 +168,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
           val userEmail: Option[String] = params.get("userEmail")
           val enabled: Option[Boolean] = params.get("enabled").map(_.toBoolean)
         }
-        case _                                   c=> () // Nothing to do
+        case _                                    => () // Nothing to do
       }
     )
 
