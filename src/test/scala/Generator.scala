@@ -4,19 +4,12 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
-import org.broadinstitute.dsde.workbench.sam.model._
-import org.scalacheck._
-import SamResourceActions._
-import org.broadinstitute.dsde.workbench.sam.azure.{
-  BillingProfileId,
-  ManagedResourceGroup,
-  ManagedResourceGroupCoordinates,
-  ManagedResourceGroupName,
-  SubscriptionId,
-  TenantId
-}
+import org.broadinstitute.dsde.workbench.sam.azure._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LockDetails
+import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
+import org.scalacheck._
 
 import scala.concurrent.duration._
 

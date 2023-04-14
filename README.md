@@ -78,7 +78,7 @@ Note that in this model Group is a Subject. This allows it to be used interchang
 ### ERD
 ![Sam ERD](sam_erd.png)
 
-The Sam schema has 3 main sections: users and groups in yellow, resources and policies in green, resource type
+The Sam schema can be viewed in sections: users in blue, groups in yellow, resources in orange, policies in green, and resource type
 configuration in purple. Both groups and resources have a hierarchical model (groups can contain groups
 and resources can have parents). To solve read-query performance issues these hierarchies are also stored in
 a flattened representation: 

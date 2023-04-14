@@ -15,6 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
 import java.security.SecureRandom
+import java.time.Instant
 import javax.naming.NameNotFoundException
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
@@ -30,7 +31,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       for {
         _ <- validateEmailAddress(user.email, blockedEmailDomains)
-        createdUser <- registerUser(user, samRequestContext)
+        createdUser <- registerUser(user.copy(registeredAt = Option(Instant.now())), samRequestContext)
         _ <- enableUserInternal(createdUser, samRequestContext)
         _ <- addToAllUsersGroup(createdUser.id, samRequestContext)
         userStatus <- getUserStatus(createdUser.id, samRequestContext = samRequestContext)
@@ -85,7 +86,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             IO.raiseError[SamUser](
               new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint"))
             )
-
         }
       } yield updated
     }
@@ -115,8 +115,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     openTelemetry.time("api.v1.user.validateNewWorkbenchUser.time", API_TIMING_DURATION_BUCKET) {
       for {
         existingUser <- newWorkbenchUser match {
-          case SamUser(_, Some(googleSubjectId), _, _, _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
-          case SamUser(_, _, _, Some(azureB2CId), _, _) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
+          case SamUser(_, Some(googleSubjectId), _, _, _, _, _, _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
+          case SamUser(_, _, _, Some(azureB2CId), _, _, _, _, _) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
           case _ => IO.raiseError(new WorkbenchException("cannot create user when neither google subject id nor azure b2c id exists"))
         }
 
