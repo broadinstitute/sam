@@ -10,6 +10,10 @@ import sbtassembly.AssemblyPlugin.autoImport._
 object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
 
+  val proxyResolvers = List(
+    "internal-maven-proxy" at artifactory + "maven-central"
+  )
+
   lazy val commonResolvers = List(
     "artifactory-releases" at artifactory + "libs-release",
     "artifactory-snapshots" at artifactory + "libs-snapshot"
@@ -65,7 +69,7 @@ object Settings {
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
       organization := "org.broadinstitute.dsde.workbench",
       scalaVersion := "2.13.10",
-      resolvers ++= commonResolvers,
+      resolvers := proxyResolvers ++: resolvers.value ++: commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtAll).value,
       Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtSbt).value
