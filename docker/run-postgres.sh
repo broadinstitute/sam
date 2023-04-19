@@ -43,6 +43,9 @@ if [ $COMMAND = "start" ]; then
     start
 elif [ $COMMAND = "stop" ]; then
     stop
+elif [ $COMMAND = "restart" ]; then
+    stop
+    start
 else
     exit 1
 fi
