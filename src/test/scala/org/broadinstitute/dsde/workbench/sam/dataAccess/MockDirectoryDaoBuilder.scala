@@ -34,18 +34,12 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   mockedDirectoryDAO.deleteUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
 
   def withHealthyDatabase: MockDirectoryDaoBuilder = {
-    lenient()
-      .doReturn(IO(true))
-      .when(mockedDirectoryDAO)
-      .checkStatus(any[SamRequestContext])
+    mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(true)
     this
   }
 
   def withUnhealthyDatabase: MockDirectoryDaoBuilder = {
-    lenient()
-      .doReturn(IO(false))
-      .when(mockedDirectoryDAO)
-      .checkStatus(any[SamRequestContext])
+    mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(false)
     this
   }
 

@@ -1,9 +1,11 @@
 package org.broadinstitute.dsde.workbench.sam.service.StatusServiceSpecs
 
 import akka.actor.ActorSystem
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
-import org.broadinstitute.dsde.workbench.sam.service.{MockCloudExtensionsBuilder, StatusService}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, StatusService}
 import org.broadinstitute.dsde.workbench.util.health.Subsystems
 import org.mockito.IdiomaticMockito
 import org.scalatest.Inspectors.forEvery
@@ -28,6 +30,8 @@ class StatusServiceSpec
   implicit val system = ActorSystem("StatusServiceSpec")
   implicit override val patienceConfig = PatienceConfig(timeout = 1 second)
 
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+
   override def afterAll(): Unit = {
     system.terminate()
     super.afterAll()
@@ -39,7 +43,7 @@ class StatusServiceSpec
       // Arrange
       val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase // Database is a critical subsystem
         .build
-      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO).build
+      val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
       val statusService = new StatusService(directoryDAO, cloudExtensions)
 
       eventually {
@@ -59,7 +63,7 @@ class StatusServiceSpec
       val subsystem = Subsystems.GoogleGroups
       val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase // Database is a critical subsystem
         .build
-      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO)
+      val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup)
         .withHealthySubsystem(subsystem)
         .build
       val statusService = new StatusService(directoryDAO, cloudExtensions)
@@ -81,7 +85,7 @@ class StatusServiceSpec
       val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase // Database is a critical subsystem
         .build
 
-      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO)
+      val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup)
         .withUnhealthySubsystem(subsystem, List("Because of...reasons"))
         .build
       val statusService = new StatusService(directoryDAO, cloudExtensions)
@@ -103,7 +107,7 @@ class StatusServiceSpec
 
       val healthyNoncriticalSubsystem = Subsystems.GoogleGroups
       val unhealthyNoncriticalSubsystem = Subsystems.GoogleBuckets
-      val cloudExtensions = MockCloudExtensionsBuilder(directoryDAO)
+      val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup)
         .withHealthySubsystem(healthyNoncriticalSubsystem)
         .withUnhealthySubsystem(unhealthyNoncriticalSubsystem, List(s"Cuz $unhealthyNoncriticalSubsystem is broke"))
         .build
@@ -133,7 +137,7 @@ class StatusServiceSpec
         .build
 
       val subsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.Leonardo, Subsystems.Agora)
-      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
+      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup)
       subsystems.foreach { subsystem =>
         cloudExtensionsBuilder.withHealthySubsystem(subsystem)
       }
@@ -159,7 +163,7 @@ class StatusServiceSpec
       val directoryDAO = MockDirectoryDaoBuilder().withHealthyDatabase.build
 
       val nonCriticalSubsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GoogleBuckets)
-      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
+      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup)
       nonCriticalSubsystems.foreach { subsystem =>
         cloudExtensionsBuilder.withUnhealthySubsystem(subsystem, List(s"Cuz $subsystem is broke"))
       }
@@ -193,7 +197,7 @@ class StatusServiceSpec
         .build
 
       val nonCriticalSubsystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.Leonardo, Subsystems.Agora)
-      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(directoryDAO)
+      val cloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup)
       nonCriticalSubsystems.foreach { subsystem =>
         cloudExtensionsBuilder.withHealthySubsystem(subsystem)
       }
