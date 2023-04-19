@@ -22,12 +22,12 @@ import org.scalatest.Inside.inside
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues, Suite}
+import org.scalatest._
 
+import scala.concurrent.ExecutionContext
 import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
 
 // TODO: continue breaking down old UserServiceSpec tests into nested suites
 // See: https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
@@ -46,6 +46,7 @@ class UserServiceSpec extends Suite {
 // into smaller, more focused suites which should then be added to the `nestedSuites` of `UserServiceSpec`
 // This class does not connect to a real database (hence "mock" in the name (naming is hard, don't judge me)), but its
 // tests should still be broken out to individual Spec files and rewritten
+@DoNotDiscover
 class OldUserServiceMockSpec
     extends AnyFlatSpec
     with Matchers
@@ -107,7 +108,7 @@ class OldUserServiceMockSpec
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
     when(mockTosService.getTosComplianceStatus(any[SamUser]))
@@ -213,26 +214,6 @@ class OldUserServiceMockSpec
     service.deleteUser(defaultUser.id, samRequestContext).unsafeRunSync()
     verify(dirDAO).deleteUser(defaultUser.id, samRequestContext)
   }
-
-  "registerUser" should "create the user in the database if they do not already exist in the database" in {
-    when(dirDAO.loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext])).thenReturn(IO(None))
-    service.registerUser(disabledUser, samRequestContext).unsafeRunSync()
-    verify(dirDAO).createUser(disabledUser, samRequestContext)
-  }
-
-  it should "create the user on google if they do not already exist in the database" in {
-    when(dirDAO.loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext])).thenReturn(IO(None))
-    service.registerUser(disabledUser, samRequestContext).unsafeRunSync()
-    verify(googleExtensions).onUserCreate(disabledUser, samRequestContext)
-  }
-
-  it should "throw a runtime exception if an exception is thrown when creating a new user record in the database" in {
-    when(dirDAO.loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext])).thenReturn(IO(None))
-    when(dirDAO.createUser(any[SamUser], any[SamRequestContext])).thenThrow(new RuntimeException("bummer"))
-    intercept[RuntimeException] {
-      service.registerUser(defaultUser, samRequestContext).unsafeRunSync()
-    }
-  }
 }
 
 object GenEmail {
@@ -249,6 +230,7 @@ object GenEmail {
 // into smaller, more focused suites which should then be added to the `nestedSuites` of `UserServiceSpec`
 // This class DOES connect to a real database and its tests should be broken out to individual Spec files
 // and rewritten
+@DoNotDiscover
 class OldUserServiceSpec
     extends AnyFlatSpec
     with Matchers
@@ -299,7 +281,7 @@ class OldUserServiceSpec
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO.pure(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(Future.successful(()))
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
     tos = new TosService(dirDAO, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)

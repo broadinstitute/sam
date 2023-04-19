@@ -197,7 +197,7 @@ class GoogleExtensions(
 
      see GoogleGroupSynchronizer for the background process that does the group synchronization
    */
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): Future[Unit] = {
+  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit] =
     for {
       start <- clock.monotonic
       // only sync groups that have been synchronized in the past
@@ -234,7 +234,6 @@ class GoogleExtensions(
         StructuredArguments.entries(Map("duration" -> duration.toMillis, "group-ids" -> groupIdentities.map(_.toString).asJava).asJava)
       )
     }
-  }.unsafeToFuture()
 
   private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[List[String]] =
     // start with a group

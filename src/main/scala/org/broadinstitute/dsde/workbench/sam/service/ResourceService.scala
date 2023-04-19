@@ -633,7 +633,7 @@ class ResourceService(
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq: _*)
 
-      _ <- IO.fromFuture(IO(cloudExtensions.onGroupUpdate(Seq(policyId), samRequestContext))).attempt.flatMap {
+      _ <- cloudExtensions.onGroupUpdate(Seq(policyId), samRequestContext).attempt.flatMap {
         case Left(regrets) => IO(logger.error(s"error calling cloudExtensions.onGroupUpdate for $policyId", regrets))
         case Right(_) => IO.unit
       }

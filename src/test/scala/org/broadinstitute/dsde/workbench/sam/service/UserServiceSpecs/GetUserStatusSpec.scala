@@ -4,9 +4,11 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genWorkbenchUserBoth}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.scalatest.DoNotDiscover
 
 import scala.concurrent.ExecutionContextExecutor
 
+@DoNotDiscover
 class GetUserStatusSpec extends UserServiceTestTraits {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
