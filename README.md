@@ -139,6 +139,12 @@ Note that Sam does not actually launch workflows create VMs but appears to in th
 ### Required Tooling:
 #### Java:
 Make sure you have Java JDK 17 installed. Instructions for our recommended package can be found [here](https://adoptium.net/)
+
+#### Docker
+Docker is required for running Sam locally. Docker Desktop can be installed from [here](https://docs.docker.com/desktop/)
+
+This should also install the `kubectl` command, which is required for rendering configs for running Sam locally.
+
 #### Scala:
 Mac:
 ```$xslt
@@ -164,6 +170,17 @@ Build jar and docker image:
 ```
 
 ### Running Sam Locally
+#### Credentials
+You'll need to authenticate with Google to run the `kubectl` commands. To run Sam locally, dev credentials are required.
+
+```shell
+gcloud container clusters get-credentials terra-dev --region us-central1-a --project broad-dsde-dev
+```
+If you don't have permissions, try authenticating using your Firecloud account.
+
+#### firecloud-develop
+`firecloud-develop` is still required for running the local proxy. Follow the instructions in the [below section](#firecloud-develop-setup)
+
 #### Render secrets
 You only have to do this once.
 ```shell
