@@ -76,6 +76,8 @@ jobs:
       ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
       ARTIFACTORY_PASSWORD: ${{secrets.ARTIFACTORY_PASSWORD}}
       SBT_OPTS: -Xmx3g
+      # https://stackoverflow.com/questions/58033366/how-to-get-the-current-branch-within-github-actions
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
     steps:
       - uses: actions/checkout@v2
@@ -83,11 +85,6 @@ jobs:
       # coursier cache action caches both coursier and sbt caches
       - name: coursier-cache-action
         uses: coursier/cache-action@v5
-
-      - name: Extract branch name
-        shell: bash
-        run: echo "Branch:: $(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_OUTPUT
-        id: extractBranch
 
       - name: Generate java client
         id: generateJavaClient
@@ -102,5 +99,5 @@ jobs:
       - name: Publish java client as snapshot for PRs
         working-directory: codegen_java
         id: publishJavaClientSnapshot
-        if: ${{steps.extractBranch.outputs.branch != 'develop'}}
+        if: ${{ $BRANCH_NAME != 'develop' }}
         run: sbt "+ publish" -Dproject.isSnapshot=true
