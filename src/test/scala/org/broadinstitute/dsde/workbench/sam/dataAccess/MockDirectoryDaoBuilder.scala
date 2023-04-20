@@ -33,6 +33,16 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   mockedDirectoryDAO.removeGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
   mockedDirectoryDAO.deleteUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
 
+  def withHealthyDatabase: MockDirectoryDaoBuilder = {
+    mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(true)
+    this
+  }
+
+  def withUnhealthyDatabase: MockDirectoryDaoBuilder = {
+    mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(false)
+    this
+  }
+
   def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = withExistingUsers(Set(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
     samUsers.toSet.foreach(makeUserExist)

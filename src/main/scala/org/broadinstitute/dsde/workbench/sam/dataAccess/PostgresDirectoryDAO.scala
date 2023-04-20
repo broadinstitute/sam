@@ -1,30 +1,31 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
-import java.time.Instant
-import java.util.Date
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
+import cats.effect.{IO, Temporal}
+import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedPolicyId, _}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
 
+import java.time.Instant
+import java.util.Date
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
-import cats.effect.Temporal
-import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 
 class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit timer: Temporal[IO])
     extends DirectoryDAO
     with DatabaseSupport
-    with PostgresGroupDAO {
+    with PostgresGroupDAO
+    with LazyLogging {
 
   override def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String], samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup] =
     serializableWriteTransaction("createGroup", samRequestContext) { implicit session =>
@@ -815,9 +816,26 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       }
     }
 
-  override def checkStatus(samRequestContext: SamRequestContext): Boolean =
-    writeDbRef.inLocalTransaction { session =>
-      session.connection.isValid((2 seconds).toSeconds.intValue())
+  override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] =
+    checkStatusWithQuery(samsqls"SELECT 1", samRequestContext)
+
+  // This method exists so that we can test a _real_ db connection when the query fails for some reason
+  // If we can find another way to have a valid connection pool but make the query fail, we can get rid of this method
+  // and move its logic into the public `checkStatus`
+  private[dataAccess] def checkStatusWithQuery(query: SQLSyntax, samRequestContext: SamRequestContext): IO[Boolean] =
+    readOnlyTransaction("checkStatus", samRequestContext) { implicit session =>
+      val isSessionValid = session.connection.isValid((2 seconds).toSeconds.intValue())
+      val canQuery =
+        samsql"$query"
+          .map(rs => rs.int(1))
+          .single()
+          .apply()
+          .nonEmpty
+
+      isSessionValid && canQuery
+    }.recoverWith { err =>
+      logger.error("Failed to connect to Sam's database", err)
+      IO(false)
     }
 
   override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] =

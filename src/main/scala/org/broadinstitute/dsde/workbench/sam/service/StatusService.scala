@@ -6,20 +6,19 @@ import akka.util.Timeout
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
+import io.sentry.Sentry
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.HealthMonitor.GetCurrentStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.{Database, Subsystem}
-import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse, SubsystemStatus}
+import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, StatusCheckResponse, SubsystemStatus, Subsystems}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 class StatusService(
-    val directoryDAO: DirectoryDAO,
-    val cloudExtensions: CloudExtensions,
-    val dbReference: DbReference,
+    directoryDAO: DirectoryDAO,
+    cloudExtensions: CloudExtensions,
     initialDelay: FiniteDuration = Duration.Zero,
     pollInterval: FiniteDuration = 1 minute
 )(implicit system: ActorSystem, executionContext: ExecutionContext)
@@ -29,16 +28,39 @@ class StatusService(
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems)(checkStatus _))
   system.scheduler.scheduleAtFixedRate(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
 
-  def getStatus(): Future[StatusCheckResponse] = (healthMonitor ? GetCurrentStatus).asInstanceOf[Future[StatusCheckResponse]]
+  // There is a differentiation between "critical" and "non-critical" systems.
+  // The Database is the only critical system and if it is reporting "not OK", then Sam should report "not OK".
+  // If, however, any of the other (non-critical) Services are not reporting "OK", then Sam will still be "OK", but
+  // should be considered "degraded"
+  def getStatus(): Future[StatusCheckResponse] =
+    (healthMonitor ? GetCurrentStatus).mapTo[StatusCheckResponse].map { statusCheckResponse =>
+      // Sam can still report OK if non-critical systems are not OK
+      val overallSamStatus: Boolean = StatusService.criticalSubsystems.forall { subsystem =>
+        statusCheckResponse.systems.get(subsystem).exists(_.ok)
+      }
+
+      val finalStatus = statusCheckResponse.copy(ok = overallSamStatus)
+
+      val unhealthySubsystems = statusCheckResponse.systems.filter(tuple => !tuple._2.ok)
+      unhealthySubsystems.foreach { case (subsystem, _) =>
+        Sentry.captureMessage(s"Sam service is degraded! $subsystem is NOT OK: $finalStatus")
+      }
+
+      finalStatus
+    }
 
   private def checkStatus(): Map[Subsystem, Future[SubsystemStatus]] =
     cloudExtensions.checkStatus + (Database -> checkDatabase().unsafeToFuture())
 
-  private def checkDatabase(): IO[SubsystemStatus] = IO {
+  private def checkDatabase(): IO[SubsystemStatus] = {
     logger.info("checking database connection")
-    if (directoryDAO.checkStatus(SamRequestContext()))
-      HealthMonitor.OkStatus
-    else
-      HealthMonitor.failedStatus("Postgres database connection invalid or timed out checking")
+    directoryDAO.checkStatus(SamRequestContext()).map {
+      case true => HealthMonitor.OkStatus
+      case false => HealthMonitor.failedStatus("Postgres database connection invalid or timed out checking")
+    }
   }
+}
+
+object StatusService {
+  val criticalSubsystems: Set[Subsystem] = Set(Subsystems.Database)
 }

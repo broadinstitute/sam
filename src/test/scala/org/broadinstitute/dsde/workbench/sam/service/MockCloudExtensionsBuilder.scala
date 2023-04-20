@@ -5,11 +5,13 @@ import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
 import org.mockito.ArgumentMatchersSugar.{any, argThat}
 import org.mockito.IdiomaticMockito
 import org.mockito.Mockito.RETURNS_SMART_NULLS
 
-import scala.concurrent.ExecutionContext
+import scala.collection.mutable
+import scala.concurrent.{ExecutionContext, Future}
 
 case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends IdiomaticMockito {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
@@ -21,6 +23,8 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
   mockedCloudExtensions.onUserEnable(any[SamUser], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
+  mockedCloudExtensions.allSubSystems returns Set.empty
+  mockedCloudExtensions.checkStatus returns Map.empty
 
   def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withEnabledUsers(Set(samUser))
   def withEnabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
@@ -34,11 +38,26 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
     this
   }
 
+  private val subsystemStatuses: mutable.Map[Subsystems.Subsystem, Future[SubsystemStatus]] = mutable.Map.empty
+
+  def withHealthySubsystem(subsystem: Subsystems.Subsystem): MockCloudExtensionsBuilder = {
+    subsystemStatuses.addOne(subsystem -> Future.successful(SubsystemStatus(true, None)))
+    this
+  }
+
+  def withUnhealthySubsystem(subsystem: Subsystems.Subsystem, messages: List[String]): MockCloudExtensionsBuilder = {
+    subsystemStatuses.addOne(subsystem -> Future.successful(SubsystemStatus(false, Some(messages))))
+    this
+  }
+
   private def makeUserAppearEnabled(samUser: SamUser): Unit =
     mockedCloudExtensions.getUserStatus(argThat(IsSameUserAs(samUser))) returns IO(true)
 
   private def makeUserAppearDisabled(samUser: SamUser): Unit =
     mockedCloudExtensions.getUserStatus(argThat(IsSameUserAs(samUser))) returns IO(false)
 
-  def build: CloudExtensions = mockedCloudExtensions
+  def build: CloudExtensions = {
+    mockedCloudExtensions.checkStatus returns subsystemStatuses.toMap
+    mockedCloudExtensions
+  }
 }

@@ -6,13 +6,15 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure._
+import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
+import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
-import org.scalatest.{BeforeAndAfterEach, OptionValues}
 import org.scalatest.Inside.inside
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterEach, OptionValues}
 
 import java.time.Instant
 import java.util.Date
@@ -1605,6 +1607,39 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         // Assert
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
         loadedUser.value.updatedAt should beAround(Instant.now())
+      }
+    }
+
+    "checkStatus" - {
+      "is true if database is queryable" in {
+        // Act
+        val samStatus = dao.checkStatus(samRequestContext).unsafeRunSync()
+
+        // Assert
+        samStatus shouldBe true
+      }
+
+      "is false if database cannot be connected to" in {
+        // Arrange
+        val badDBName = Symbol("noDB")
+        val badDbReference = new TestDbReference(badDBName, TestSupport.blockingEc)
+        val badDao = new PostgresDirectoryDAO(badDbReference, badDbReference)
+
+        // Act
+        val samStatus = badDao.checkStatus(samRequestContext).unsafeRunSync()
+
+        // Assert
+        samStatus shouldBe false
+      }
+
+      // Test ignored - not sure how to test it without injecting a mocked DBReference into the DAO or maybe passing
+      // a bad query as a parameter into the checkStatus method
+      "is false if database has connections but cannot be queried" in {
+        // Act
+        val samStatus = dao.checkStatusWithQuery(samsqls"SELECT FOO FROM BAR", samRequestContext).unsafeRunSync()
+
+        // Assert
+        samStatus shouldBe false
       }
     }
   }

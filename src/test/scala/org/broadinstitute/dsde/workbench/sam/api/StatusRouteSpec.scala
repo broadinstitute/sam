@@ -47,7 +47,7 @@ class StatusRouteSpec extends RetryableAnyFlatSpec with Matchers with ScalatestR
     val mockResourceService = new ResourceService(Map.empty, null, policyDAO, directoryDAO, NoExtensions, emailDomain, Set.empty)
     val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
-    val mockStatusService = new StatusService(directoryDAO, NoExtensions, TestSupport.dbRef)
+    val mockStatusService = new StatusService(directoryDAO, NoExtensions)
     val mockManagedGroupService = new ManagedGroupService(mockResourceService, null, Map.empty, policyDAO, directoryDAO, NoExtensions, emailDomain)
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, Map.empty, policyDAO, directoryDAO)
     val samRoutes = new TestSamRoutes(

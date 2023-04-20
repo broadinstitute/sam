@@ -192,7 +192,7 @@ object TestSamRoutes {
     TestSupport.runAndWait(googleDirectoryDAO.createGroup(allUsersGroup.id.toString, allUsersGroup.email))
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
-    val mockStatusService = new StatusService(directoryDAO, cloudXtns, dbRef)
+    val mockStatusService = new StatusService(directoryDAO, cloudXtns)
     val azureService = new AzureService(crlService.getOrElse(MockCrlService(Option(user))), directoryDAO, new MockAzureManagedResourceGroupDAO)
     val userToTestWith = if (acceptTermsOfService) user.copy(acceptedTosVersion = Some(tosConfig.version)) else user
     new TestSamRoutes(
