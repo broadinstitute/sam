@@ -163,7 +163,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   def requestFilter: ProviderRequest => ProviderRequestFilter = req =>
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
-        println(s"Captured value ${value}")
+        // println(s"Captured value ${value}")
         Authorization
           .parse(value)
           .map {
