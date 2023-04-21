@@ -145,7 +145,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   // 2. For normal Sam PR, verify all consumer pacts in Pact Broker labelled with a deployed environment (alpha, dev, prod, staging).
   consumerBranch match {
     case Some(s) if !s.isBlank() => consumerVersionSelectors = consumerVersionSelectors.branch(s, consumerName)
-    case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased
+    case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased.mainBranch
   }
 
   // If the auth header in the request is "correct", we can replace it with an auth header that will actually work with our API,
