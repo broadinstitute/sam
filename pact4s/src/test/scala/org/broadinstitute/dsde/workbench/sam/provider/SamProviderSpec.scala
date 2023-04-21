@@ -9,17 +9,20 @@ import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail,
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
+import org.http4s.{AuthScheme, Credentials}
+import org.http4s.headers.Authorization
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
+import pact4s.provider.ProviderRequestFilter.{NoOpFilter, SetHeaders}
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
@@ -28,8 +31,12 @@ import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
 class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging with MockitoSugar {
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+  val defaultTosService: TosService = MockTosServiceBuilder().build
+
   def genSamDependencies: MockSamDependencies = {
-    val directoryDAO = mock[DirectoryDAO]
+    val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+    val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
     val policyDAO = mock[AccessPolicyDAO]
     val googleExt = mock[GoogleExtensions]
 
@@ -38,7 +45,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     val mockManagedGroupService = mock[ManagedGroupService]
     val tosService = mock[TosService]
     val azureService = mock[AzureService]
-    val userService = mock[UserService]
+    val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
@@ -141,7 +148,24 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased
   }
 
-  override def provider: ProviderInfoBuilder = ProviderInfoBuilder(
+  // If the auth header in the request is "correct", we can replace it with an auth header that will actually work with our API,
+  // else we leave it as is to be rejected.
+  def requestFilter: ProviderRequest => ProviderRequestFilter = req =>
+    req.getFirstHeader("Authorization") match {
+      case Some((_, value)) =>
+        Authorization
+          .parse(value)
+          .map {
+            case Authorization(Credentials.Token(AuthScheme.Bearer, x)) =>
+              println(s"captured ${x}")
+              SetHeaders("Authorization" -> s"Bearer ${x}")
+            case _ => NoOpFilter
+          }
+          .getOrElse(NoOpFilter)
+      case None => NoOpFilter
+    }
+
+  val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
     // pactSource = PactSource.FileSource(Map("leo-consumer" -> new File("src/test/resources/leo-consumer-sam-provider.json")))
     pactSource = PactSource
