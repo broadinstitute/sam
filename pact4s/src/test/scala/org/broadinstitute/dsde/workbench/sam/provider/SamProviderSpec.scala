@@ -16,9 +16,8 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
-import org.http4s.{AuthScheme, Credentials}
 import org.http4s.headers.Authorization
-import org.mockito.invocation.InvocationOnMock
+import org.http4s.{AuthScheme, Credentials}
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -47,15 +46,6 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     val tosService = mock[TosService]
     val azureService = mock[AzureService]
     val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
-    when(
-      userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    ).thenAnswer((i: InvocationOnMock) =>  {
-      val samUser = i.getArgument[SamRequestContext](1).samUser.get
-      val userSubjectIdArg = samUser.googleSubjectId.get.value
-      val emailArg = samUser.email.value
-      val enabledArg = samUser.enabled
-      IO.pure(UserStatusInfo(userSubjectIdArg, emailArg, enabledArg, false))
-    })
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
@@ -163,7 +153,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   def requestFilter: ProviderRequest => ProviderRequestFilter = req =>
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
-        // println(s"Captured value ${value}")
+        println(s"Captured value ${value}")
         Authorization
           .parse(value)
           .map {
