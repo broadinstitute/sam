@@ -175,6 +175,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
+    .withRequestFiltering(requestFilter)
 
   it should "Verify pacts" in {
     verifyPacts(
