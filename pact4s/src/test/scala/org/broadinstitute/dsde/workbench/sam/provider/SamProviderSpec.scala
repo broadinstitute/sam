@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail,
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockDirectoryDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -35,8 +35,10 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   val defaultTosService: TosService = MockTosServiceBuilder().build
 
   def genSamDependencies: MockSamDependencies = {
-    val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
-    val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+    // val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+    // val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+    val directoryDAO: DirectoryDAO = mock[DirectoryDAO]
+    val cloudExtensions: CloudExtensions = mock[CloudExtensions]
     val policyDAO = mock[AccessPolicyDAO]
     val googleExt = mock[GoogleExtensions]
 
@@ -55,14 +57,15 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     //} thenReturn {
     //  Seq()
     //}
-    val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), defaultTosService))
+    // val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), defaultTosService))
+    val userService: UserService = mock[UserService]
     when {
       userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
     } thenReturn {
       IO.pure(UserStatusInfo("", "", false, false))
     }
     // val userService: UserService = new UserService(directoryDAO, cloudExtensions, anySeq[String], any[TosService])
-    //when {
+    // when {
     //  userService.directoryDAO
     //} thenReturn {
     //  directoryDAO
