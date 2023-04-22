@@ -46,17 +46,19 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     val mockManagedGroupService = mock[ManagedGroupService]
     val tosService = mock[TosService]
     val azureService = mock[AzureService]
-    when {
-      any[TosService]
-    } thenReturn {
-      defaultTosService
-    }
-    when {
-      anySeq[String]
-    } thenReturn {
-      Seq()
-    }
-    val userService: UserService = new UserService(directoryDAO, cloudExtensions, anySeq[String], any[TosService])
+    // when {
+    //  any[TosService]
+    //} thenReturn {
+    //  defaultTosService
+    //}
+    //when {
+    //  anySeq[String]
+    //} thenReturn {
+    //  Seq()
+    //}
+    val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), defaultTosService))
+
+    // val userService: UserService = new UserService(directoryDAO, cloudExtensions, anySeq[String], any[TosService])
     //when {
     //  userService.directoryDAO
     //} thenReturn {
