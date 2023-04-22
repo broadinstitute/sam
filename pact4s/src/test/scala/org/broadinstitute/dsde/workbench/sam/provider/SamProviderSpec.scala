@@ -16,10 +16,12 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
+import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
+import pact4s.provider.StateManagement.StateManagementFunction
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
@@ -39,6 +41,25 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     val tosService = mock[TosService]
     val azureService = mock[AzureService]
     val userService = mock[UserService]
+    // TODO: This mock currently worked for BPM contract.
+    // As BPM evolves or other consumers come into play
+    // we will need proper state handling.
+    // when {
+    //   userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+    // } thenReturn {
+    //   val userStatusInfo = UserStatusInfo("userSubjectId", "userEmail", true, false)
+    //   IO.pure(userStatusInfo)
+    // }
+    when(
+      userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+    ).thenAnswer((i: InvocationOnMock) =>  {
+      val samUser = i.getArgument[SamRequestContext](1).samUser.get
+      val userSubjectIdArg = samUser.googleSubjectId.get.value
+      val emailArg = samUser.email.value
+      val enabledArg = samUser.enabled
+      IO.pure(UserStatusInfo(userSubjectIdArg, emailArg, enabledArg, false))
+    })
+
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
@@ -138,7 +159,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
   // 2. For normal Sam PR, verify all consumer pacts in Pact Broker labelled with a deployed environment (alpha, dev, prod, staging).
   consumerBranch match {
     case Some(s) if !s.isBlank() => consumerVersionSelectors = consumerVersionSelectors.branch(s, consumerName)
-    case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased
+    case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased.mainBranch
   }
 
   override def provider: ProviderInfoBuilder = ProviderInfoBuilder(
@@ -151,6 +172,17 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost").withPort(8080)
+    .withStateManagementFunction(
+      StateManagementFunction {
+        case ProviderState("user exists", params) =>
+          println("Prepare 'user exists' provider state")
+          // val userSubjectId: Option[String] = params.get("userSubjectId")
+          // val userEmail: Option[String] = params.get("userEmail")
+          // val enabled: Option[Boolean] = params.get("enabled").map(_.toBoolean)
+
+        case _                                    => () // Nothing to do
+      }
+    )
 
   it should "Verify pacts" in {
     verifyPacts(
