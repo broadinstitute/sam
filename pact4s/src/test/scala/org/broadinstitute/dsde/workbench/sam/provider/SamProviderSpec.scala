@@ -18,7 +18,6 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, Mo
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
-import org.mockito.DefaultAnswers
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
@@ -47,7 +46,17 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     val mockManagedGroupService = mock[ManagedGroupService]
     val tosService = mock[TosService]
     val azureService = mock[AzureService]
-    val userService: UserService = mock[UserService](DefaultAnswers.ReturnsDeepStubs)
+    val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq(), defaultTosService)
+    //when {
+    //  userService.directoryDAO
+    //} thenReturn {
+    //  directoryDAO
+    //}
+    //when {
+    //  userService.cloudExtensions
+    //} thenReturn {
+    //  cloudExtensions
+    //}
     when(
       userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
     ).thenAnswer((i: InvocationOnMock) =>  {
