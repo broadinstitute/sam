@@ -18,7 +18,6 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, Mo
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
-import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -57,7 +56,11 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     //  Seq()
     //}
     val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), defaultTosService))
-
+    when {
+      userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+    } thenReturn {
+      IO.pure(UserStatusInfo("", "", false, false))
+    }
     // val userService: UserService = new UserService(directoryDAO, cloudExtensions, anySeq[String], any[TosService])
     //when {
     //  userService.directoryDAO
@@ -69,20 +72,20 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     //} thenReturn {
     //  cloudExtensions
     //}
-    when(
-      userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    ).thenAnswer((i: InvocationOnMock) =>  {
-      val samUser1 = Option(i.getArgument[SamUser](0))
-      samUser1 match {
-        case Some(s) =>
-          val userSubjectIdArg = s.googleSubjectId.get.value
-          val emailArg = s.email.value
-          val enabledArg = s.enabled
-          IO.pure(UserStatusInfo(userSubjectIdArg, emailArg, enabledArg, false))
-        case _ =>
-          IO.pure(UserStatusInfo("", "", false, false))
-      }
-    })
+    //when(
+    //  userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+    //).thenAnswer((i: InvocationOnMock) =>  {
+    //  val samUser1 = Option(i.getArgument[SamUser](0))
+    //  samUser1 match {
+    //    case Some(s) =>
+    //      val userSubjectIdArg = s.googleSubjectId.get.value
+    //      val emailArg = s.email.value
+    //      val enabledArg = s.enabled
+    //      IO.pure(UserStatusInfo(userSubjectIdArg, emailArg, enabledArg, false))
+    //    case _ =>
+    //      IO.pure(UserStatusInfo("", "", false, false))
+    //  }
+    //})
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
