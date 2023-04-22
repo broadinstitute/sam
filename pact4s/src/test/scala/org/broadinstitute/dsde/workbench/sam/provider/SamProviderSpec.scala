@@ -72,13 +72,16 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     when(
       userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
     ).thenAnswer((i: InvocationOnMock) =>  {
-      val samUser1 = i.getArgument[SamUser](0)
-      println(samUser1)
-      val samUser = i.getArgument[SamRequestContext](1).samUser.get
-      val userSubjectIdArg = samUser.googleSubjectId.get.value
-      val emailArg = samUser.email.value
-      val enabledArg = samUser.enabled
-      IO.pure(UserStatusInfo(userSubjectIdArg, emailArg, enabledArg, false))
+      val samUser1 = Option(i.getArgument[SamUser](0))
+      samUser1 match {
+        case Some(s) =>
+          val userSubjectIdArg = s.googleSubjectId.get.value
+          val emailArg = s.email.value
+          val enabledArg = s.enabled
+          IO.pure(UserStatusInfo(userSubjectIdArg, emailArg, enabledArg, false))
+        case _ =>
+          IO.pure(UserStatusInfo("", "", false, false))
+      }
     })
     val statusService = mock[StatusService]
     when {
