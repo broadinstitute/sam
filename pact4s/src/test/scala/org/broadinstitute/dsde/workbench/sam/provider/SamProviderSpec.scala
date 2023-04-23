@@ -125,7 +125,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     ).thenAnswer((i: InvocationOnMock) =>  {
       val googleSubjectId = Option(i.getArgument[GoogleSubjectId](0))
       googleSubjectId match {
-        case Some(g) => print(g.value)
+        case Some(g) => println(g.value)
         case _ => println("No GSID")
       }
       val samRequestContext = i.getArgument[SamRequestContext](1)

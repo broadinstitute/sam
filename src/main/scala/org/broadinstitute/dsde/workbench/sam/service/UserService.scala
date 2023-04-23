@@ -27,7 +27,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging {
 
-  def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
+  def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] = {
+    println("call createUser")
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
@@ -56,6 +57,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         )
       )
     }
+  }
 
   private def attemptToRegisterSubjectAsAUser(
       maybeWorkbenchSubject: Option[WorkbenchSubject],
@@ -317,10 +319,12 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // single boolean response indicating whether the user can use the system.
   // Then there can be a simple, separate endpoint for `getUserInfo` that just returns the user record and that's it.
   // Mixing up the endpoint to return user info AND status information is only causing problems and confusion
-  def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] =
+  def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] = {
+    println("call getUserStatusInfo")
     for {
       tosAcceptanceDetails <- tosService.getTosComplianceStatus(user)
     } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.permitsSystemUsage && user.enabled, user.enabled)
+  }
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusDiagnostics]] =
     openTelemetry.time("api.v1.user.statusDiagnostics.time", API_TIMING_DURATION_BUCKET) {
