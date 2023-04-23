@@ -18,7 +18,6 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, Mo
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
-import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,13 +32,13 @@ import scala.concurrent.duration.DurationInt
 
 class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging with MockitoSugar {
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  val defaultTosService: TosService = MockTosServiceBuilder().build
-  when(
-    defaultTosService.getTosComplianceStatus(any[SamUser])
-  ).thenAnswer((i: InvocationOnMock) =>  {
-    val samUser = i.getArgument[SamUser](0)
-    IO.pure(TermsOfServiceComplianceStatus(samUser.id, true, true))
-  })
+  val defaultTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
+  //when(
+  //  defaultTosService.getTosComplianceStatus(any[SamUser])
+  //).thenAnswer((i: InvocationOnMock) =>  {
+  //  val samUser = i.getArgument[SamUser](0)
+  //  IO.pure(TermsOfServiceComplianceStatus(samUser.id, true, true))
+  //})
 
   def genSamDependencies: MockSamDependencies = {
     val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
