@@ -123,13 +123,17 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     when(
       directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
     ).thenAnswer((i: InvocationOnMock) =>  {
-      val googleSubjectId = i.getArgument[GoogleSubjectId](0)
+      val googleSubjectId = Option(i.getArgument[GoogleSubjectId](0))
+      googleSubjectId match {
+        case Some(g) => print(g.value)
+        case _ => println("No GSID")
+      }
       val samRequestContext = i.getArgument[SamRequestContext](1)
       samRequestContext.samUser match {
         case Some(s) => println(s.id.value)
-        case _ => println("none")
+        case _ => println("no SamUser")
       }
-      val samUser = SamUser(WorkbenchUserId("test"), Option(googleSubjectId), WorkbenchEmail("test@test"), None, enabled = true, None)
+      val samUser = SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None)
       IO.pure(Option(samUser))
     })
 
