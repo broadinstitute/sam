@@ -132,7 +132,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
           println(g.value)
           println(fakeUserSubjectId)
           println(fakeUserEmail)
-          directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
+          // directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
         case _ => println("No googleSubjectId found")
       }
       var samUser: SamUser = SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None)
