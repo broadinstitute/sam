@@ -128,11 +128,6 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
         case Some(g) => println(g.value)
         case _ => println("No GSID")
       }
-      val samRequestContext = i.getArgument[SamRequestContext](1)
-      samRequestContext.samUser match {
-        case Some(s) => println(s.id.value)
-        case _ => println("no SamUser")
-      }
       val samUser = SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None)
       IO.pure(Option(samUser))
     })

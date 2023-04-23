@@ -321,6 +321,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // Mixing up the endpoint to return user info AND status information is only causing problems and confusion
   def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] = {
     println("call getUserStatusInfo")
+    print(s"${user.email.value}, ${user.id.value}, ${user.enabled}, ${user.googleSubjectId}")
     for {
       tosAcceptanceDetails <- tosService.getTosComplianceStatus(user)
     } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.permitsSystemUsage && user.enabled, user.enabled)
