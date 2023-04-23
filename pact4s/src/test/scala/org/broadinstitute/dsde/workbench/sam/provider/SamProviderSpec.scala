@@ -32,6 +32,8 @@ import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
 class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging with MockitoSugar {
+  var fakeUserSubjectId: Option[String] = None
+  var fakeUserEmail: Option[String] = None
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val defaultTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
   //when(
@@ -124,8 +126,13 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
     ).thenAnswer((i: InvocationOnMock) =>  {
       val googleSubjectId = Option(i.getArgument[GoogleSubjectId](0))
+      val samRequestContext = i.getArgument[SamRequestContext](1)
       googleSubjectId match {
-        case Some(g) => println(g.value)
+        case Some(g) =>
+          println(g.value)
+          println(fakeUserSubjectId)
+          println(fakeUserEmail)
+          directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
         case _ => println("No GSID")
       }
       val samUser = SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None)
@@ -218,9 +225,15 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
         Authorization
           .parse(value)
           .map {
-            case Authorization(Credentials.Token(AuthScheme.Bearer, x)) =>
-              println(s"Captured token ${x}")
-              SetHeaders("Authorization" -> s"Bearer ${x}")
+            case Authorization(Credentials.Token(AuthScheme.Bearer, token)) =>
+              println(s"Captured token ${token}")
+              SetHeaders("Authorization" -> s"Bearer ${token}")
+              token match {
+                case "accessToken" =>
+                  fakeUserSubjectId = Some("userSubjectId")
+                  fakeUserEmail = Some("userEmail")
+                case _ =>
+              }
             case _ =>
               println("Captured no auth")
               NoOpFilter
