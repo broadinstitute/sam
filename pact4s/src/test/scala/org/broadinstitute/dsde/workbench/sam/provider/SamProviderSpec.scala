@@ -227,13 +227,13 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
           .map {
             case Authorization(Credentials.Token(AuthScheme.Bearer, token)) =>
               println(s"Captured token ${token}")
-              SetHeaders("Authorization" -> s"Bearer ${token}")
               token match {
                 case "accessToken" =>
                   fakeUserSubjectId = Some("userSubjectId")
                   fakeUserEmail = Some("userEmail")
                 case _ =>
               }
+              SetHeaders("Authorization" -> s"Bearer ${token}")
             case _ =>
               println("Captured no auth")
               NoOpFilter
