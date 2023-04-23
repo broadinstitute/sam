@@ -18,6 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, Mo
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
+import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -112,16 +113,29 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       )
     }
 
-    when {
-      directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
-    } thenReturn {
-      val samUser = SamUser(WorkbenchUserId("test"), None, WorkbenchEmail("test@test"), None, enabled = true, None)
-      IO.pure(Option(samUser))
-    }
+    //when {
+    //  directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
+    //} thenReturn {
+    //  val samUser = SamUser(WorkbenchUserId("test"), None, WorkbenchEmail("test@test"), None, enabled = true, None)
+    //  IO.pure(Option(samUser))
+    //}
 
-    when {
-      tosService.getTosComplianceStatus(any[SamUser])
-    } thenReturn IO.pure(TermsOfServiceComplianceStatus(WorkbenchUserId("test"), userHasAcceptedLatestTos = true, permitsSystemUsage = true))
+    when(
+      directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
+    ).thenAnswer((i: InvocationOnMock) =>  {
+      val googleSubjectId = i.getArgument[GoogleSubjectId](0)
+      val samRequestContext = i.getArgument[SamRequestContext](1)
+      samRequestContext.samUser match {
+        case Some(s) => println(s.id.value)
+        case _ => println("none")
+      }
+      val samUser = SamUser(WorkbenchUserId("test"), Option(googleSubjectId), WorkbenchEmail("test@test"), None, enabled = true, None)
+      IO.pure(Option(samUser))
+    })
+
+    // when {
+    //  tosService.getTosComplianceStatus(any[SamUser])
+    // } thenReturn IO.pure(TermsOfServiceComplianceStatus(WorkbenchUserId("test"), userHasAcceptedLatestTos = true, permitsSystemUsage = true))
 
     val fakeWorkspaceResourceType = ResourceType(ResourceTypeName("workspace"), Set.empty, Set.empty, ResourceRoleName("workspace"))
     when {
