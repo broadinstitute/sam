@@ -66,11 +66,11 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     //}
     val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), defaultTosService))
     // val userService: UserService = mock[UserService]
-    when {
-      userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    } thenReturn {
-      IO.pure(UserStatusInfo("", "", false, false))
-    }
+    // when {
+    //  userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
+    //} thenReturn {
+    //  IO.pure(UserStatusInfo("", "", false, false))
+    //}
     // val userService: UserService = new UserService(directoryDAO, cloudExtensions, anySeq[String], any[TosService])
     // when {
     //  userService.directoryDAO
