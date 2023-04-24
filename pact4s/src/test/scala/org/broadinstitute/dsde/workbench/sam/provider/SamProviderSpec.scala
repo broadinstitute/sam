@@ -42,13 +42,6 @@ class SamProviderSpec
   var activeSamUserSubjectId: Option[String] = None
   var activeSamUserEmail: Option[String] = None
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  val defaultTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
-  // when(
-  //  defaultTosService.getTosComplianceStatus(any[SamUser])
-  // ).thenAnswer((i: InvocationOnMock) =>  {
-  //  val samUser = i.getArgument[SamUser](0)
-  //  IO.pure(TermsOfServiceComplianceStatus(samUser.id, true, true))
-  // })
 
   def genSamDependencies: MockSamDependencies = {
     val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
@@ -61,37 +54,11 @@ class SamProviderSpec
     val policyEvaluatorService = mock[PolicyEvaluatorService]
     val mockResourceService = mock[ResourceService]
     val mockManagedGroupService = mock[ManagedGroupService]
-    // val tosService = mock[TosService]
+    // val tosService = mock[TosService] // replaced by MockTosServiceBuilder
     val tosService = MockTosServiceBuilder().withAllAccepted().build
     val azureService = mock[AzureService]
-    // when {
-    //  any[TosService]
-    // } thenReturn {
-    //  defaultTosService
-    // }
-    // when {
-    //  anySeq[String]
-    // } thenReturn {
-    //  Seq()
-    // }
+    // val userService: UserService = mock[UserService] // replaced by a mock returned by constructor call
     val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), tosService))
-    // val userService: UserService = mock[UserService]
-    // when {
-    //  userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    // } thenReturn {
-    //  IO.pure(UserStatusInfo("", "", false, false))
-    // }
-    // val userService: UserService = new UserService(directoryDAO, cloudExtensions, anySeq[String], any[TosService])
-    // when {
-    //  userService.directoryDAO
-    // } thenReturn {
-    //  directoryDAO
-    // }
-    // when {
-    //  userService.cloudExtensions
-    // } thenReturn {
-    //  cloudExtensions
-    // }
     // when(
     //  userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
     // ).thenAnswer((i: InvocationOnMock) =>  {
@@ -123,6 +90,7 @@ class SamProviderSpec
       )
     }
 
+    // Replaced by stubbing below
     // when {
     //  directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
     // } thenReturn {
@@ -133,7 +101,8 @@ class SamProviderSpec
     when(
       directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
     ).thenAnswer { (i: InvocationOnMock) =>
-      val googleSubjectId = Option(i.getArgument[GoogleSubjectId](0))
+      val googleSubjectId: Option[GoogleSubjectId] = Some(i.getArgument[GoogleSubjectId](0))
+      val defaultSamUser: Option[SamUser] = Some(SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None))
       val samRequestContext = i.getArgument[SamRequestContext](1)
       googleSubjectId match {
         case Some(g) =>
@@ -143,19 +112,22 @@ class SamProviderSpec
         // directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
         case _ => println("No googleSubjectId found")
       }
-      var samUser: SamUser = SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None)
+      var samUser: Option[SamUser] = None
       activeSamUserSubjectId match {
         case Some(userSubjectId) =>
           activeSamUserEmail match {
             case Some(userEmail) =>
-              samUser = SamUser(WorkbenchUserId(userSubjectId), googleSubjectId, WorkbenchEmail(userEmail), None, enabled = true, None)
+              samUser = Some(SamUser(WorkbenchUserId(userSubjectId), googleSubjectId, WorkbenchEmail(userEmail), None, enabled = true, None))
             case _ =>
+              samUser = defaultSamUser
           }
         case _ =>
+          samUser = defaultSamUser
       }
-      IO.pure(Option(samUser))
+      IO.pure(samUser)
     }
 
+      // Wrapped inside MockTosServiceBuilder
     // when {
     //  tosService.getTosComplianceStatus(any[SamUser])
     // } thenReturn IO.pure(TermsOfServiceComplianceStatus(WorkbenchUserId("test"), userHasAcceptedLatestTos = true, permitsSystemUsage = true))
@@ -262,6 +234,8 @@ class SamProviderSpec
           .getOrElse(NoOpFilter)
       case None =>
         println("No Authorization header found.")
+        activeSamUserSubjectId = Some("test")
+        activeSamUserEmail = Some("test@test")
         NoOpFilter
     }
 
