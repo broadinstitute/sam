@@ -39,8 +39,8 @@ class SamProviderSpec
     with PactVerifier
     with LazyLogging
     with MockitoSugar {
-  var fakeUserSubjectId: Option[String] = None
-  var fakeUserEmail: Option[String] = None
+  var activeSamUserSubjectId: Option[String] = None
+  var activeSamUserEmail: Option[String] = None
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val defaultTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
   // when(
@@ -138,15 +138,15 @@ class SamProviderSpec
       googleSubjectId match {
         case Some(g) =>
           println(g.value)
-          println(fakeUserSubjectId)
-          println(fakeUserEmail)
+          println(activeSamUserSubjectId)
+          println(activeSamUserEmail)
         // directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
         case _ => println("No googleSubjectId found")
       }
       var samUser: SamUser = SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None)
-      fakeUserSubjectId match {
+      activeSamUserSubjectId match {
         case Some(userSubjectId) =>
-          fakeUserEmail match {
+          activeSamUserEmail match {
             case Some(userEmail) =>
               samUser = SamUser(WorkbenchUserId(userSubjectId), googleSubjectId, WorkbenchEmail(userEmail), None, enabled = true, None)
             case _ =>
@@ -246,21 +246,23 @@ class SamProviderSpec
               println(s"Captured token ${token}")
               token match {
                 case "accessToken" =>
-                  fakeUserSubjectId = Some("userSubjectId")
-                  fakeUserEmail = Some("userEmail")
+                  activeSamUserSubjectId = Some("userSubjectId")
+                  activeSamUserEmail = Some("userEmail")
                 case _ =>
-                  fakeUserSubjectId = None
-                  fakeUserEmail = None
+                  activeSamUserSubjectId = None
+                  activeSamUserEmail = None
               }
               SetHeaders("Authorization" -> s"Bearer ${token}")
             case _ =>
-              println("Captured no auth")
-              fakeUserSubjectId = None
-              fakeUserEmail = None
+              println("AuthScheme is not Bearer")
+              activeSamUserSubjectId = None
+              activeSamUserEmail = None
               NoOpFilter
           }
           .getOrElse(NoOpFilter)
-      case None => NoOpFilter
+      case None =>
+        println("No Authorization header found.")
+        NoOpFilter
     }
 
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
