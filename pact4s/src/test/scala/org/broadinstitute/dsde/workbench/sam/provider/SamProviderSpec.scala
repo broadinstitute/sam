@@ -59,20 +59,6 @@ class SamProviderSpec
     val azureService = mock[AzureService]
     // val userService: UserService = mock[UserService] // replaced by a mock returned by constructor call
     val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), tosService))
-    // when(
-    //  userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    // ).thenAnswer((i: InvocationOnMock) =>  {
-    //  val samUser1 = Option(i.getArgument[SamUser](0))
-    //  samUser1 match {
-    //    case Some(s) =>
-    //      val userSubjectIdArg = s.googleSubjectId.get.value
-    //      val emailArg = s.email.value
-    //      val enabledArg = s.enabled
-    //      IO.pure(UserStatusInfo(userSubjectIdArg, emailArg, enabledArg, false))
-    //    case _ =>
-    //      IO.pure(UserStatusInfo("", "", false, false))
-    //  }
-    // })
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
