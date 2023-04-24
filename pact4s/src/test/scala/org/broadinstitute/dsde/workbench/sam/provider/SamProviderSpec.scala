@@ -31,62 +31,70 @@ import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
-class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestSupport with BeforeAndAfterAll with PactVerifier with LazyLogging with MockitoSugar {
+class SamProviderSpec
+    extends AnyFlatSpec
+    with ScalatestRouteTest
+    with MockTestSupport
+    with BeforeAndAfterAll
+    with PactVerifier
+    with LazyLogging
+    with MockitoSugar {
   var fakeUserSubjectId: Option[String] = None
   var fakeUserEmail: Option[String] = None
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val defaultTosService: TosService = MockTosServiceBuilder().withAllAccepted().build
-  //when(
+  // when(
   //  defaultTosService.getTosComplianceStatus(any[SamUser])
-  //).thenAnswer((i: InvocationOnMock) =>  {
+  // ).thenAnswer((i: InvocationOnMock) =>  {
   //  val samUser = i.getArgument[SamUser](0)
   //  IO.pure(TermsOfServiceComplianceStatus(samUser.id, true, true))
-  //})
+  // })
 
   def genSamDependencies: MockSamDependencies = {
     val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
     val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
-    //val directoryDAO: DirectoryDAO = mock[DirectoryDAO]
-    //val cloudExtensions: CloudExtensions = mock[CloudExtensions]
+    // val directoryDAO: DirectoryDAO = mock[DirectoryDAO]
+    // val cloudExtensions: CloudExtensions = mock[CloudExtensions]
     val policyDAO = mock[AccessPolicyDAO]
     val googleExt = mock[GoogleExtensions]
 
     val policyEvaluatorService = mock[PolicyEvaluatorService]
     val mockResourceService = mock[ResourceService]
     val mockManagedGroupService = mock[ManagedGroupService]
-    val tosService = mock[TosService]
+    // val tosService = mock[TosService]
+    val tosService = MockTosServiceBuilder().withAllAccepted().build
     val azureService = mock[AzureService]
     // when {
     //  any[TosService]
-    //} thenReturn {
+    // } thenReturn {
     //  defaultTosService
-    //}
-    //when {
+    // }
+    // when {
     //  anySeq[String]
-    //} thenReturn {
+    // } thenReturn {
     //  Seq()
-    //}
-    val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), defaultTosService))
+    // }
+    val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), tosService))
     // val userService: UserService = mock[UserService]
     // when {
     //  userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    //} thenReturn {
+    // } thenReturn {
     //  IO.pure(UserStatusInfo("", "", false, false))
-    //}
+    // }
     // val userService: UserService = new UserService(directoryDAO, cloudExtensions, anySeq[String], any[TosService])
     // when {
     //  userService.directoryDAO
-    //} thenReturn {
+    // } thenReturn {
     //  directoryDAO
-    //}
-    //when {
+    // }
+    // when {
     //  userService.cloudExtensions
-    //} thenReturn {
+    // } thenReturn {
     //  cloudExtensions
-    //}
-    //when(
+    // }
+    // when(
     //  userService.getUserStatusInfo(any[SamUser], any[SamRequestContext])
-    //).thenAnswer((i: InvocationOnMock) =>  {
+    // ).thenAnswer((i: InvocationOnMock) =>  {
     //  val samUser1 = Option(i.getArgument[SamUser](0))
     //  samUser1 match {
     //    case Some(s) =>
@@ -97,7 +105,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
     //    case _ =>
     //      IO.pure(UserStatusInfo("", "", false, false))
     //  }
-    //})
+    // })
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
@@ -115,16 +123,16 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       )
     }
 
-    //when {
+    // when {
     //  directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
-    //} thenReturn {
+    // } thenReturn {
     //  val samUser = SamUser(WorkbenchUserId("test"), None, WorkbenchEmail("test@test"), None, enabled = true, None)
     //  IO.pure(Option(samUser))
-    //}
+    // }
 
     when(
       directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
-    ).thenAnswer((i: InvocationOnMock) =>  {
+    ).thenAnswer { (i: InvocationOnMock) =>
       val googleSubjectId = Option(i.getArgument[GoogleSubjectId](0))
       val samRequestContext = i.getArgument[SamRequestContext](1)
       googleSubjectId match {
@@ -132,7 +140,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
           println(g.value)
           println(fakeUserSubjectId)
           println(fakeUserEmail)
-          // directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
+        // directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
         case _ => println("No googleSubjectId found")
       }
       var samUser: SamUser = SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None)
@@ -146,7 +154,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
         case _ =>
       }
       IO.pure(Option(samUser))
-    })
+    }
 
     // when {
     //  tosService.getTosComplianceStatus(any[SamUser])
@@ -241,10 +249,14 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
                   fakeUserSubjectId = Some("userSubjectId")
                   fakeUserEmail = Some("userEmail")
                 case _ =>
+                  fakeUserSubjectId = None
+                  fakeUserEmail = None
               }
               SetHeaders("Authorization" -> s"Bearer ${token}")
             case _ =>
               println("Captured no auth")
+              fakeUserSubjectId = None
+              fakeUserEmail = None
               NoOpFilter
           }
           .getOrElse(NoOpFilter)
@@ -260,7 +272,8 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
       )
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-  ).withHost("localhost").withPort(8080)
+  ).withHost("localhost")
+    .withPort(8080)
     .withRequestFiltering(requestFilter)
 
   it should "Verify pacts" in {
@@ -270,7 +283,7 @@ class SamProviderSpec extends AnyFlatSpec with ScalatestRouteTest with MockTestS
         PublishVerificationResults(gitSha, ProviderTags(branch))
       ),
       providerVerificationOptions = Seq(
-        ProviderVerificationOption.SHOW_STACKTRACE,
+        ProviderVerificationOption.SHOW_STACKTRACE
       ).toList,
       verificationTimeout = Some(30.seconds)
     )
