@@ -11,6 +11,8 @@ object Merging {
     case PathList("META-INF", "versions", "9", "module-info.class") => MergeStrategy.first
     case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.first
     case PathList("META-INF", "kotlin-result.kotlin_module") => MergeStrategy.first
+    case PathList("META-INF", "kotlin-stdlib.kotlin_module") => MergeStrategy.first
+    case PathList("META-INF", "kotlin-stdlib-common.kotlin_module") => MergeStrategy.first
     case PathList("mozilla", "public-suffix-list.txt") => MergeStrategy.first
     case "module-info.class" =>
       MergeStrategy.discard
