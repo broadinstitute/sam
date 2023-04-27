@@ -142,14 +142,21 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   }
                 } ~
                 pathPrefix("signedUrlForBlob") {
-                  post {
-                    entity(as[SignedUrlRequest]) { request =>
-                      complete {
-                        googleExtensions
-                          .getSignedUrl(samUser, GoogleProject(project), request.bucketName, request.blobName, samRequestContext)
-                          .map { signedUrl =>
-                            StatusCodes.OK -> JsString(signedUrl.toString)
-                          }
+                  requireOneOfActionIfParentIsWorkspace(
+                    FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
+                    Set(SamResourceActions.createPet),
+                    samUser.id,
+                    samRequestContext
+                  ) {
+                    post {
+                      entity(as[SignedUrlRequest]) { request =>
+                        complete {
+                          googleExtensions
+                            .getSignedUrl(samUser, GoogleProject(project), request.bucketName, request.blobName, samRequestContext)
+                            .map { signedUrl =>
+                              StatusCodes.OK -> JsString(signedUrl.toString)
+                            }
+                        }
                       }
                     }
                   }

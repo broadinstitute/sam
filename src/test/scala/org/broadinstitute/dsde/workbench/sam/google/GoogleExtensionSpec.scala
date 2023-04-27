@@ -10,12 +10,6 @@ import cats.implicits._
 import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.api.services.cloudresourcemanager.model.Ancestor
 import com.google.api.services.groupssettings.model.Groups
-import com.google.auth.oauth2.ServiceAccountCredentials
-import com.google.gson.stream.{JsonReader, JsonWriter}
-import com.google.gson.{FieldNamingPolicy, GsonBuilder, TypeAdapter}
-import org.bouncycastle.jcajce.provider.asymmetric.rsa.BCRSAPrivateCrtKey
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.bouncycastle.openssl.jcajce.{JcaPEMWriter, JcaPKCS8Generator}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.MessageRequest
@@ -25,9 +19,10 @@ import org.broadinstitute.dsde.workbench.google2.Generators.{genGcsBlobName, gen
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId, ServiceAccountPrivateKeyData}
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
+import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -40,16 +35,11 @@ import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
 
-import java.io.StringWriter
-import java.nio.charset.StandardCharsets
-import java.security.{KeyPairGenerator, Security}
-import java.time.{Duration => JavaDuration, Instant}
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.{Base64, Date, GregorianCalendar, UUID}
+import java.util.{Date, GregorianCalendar, UUID}
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.Using
 
 class GoogleExtensionSpec(_system: ActorSystem)
     extends TestKit(_system)
@@ -1199,64 +1189,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
 
-  class RealKeyMockGoogleIamDAO extends MockGoogleIamDAO {
+  private def setupGoogleKeyCacheTestsWithRealKey: (GoogleExtensions, UserService, TosService) =
+    setupGoogleKeyCacheTests(true)
 
-    class DurationAdapter extends TypeAdapter[JavaDuration] {
-      override def write(writer: JsonWriter, value: JavaDuration): Unit =
-        writer.value(value.toMillis)
-
-      override def read(in: JsonReader): JavaDuration = throw new NotImplementedError("No reading here")
-    }
-
-    class BCRSAPrivateCrtKeyAdapter extends TypeAdapter[BCRSAPrivateCrtKey] {
-      override def write(writer: JsonWriter, value: BCRSAPrivateCrtKey): Unit = {
-        val sw = new StringWriter()
-        Using(new JcaPEMWriter(sw)) { pw =>
-          pw.writeObject(new JcaPKCS8Generator(value, null))
-        }
-        writer.value(sw.toString)
-      }
-
-      override def read(in: JsonReader): BCRSAPrivateCrtKey = throw new NotImplementedError("No reading here")
-    }
-    override def createServiceAccountKey(serviceAccountProject: GoogleProject, serviceAccountEmail: WorkbenchEmail): Future[ServiceAccountKey] = {
-      Security.addProvider(new BouncyCastleProvider)
-
-      // Create the public and private keys
-      val keyGen = KeyPairGenerator.getInstance("RSA", "BC")
-      keyGen.initialize(2048)
-      val pair = keyGen.genKeyPair()
-
-      val keyId = ServiceAccountKeyId(UUID.randomUUID().toString)
-      val serviceAccountCredentials = ServiceAccountCredentials
-        .newBuilder()
-        .setServiceAccountUser("testUser")
-        .setClientEmail(serviceAccountEmail.value)
-        .setClientId("12345678")
-        .setPrivateKey(pair.getPrivate)
-        .setPrivateKeyId(keyId.value)
-        .build()
-
-      val gson = new GsonBuilder()
-        .registerTypeAdapter(classOf[JavaDuration], new DurationAdapter)
-        .registerTypeAdapter(classOf[BCRSAPrivateCrtKey], new BCRSAPrivateCrtKeyAdapter)
-        .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
-        .create()
-      val keyJsonTree = gson.toJsonTree(serviceAccountCredentials)
-      keyJsonTree.getAsJsonObject.addProperty("type", "service_account")
-      val keyJson = gson.toJson(keyJsonTree)
-      val key = ServiceAccountKey(
-        keyId,
-        ServiceAccountPrivateKeyData(Base64.getEncoder.encodeToString(keyJson.getBytes(StandardCharsets.UTF_8))),
-        Some(Instant.now),
-        Some(Instant.now.plusSeconds(300))
-      )
-      serviceAccountKeys(serviceAccountEmail) += keyId -> key
-      Future.successful(key)
-    }
-  }
-
-  private def setupGoogleKeyCacheTests(realKey: Boolean = false): (GoogleExtensions, UserService, TosService) = {
+  private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService, TosService) =
+    setupGoogleKeyCacheTests(false)
+  private def setupGoogleKeyCacheTests(realKey: Boolean): (GoogleExtensions, UserService, TosService) = {
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = newDirectoryDAO()
 
@@ -1334,7 +1272,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests()
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
@@ -1359,7 +1297,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests()
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
@@ -1396,7 +1334,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests()
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
