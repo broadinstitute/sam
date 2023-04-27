@@ -1,7 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
 import monocle.macros.Lenses
+import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
@@ -74,6 +77,9 @@ object SamJsonSupport {
   implicit val CreateResourcePolicyResponseFormat = jsonFormat2(CreateResourcePolicyResponse.apply)
 
   implicit val CreateResourceResponseFormat = jsonFormat4(CreateResourceResponse.apply)
+
+  implicit val GcsBlobNameFormat = jsonFormat(GcsBlobName.apply _, "value")
+  implicit val SignedUrlRequestFormat = jsonFormat2(SignedUrlRequest.apply)
 }
 
 object RootPrimitiveJsonSupport {
@@ -302,6 +308,8 @@ object BasicWorkbenchGroup {
 @Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
+
+@Lenses final case class SignedUrlRequest(bucketName: GcsBucketName, blobName: GcsBlobName)
 object SamUser {
   def apply(
       id: WorkbenchUserId,

@@ -116,6 +116,7 @@ object MockTestSupport extends MockTestSupport {
         cloudKeyCache,
         notificationDAO,
         FakeGoogleKmsInterpreter,
+        FakeGoogleStorageInterpreter,
         googleServicesConfig,
         petServiceAccountConfig,
         resourceTypes,

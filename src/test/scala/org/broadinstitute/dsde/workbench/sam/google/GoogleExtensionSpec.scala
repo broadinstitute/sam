@@ -10,14 +10,22 @@ import cats.implicits._
 import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.api.services.cloudresourcemanager.model.Ancestor
 import com.google.api.services.groupssettings.model.Groups
+import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.gson.stream.{JsonReader, JsonWriter}
+import com.google.gson.{FieldNamingPolicy, GsonBuilder, TypeAdapter}
+import org.bouncycastle.jcajce.provider.asymmetric.rsa.BCRSAPrivateCrtKey
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.bouncycastle.openssl.jcajce.{JcaPEMWriter, JcaPKCS8Generator}
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.MessageRequest
 import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
+import org.broadinstitute.dsde.workbench.google2.Generators.{genGcsBlobName, genGcsBucketName}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId, ServiceAccountPrivateKeyData}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -32,11 +40,16 @@ import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
 
+import java.io.StringWriter
+import java.nio.charset.StandardCharsets
+import java.security.{KeyPairGenerator, Security}
+import java.time.{Duration => JavaDuration, Instant}
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.{Date, GregorianCalendar, UUID}
+import java.util.{Base64, Date, GregorianCalendar, UUID}
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Using
 
 class GoogleExtensionSpec(_system: ActorSystem)
     extends TestKit(_system)
@@ -115,6 +128,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
         mockGoogleNotificationsPubSubDAO,
         mockGoogleGroupSyncPubSubDAO,
         mockGoogleDisableUsersPubSubDAO,
+        null,
         null,
         null,
         null,
@@ -276,6 +290,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       petServiceAccountConfig,
       constrainableResourceTypes,
@@ -350,6 +365,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockGoogleGroupSyncPubSubDAO,
       mockGoogleDisableUsersPubSubDAO,
       mockGoogleIamDAO,
+      null,
       null,
       null,
       null,
@@ -447,6 +463,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockGoogleIamDAO,
       null,
       mockGoogleProjectDAO,
+      null,
       null,
       null,
       null,
@@ -552,6 +569,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       petServiceAccountConfig,
       configResourceTypes,
@@ -574,6 +592,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val ge = new GoogleExtensions(
       TestSupport.distributedLock,
       dirDAO,
+      null,
       null,
       null,
       null,
@@ -617,6 +636,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -641,6 +661,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       dirDAO,
       null,
       new MockGoogleDirectoryDAO(),
+      null,
       null,
       null,
       null,
@@ -687,6 +708,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -708,6 +730,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val ge = new GoogleExtensions(
       TestSupport.distributedLock,
       dirDAO,
+      null,
       null,
       null,
       null,
@@ -752,6 +775,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -777,6 +801,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       dirDAO,
       null,
       mockGoogleDirectoryDAO,
+      null,
       null,
       null,
       null,
@@ -842,6 +867,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       googleKeyCache,
       notificationDAO,
       FakeGoogleKmsInterpreter,
+      null,
       googleServicesConfig,
       petServiceAccountConfig,
       configResourceTypes,
@@ -897,6 +923,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       config,
       null,
       configResourceTypes,
@@ -912,6 +939,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val config = googleServicesConfig.copy(appsDomain = "test.cloudfire.org")
     val googleExtensions = new GoogleExtensions(
       TestSupport.distributedLock,
+      null,
       null,
       null,
       null,
@@ -947,6 +975,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockDirectoryDAO,
       null,
       mockGoogleDirectoryDAO,
+      null,
       null,
       null,
       null,
@@ -997,6 +1026,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -1030,6 +1060,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -1049,7 +1080,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       .thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
-    when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
+    when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext))
@@ -1057,7 +1088,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN), samRequestContext))
 
-    verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[String]])
+    verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
 
   it should "trigger updates to constrained policies when updating a group that is a part of a managed group" in {
@@ -1078,6 +1109,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -1098,7 +1130,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       .thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
-    when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
+    when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish subgroup relationship to managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
@@ -1110,7 +1142,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), samRequestContext))
 
-    verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[String]])
+    verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
 
   it should "break out of the loop" in {
@@ -1131,6 +1163,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -1151,7 +1184,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       .thenReturn(IO.pure(Set.empty.asInstanceOf[Set[WorkbenchGroupIdentity]]))
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
-    when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[String]])).thenReturn(Future.successful(()))
+    when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
 
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
@@ -1163,16 +1196,73 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), samRequestContext))
 
-    verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[String]])
+    verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
 
-  private def setupGoogleKeyCacheTests: (GoogleExtensions, UserService, TosService) = {
+  class RealKeyMockGoogleIamDAO extends MockGoogleIamDAO {
+
+    class DurationAdapter extends TypeAdapter[JavaDuration] {
+      override def write(writer: JsonWriter, value: JavaDuration): Unit =
+        writer.value(value.toMillis)
+
+      override def read(in: JsonReader): JavaDuration = throw new NotImplementedError("No reading here")
+    }
+
+    class BCRSAPrivateCrtKeyAdapter extends TypeAdapter[BCRSAPrivateCrtKey] {
+      override def write(writer: JsonWriter, value: BCRSAPrivateCrtKey): Unit = {
+        val sw = new StringWriter()
+        Using(new JcaPEMWriter(sw)) { pw =>
+          pw.writeObject(new JcaPKCS8Generator(value, null))
+        }
+        writer.value(sw.toString)
+      }
+
+      override def read(in: JsonReader): BCRSAPrivateCrtKey = throw new NotImplementedError("No reading here")
+    }
+    override def createServiceAccountKey(serviceAccountProject: GoogleProject, serviceAccountEmail: WorkbenchEmail): Future[ServiceAccountKey] = {
+      Security.addProvider(new BouncyCastleProvider)
+
+      // Create the public and private keys
+      val keyGen = KeyPairGenerator.getInstance("RSA", "BC")
+      keyGen.initialize(2048)
+      val pair = keyGen.genKeyPair()
+
+      val keyId = ServiceAccountKeyId(UUID.randomUUID().toString)
+      val serviceAccountCredentials = ServiceAccountCredentials
+        .newBuilder()
+        .setServiceAccountUser("testUser")
+        .setClientEmail(serviceAccountEmail.value)
+        .setClientId("12345678")
+        .setPrivateKey(pair.getPrivate)
+        .setPrivateKeyId(keyId.value)
+        .build()
+
+      val gson = new GsonBuilder()
+        .registerTypeAdapter(classOf[JavaDuration], new DurationAdapter)
+        .registerTypeAdapter(classOf[BCRSAPrivateCrtKey], new BCRSAPrivateCrtKeyAdapter)
+        .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+        .create()
+      val keyJsonTree = gson.toJsonTree(serviceAccountCredentials)
+      keyJsonTree.getAsJsonObject.addProperty("type", "service_account")
+      val keyJson = gson.toJson(keyJsonTree)
+      val key = ServiceAccountKey(
+        keyId,
+        ServiceAccountPrivateKeyData(Base64.getEncoder.encodeToString(keyJson.getBytes(StandardCharsets.UTF_8))),
+        Some(Instant.now),
+        Some(Instant.now.plusSeconds(300))
+      )
+      serviceAccountKeys(serviceAccountEmail) += keyId -> key
+      Future.successful(key)
+    }
+  }
+
+  private def setupGoogleKeyCacheTests(realKey: Boolean = false): (GoogleExtensions, UserService, TosService) = {
     implicit val patienceConfig = PatienceConfig(1 second)
     val dirDAO = newDirectoryDAO()
 
     clearDatabase()
 
-    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleIamDAO = if (realKey) new RealKeyMockGoogleIamDAO else new MockGoogleIamDAO
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGoogleKeyCachePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleNotificationPubSubDAO = new MockGooglePubSubDAO
@@ -1203,6 +1293,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       googleKeyCache,
       notificationDAO,
       null,
+      FakeGoogleStorageInterpreter,
       googleServicesConfig,
       petServiceAccountConfig,
       configResourceTypes,
@@ -1214,11 +1305,36 @@ class GoogleExtensionSpec(_system: ActorSystem)
     (googleExtensions, service, tosService)
   }
 
+  "getSignedUrl" should "get a signed URL for GS Objects" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    implicit val patienceConfig = PatienceConfig(1 second)
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests(true)
+
+    val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
+    // create a user
+    val newUser = newUserWithAcceptedTos(service, tosService, createDefaultUser, samRequestContext)
+    newUser shouldBe UserStatus(
+      UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
+      TestSupport.enabledMapTosAccepted
+    )
+
+    // create a pet service account
+    val googleProject = GoogleProject("testproject")
+
+    val bucketName = genGcsBucketName.sample.get
+    val blobName = genGcsBlobName.sample.get
+    runAndWait(FakeGoogleStorageInterpreter.createBlob(bucketName, blobName, "test".getBytes("UTF-8")).compile.drain)
+
+    val url = runAndWait(googleExtensions.getSignedUrl(createDefaultUser, googleProject, bucketName, blobName, samRequestContext))
+    url.getFile should startWith(s"/${bucketName.value}/${blobName.value}")
+  }
+
   "GoogleKeyCache" should "create a service account key and return the same key when called again" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests()
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
@@ -1243,7 +1359,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests()
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
@@ -1280,7 +1396,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     assume(databaseEnabled, databaseEnabledClue)
 
     implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests
+    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests()
 
     val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
     // create a user
@@ -1363,6 +1479,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       TestSupport.distributedLock,
       dirDAO,
       policyDAO,
+      null,
       null,
       null,
       null,
@@ -1922,6 +2039,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       garbageOrgGoogleServicesConfig,
       petServiceAccountConfig,
       configResourceTypes,
@@ -1965,6 +2083,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      null,
       googleServicesConfig,
       petServiceAccountConfig,
       configResourceTypes,
@@ -1998,6 +2117,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       notificationDAO,
+      null,
       null,
       googleServicesConfig,
       petServiceAccountConfig,
