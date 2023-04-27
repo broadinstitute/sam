@@ -102,7 +102,8 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogle2Tests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
-  val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.126.10" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+  val googleStorageLocal: ModuleID =
+    "com.google.cloud" % "google-cloud-nio" % "0.126.10" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
