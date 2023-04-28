@@ -5,11 +5,11 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{GoogleSubjectId, WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, MockDirectoryDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -18,12 +18,12 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, Mo
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
-import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
 import pact4s.provider.ProviderRequestFilter.{NoOpFilter, SetHeaders}
+import pact4s.provider.StateManagement.StateManagementFunction
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
@@ -42,10 +42,19 @@ class SamProviderSpec
   var activeSamUserSubjectId: Option[String] = None
   var activeSamUserEmail: Option[String] = None
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
+  val newSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
 
   def genSamDependencies: MockSamDependencies = {
-    val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
-    val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+    val userService: UserService = TestUserServiceBuilder()
+      .withAllUsersGroup(allUsersGroup)
+      .withEnabledUser(defaultSamUser)
+      .withAllUsersHavingAcceptedTos()
+      .build
+    // val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+    val directoryDAO: DirectoryDAO = userService.directoryDAO
+    // val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+    val cloudExtensions: CloudExtensions = userService.cloudExtensions
     // val directoryDAO: DirectoryDAO = mock[DirectoryDAO]
     // val cloudExtensions: CloudExtensions = mock[CloudExtensions]
     val policyDAO = mock[AccessPolicyDAO]
@@ -58,7 +67,7 @@ class SamProviderSpec
     val tosService = MockTosServiceBuilder().withAllAccepted().build
     val azureService = mock[AzureService]
     // val userService: UserService = mock[UserService] // replaced by a mock returned by constructor call
-    val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), tosService))
+    // val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), tosService))
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
@@ -84,34 +93,34 @@ class SamProviderSpec
     //  IO.pure(Option(samUser))
     // }
 
-    when(
-      directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
-    ).thenAnswer { (i: InvocationOnMock) =>
-      val googleSubjectId: Option[GoogleSubjectId] = Some(i.getArgument[GoogleSubjectId](0))
-      val defaultSamUser: Option[SamUser] = Some(SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None))
-      val samRequestContext = i.getArgument[SamRequestContext](1)
-      googleSubjectId match {
-        case Some(g) =>
-          println(g.value)
-          println(activeSamUserSubjectId)
-          println(activeSamUserEmail)
+    // when(
+    //  directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
+    //).thenAnswer { (i: InvocationOnMock) =>
+    //  val googleSubjectId: Option[GoogleSubjectId] = Some(i.getArgument[GoogleSubjectId](0))
+    //  val defaultSamUser: Option[SamUser] = Some(SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None))
+    //  val samRequestContext = i.getArgument[SamRequestContext](1)
+    //  googleSubjectId match {
+    //    case Some(g) =>
+    //      println(g.value)
+    //      println(activeSamUserSubjectId)
+    //      println(activeSamUserEmail)
         // directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
-        case _ => println("No googleSubjectId found")
-      }
-      var samUser: Option[SamUser] = None
-      activeSamUserSubjectId match {
-        case Some(userSubjectId) =>
-          activeSamUserEmail match {
-            case Some(userEmail) =>
-              samUser = Some(SamUser(WorkbenchUserId(userSubjectId), googleSubjectId, WorkbenchEmail(userEmail), None, enabled = true, None))
-            case _ =>
-              samUser = defaultSamUser
-          }
-        case _ =>
-          samUser = defaultSamUser
-      }
-      IO.pure(samUser)
-    }
+    //    case _ => println("No googleSubjectId found")
+    //  }
+    //  var samUser: Option[SamUser] = None
+    //  activeSamUserSubjectId match {
+    //    case Some(userSubjectId) =>
+    //      activeSamUserEmail match {
+    //        case Some(userEmail) =>
+    //          samUser = Some(SamUser(WorkbenchUserId(userSubjectId), googleSubjectId, WorkbenchEmail(userEmail), None, enabled = true, None))
+    //        case _ =>
+    //          samUser = defaultSamUser
+    //      }
+    //    case _ =>
+    //      samUser = defaultSamUser
+    //  }
+    //  IO.pure(samUser)
+    //}
 
       // Wrapped inside MockTosServiceBuilder
     // when {
@@ -162,7 +171,7 @@ class SamProviderSpec
   def startSam: IO[Http.ServerBinding] =
     for {
       binding <- IO
-        .fromFuture(IO(Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, Generator.genWorkbenchUserBoth.sample.get).route)))
+        .fromFuture(IO(Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route)))
         .onError { t: Throwable =>
           IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
@@ -206,10 +215,14 @@ class SamProviderSpec
                 case "accessToken" =>
                   activeSamUserSubjectId = Some("userSubjectId")
                   activeSamUserEmail = Some("userEmail")
+                  genSamDependencies.userService.createUser(newSamUser, mock[SamRequestContext])
+                  genSamDependencies.userService.enableUser(newSamUser.id, mock[SamRequestContext])
+                  genSamDependencies.userService.getUserStatusInfo(newSamUser, mock[SamRequestContext])
                 case _ =>
                   activeSamUserSubjectId = None
                   activeSamUserEmail = None
               }
+              println(s"Set headers")
               SetHeaders("Authorization" -> s"Bearer ${token}")
             case _ =>
               println("AuthScheme is not Bearer")
@@ -237,6 +250,16 @@ class SamProviderSpec
   ).withHost("localhost")
     .withPort(8080)
     .withRequestFiltering(requestFilter)
+    .withStateManagementFunction(
+      StateManagementFunction {
+        case ProviderState("", params) =>
+          println("default state")
+        case ProviderState("user exists", params) =>
+          println("user exists")
+        case _ => () // Nothing to do
+      }
+        .withBeforeEach(() => ())
+    )
 
   it should "Verify pacts" in {
     verifyPacts(
