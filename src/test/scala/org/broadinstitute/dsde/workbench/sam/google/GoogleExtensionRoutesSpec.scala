@@ -438,7 +438,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     (googleIamDAO, expectedJson)
   }
 
-  def setupSignedUrlTest(): (SamUser, SamRoutes) = {
+  def setupSignedUrlTest(): (SamUser, SamRoutes, String) = {
     val googleIamDAO = new RealKeyMockGoogleIamDAO
     val samUser = Generator.genWorkbenchUserGoogle.sample.get
 
@@ -448,6 +448,22 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       TestSupport.googleServicesConfig.copy(serviceAccountClientEmail = samUser.email, serviceAccountClientId = samUser.googleSubjectId.get.value),
       user = samUser
     )
+    val resourceType = ResourceType(
+      SamResourceTypes.googleProjectName,
+      Set(ResourceActionPattern(SamResourceActions.createPet.value, "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.createPet))),
+      ResourceRoleName("owner")
+    )
+
+    val projectName = "my-project"
+    val createResourceRequest = CreateResourceRequest(
+      ResourceId(projectName),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(samUser.email), Set(SamResourceActions.createPet), Set(resourceType.ownerRoleName))),
+      Set.empty
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
 
     samDeps.cloudExtensions
       .asInstanceOf[GoogleExtensions]
@@ -460,7 +476,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
         )
       )
       .unsafeRunSync()
-    (user, routes)
+    (user, routes, projectName)
   }
 
   def setupPetSATest(): (SamUser, SamRoutes, String) = {

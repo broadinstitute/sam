@@ -143,7 +143,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   }
                 } ~
                 pathPrefix("signedUrlForBlob") {
-                  requireOneOfActionIfParentIsWorkspace(
+                  requireOneOfAction(
                     FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
                     Set(SamResourceActions.createPet),
                     samUser.id,
