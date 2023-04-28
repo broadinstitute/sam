@@ -223,6 +223,7 @@ class SamProviderSpec
                   activeSamUserEmail = None
               }
               println(s"Set headers")
+              println(s"Captured token ${token}")
               SetHeaders("Authorization" -> s"Bearer ${token}")
             case _ =>
               println("AuthScheme is not Bearer")
