@@ -42,7 +42,7 @@ class SamProviderSpec
   var activeSamUserSubjectId: Option[String] = None
   var activeSamUserEmail: Option[String] = None
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
+  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
   val newSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
 
   def genSamDependencies: MockSamDependencies = {
@@ -250,14 +250,13 @@ class SamProviderSpec
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost")
     .withPort(8080)
-    .withRequestFiltering(requestFilter)
+    //.withRequestFiltering(requestFilter)
     .withStateManagementFunction(
       StateManagementFunction {
-        case ProviderState("", params) =>
-          println("default state")
         case ProviderState("user exists", params) =>
           println("user exists")
-        case _ => () // Nothing to do
+        case _ =>
+          println("do default")
       }
         .withBeforeEach(() => ())
     )
