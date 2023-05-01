@@ -39,11 +39,9 @@ class SamProviderSpec
     with PactVerifier
     with LazyLogging
     with MockitoSugar {
-  var activeSamUserSubjectId: Option[String] = None
-  var activeSamUserEmail: Option[String] = None
+
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
-  val newSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
 
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
@@ -213,29 +211,19 @@ class SamProviderSpec
               println(s"Captured token ${token}")
               token match {
                 case "accessToken" =>
-                  activeSamUserSubjectId = Some("userSubjectId")
-                  activeSamUserEmail = Some("userEmail")
-                  genSamDependencies.userService.createUser(newSamUser, mock[SamRequestContext])
-                  genSamDependencies.userService.enableUser(newSamUser.id, mock[SamRequestContext])
-                  genSamDependencies.userService.getUserStatusInfo(newSamUser, mock[SamRequestContext])
+                  println("do accessToken")
                 case _ =>
-                  activeSamUserSubjectId = None
-                  activeSamUserEmail = None
+                  println("do others")
               }
               println(s"Set headers")
-              println(s"Captured token ${token}")
               SetHeaders("Authorization" -> s"Bearer ${token}")
             case _ =>
               println("AuthScheme is not Bearer")
-              activeSamUserSubjectId = None
-              activeSamUserEmail = None
               NoOpFilter
           }
           .getOrElse(NoOpFilter)
       case None =>
         println("No Authorization header found.")
-        activeSamUserSubjectId = Some("test")
-        activeSamUserEmail = Some("test@test")
         NoOpFilter
     }
 
