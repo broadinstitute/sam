@@ -42,7 +42,7 @@ class SamProviderSpec
   var activeSamUserSubjectId: Option[String] = None
   var activeSamUserEmail: Option[String] = None
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
+  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
   val newSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
 
   def genSamDependencies: MockSamDependencies = {
