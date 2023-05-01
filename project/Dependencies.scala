@@ -11,7 +11,7 @@ object Dependencies {
   val postgresDriverVersion = "42.5.0"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "6abbdd5d-SNAP"
+  val workbenchLibV = "1bab754"
   val workbenchUtilV = s"0.7-$workbenchLibV"
   val workbenchUtil2V = s"0.3-$workbenchLibV"
   val workbenchModelV = s"0.17-$workbenchLibV"
