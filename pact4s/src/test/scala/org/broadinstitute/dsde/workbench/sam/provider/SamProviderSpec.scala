@@ -8,6 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
+import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
@@ -28,6 +29,7 @@ import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
 import java.lang.Thread.sleep
+import java.util.UUID
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
@@ -42,6 +44,33 @@ class SamProviderSpec
 
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
+  val defaultResourceTypeActionPatterns = Set(
+    SamResourceActionPatterns.alterPolicies,
+    SamResourceActionPatterns.delete,
+    SamResourceActionPatterns.readPolicies,
+    ResourceActionPattern("view", "", false),
+    ResourceActionPattern("non_owner_action", "", false)
+  )
+  val defaultResourceTypeActions =
+    Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
+  val defaultResourceType = ResourceType(
+    ResourceTypeName(UUID.randomUUID().toString),
+    defaultResourceTypeActionPatterns,
+    Set(
+      ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")),
+      ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
+    ),
+    ResourceRoleName("owner")
+  )
+  val otherResourceType = ResourceType(
+    ResourceTypeName(UUID.randomUUID().toString),
+    defaultResourceTypeActionPatterns,
+    Set(
+      ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")),
+      ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
+    ),
+    ResourceRoleName("owner")
+  )
 
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
@@ -57,8 +86,8 @@ class SamProviderSpec
     // val cloudExtensions: CloudExtensions = mock[CloudExtensions]
     val policyDAO = mock[AccessPolicyDAO]
     val googleExt = mock[GoogleExtensions]
-
-    val policyEvaluatorService = mock[PolicyEvaluatorService]
+    // val policyEvaluatorService = mock[PolicyEvaluatorService]
+    val policyEvaluatorService = PolicyEvaluatorService("example.com", Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyDAO, directoryDAO)
     val mockResourceService = mock[ResourceService]
     val mockManagedGroupService = mock[ManagedGroupService]
     // val tosService = mock[TosService] // replaced by MockTosServiceBuilder

@@ -160,7 +160,8 @@ class PolicyEvaluatorService(
       resourceTypeName: ResourceTypeName,
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
-  ): IO[Iterable[UserResourcesResponse]] =
+  ): IO[Iterable[UserResourcesResponse]] = {
+    println("call listUserResources")
     for {
       rt <- getResourceType(resourceTypeName)
       resourcesWithAccess <- accessPolicyDAO.listUserResourcesWithRolesAndActions(resourceTypeName, userId, samRequestContext)
@@ -182,6 +183,7 @@ class PolicyEvaluatorService(
           IO.pure(userResourcesResponses.map(_.some))
         }
     } yield results.flatten
+  }
 
   private def populateAuthDomains(
       resourceTypeName: ResourceTypeName,
