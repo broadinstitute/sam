@@ -5,7 +5,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
@@ -159,20 +158,20 @@ class SamProviderSpec
       mockResourceService.getResourceType(any[ResourceTypeName])
     } thenReturn IO.pure(Option(fakeWorkspaceResourceType))
 
-    when {
-      policyEvaluatorService.listUserResources(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
-    } thenReturn IO.pure(
-      Vector(
-        UserResourcesResponse(
-          resourceId = ResourceId("cea587e9-9a8e-45b6-b985-9e3803754020"),
-          direct = RolesAndActions(Set.empty, Set.empty),
-          inherited = RolesAndActions(Set.empty, Set.empty),
-          public = RolesAndActions(Set.empty, Set.empty),
-          authDomainGroups = Set.empty,
-          missingAuthDomainGroups = Set.empty
-        )
-      )
-    )
+    // when {
+    //  policyEvaluatorService.listUserResources(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
+    //} thenReturn IO.pure(
+    //  Vector(
+    //    UserResourcesResponse(
+    //      resourceId = ResourceId("cea587e9-9a8e-45b6-b985-9e3803754020"),
+    //      direct = RolesAndActions(Set.empty, Set.empty),
+    //      inherited = RolesAndActions(Set.empty, Set.empty),
+    //      public = RolesAndActions(Set.empty, Set.empty),
+    //      authDomainGroups = Set.empty,
+    //      missingAuthDomainGroups = Set.empty
+    //    )
+    //  )
+    //)
 
     MockSamDependencies(
       mockResourceService,
