@@ -70,6 +70,15 @@ class SamProviderSpec
     ),
     ResourceRoleName("owner")
   )
+  val workspaceResourceType = ResourceType(
+    ResourceTypeName("workspace"),
+    defaultResourceTypeActionPatterns,
+    Set(
+      ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")),
+      ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
+    ),
+    ResourceRoleName("owner")
+  )
 
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
@@ -86,7 +95,7 @@ class SamProviderSpec
     val policyDAO = mock[AccessPolicyDAO]
     val googleExt = mock[GoogleExtensions]
     // val policyEvaluatorService = mock[PolicyEvaluatorService]
-    val policyEvaluatorService = PolicyEvaluatorService("example.com", Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType), policyDAO, directoryDAO)
+    val policyEvaluatorService = PolicyEvaluatorService("example.com", Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
     val mockResourceService = mock[ResourceService]
     val mockManagedGroupService = mock[ManagedGroupService]
     // val tosService = mock[TosService] // replaced by MockTosServiceBuilder
