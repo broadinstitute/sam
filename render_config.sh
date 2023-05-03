@@ -17,6 +17,16 @@ kubectl -n terra-dev get secret admin-two-sa-secret -o 'go-template={{index .dat
 kubectl -n terra-dev get secret admin-three-sa-secret -o 'go-template={{index .data "admin-service-account-3.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-3.json
 kubectl -n terra-dev get secret admin-four-sa-secret -o 'go-template={{index .data "admin-service-account-4.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-4.json
 
+# These will come from k8s later. Using firecloud-develop rendered conf files for now.
+#kubectl -n terra-dev get configmap sam-oauth2-configmap -o 'go-template={{index .data "oauth2-config"}}' > ${SERVICE_OUTPUT_LOCATION}/oauth2.conf
+#kubectl -n terra-dev get configmap sam-proxy-configmap -o 'go-template={{index .data "apache-httpd-proxy-config"}}' > ${SERVICE_OUTPUT_LOCATION}/site.conf
+
+vault read -field=value secret/dsde/firecloud/local/common/server.crt > ${SERVICE_OUTPUT_LOCATION}/server.crt
+echo "" >> ${SERVICE_OUTPUT_LOCATION}/server.crt
+vault read -field=chain secret/common/ca-bundle.crt >> ${SERVICE_OUTPUT_LOCATION}/server.crt
+
+vault read -field=value secret/dsde/firecloud/local/common/server.key > ${SERVICE_OUTPUT_LOCATION}/server.key
+
 if [ -f "${SECRET_ENV_VARS_LOCATION}" ]; then
   rm "${SECRET_ENV_VARS_LOCATION}"
 fi

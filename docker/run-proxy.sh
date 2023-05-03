@@ -35,9 +35,8 @@ start() {
         -e FILTER2='AddOutputFilterByType DEFLATE application/json text/plain text/html application/javascript application/x-javascript' \
         us.gcr.io/broad-dsp-gcr-public/httpd-terra-proxy:v0.1.16
 
-    docker cp "${CONFIG_DIR}/server.crt" sam-proxy:/etc/ssl/certs/server.crt
-    docker cp "${CONFIG_DIR}/server.key" sam-proxy:/etc/ssl/private/server.key
-    docker cp "${CONFIG_DIR}/ca-bundle.crt" sam-proxy:/etc/ssl/certs/server-ca-bundle.crt
+    docker cp "${SECRETS_DIR}/server.crt" sam-proxy:/etc/ssl/certs/server.crt
+    docker cp "${SECRETS_DIR}/server.key" sam-proxy:/etc/ssl/private/server.key
     docker cp "${CONFIG_DIR}/oauth2.conf" sam-proxy:/etc/httpd/conf.d/oauth2.conf
     docker cp "${CONFIG_DIR}/site.conf" sam-proxy:/etc/httpd/conf.d/site.conf
 
@@ -53,6 +52,7 @@ stop() {
 
 CONTAINER=sam-proxy
 COMMAND=$1
+SECRETS_DIR="$(git rev-parse --show-toplevel)/src/main/resources/rendered"
 CONFIG_DIR="$(git rev-parse --show-toplevel)/config"
 
 if [ ${#@} == 0 ]; then
