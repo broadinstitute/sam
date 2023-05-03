@@ -37,7 +37,7 @@ import java.net.URL
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration.TimeUnit
 
-class NewGoogleExtensionSpec(_system: ActorSystem)
+class NewGoogleExtensionsSpec(_system: ActorSystem)
     extends TestKit(_system)
     with AnyFlatSpecLike
     with Matchers
