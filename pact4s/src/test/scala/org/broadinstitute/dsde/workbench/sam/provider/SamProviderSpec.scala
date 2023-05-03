@@ -48,7 +48,7 @@ class SamProviderSpec
   println(accessPolicy)
   val policies: Map[WorkbenchSubject, AccessPolicy] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
 
-  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser), WorkbenchEmail("all_users@fake.com"))
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
   val defaultResourceTypeActionPatterns = Set(
     SamResourceActionPatterns.alterPolicies,
     SamResourceActionPatterns.delete,
