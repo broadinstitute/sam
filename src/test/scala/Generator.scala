@@ -1,8 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
+import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.azure._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LockDetails
@@ -108,6 +109,9 @@ object Generator {
 
   val genWorkbenchGroupName = Gen.alphaStr.map(x => WorkbenchGroupName(s"s${x.take(50)}")) // prepending `s` just so this won't be an empty string
   val genGoogleProject = Gen.alphaStr.map(x => GoogleProject(s"s$x")) // prepending `s` just so this won't be an empty string
+  val genGcsBucketName = Gen.listOfN(63, Gen.alphaChar).map(x => GcsBucketName(x.mkString))
+  val genGcsBlobName = Gen.alphaStr.flatMap(x => Gen.alphaStr.map(y => GcsBlobName(s"s$x/s$y")))
+
   val genWorkbenchSubject: Gen[WorkbenchSubject] = for {
     groupId <- genWorkbenchGroupName
     userId <- genWorkbenchUserId

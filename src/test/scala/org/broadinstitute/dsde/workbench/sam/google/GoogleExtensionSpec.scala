@@ -15,7 +15,6 @@ import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.MessageRequest
 import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
-import org.broadinstitute.dsde.workbench.google2.Generators.{genGcsBlobName, genGcsBucketName}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model._
@@ -1241,31 +1240,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val service = new UserService(dirDAO, googleExtensions, Seq.empty, tosService)
 
     (googleExtensions, service, tosService)
-  }
-
-  "getSignedUrl" should "get a signed URL for GS Objects" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    implicit val patienceConfig = PatienceConfig(1 second)
-    val (googleExtensions, service, tosService) = setupGoogleKeyCacheTests(true)
-
-    val createDefaultUser = Generator.genWorkbenchUserGoogle.sample.get
-    // create a user
-    val newUser = newUserWithAcceptedTos(service, tosService, createDefaultUser, samRequestContext)
-    newUser shouldBe UserStatus(
-      UserStatusDetails(createDefaultUser.id, createDefaultUser.email),
-      TestSupport.enabledMapTosAccepted
-    )
-
-    // create a pet service account
-    val googleProject = GoogleProject("testproject")
-
-    val bucketName = genGcsBucketName.sample.get
-    val blobName = genGcsBlobName.sample.get
-    runAndWait(FakeGoogleStorageInterpreter.createBlob(bucketName, blobName, "test".getBytes("UTF-8")).compile.drain)
-
-    val url = runAndWait(googleExtensions.getSignedUrl(createDefaultUser, googleProject, bucketName, blobName, samRequestContext))
-    url.getFile should startWith(s"/${bucketName.value}/${blobName.value}")
   }
 
   "GoogleKeyCache" should "create a service account key and return the same key when called again" in {
