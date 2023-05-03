@@ -171,9 +171,9 @@ Build jar and docker image:
 
 ### Running Sam Locally
 #### Host alias
-If you haven't already, add `127.0.0.1       local.broadinstitute.org` to `/etc/hosts`:
+If you haven't already, add `127.0.0.1       local.dsde-dev.broadinstitute.org` to `/etc/hosts`:
 ```
-sudo sh -c "echo '127.0.0.1       local.broadinstitute.org' >> /etc/hosts"
+sudo sh -c "echo '127.0.0.1       local.dsde-dev.broadinstitute.org' >> /etc/hosts"
 ```
 
 You can then start Sam against dev DBs or local DBs following the instructions below.
@@ -216,10 +216,10 @@ Navigate to [Sam's (Proxy's) Swagger page](http://localhost:50443/)
 
 #### Verify that local Sam is running
 [Status endpoint:
-https://local.broadinstitute.org:50443/status](https://local.broadinstitute.org:50443/status)
+https://local.dsde-dev.broadinstitute.org:50443/status](https://local.dsde-dev.broadinstitute.org:50443/status)
 
 [Swagger page:
-https://local.broadinstitute.org:50443/#/](https://local.broadinstitute.org:50443/#/)
+https://local.dsde-dev.broadinstitute.org:50443/#/](https://local.dsde-dev.broadinstitute.org:50443/#/)
 
 ##### Human-Readable Logging
 To make Sam output human-readable log messages instead of Stackdriver-compatible messages, 
