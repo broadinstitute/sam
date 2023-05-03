@@ -5,7 +5,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
@@ -14,10 +14,12 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
+import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -41,8 +43,12 @@ class SamProviderSpec
     with LazyLogging
     with MockitoSugar {
 
-  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
+  val accessPolicy: AccessPolicy = Generator.genPolicy.sample.get
+  println(accessPolicy)
+  val policies: Map[WorkbenchSubject, AccessPolicy] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
+
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser), WorkbenchEmail("all_users@fake.com"))
   val defaultResourceTypeActionPatterns = Set(
     SamResourceActionPatterns.alterPolicies,
     SamResourceActionPatterns.delete,
@@ -93,6 +99,31 @@ class SamProviderSpec
     // val directoryDAO: DirectoryDAO = mock[DirectoryDAO]
     // val cloudExtensions: CloudExtensions = mock[CloudExtensions]
     val policyDAO = mock[AccessPolicyDAO]
+    when(
+      policyDAO.listUserResourcesWithRolesAndActions(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
+    ).thenAnswer((i: InvocationOnMock) => {
+      println("policyDAO.listUserResourcesWithRolesAndActions")
+      val resourceTypeName = i.getArgument[ResourceTypeName](0)
+      val workbenchUserId = i.getArgument[WorkbenchUserId](1)
+      println(resourceTypeName.value)
+      println(workbenchUserId.value)
+      IO {
+        val forEachPolicy = policies.collect {
+          case (fqPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
+            if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
+            if (accessPolicy.public) {
+              ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.empty, RolesAndActions.empty, RolesAndActions.fromPolicy(accessPolicy))
+            } else {
+              ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.fromPolicy(accessPolicy), RolesAndActions.empty, RolesAndActions.empty)
+            }
+        }
+        forEachPolicy.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
+          rowsForResource.reduce { (left, right) =>
+            ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
+          }
+        }
+      }
+    })
     val googleExt = mock[GoogleExtensions]
     // val policyEvaluatorService = mock[PolicyEvaluatorService]
     val policyEvaluatorService = PolicyEvaluatorService("example.com", Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
