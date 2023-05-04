@@ -14,7 +14,9 @@ import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
+import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.MessageRequest
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model._
@@ -32,6 +34,7 @@ import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
 
 import java.io.ByteArrayInputStream
+import java.net.URL
 import java.util.Date
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -56,6 +59,7 @@ class GoogleExtensions(
     val googleKeyCache: GoogleKeyCache,
     val notificationDAO: NotificationDAO,
     val googleKms: GoogleKmsService[IO],
+    val googleStorageService: GoogleStorageService[IO],
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
     val resourceTypes: Map[ResourceTypeName, ResourceType],
@@ -174,7 +178,7 @@ class GoogleExtensions(
   // The handler for the subscription will ultimately call GoogleExtensions.synchronizeGroupMembers, which will
   // do all the heavy lifting of creating the Google Group and adding members.
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] =
-    googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, Seq(id.toJson.compactPrint))
+    googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, Seq(MessageRequest(id.toJson.compactPrint)))
 
   /*
     - managed groups and access policies are both "groups"
@@ -223,7 +227,7 @@ class GoogleExtensions(
       }
 
       // publish all the messages
-      _ <- IO.fromFuture(IO(publishMessages(messages.flatten)))
+      _ <- IO.fromFuture(IO(publishMessages(messages.flatten.map(MessageRequest(_)))))
 
       end <- clock.monotonic
 
@@ -258,7 +262,7 @@ class GoogleExtensions(
       // return messages for all the affected access policies and the original group we started with
     } yield constrainedResourceAccessPolicyIds.flatten.map(accessPolicyId => accessPolicyId.toJson.compactPrint)
 
-  private def publishMessages(messages: Seq[String]): Future[Unit] =
+  private def publishMessages(messages: Seq[MessageRequest]): Future[Unit] =
     googleGroupSyncPubSubDAO.publishMessages(googleServicesConfig.groupSyncPubSubConfig.topic, messages)
 
   override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
@@ -636,6 +640,14 @@ class GoogleExtensions(
       Subsystems.GoogleIam -> checkIam
     )
   }
+
+  def getSignedUrl(samUser: SamUser, project: GoogleProject, bucket: GcsBucketName, name: GcsBlobName, samRequestContext: SamRequestContext): IO[URL] =
+    for {
+      petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
+      petKey <- googleKeyCache.getKey(petServiceAccount)
+      serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
+      url <- googleStorageService.getSignedBlobUrl(bucket, name, serviceAccountCredentials).compile.lastOrError
+    } yield url
 
   override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
 }

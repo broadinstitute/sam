@@ -127,6 +127,7 @@ object TestSupport extends TestSupport {
         cloudKeyCache,
         notificationDAO,
         FakeGoogleKmsInterpreter,
+        FakeGoogleStorageInterpreter,
         googleServicesConfig,
         petServiceAccountConfig,
         resourceTypes,
