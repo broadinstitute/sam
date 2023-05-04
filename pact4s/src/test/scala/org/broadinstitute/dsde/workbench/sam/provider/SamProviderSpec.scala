@@ -5,8 +5,9 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
+import org.broadinstitute.dsde.workbench.sam.Generator.genNonPetEmail
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
@@ -44,9 +45,9 @@ class SamProviderSpec
     with MockitoSugar {
 
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
-  val accessPolicy: AccessPolicy = Generator.genPolicy.sample.get
-  println(accessPolicy)
-  val policies: Map[WorkbenchSubject, AccessPolicy] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
+  // val accessPolicy: AccessPolicy = Generator.genPolicy.sample.get
+  // println(accessPolicy)
+  // val policies: Map[WorkbenchSubject, WorkbenchGroup] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
 
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
   val defaultResourceTypeActionPatterns = Set(
@@ -85,6 +86,23 @@ class SamProviderSpec
     ),
     ResourceRoleName("owner")
   )
+  val accessPolicy = AccessPolicy(
+    FullyQualifiedPolicyId(
+      FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(UUID.randomUUID().toString)),
+      AccessPolicyName("member")
+    ),
+    Set(defaultSamUser.id),
+    genNonPetEmail.sample.get,
+    Set(
+      ResourceRoleName("owner"),
+      ResourceRoleName("other")
+    ),
+    defaultResourceTypeActions,
+    Set(),
+    false
+  )
+  println(accessPolicy.members)
+  val policies: Map[WorkbenchSubject, WorkbenchGroup] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
 
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
