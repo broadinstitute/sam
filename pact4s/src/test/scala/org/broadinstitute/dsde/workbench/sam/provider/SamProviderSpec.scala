@@ -126,7 +126,6 @@ class SamProviderSpec
         val forEachPolicy = policies.collect {
           case (fqPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
             if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
-            println(accessPolicy.members.contains(workbenchUserId))
             if (accessPolicy.public) {
               ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.empty, RolesAndActions.empty, RolesAndActions.fromPolicy(accessPolicy))
             } else {
