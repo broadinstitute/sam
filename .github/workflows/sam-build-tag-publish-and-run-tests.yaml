@@ -18,6 +18,8 @@ jobs:
       id-token: 'write'
     outputs:
       custom-version-json: ${{ steps.render-sam-version.outputs.custom-version-json }}
+      tag: ${{ steps.tag.outputs.tag }}
+      ref: ${{ steps.extract-branch.outputs.ref }}
     steps:
       - uses: 'actions/checkout@v3'
 
@@ -48,6 +50,7 @@ jobs:
           echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
           echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
 
+      # Builds Sam elsewhere to protect secrets.  Upon success, will tag the commit in git.
       - name: dispatch build to terra-github-workflows
         uses: broadinstitute/workflow-dispatch@v3
         with:
@@ -64,6 +67,31 @@ jobs:
         run: |
           echo "$GITHUB_CONTEXT"
           echo 'custom-version-json={\"sam\":{\"appVersion\":\"${{ steps.tag.outputs.tag }}\"}}' >> $GITHUB_OUTPUT
+
+  report-to-sherlock:
+    # Report new Sam version to Broad DevOps
+    uses: broadinstitute/sherlock/.github/workflows/client-report-app-version.yaml@main
+    needs: [ sam-build-tag-publish-job ]
+    with:
+      new-version: ${{ needs.sam-build-tag-publish-job.outputs.tag }}
+      chart-name: 'sam'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+  set-version-in-dev:
+    # Put new Sam version in Broad dev environment
+    uses: broadinstitute/sherlock/.github/workflows/client-set-environment-app-version.yaml@main
+    needs: [ sam-build-tag-publish-job, report-to-sherlock ]
+    if: ${{ needs.sam-build-tag-publish-job.outputs.ref == 'develop' }}
+    with:
+      new-version: ${{ needs.sam-build-tag-publish-job.outputs.tag }}
+      chart-name: 'sam'
+      environment-name: 'dev'
+    secrets:
+      sync-git-token: ${{ secrets.BROADBOT_TOKEN }}
+    permissions:
+      id-token: 'write'
 
   create-bee-workflow:
     strategy:

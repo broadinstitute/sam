@@ -7,10 +7,8 @@ on:
     paths-ignore: ['**.md']
 
 jobs:
-  test:
-
+  run-unit-tests:
     runs-on: ubuntu-20.04
-
     env:
       SBT_OPTS: >-
         -Xmx3g
@@ -86,8 +84,19 @@ jobs:
 
       - name: Extract branch name
         shell: bash
-        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
         id: extractBranch
+        run: |
+          GITHUB_EVENT_NAME=${{ github.event_name }}
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            GITHUB_REF=${{ github.ref }}
+          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            GITHUB_REF=refs/heads/${{ github.head_ref }}
+          else
+            echo "Failed to extract branch information"
+            exit 1
+          fi
+
+          echo "branch=$GITHUB_REF" >> $GITHUB_OUTPUT
 
       - name: Generate java client
         id: generateJavaClient
