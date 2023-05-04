@@ -14,12 +14,14 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes, _}
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
+import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers.{eq => mockitoEq}
 import org.mockito.Mockito._
+import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
@@ -396,6 +398,20 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     (user, samDependencies, createRoutes)
   }
 
+  def createMockGoogleIamDaoForSignedUrlTests: GoogleIamDAO = {
+    val googleIamDAO = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
+
+    lenient()
+      .doAnswer { (i: InvocationOnMock) =>
+        val email = i.getArgument[WorkbenchEmail](1)
+        val (keyId, keyJson) = RealKeyMockGoogleIamDAO.generateNewRealKey(email)
+        Future.successful(ServiceAccountKey(keyId, ServiceAccountPrivateKeyData(ServiceAccountPrivateKeyData(keyJson).encode), None, None))
+      }
+      .when(googleIamDAO)
+      .createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])
+
+    googleIamDAO
+  }
   def createMockGoogleIamDaoForSAKeyTests: (GoogleIamDAO, String) = {
     val googleIamDAO = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
     val expectedJson = """{"json":"yes I am"}"""
@@ -420,6 +436,47 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       .when(googleIamDAO.addServiceAccountUserRoleForUser(any[GoogleProject], any[WorkbenchEmail], any[WorkbenchEmail]))
       .thenReturn(Future.successful(()))
     (googleIamDAO, expectedJson)
+  }
+
+  def setupSignedUrlTest(): (SamUser, SamRoutes, String) = {
+    val googleIamDAO = new RealKeyMockGoogleIamDAO
+    val samUser = Generator.genWorkbenchUserGoogle.sample.get
+
+    val (user, samDeps, routes) = createTestUser(
+      configResourceTypes,
+      Some(googleIamDAO),
+      TestSupport.googleServicesConfig.copy(serviceAccountClientEmail = samUser.email, serviceAccountClientId = samUser.googleSubjectId.get.value),
+      user = samUser
+    )
+    val resourceType = ResourceType(
+      SamResourceTypes.googleProjectName,
+      Set(ResourceActionPattern(SamResourceActions.createPet.value, "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.createPet))),
+      ResourceRoleName("owner")
+    )
+
+    val projectName = "my-project"
+    val createResourceRequest = CreateResourceRequest(
+      ResourceId(projectName),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(samUser.email), Set(SamResourceActions.createPet), Set(resourceType.ownerRoleName))),
+      Set.empty
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    samDeps.cloudExtensions
+      .asInstanceOf[GoogleExtensions]
+      .onBoot(
+        SamApplication(
+          samDeps.userService,
+          samDeps.resourceService,
+          samDeps.statusService,
+          new TosService(samDeps.directoryDAO, TestSupport.tosConfig)
+        )
+      )
+      .unsafeRunSync()
+    (user, routes, projectName)
   }
 
   def setupPetSATest(): (SamUser, SamRoutes, String) = {

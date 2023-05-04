@@ -287,6 +287,7 @@ object Boot extends IOApp with LazyLogging {
       googleKeyCache,
       notificationDAO,
       googleKms,
+      googleStorageNew,
       config.googleServicesConfig,
       config.petServiceAccountConfig,
       resourceTypeMap,
