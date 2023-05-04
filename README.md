@@ -212,7 +212,6 @@ sh docker/run-proxy.sh start
 ```shell
 sbt run
 ```
-Navigate to [Sam's (Proxy's) Swagger page](http://localhost:50443/)
 
 #### Verify that local Sam is running
 [Status endpoint:
