@@ -5,7 +5,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.Generator.genNonPetEmail
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
@@ -102,7 +102,8 @@ class SamProviderSpec
     false
   )
   println(accessPolicy.members)
-  val policies: Map[WorkbenchSubject, WorkbenchGroup] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
+  // val policies: Map[WorkbenchSubject, WorkbenchGroup] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
+  val policies: Map[WorkbenchGroupIdentity, WorkbenchGroup] = Map(accessPolicy.id -> accessPolicy)
 
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
