@@ -1100,7 +1100,9 @@ paths:
     post:
       tags:
         - Google
-      summary: gets a signed URL for the given blob, signed by the Pet Service account of the calling user
+      summary: Gets a signed URL for the given blob, signed by the Pet Service account of the calling user. 
+        The signed URL is active for 1 hour and scoped to the permissions of the signing Pet Service Account.
+        Sam will provide a signed URL for any object path, even if that object does not exist.
       operationId: getSignedUrlForBlob
       parameters:
         - name: project
