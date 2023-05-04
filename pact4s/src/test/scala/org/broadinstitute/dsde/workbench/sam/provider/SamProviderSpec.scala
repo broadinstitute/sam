@@ -93,16 +93,12 @@ class SamProviderSpec
     ),
     Set(defaultSamUser.id),
     genNonPetEmail.sample.get,
-    Set(
-      ResourceRoleName("owner"),
-      ResourceRoleName("other")
-    ),
-    defaultResourceTypeActions,
+    Set(),
+    Set(),
     Set(),
     false
   )
-  println(accessPolicy.members)
-  // val policies: Map[WorkbenchSubject, WorkbenchGroup] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
+
   val policies: Map[WorkbenchGroupIdentity, WorkbenchGroup] = Map(accessPolicy.id -> accessPolicy)
 
   def genSamDependencies: MockSamDependencies = {
