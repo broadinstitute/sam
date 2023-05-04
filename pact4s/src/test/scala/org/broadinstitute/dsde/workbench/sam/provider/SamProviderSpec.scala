@@ -45,10 +45,6 @@ class SamProviderSpec
     with MockitoSugar {
 
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
-  // val accessPolicy: AccessPolicy = Generator.genPolicy.sample.get
-  // println(accessPolicy)
-  // val policies: Map[WorkbenchSubject, WorkbenchGroup] = accessPolicy.members.map(m => (m, accessPolicy)).toMap
-
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
   val defaultResourceTypeActionPatterns = Set(
     SamResourceActionPatterns.alterPolicies,
@@ -117,11 +113,8 @@ class SamProviderSpec
     when(
       policyDAO.listUserResourcesWithRolesAndActions(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
     ).thenAnswer((i: InvocationOnMock) => {
-      println("policyDAO.listUserResourcesWithRolesAndActions")
       val resourceTypeName = i.getArgument[ResourceTypeName](0)
       val workbenchUserId = i.getArgument[WorkbenchUserId](1)
-      println(resourceTypeName.value)
-      println(workbenchUserId.value)
       IO {
         val forEachPolicy = policies.collect {
           case (fqPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
