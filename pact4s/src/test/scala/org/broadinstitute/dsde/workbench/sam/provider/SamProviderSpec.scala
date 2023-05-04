@@ -44,7 +44,7 @@ class SamProviderSpec
     with LazyLogging
     with MockitoSugar {
 
-  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
+  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
   val defaultResourceTypeActionPatterns = Set(
     SamResourceActionPatterns.alterPolicies,
