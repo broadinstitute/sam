@@ -181,7 +181,7 @@ class SamProviderSpec
     //  tosService.getTosComplianceStatus(any[SamUser])
     // } thenReturn IO.pure(TermsOfServiceComplianceStatus(WorkbenchUserId("test"), userHasAcceptedLatestTos = true, permitsSystemUsage = true))
 
-    val fakeWorkspaceResourceType = ResourceType(ResourceTypeName("workspace"), Set.empty, Set.empty, ResourceRoleName("workspace"))
+    val fakeWorkspaceResourceType = ResourceType(SamResourceTypes.workspaceName, Set.empty, Set.empty, ResourceRoleName("workspace"))
     when {
       mockResourceService.getResourceType(any[ResourceTypeName])
     } thenReturn IO.pure(Option(fakeWorkspaceResourceType))
