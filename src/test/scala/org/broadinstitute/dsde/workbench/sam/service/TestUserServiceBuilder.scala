@@ -30,6 +30,7 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
   private val disabledUsers: mutable.Set[SamUser] = mutable.Set.empty
 
   private var maybeAllUsersGroup: Option[WorkbenchGroup] = None
+  private var maybeWorkbenchGroup: Option[WorkbenchGroup] = None
   private val blockedEmailDomains: mutable.Set[String] = mutable.Set.empty
   private var haveAllAcceptedToS: Boolean = false
   private val tosStatesForUsers: mutable.Map[SamUser, Boolean] = mutable.Map.empty
@@ -59,6 +60,11 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
 
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): TestUserServiceBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
+    this
+  }
+
+  def withWorkbenchGroup(workbenchGroup: WorkbenchGroup): TestUserServiceBuilder = {
+    maybeWorkbenchGroup = Option(workbenchGroup)
     this
   }
 
@@ -99,6 +105,11 @@ case class TestUserServiceBuilder()(implicit val executionContext: ExecutionCont
     maybeAllUsersGroup match {
       case Some(g) => mockDirectoryDaoBuilder.withAllUsersGroup(g)
       case None => ()
+    }
+
+    maybeWorkbenchGroup match {
+      case Some(g) => mockDirectoryDaoBuilder.withWorkbenchGroup(g)
+      case _ => ()
     }
 
     mockDirectoryDaoBuilder

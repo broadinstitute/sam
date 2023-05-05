@@ -5,7 +5,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.Generator.genNonPetEmail
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
@@ -44,7 +44,7 @@ class SamProviderSpec
     with LazyLogging
     with MockitoSugar {
 
-  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
+  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
   val defaultResourceTypeActionPatterns = Set(
     SamResourceActionPatterns.alterPolicies,
@@ -100,6 +100,7 @@ class SamProviderSpec
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
       .withAllUsersGroup(allUsersGroup)
+      .withWorkbenchGroup(accessPolicy)
       .withEnabledUser(defaultSamUser)
       .withAllUsersHavingAcceptedTos()
       .build
@@ -115,10 +116,14 @@ class SamProviderSpec
     ).thenAnswer((i: InvocationOnMock) => {
       val resourceTypeName = i.getArgument[ResourceTypeName](0)
       val workbenchUserId = i.getArgument[WorkbenchUserId](1)
+      val samRequestContext = i.getArgument[SamRequestContext](2)
       IO {
-        val forEachPolicy = policies.collect {
+        val group = directoryDAO.loadGroup(WorkbenchGroupName(accessPolicy.id.toString), samRequestContext).unsafeRunSync().get
+        print(group)
+        val policies2: Map[WorkbenchGroupIdentity, WorkbenchGroup] = Map(group.id -> group)
+        val forEachPolicy = policies2.collect {
           case (fqPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
-            if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
+                if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
             if (accessPolicy.public) {
               ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.empty, RolesAndActions.empty, RolesAndActions.fromPolicy(accessPolicy))
             } else {

@@ -3,14 +3,34 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genGoogleSubjectId, genNonPetEmail}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 
+import java.util.UUID
+import scala.collection.concurrent.TrieMap
+import scala.collection.mutable
+
 case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
+  private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
+  private val groupsWithEmails: mutable.Map[WorkbenchEmail, WorkbenchGroupName] = new TrieMap()
+  private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
+  val accessPolicy = AccessPolicy(
+    FullyQualifiedPolicyId(
+      FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(UUID.randomUUID().toString)),
+      AccessPolicyName("member")
+    ),
+    Set(genGoogleSubjectId.sample.get),
+    genNonPetEmail.sample.get,
+    Set(),
+    Set(),
+    Set(),
+    false
+  )
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
 
   val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
@@ -45,6 +65,27 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     .doReturn(IO(None))
     .when(mockedDirectoryDAO)
     .loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext])
+
+  /*lenient()
+    .doAnswer { (invocation: InvocationOnMock) =>
+      print(groups)
+      val group = invocation.getArgument[BasicWorkbenchGroup](0)
+      val accessInstructionsOpt = invocation.getArgument[Option[String]](1)
+      if (groups.keySet.contains(group.id)) {
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"group ${group.id} already exists")))
+      } else {
+        groups += group.id -> group
+        groupsWithEmails += group.email -> group.id
+        accessInstructionsOpt match {
+          case Some(s) =>
+            groupAccessInstructions += group.id -> s
+          case _ => ()
+        }
+        IO.pure(group)
+      }
+    }
+    .when(mockedDirectoryDAO)
+    .createGroup(any[BasicWorkbenchGroup], any[Option[String]], any[SamRequestContext])*/
 
   // Create/Insert user should succeed and then make the user appear to "exist" in the Mock
   lenient()
@@ -171,6 +212,20 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     this
   }
 
+  def withWorkbenchGroup(group: WorkbenchGroup): StatefulMockDirectoryDaoBuilder = {
+    groups += group.id -> group
+
+    doThrow(new RuntimeException(s"Group $group is mocked to already exist"))
+      .when(mockedDirectoryDAO)
+      .createGroup(ArgumentMatchers.eq(BasicWorkbenchGroup(group)), any[Option[String]], any[SamRequestContext])
+
+    lenient()
+      .doReturn(IO.pure(Option(group)))
+      .when(mockedDirectoryDAO)
+      .loadGroup(ArgumentMatchers.eq(WorkbenchGroupName(group.id.toString)), any[SamRequestContext])
+
+    this
+  }
   // Bare minimum for a user to exist:
   // - has an ID
   // - has an email
