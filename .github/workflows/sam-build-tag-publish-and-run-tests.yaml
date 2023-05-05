@@ -40,6 +40,22 @@ jobs:
           echo "github.head_ref ${{ github.head_ref }}"
           echo "github ${{ github }}"
 
+      # we need this because github can't actually provide the branch name reliably
+      # https://github.com/orgs/community/discussions/5251
+      - name: Extract branch
+        id: extract-branch
+        run: |
+          if [[ '${{ github.event_name }}' == 'push' ]]; then
+            BRANCH_NAME=${{ github.ref_name }}
+          elif [[ '${{ github.event_name }}' == 'pull_request' ]]; then
+            BRANCH_NAME=${{ github.head_ref }}
+          else
+            echo "Failed to extract branch information"
+            exit 1
+          fi
+
+          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
       # Builds Sam elsewhere to protect secrets.  Upon success, will tag the commit in git.
       - name: dispatch build to terra-github-workflows
         uses: broadinstitute/workflow-dispatch@v3
@@ -48,7 +64,7 @@ jobs:
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ github.head_ref }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
+          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.name }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
 
       - name: Render Sam version
         id: render-sam-version
