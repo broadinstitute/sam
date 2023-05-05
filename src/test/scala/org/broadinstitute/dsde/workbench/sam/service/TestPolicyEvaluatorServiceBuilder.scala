@@ -28,7 +28,7 @@ case class TestPolicyEvaluatorServiceBuilder(
     ResourceActionPattern("non_owner_action", "", false)
   )
   private val workspaceResourceType = ResourceType(
-    ResourceTypeName("workspace"),
+    SamResourceTypes.workspaceName,
     defaultResourceTypeActionPatterns,
     Set(
       ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")),

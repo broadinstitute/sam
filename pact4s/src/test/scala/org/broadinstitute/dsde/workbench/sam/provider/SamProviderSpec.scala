@@ -57,7 +57,8 @@ class SamProviderSpec
     val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, policyDAOOpt = Some(policyDAO)).build
 
     val googleExt = mock[GoogleExtensions]
-    val mockResourceService = mock[ResourceService]
+    // val mockResourceService = mock[ResourceService]
+    val resourceService: ResourceService = TestResourceServiceBuilder(policyEvaluatorService, policyDAO, directoryDAO, cloudExtensions).withWorkspaceResourceType().build
     val mockManagedGroupService = mock[ManagedGroupService]
     val tosService = MockTosServiceBuilder().withAllAccepted().build
     val azureService = mock[AzureService]
@@ -78,13 +79,13 @@ class SamProviderSpec
       )
     }
 
-    val fakeWorkspaceResourceType = ResourceType(SamResourceTypes.workspaceName, Set.empty, Set.empty, ResourceRoleName("workspace"))
-    when {
-      mockResourceService.getResourceType(any[ResourceTypeName])
-    } thenReturn IO.pure(Option(fakeWorkspaceResourceType))
+    //val fakeWorkspaceResourceType = ResourceType(SamResourceTypes.workspaceName, Set.empty, Set.empty, ResourceRoleName("workspace"))
+    //when {
+    //  mockResourceService.getResourceType(any[ResourceTypeName])
+    //} thenReturn IO.pure(Option(fakeWorkspaceResourceType))
 
     MockSamDependencies(
-      mockResourceService,
+      resourceService,
       policyEvaluatorService,
       tosService,
       userService,
