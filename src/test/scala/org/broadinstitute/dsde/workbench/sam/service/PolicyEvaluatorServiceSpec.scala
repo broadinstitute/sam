@@ -10,13 +10,12 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFlatSpec, TestSupport}
 import org.scalatest._
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class PolicyEvaluatorServiceSpec extends AnyFlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
+class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with TestSupport with BeforeAndAfterEach {
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 

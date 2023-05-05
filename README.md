@@ -207,7 +207,7 @@ sh docker/run-proxy.sh start
 ```shell
 sbt run
 ```
-Navigate to [Sam's (Proxy's) Swagger page](http://localhost:50443/)
+Navigate to [Sam's (Proxy's) Swagger page](https://local.broadinstitute.org:50443/#/)
 
 
 #### Debugging in IntelliJ

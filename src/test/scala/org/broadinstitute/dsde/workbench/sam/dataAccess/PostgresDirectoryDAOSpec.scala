@@ -10,9 +10,8 @@ import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFreeSpec, TestSupport}
 import org.scalatest.Inside.inside
-import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterEach, OptionValues}
 
@@ -20,7 +19,7 @@ import java.time.Instant
 import java.util.Date
 import scala.concurrent.duration._
 
-class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
+class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
