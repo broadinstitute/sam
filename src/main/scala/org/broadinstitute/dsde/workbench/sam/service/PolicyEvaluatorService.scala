@@ -48,16 +48,13 @@ class PolicyEvaluatorService(
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
   ): IO[Boolean] = traceIOWithContext("hasPermissionOneOf", samRequestContext) { samRequestContext =>
-    println("call hasPermissionOneOf")
     listUserResourceActions(resource, userId, samRequestContext).map { userActions =>
       actions.toSet.intersect(userActions).nonEmpty
     }
   }
 
   def hasPermission(resource: FullyQualifiedResourceId, action: ResourceAction, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
-    traceIOWithContext("hasPermission", samRequestContext){ samRequestContext =>
-      println("call hasPermission")
-      hasPermissionOneOf(resource, Set(action), userId, samRequestContext)}
+    traceIOWithContext("hasPermission", samRequestContext)(samRequestContext => hasPermissionOneOf(resource, Set(action), userId, samRequestContext))
 
   /** Checks if user have permission by providing user email address. */
   def hasPermissionByUserEmail(
@@ -66,7 +63,6 @@ class PolicyEvaluatorService(
       userEmail: WorkbenchEmail,
       samRequestContext: SamRequestContext
   ): IO[Boolean] = traceIOWithContext("hasPermissionByUserEmail", samRequestContext) { samRequestContext =>
-    println("call hasPermissionByUserEmail")
     for {
       subjectOpt <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       res <- subjectOpt match {
@@ -164,8 +160,7 @@ class PolicyEvaluatorService(
       resourceTypeName: ResourceTypeName,
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
-  ): IO[Iterable[UserResourcesResponse]] = {
-    println("call listUserResources")
+  ): IO[Iterable[UserResourcesResponse]] =
     for {
       rt <- getResourceType(resourceTypeName)
       resourcesWithAccess <- accessPolicyDAO.listUserResourcesWithRolesAndActions(resourceTypeName, userId, samRequestContext)
@@ -187,7 +182,6 @@ class PolicyEvaluatorService(
           IO.pure(userResourcesResponses.map(_.some))
         }
     } yield results.flatten
-  }
 
   private def populateAuthDomains(
       resourceTypeName: ResourceTypeName,

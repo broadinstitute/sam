@@ -27,8 +27,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging {
 
-  def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] = {
-    println("call createUser")
+  def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
@@ -57,14 +56,12 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         )
       )
     }
-  }
 
   private def attemptToRegisterSubjectAsAUser(
       maybeWorkbenchSubject: Option[WorkbenchSubject],
       possibleNewUser: SamUser,
       samRequestContext: SamRequestContext
-  ): IO[SamUser] = {
-    println("call attemptToRegisterSubjectAsAUser")
+  ): IO[SamUser] =
     maybeWorkbenchSubject match {
       // If a WorkbenchUserId was found, then the user was previously invited
       case Some(invitedUserId: WorkbenchUserId) => registerInvitedUser(possibleNewUser, invitedUserId, samRequestContext)
@@ -74,39 +71,31 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(_) =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Email ${possibleNewUser.email} is already used.")))
     }
-  }
 
-  private def validateUser(user: SamUser): Option[Seq[ErrorReport]] = {
-    println("call validateUser")
+  private def validateUser(user: SamUser): Option[Seq[ErrorReport]] =
     Option(
       Seq(
         validateUserIds(user),
         validateEmail(user.email, blockedEmailDomains)
       ).flatten // flatten to get rid of Nones
     ).filter(_.nonEmpty) // If the final Seq is empty, filter it out and just return a None
-  }
 
   // user record has to have a GoogleSubjectId and/or an AzureB2CId
-  private def validateUserIds(user: SamUser): Option[ErrorReport] = {
-    println("call validateUserIds")
+  private def validateUserIds(user: SamUser): Option[ErrorReport] =
     if (user.googleSubjectId.isEmpty && user.azureB2CId.isEmpty) {
       Option(ErrorReport("cannot create user when neither google subject id nor azure b2c id exists"))
     } else None
-  }
 
-  private def validateEmail(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): Option[ErrorReport] = {
-    println("call validateEmail")
+  private def validateEmail(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): Option[ErrorReport] =
     if (!UserService.emailRegex.matches(email.value)) {
       Option(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]"))
     } else if (blockedEmailDomains.exists(domain => email.value.endsWith("@" + domain) || email.value.endsWith("." + domain))) {
       Option(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]"))
     } else None
-  }
 
   // Try to find user by GoogleSubject, AzureB2CId
   // A registered user is one that has a record in the database and has a Cloud Identifier specified
-  private def tryToFindUserByCloudId(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
-    println("call tryToFindUserByCloudId")
+  private def tryToFindUserByCloudId(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     openTelemetry.time("api.v1.user.tryToFindUserByCloudId.time", API_TIMING_DURATION_BUCKET) {
       // running these IOs sequentially.  Could be parallelized but I can't imagine the performance hit here is all that
       // bad.  If we wanted to optimize it, the better thing to do would be to write a single query that searches via
@@ -116,16 +105,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         maybeAzureUser <- user.azureB2CId.map(directoryDAO.loadUserByAzureB2CId(_, samRequestContext)).getOrElse(IO(None))
       } yield maybeGoogleUser.orElse(maybeAzureUser)
     }
-  }
 
-  private def assertUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
-    println("call assertUserIsNotAlreadyRegistered")
+  private def assertUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     tryToFindUserByCloudId(user, samRequestContext).flatMap {
       case Some(registeredUser) =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered")))
       case None => IO(user)
     }
-  }
 
   // In most cases when this is called we will have a scenario where 1 or more Cloud Ids are set.  For any Cloud Ids
   // that are `Some(id)`, we should try to update the User record in the database with that id.  At this point it will
@@ -136,8 +122,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // updates that are not attempted.  That is OK.  If some updates are run and others are not, that does not mean those
   // that succeeded are invalid.  Similarly, if there are additional updates that failed to run due to the exception
   // that is OK.
-  private def updateUser(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
-    println("call registerInvitedUser")
+  private def updateUser(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.updateUser.time", API_TIMING_DURATION_BUCKET) {
       for {
         _ <- user.googleSubjectId
@@ -148,10 +133,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           .getOrElse(IO.unit)
       } yield ()
     }
-  }
 
-  private def registerInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] = {
-    println("call registerInvitedUser")
+  private def registerInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     openTelemetry.time("api.v1.user.registerInvitedUser.time", API_TIMING_DURATION_BUCKET) {
       val userToRegister = invitedUser.copy(id = invitedUserId)
       for {
@@ -160,33 +143,25 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
       } yield userToRegister
     }
-  }
 
   // For now, it looks like createUserInternal does what we need here, but added a new alias method here for naming
   // consistency and just in case things change more as we are refactoring
-  private def registerBrandNewUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
-    println("call registerBrandNewUser")
+  private def registerBrandNewUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     createUserInternal(user.copy(registeredAt = Option(Instant.now())), samRequestContext)
-  }
 
   // Would love to just call this "enableUser" but that name is already used
-  private def makeUserEnabled(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
-    println("call makeUserEnabled")
+  private def makeUserEnabled(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     enableUserInternal(user, samRequestContext).map(_ => user.copy(enabled = true))
-  }
 
-  def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
-    println("call addToAllUsersGroup")
+  def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.addToAllUsersGroup.time", API_TIMING_DURATION_BUCKET) {
       for {
         allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
         _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext)
       } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
     }
-  }
 
-  def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] = {
-    println("call inviteUser")
+  def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     openTelemetry.time("api.v1.user.invite.time", API_TIMING_DURATION_BUCKET) {
       for {
         _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains)
@@ -198,15 +173,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         }
       } yield UserStatusDetails(createdUser.id, createdUser.email)
     }
-  }
 
   /** First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists throw a conflict error. If the user does not exist
     * look them up by email. If the user email exists then this is an invited user, update their googleSubjectId and/or azureB2CId and return the updated user
     * record. If the email does not exist, this is a new user, create them. It is critical that this method returns the updated/created SamUser record FROM THE
     * DATABASE and not the SamUser passed in as the first parameter.
     */
-  protected[service] def registerUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
-    println("call registerUser")
+  protected[service] def registerUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     openTelemetry.time("api.v1.user.register.time", API_TIMING_DURATION_BUCKET) {
       for {
         _ <- validateNewWorkbenchUser(user, samRequestContext)
@@ -228,10 +201,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         }
       } yield updated
     }
-  }
 
-  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId): IO[SamUser] = {
-    println("call acceptInvitedUser")
+  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId): IO[SamUser] =
     openTelemetry.time("api.v1.user.acceptInvited.time", API_TIMING_DURATION_BUCKET) {
       for {
         groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
@@ -251,10 +222,8 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         )
       )
     }
-  }
 
-  private def validateNewWorkbenchUser(newWorkbenchUser: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
-    println("call validateNewWorkbenchUser")
+  private def validateNewWorkbenchUser(newWorkbenchUser: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.validateNewWorkbenchUser.time", API_TIMING_DURATION_BUCKET) {
       for {
         existingUser <- newWorkbenchUser match {
@@ -270,22 +239,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         }
       } yield ()
     }
-  }
 
-  private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] = {
-    println("call createUserInternal")
+  private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     openTelemetry.time("api.v1.createUserInternal.time", API_TIMING_DURATION_BUCKET) {
       for {
         createdUser <- directoryDAO.createUser(user, samRequestContext)
         _ <- cloudExtensions.onUserCreate(createdUser, samRequestContext)
       } yield createdUser
     }
-  }
 
-  def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] = {
-    println("call getSubjectFromEmail")
+  def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext)
-  }
 
   // Get User Status v1
   // This endpoint/method should probably be deprecated.
@@ -299,8 +263,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   //   - "google" - boolean indicating whether the user's email address is listed as a member of their proxy group on
   //     Google
   //   - "adminEnabled" - boolean value read directly from the Sam User table
-  def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
-    println("call getUserStatus")
+  def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     openTelemetry.time("api.v1.user.getStatus.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
@@ -333,23 +296,18 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         case None => IO.pure(None)
       }
     }
-  }
 
-  def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
-    println("call acceptTermsOfService")
+  def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     for {
       _ <- tosService.acceptTosStatus(userId, samRequestContext)
       status <- getUserStatus(userId, false, samRequestContext)
     } yield status
-  }
 
-  def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
-    println("call rejectTermsOfService")
+  def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     for {
       _ <- tosService.rejectTosStatus(userId, samRequestContext)
       status <- getUserStatus(userId, false, samRequestContext)
     } yield status
-  }
 
   // `UserStatusInfo` is too complicated.  Yes seriously.  What the heck is the difference between "enabled" and
   // "adminEnabled"? Do our consumers know?  Do they care?  Should they care?  I think the answer is "no".  This class
@@ -359,15 +317,12 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // single boolean response indicating whether the user can use the system.
   // Then there can be a simple, separate endpoint for `getUserInfo` that just returns the user record and that's it.
   // Mixing up the endpoint to return user info AND status information is only causing problems and confusion
-  def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] = {
-    println("call getUserStatusInfo")
+  def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] =
     for {
       tosAcceptanceDetails <- tosService.getTosComplianceStatus(user)
     } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.permitsSystemUsage && user.enabled, user.enabled)
-  }
 
-  def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusDiagnostics]] = {
-    println("call getUserStatusDiagnostics")
+  def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusDiagnostics]] =
     openTelemetry.time("api.v1.user.statusDiagnostics.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
@@ -393,11 +348,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         case None => IO.pure(None)
       }
     }
-  }
 
   // TODO: return type should be refactored into ADT for easier read
-  def getUserIdInfoFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Either[Unit, Option[UserIdInfo]]] = {
-    println("call getUserIdInfoFromEmail")
+  def getUserIdInfoFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Either[Unit, Option[UserIdInfo]]] =
     openTelemetry.time("api.v1.user.idInfoFromEmail.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadSubjectFromEmail(email, samRequestContext).flatMap {
         // don't attempt to handle groups or service accounts - just users
@@ -410,19 +363,15 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         case _ => IO.pure(Left(()))
       }
     }
-  }
 
-  def getUserStatusFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
-    println("call getUserStatusFromEmail")
+  def getUserStatusFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext).flatMap {
       // don't attempt to handle groups or service accounts - just users
       case Some(user: WorkbenchUserId) => getUserStatus(user, samRequestContext = samRequestContext)
       case _ => IO.pure(None)
     }
-  }
 
-  def enableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
-    println("call enableUser")
+  def enableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     openTelemetry.time("api.v1.user.enable.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
@@ -433,25 +382,21 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         case None => IO.pure(None)
       }
     }
-  }
 
-  private def enableUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
-    println("call enableUserInternal")
+  private def enableUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.enableUserInternal.time", API_TIMING_DURATION_BUCKET) {
       for {
         _ <- directoryDAO.enableIdentity(user.id, samRequestContext)
         _ <- cloudExtensions.onUserEnable(user, samRequestContext)
       } yield logger.info(s"Enabled user ${user.toUserIdInfo}")
     }
-  }
 
   val serviceAccountDomain = "\\S+@\\S+\\.gserviceaccount\\.com".r
 
   private def isServiceAccount(email: String) =
     serviceAccountDomain.pattern.matcher(email).matches
 
-  def disableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] = {
-    println("call disableUser")
+  def disableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     openTelemetry.time("api.v1.user.disable.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
@@ -463,7 +408,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         case None => IO.pure(None)
       }
     }
-  }
 
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.delete.time", API_TIMING_DURATION_BUCKET) {
@@ -479,15 +423,13 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   // moved this method from the UserService companion object into this class
   // because Mockito would not let us spy/mock the static method
-  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): IO[Unit] = {
-    println("call validateEmailAddress")
+  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): IO[Unit] =
     email.value match {
       case emailString if blockedEmailDomains.exists(domain => emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)) =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")))
       case UserService.emailRegex() => IO.unit
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }
-  }
 }
 
 object UserService {

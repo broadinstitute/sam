@@ -10,13 +10,10 @@ import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 
-import scala.collection.concurrent.TrieMap
-import scala.collection.mutable
-
 case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
-  private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
-  private val groupsWithEmails: mutable.Map[WorkbenchEmail, WorkbenchGroupName] = new TrieMap()
-  private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
+  //private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
+  //private val groupsWithEmails: mutable.Map[WorkbenchEmail, WorkbenchGroupName] = new TrieMap()
+  //private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
 
   val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
@@ -198,7 +195,7 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     this
   }
 
-  def withWorkbenchGroup(group: WorkbenchGroup, accessInstructionsOpt: Option[String] = None): StatefulMockDirectoryDaoBuilder = {
+  /*def withWorkbenchGroup(group: WorkbenchGroup, accessInstructionsOpt: Option[String] = None): StatefulMockDirectoryDaoBuilder = {
     groups += group.id -> group
     groupsWithEmails += group.email -> WorkbenchGroupName(group.id.toString)
     accessInstructionsOpt match {
@@ -217,7 +214,7 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
       .loadGroup(ArgumentMatchers.eq(WorkbenchGroupName(group.id.toString)), any[SamRequestContext])
 
     this
-  }
+  }*/
   // Bare minimum for a user to exist:
   // - has an ID
   // - has an email
