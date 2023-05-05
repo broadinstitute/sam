@@ -31,6 +31,13 @@ jobs:
           RELEASE_BRANCHES: develop
           WITH_V: true
 
+      - name: debug outputs
+        run: |-
+          echo "github.ref ${{ github.ref }}"
+          echo "github.ref_name ${{ github.ref_name }}"
+          echo "GITHUB_REF_NAME $GITHUB_REF_NAME"
+          echo "github.ref_type ${{ github.ref_type }}"
+
       # Builds Sam elsewhere to protect secrets.  Upon success, will tag the commit in git.
       - name: dispatch build to terra-github-workflows
         uses: broadinstitute/workflow-dispatch@v3
