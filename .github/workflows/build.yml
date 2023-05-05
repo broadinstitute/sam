@@ -89,11 +89,11 @@ jobs:
       - name: Publish java client for merge to develop branch
         working-directory: codegen_java
         id: publishJavaClient
-        if: ${{ github.ref_name == 'develop' }}
+        if: ${{ github.head_ref == 'develop' }}
         run: sbt "+ publish" -Dproject.isSnapshot=false
 
       - name: Publish java client as snapshot for PRs
         working-directory: codegen_java
         id: publishJavaClientSnapshot
-        if: ${{ github.ref_name != 'develop' }}
+        if: ${{ github.head_ref != 'develop' }}
         run: sbt "+ publish" -Dproject.isSnapshot=true
