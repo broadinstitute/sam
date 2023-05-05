@@ -38,20 +38,30 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       .when(mockedAccessPolicyDAO)
       .loadPolicy(ArgumentMatchers.eq(policy.id), any[SamRequestContext])
 
-    policy.members.foreach(m => {
+    policy.members.foreach { m =>
       lenient()
         .doAnswer { (i: InvocationOnMock) =>
           val resourceTypeName = i.getArgument[ResourceTypeName](0)
           val workbenchUserId = i.getArgument[WorkbenchUserId](1)
-          println("policies.size: "+policies.size)
+          println("policies.size: " + policies.size)
           IO {
             val forEachPolicy = policies.collect {
-              case (fqPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
-                if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
+              case (fqPolicyId @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
+                  if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
                 if (accessPolicy.public) {
-                  ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.empty, RolesAndActions.empty, RolesAndActions.fromPolicy(accessPolicy))
+                  ResourceIdWithRolesAndActions(
+                    fqPolicyId.resource.resourceId,
+                    RolesAndActions.empty,
+                    RolesAndActions.empty,
+                    RolesAndActions.fromPolicy(accessPolicy)
+                  )
                 } else {
-                  ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.fromPolicy(accessPolicy), RolesAndActions.empty, RolesAndActions.empty)
+                  ResourceIdWithRolesAndActions(
+                    fqPolicyId.resource.resourceId,
+                    RolesAndActions.fromPolicy(accessPolicy),
+                    RolesAndActions.empty,
+                    RolesAndActions.empty
+                  )
                 }
             }
             forEachPolicy.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
@@ -65,8 +75,9 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         .listUserResourcesWithRolesAndActions(
           ArgumentMatchers.eq(policy.id.resource.resourceTypeName),
           ArgumentMatchers.eq(WorkbenchUserId(m.toString)),
-          any[SamRequestContext])
-    })
+          any[SamRequestContext]
+        )
+    }
   }
 
   def withAccessPolicy(resourceTypeName: ResourceTypeName, members: Set[WorkbenchSubject]): StatefulMockAccessPolicyDaoBuilder = {
