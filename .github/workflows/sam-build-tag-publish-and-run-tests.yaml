@@ -19,7 +19,6 @@ jobs:
     outputs:
       custom-version-json: ${{ steps.render-sam-version.outputs.custom-version-json }}
       tag: ${{ steps.tag.outputs.tag }}
-      ref: ${{ steps.extract-branch.outputs.ref }}
     steps:
       - uses: 'actions/checkout@v3'
 
@@ -32,24 +31,6 @@ jobs:
           RELEASE_BRANCHES: develop
           WITH_V: true
 
-      - name: Extract branch
-        id: extract-branch
-        run: |
-          GITHUB_EVENT_NAME=${{ github.event_name }}
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            GITHUB_REF=${{ github.ref }}
-            GITHUB_SHA=${{ github.sha }}
-          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            GITHUB_REF=refs/heads/${{ github.head_ref }}
-            GITHUB_SHA=${{ github.event.pull_request.head.sha }}
-          else
-            echo "Failed to extract branch information"
-            exit 1
-          fi
-
-          echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
-          echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
-
       # Builds Sam elsewhere to protect secrets.  Upon success, will tag the commit in git.
       - name: dispatch build to terra-github-workflows
         uses: broadinstitute/workflow-dispatch@v3
@@ -58,7 +39,7 @@ jobs:
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
+          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ github.ref_name }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
 
       - name: Render Sam version
         id: render-sam-version
@@ -83,7 +64,7 @@ jobs:
     # Put new Sam version in Broad dev environment
     uses: broadinstitute/sherlock/.github/workflows/client-set-environment-app-version.yaml@main
     needs: [ sam-build-tag-publish-job, report-to-sherlock ]
-    if: ${{ needs.sam-build-tag-publish-job.outputs.ref == 'develop' }}
+    if: ${{ github.ref_name == 'develop' }}
     with:
       new-version: ${{ needs.sam-build-tag-publish-job.outputs.tag }}
       chart-name: 'sam'
