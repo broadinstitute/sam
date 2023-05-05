@@ -7,9 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.sam.Generator.genNonPetEmail
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
-import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
@@ -29,7 +27,6 @@ import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
 import java.lang.Thread.sleep
-import java.util.UUID
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
@@ -44,7 +41,7 @@ class SamProviderSpec
 
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
-  val defaultResourceTypeActionPatterns = Set(
+  /*val defaultResourceTypeActionPatterns = Set(
     SamResourceActionPatterns.alterPolicies,
     SamResourceActionPatterns.delete,
     SamResourceActionPatterns.readPolicies,
@@ -79,8 +76,8 @@ class SamProviderSpec
       ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
     ),
     ResourceRoleName("owner")
-  )
-  val accessPolicy = AccessPolicy(
+  )*/
+  /*val accessPolicy = AccessPolicy(
     FullyQualifiedPolicyId(
       FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(UUID.randomUUID().toString)),
       AccessPolicyName("member")
@@ -93,7 +90,7 @@ class SamProviderSpec
     false
   )
 
-  val policies: Map[WorkbenchGroupIdentity, WorkbenchGroup] = Map(accessPolicy.id -> accessPolicy)
+  val policies: Map[WorkbenchGroupIdentity, WorkbenchGroup] = Map(accessPolicy.id -> accessPolicy)*/
 
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
@@ -111,35 +108,10 @@ class SamProviderSpec
     val policyDAO = StatefulMockAccessPolicyDaoBuilder()
       .withAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
       .build
-    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(
-      policyDAOOpt = Some(policyDAO), directoryDAOOpt = Some(directoryDAO))
+    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO,
+      policyDAOOpt = Some(policyDAO))
       .build
-    /*when(
-      policyDAO.listUserResourcesWithRolesAndActions(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
-    ).thenAnswer((i: InvocationOnMock) => {
-      val resourceTypeName = i.getArgument[ResourceTypeName](0)
-      val workbenchUserId = i.getArgument[WorkbenchUserId](1)
-      val samRequestContext = i.getArgument[SamRequestContext](2)
-      IO {
-        val group = directoryDAO.loadGroup(WorkbenchGroupName(accessPolicy.id.toString), samRequestContext).unsafeRunSync().get
-        print(group)
-        val policies2: Map[WorkbenchGroupIdentity, WorkbenchGroup] = Map(group.id -> group)
-        val forEachPolicy = policies2.collect {
-          case (fqPolicyId@FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
-                if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
-            if (accessPolicy.public) {
-              ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.empty, RolesAndActions.empty, RolesAndActions.fromPolicy(accessPolicy))
-            } else {
-              ResourceIdWithRolesAndActions(fqPolicyId.resource.resourceId, RolesAndActions.fromPolicy(accessPolicy), RolesAndActions.empty, RolesAndActions.empty)
-            }
-        }
-        forEachPolicy.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
-          rowsForResource.reduce { (left, right) =>
-            ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
-          }
-        }
-      }
-    })*/
+
     val googleExt = mock[GoogleExtensions]
     // val policyEvaluatorService = mock[PolicyEvaluatorService]
     // val policyEvaluatorService = PolicyEvaluatorService("example.com", Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
@@ -209,10 +181,10 @@ class SamProviderSpec
     //  tosService.getTosComplianceStatus(any[SamUser])
     // } thenReturn IO.pure(TermsOfServiceComplianceStatus(WorkbenchUserId("test"), userHasAcceptedLatestTos = true, permitsSystemUsage = true))
 
-    val fakeWorkspaceResourceType = ResourceType(ResourceTypeName("workspace"), Set.empty, Set.empty, ResourceRoleName("workspace"))
+    /*val fakeWorkspaceResourceType = ResourceType(ResourceTypeName("workspace"), Set.empty, Set.empty, ResourceRoleName("workspace"))
     when {
       mockResourceService.getResourceType(any[ResourceTypeName])
-    } thenReturn IO.pure(Option(fakeWorkspaceResourceType))
+    } thenReturn IO.pure(Option(fakeWorkspaceResourceType))*/
 
     // when {
     //  policyEvaluatorService.listUserResources(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
