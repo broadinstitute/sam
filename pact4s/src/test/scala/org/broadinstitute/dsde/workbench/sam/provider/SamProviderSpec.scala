@@ -39,58 +39,8 @@ class SamProviderSpec
     with LazyLogging
     with MockitoSugar {
 
-  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled=true)
+  val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
-  /*val defaultResourceTypeActionPatterns = Set(
-    SamResourceActionPatterns.alterPolicies,
-    SamResourceActionPatterns.delete,
-    SamResourceActionPatterns.readPolicies,
-    ResourceActionPattern("view", "", false),
-    ResourceActionPattern("non_owner_action", "", false)
-  )
-  val defaultResourceTypeActions =
-    Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
-  val defaultResourceType = ResourceType(
-    ResourceTypeName(UUID.randomUUID().toString),
-    defaultResourceTypeActionPatterns,
-    Set(
-      ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")),
-      ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
-    ),
-    ResourceRoleName("owner")
-  )
-  val otherResourceType = ResourceType(
-    ResourceTypeName(UUID.randomUUID().toString),
-    defaultResourceTypeActionPatterns,
-    Set(
-      ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")),
-      ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
-    ),
-    ResourceRoleName("owner")
-  )
-  val workspaceResourceType = ResourceType(
-    ResourceTypeName("workspace"),
-    defaultResourceTypeActionPatterns,
-    Set(
-      ResourceRole(ResourceRoleName("owner"), defaultResourceTypeActions - ResourceAction("non_owner_action")),
-      ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
-    ),
-    ResourceRoleName("owner")
-  )*/
-  /*val accessPolicy = AccessPolicy(
-    FullyQualifiedPolicyId(
-      FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(UUID.randomUUID().toString)),
-      AccessPolicyName("member")
-    ),
-    Set(defaultSamUser.id),
-    genNonPetEmail.sample.get,
-    Set(),
-    Set(),
-    Set(),
-    false
-  )
-
-  val policies: Map[WorkbenchGroupIdentity, WorkbenchGroup] = Map(accessPolicy.id -> accessPolicy)*/
 
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
@@ -98,30 +48,19 @@ class SamProviderSpec
       .withEnabledUser(defaultSamUser)
       .withAllUsersHavingAcceptedTos()
       .build
-    // val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+
     val directoryDAO: DirectoryDAO = userService.directoryDAO
-    // val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
     val cloudExtensions: CloudExtensions = userService.cloudExtensions
-    // val directoryDAO: DirectoryDAO = mock[DirectoryDAO]
-    // val cloudExtensions: CloudExtensions = mock[CloudExtensions]
-    // val policyDAO = mock[AccessPolicyDAO]
     val policyDAO = StatefulMockAccessPolicyDaoBuilder()
       .withAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
       .build
-    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO,
-      policyDAOOpt = Some(policyDAO))
-      .build
+    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, policyDAOOpt = Some(policyDAO)).build
 
     val googleExt = mock[GoogleExtensions]
-    // val policyEvaluatorService = mock[PolicyEvaluatorService]
-    // val policyEvaluatorService = PolicyEvaluatorService("example.com", Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
     val mockResourceService = mock[ResourceService]
     val mockManagedGroupService = mock[ManagedGroupService]
-    // val tosService = mock[TosService] // replaced by MockTosServiceBuilder
     val tosService = MockTosServiceBuilder().withAllAccepted().build
     val azureService = mock[AzureService]
-    // val userService: UserService = mock[UserService] // replaced by a mock returned by constructor call
-    // val userService: UserService = spy(new UserService(directoryDAO, cloudExtensions, Seq(), tosService))
     val statusService = mock[StatusService]
     when {
       statusService.getStatus()
@@ -139,67 +78,10 @@ class SamProviderSpec
       )
     }
 
-    // Replaced by stubbing below
-    // when {
-    //  directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
-    // } thenReturn {
-    //  val samUser = SamUser(WorkbenchUserId("test"), None, WorkbenchEmail("test@test"), None, enabled = true, None)
-    //  IO.pure(Option(samUser))
-    // }
-
-    // when(
-    //  directoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
-    //).thenAnswer { (i: InvocationOnMock) =>
-    //  val googleSubjectId: Option[GoogleSubjectId] = Some(i.getArgument[GoogleSubjectId](0))
-    //  val defaultSamUser: Option[SamUser] = Some(SamUser(WorkbenchUserId("test"), googleSubjectId, WorkbenchEmail("test@test"), None, enabled = true, None))
-    //  val samRequestContext = i.getArgument[SamRequestContext](1)
-    //  googleSubjectId match {
-    //    case Some(g) =>
-    //      println(g.value)
-    //      println(activeSamUserSubjectId)
-    //      println(activeSamUserEmail)
-        // directoryDAO.createUser(SamUser(WorkbenchUserId(fakeUserSubjectId.get), googleSubjectId, WorkbenchEmail(fakeUserEmail.get), None, enabled = true, None), samRequestContext)
-    //    case _ => println("No googleSubjectId found")
-    //  }
-    //  var samUser: Option[SamUser] = None
-    //  activeSamUserSubjectId match {
-    //    case Some(userSubjectId) =>
-    //      activeSamUserEmail match {
-    //        case Some(userEmail) =>
-    //          samUser = Some(SamUser(WorkbenchUserId(userSubjectId), googleSubjectId, WorkbenchEmail(userEmail), None, enabled = true, None))
-    //        case _ =>
-    //          samUser = defaultSamUser
-    //      }
-    //    case _ =>
-    //      samUser = defaultSamUser
-    //  }
-    //  IO.pure(samUser)
-    //}
-
-      // Wrapped inside MockTosServiceBuilder
-    // when {
-    //  tosService.getTosComplianceStatus(any[SamUser])
-    // } thenReturn IO.pure(TermsOfServiceComplianceStatus(WorkbenchUserId("test"), userHasAcceptedLatestTos = true, permitsSystemUsage = true))
-
     val fakeWorkspaceResourceType = ResourceType(SamResourceTypes.workspaceName, Set.empty, Set.empty, ResourceRoleName("workspace"))
     when {
       mockResourceService.getResourceType(any[ResourceTypeName])
     } thenReturn IO.pure(Option(fakeWorkspaceResourceType))
-
-    // when {
-    //  policyEvaluatorService.listUserResources(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
-    //} thenReturn IO.pure(
-    //  Vector(
-    //    UserResourcesResponse(
-    //      resourceId = ResourceId("cea587e9-9a8e-45b6-b985-9e3803754020"),
-    //      direct = RolesAndActions(Set.empty, Set.empty),
-    //      inherited = RolesAndActions(Set.empty, Set.empty),
-    //      public = RolesAndActions(Set.empty, Set.empty),
-    //      authDomainGroups = Set.empty,
-    //      missingAuthDomainGroups = Set.empty
-    //    )
-    //  )
-    //)
 
     MockSamDependencies(
       mockResourceService,
@@ -294,7 +176,7 @@ class SamProviderSpec
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
   ).withHost("localhost")
     .withPort(8080)
-    //.withRequestFiltering(requestFilter)
+    // .withRequestFiltering(requestFilter)
     .withStateManagementFunction(
       StateManagementFunction {
         case ProviderState("user exists", params) =>
