@@ -5,22 +5,20 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchGroupName, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.Generator.genNonPetEmail
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
-import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -100,7 +98,6 @@ class SamProviderSpec
   def genSamDependencies: MockSamDependencies = {
     val userService: UserService = TestUserServiceBuilder()
       .withAllUsersGroup(allUsersGroup)
-      .withWorkbenchGroup(accessPolicy)
       .withEnabledUser(defaultSamUser)
       .withAllUsersHavingAcceptedTos()
       .build
@@ -110,8 +107,14 @@ class SamProviderSpec
     val cloudExtensions: CloudExtensions = userService.cloudExtensions
     // val directoryDAO: DirectoryDAO = mock[DirectoryDAO]
     // val cloudExtensions: CloudExtensions = mock[CloudExtensions]
-    val policyDAO = mock[AccessPolicyDAO]
-    when(
+    // val policyDAO = mock[AccessPolicyDAO]
+    val policyDAO = StatefulMockAccessPolicyDaoBuilder()
+      .withAccessPolicy(accessPolicy)
+      .build
+    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(
+      policyDAOOpt = Some(policyDAO), directoryDAOOpt = Some(directoryDAO))
+      .build
+    /*when(
       policyDAO.listUserResourcesWithRolesAndActions(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
     ).thenAnswer((i: InvocationOnMock) => {
       val resourceTypeName = i.getArgument[ResourceTypeName](0)
@@ -136,10 +139,10 @@ class SamProviderSpec
           }
         }
       }
-    })
+    })*/
     val googleExt = mock[GoogleExtensions]
     // val policyEvaluatorService = mock[PolicyEvaluatorService]
-    val policyEvaluatorService = PolicyEvaluatorService("example.com", Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
+    // val policyEvaluatorService = PolicyEvaluatorService("example.com", Map(defaultResourceType.name -> defaultResourceType, otherResourceType.name -> otherResourceType, workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
     val mockResourceService = mock[ResourceService]
     val mockManagedGroupService = mock[ManagedGroupService]
     // val tosService = mock[TosService] // replaced by MockTosServiceBuilder
