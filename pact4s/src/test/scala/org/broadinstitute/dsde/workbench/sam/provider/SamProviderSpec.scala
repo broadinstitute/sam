@@ -39,10 +39,12 @@ class SamProviderSpec
     with LazyLogging
     with MockitoSugar {
 
+  // The default login user
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
 
   def genSamDependencies: MockSamDependencies = {
+    // Minimally viable Sam service and states for consumer verification
     val userService: UserService = TestUserServiceBuilder()
       .withAllUsersGroup(allUsersGroup)
       .withEnabledUser(defaultSamUser)
@@ -51,14 +53,19 @@ class SamProviderSpec
 
     val directoryDAO: DirectoryDAO = userService.directoryDAO
     val cloudExtensions: CloudExtensions = userService.cloudExtensions
+
+    // Policy service and states for consumer verification
     val policyDAO = StatefulMockAccessPolicyDaoBuilder()
       .withAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
       .build
     val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, policyDAOOpt = Some(policyDAO)).build
 
-    val googleExt = mock[GoogleExtensions]
+    // Resource service and states for consumer verification
     val resourceService: ResourceService =
       TestResourceServiceBuilder(policyEvaluatorService, policyDAO, directoryDAO, cloudExtensions).withWorkspaceResourceType().build
+
+    // The following services are mocked for now
+    val googleExt = mock[GoogleExtensions]
     val mockManagedGroupService = mock[ManagedGroupService]
     val tosService = MockTosServiceBuilder().withAllAccepted().build
     val azureService = mock[AzureService]
@@ -134,7 +141,8 @@ class SamProviderSpec
   }
 
   // If the auth header in the request is "correct", we can replace it with an auth header that will actually work with our API,
-  // else we leave it as is to be rejected.
+  // else we leave it as is to be rejected. This request filter is currently not used as the Sam provider
+  // session defaults to defaultSamUser
   def requestFilter: ProviderRequest => ProviderRequestFilter = req =>
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
@@ -145,25 +153,23 @@ class SamProviderSpec
               println(s"Captured token ${token}")
               token match {
                 case "accessToken" =>
-                  println("do accessToken")
+                  println("do bearer 'accessToken'")
                 case _ =>
-                  println("do others")
+                  println("do other bearer token")
               }
-              println(s"Set headers")
               SetHeaders("Authorization" -> s"Bearer ${token}")
             case _ =>
-              println("AuthScheme is not Bearer")
+              println("do other AuthScheme")
               NoOpFilter
           }
           .getOrElse(NoOpFilter)
       case None =>
-        println("No Authorization header found.")
+        println("no auth header found")
         NoOpFilter
     }
 
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
-    // pactSource = PactSource.FileSource(Map("leo-consumer" -> new File("src/test/resources/leo-consumer-sam-provider.json")))
     pactSource = PactSource
       .PactBrokerWithSelectors(
         brokerUrl = pactBrokerUrl
@@ -173,12 +179,17 @@ class SamProviderSpec
   ).withHost("localhost")
     .withPort(8080)
     // .withRequestFiltering(requestFilter)
+    // More sophisticated state management can be done here.
+    // It's recommended to have predefined states, e.g.
+    // TestUserServiceBuilder, StatefulMockAccessPolicyDaoBuilder,
+    // TestPolicyEvaluatorServiceBuilder, and TestResourceServiceBuilder
+    // how to verify external states of cloud services through mocking and stubbing
     .withStateManagementFunction(
       StateManagementFunction {
         case ProviderState("user exists", params) =>
           println("user exists")
         case _ =>
-          println("do default")
+          println("other state")
       }
         .withBeforeEach(() => ())
     )
