@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.Generator.{genGoogleSubjectId, genNonPetEmail}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
@@ -11,7 +10,6 @@ import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 
-import java.util.UUID
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 
@@ -19,18 +17,6 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
   private val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
   private val groupsWithEmails: mutable.Map[WorkbenchEmail, WorkbenchGroupName] = new TrieMap()
   private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
-  val accessPolicy = AccessPolicy(
-    FullyQualifiedPolicyId(
-      FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(UUID.randomUUID().toString)),
-      AccessPolicyName("member")
-    ),
-    Set(genGoogleSubjectId.sample.get),
-    genNonPetEmail.sample.get,
-    Set(),
-    Set(),
-    Set(),
-    false
-  )
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
 
   val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
@@ -212,8 +198,14 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     this
   }
 
-  def withWorkbenchGroup(group: WorkbenchGroup): StatefulMockDirectoryDaoBuilder = {
+  def withWorkbenchGroup(group: WorkbenchGroup, accessInstructionsOpt: Option[String] = None): StatefulMockDirectoryDaoBuilder = {
     groups += group.id -> group
+    groupsWithEmails += group.email -> group.id
+    accessInstructionsOpt match {
+      case Some(s) =>
+        groupAccessInstructions += group.id -> s
+      case _ => ()
+    }
 
     doThrow(new RuntimeException(s"Group $group is mocked to already exist"))
       .when(mockedDirectoryDAO)
