@@ -200,10 +200,10 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
 
   def withWorkbenchGroup(group: WorkbenchGroup, accessInstructionsOpt: Option[String] = None): StatefulMockDirectoryDaoBuilder = {
     groups += group.id -> group
-    groupsWithEmails += group.email -> group.id
+    groupsWithEmails += group.email -> WorkbenchGroupName(group.id.toString)
     accessInstructionsOpt match {
       case Some(s) =>
-        groupAccessInstructions += group.id -> s
+        groupAccessInstructions += WorkbenchGroupName(group.id.toString) -> s
       case _ => ()
     }
 
