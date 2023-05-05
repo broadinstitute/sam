@@ -109,7 +109,7 @@ class SamProviderSpec
     // val cloudExtensions: CloudExtensions = mock[CloudExtensions]
     // val policyDAO = mock[AccessPolicyDAO]
     val policyDAO = StatefulMockAccessPolicyDaoBuilder()
-      .withAccessPolicy(accessPolicy)
+      .withAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
       .build
     val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(
       policyDAOOpt = Some(policyDAO), directoryDAOOpt = Some(directoryDAO))

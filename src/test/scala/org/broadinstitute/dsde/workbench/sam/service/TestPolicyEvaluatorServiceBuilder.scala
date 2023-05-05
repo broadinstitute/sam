@@ -74,7 +74,7 @@ case class TestPolicyEvaluatorServiceBuilder(policyDAOOpt: Option[AccessPolicyDA
   private def buildAccessPolicyDao(): AccessPolicyDAO = {
     val mockAccessPolicyDaoBuilder = StatefulMockAccessPolicyDaoBuilder()
 
-    existingPolicies.foreach(mockAccessPolicyDaoBuilder.withAccessPolicy)
+    existingPolicies.foreach(p => mockAccessPolicyDaoBuilder.withAccessPolicy(p.id.resource.resourceTypeName, p.members))
 
     mockAccessPolicyDaoBuilder.build
   }

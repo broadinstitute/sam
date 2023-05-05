@@ -1,8 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, FullyQualifiedPolicyId, FullyQualifiedResourceId, ResourceIdWithRolesAndActions, ResourceTypeName, RolesAndActions}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genAccessPolicyName, genNonPetEmail, genResourceId}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
@@ -68,7 +69,19 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
     })
   }
 
-  def withAccessPolicy(policy: AccessPolicy): StatefulMockAccessPolicyDaoBuilder = {
+  def withAccessPolicy(resourceTypeName: ResourceTypeName, members: Set[WorkbenchSubject]): StatefulMockAccessPolicyDaoBuilder = {
+    val policy = AccessPolicy(
+      FullyQualifiedPolicyId(
+        FullyQualifiedResourceId(resourceTypeName, genResourceId.sample.get),
+        genAccessPolicyName.sample.get
+      ),
+      members,
+      genNonPetEmail.sample.get,
+      Set(),
+      Set(),
+      Set(),
+      false
+    )
     policies += policy.id -> policy
     mockedAccessPolicyDAO.createPolicy(policy, SamRequestContext())
     this
