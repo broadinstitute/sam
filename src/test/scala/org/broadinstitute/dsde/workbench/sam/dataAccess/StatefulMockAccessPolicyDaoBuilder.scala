@@ -38,15 +38,13 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
           val resourceTypeName = i.getArgument[ResourceTypeName](0)
           val workbenchUserId = i.getArgument[WorkbenchUserId](1)
           val policies = Map(policy.id -> policy)
-          println("listUserResourcesWithRolesAndActions: " + policy.id + ", " + policy)
+
           IO {
             val forEachPolicy = policies.collect {
               case (FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
                   if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
                 constructResourceIdWithRolesAndActions(accessPolicy)
             }
-
-            println(forEachPolicy)
 
             forEachPolicy.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
               rowsForResource.reduce { (left, right) =>
