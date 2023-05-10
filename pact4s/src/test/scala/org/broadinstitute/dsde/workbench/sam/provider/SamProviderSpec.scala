@@ -155,7 +155,9 @@ class SamProviderSpec
   // The 'parseAuth' function parses the auth header and can be used to substitute the original token
   // sent by the consumer with a 'real' token to satisfy the api auth requirements.
   //
-  def requestFilter: ProviderRequest => ProviderRequestFilter = req =>
+  def requestFilter: ProviderRequest => ProviderRequestFilter = customFilter
+
+  private def customFilter(req: ProviderRequest): ProviderRequestFilter =
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
         parseAuth(value)
@@ -164,7 +166,7 @@ class SamProviderSpec
         NoOpFilter
     }
 
-  private def parseAuth(auth: String) =
+  private def parseAuth(auth: String): ProviderRequestFilter =
     Authorization
       .parse(auth)
       .map {
