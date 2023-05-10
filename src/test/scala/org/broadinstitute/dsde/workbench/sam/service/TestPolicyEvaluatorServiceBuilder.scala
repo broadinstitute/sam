@@ -10,12 +10,10 @@ import org.mockito.scalatest.MockitoSugar
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 
-case class TestPolicyEvaluatorServiceBuilder(
-    directoryDAO: DirectoryDAO,
-    policyDAOOpt: Option[AccessPolicyDAO] = None,
-    directoryDAOOpt: Option[DirectoryDAO] = None
-)(implicit val executionContext: ExecutionContext, val openTelemetry: OpenTelemetryMetrics[IO])
-    extends MockitoSugar {
+case class TestPolicyEvaluatorServiceBuilder(directoryDAO: DirectoryDAO, policyDAO: AccessPolicyDAO)(implicit
+    val executionContext: ExecutionContext,
+    val openTelemetry: OpenTelemetryMetrics[IO]
+) extends MockitoSugar {
   private val existingPolicies: mutable.Set[AccessPolicy] = mutable.Set.empty
   private val emailDomain = "example.com"
   private val defaultResourceTypeActions =
@@ -43,14 +41,8 @@ case class TestPolicyEvaluatorServiceBuilder(
     this
   }
 
-  def build: PolicyEvaluatorService = {
-    val policyDAO = policyDAOOpt match {
-      case Some(dao) => dao
-      case None => buildAccessPolicyDao()
-    }
-
+  def build: PolicyEvaluatorService =
     new PolicyEvaluatorService(emailDomain, Map(workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
-  }
 
   private def buildAccessPolicyDao(): AccessPolicyDAO = {
     val mockAccessPolicyDaoBuilder = StatefulMockAccessPolicyDaoBuilder()

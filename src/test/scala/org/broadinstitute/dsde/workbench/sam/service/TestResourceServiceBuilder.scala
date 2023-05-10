@@ -14,7 +14,7 @@ import scala.concurrent.ExecutionContext
 
 case class TestResourceServiceBuilder(
     policyEvaluatorService: PolicyEvaluatorService,
-    accessPolicyDAO: AccessPolicyDAO,
+    policyDAO: AccessPolicyDAO,
     directoryDAO: DirectoryDAO,
     cloudExtensions: CloudExtensions
 )(implicit val executionContext: ExecutionContext, val openTelemetry: OpenTelemetryMetrics[IO])
@@ -105,6 +105,6 @@ case class TestResourceServiceBuilder(
       case _ => ()
     }
 
-    new ResourceService(resourceTypes.toMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain, Set())
+    new ResourceService(resourceTypes.toMap, policyEvaluatorService, policyDAO, directoryDAO, cloudExtensions, emailDomain, Set())
   }
 }

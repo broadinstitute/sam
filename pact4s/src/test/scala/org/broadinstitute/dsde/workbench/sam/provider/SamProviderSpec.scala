@@ -58,7 +58,7 @@ class SamProviderSpec
     val policyDAO = StatefulMockAccessPolicyDaoBuilder()
       .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
       .build
-    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, policyDAOOpt = Some(policyDAO)).build
+    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, policyDAO).build
 
     // Resource service and states for consumer verification
     val resourceService: ResourceService =
