@@ -14,19 +14,43 @@ import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 
 case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
-  private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
+  // private val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
 
   val mockedAccessPolicyDAO: AccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
 
   lenient()
     .doAnswer { (invocation: InvocationOnMock) =>
       val policy = invocation.getArgument[AccessPolicy](0)
-      policies += policy.id -> policy
+      // policies += policy.id -> policy
       makePolicyExist(policy)
       IO(policy)
     }
     .when(mockedAccessPolicyDAO)
     .createPolicy(any[AccessPolicy], any[SamRequestContext])
+
+  lenient()
+    .doAnswer { (invocation: InvocationOnMock) =>
+      val resource = invocation.getArgument[Resource](0)
+      // policies += policy.id -> policy
+      makeResourceExist(resource)
+      resource.accessPolicies.foreach(makePolicyExist)
+      IO(resource)
+    }
+    .when(mockedAccessPolicyDAO)
+    .createResource(any[Resource], any[SamRequestContext])
+
+  private def makeResourceExist(resource: Resource): Unit = {
+    doThrow(new RuntimeException(s"Resource $resource is mocked to already exist"))
+      .when(mockedAccessPolicyDAO)
+      .createResource(ArgumentMatchers.eq(resource), any[SamRequestContext])
+
+    resource.accessPolicies.foreach { p =>
+      lenient()
+        .doReturn(IO.pure(resource.accessPolicies.to(LazyList)))
+        .when(mockedAccessPolicyDAO)
+        .listAccessPolicies(ArgumentMatchers.eq(p.id.resource), any[SamRequestContext])
+    }
+  }
 
   private def makePolicyExist(policy: AccessPolicy): Unit = {
     doThrow(new RuntimeException(s"Policy $policy is mocked to already exist"))
@@ -43,7 +67,9 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         .doAnswer { (i: InvocationOnMock) =>
           val resourceTypeName = i.getArgument[ResourceTypeName](0)
           val workbenchUserId = i.getArgument[WorkbenchUserId](1)
-          println("policies.size: " + policies.size)
+          // println("policies.size: " + policies.size)
+          val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
+          policies += policy.id -> policy
           IO {
             val forEachPolicy = policies.collect {
               case (fqPolicyId @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
@@ -80,7 +106,7 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
     }
   }
 
-  def withAccessPolicy(resourceTypeName: ResourceTypeName, members: Set[WorkbenchSubject]): StatefulMockAccessPolicyDaoBuilder = {
+  def withRandomAccessPolicy(resourceTypeName: ResourceTypeName, members: Set[WorkbenchSubject]): StatefulMockAccessPolicyDaoBuilder = {
     val policy = AccessPolicy(
       FullyQualifiedPolicyId(
         FullyQualifiedResourceId(resourceTypeName, genResourceId.sample.get),
@@ -93,7 +119,7 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       Set(),
       false
     )
-    policies += policy.id -> policy
+    // policies += policy.id -> policy
     mockedAccessPolicyDAO.createPolicy(policy, SamRequestContext())
     this
   }
