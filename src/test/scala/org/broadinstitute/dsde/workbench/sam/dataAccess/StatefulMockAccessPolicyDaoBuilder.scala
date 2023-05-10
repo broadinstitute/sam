@@ -56,7 +56,6 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       .when(mockedAccessPolicyDAO)
       .listUserResourcesWithRolesAndActions(
         ArgumentMatchers.eq(policy.id.resource.resourceTypeName),
-        // ArgumentMatchers.eq(WorkbenchUserId(m.toString)),
         argThat(new AnyOfMatcher(policy.members.map(m => WorkbenchUserId(m.toString)))),
         any[SamRequestContext]
       )
