@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genAccessPolicyName, genNonPetEmail, genResourceId}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -9,9 +9,6 @@ import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
-
-import scala.collection.concurrent.TrieMap
-import scala.collection.mutable
 
 case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
   val mockedAccessPolicyDAO: AccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
@@ -40,14 +37,16 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         .doAnswer { (i: InvocationOnMock) =>
           val resourceTypeName = i.getArgument[ResourceTypeName](0)
           val workbenchUserId = i.getArgument[WorkbenchUserId](1)
-          val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap()
-          policies += policy.id -> policy
+          val policies = Map(policy.id -> policy)
+          println("listUserResourcesWithRolesAndActions: " + policy.id + ", " + policy)
           IO {
             val forEachPolicy = policies.collect {
               case (FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
                   if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
                 constructResourceIdWithRolesAndActions(accessPolicy)
             }
+
+            println(forEachPolicy)
 
             forEachPolicy.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
               rowsForResource.reduce { (left, right) =>
