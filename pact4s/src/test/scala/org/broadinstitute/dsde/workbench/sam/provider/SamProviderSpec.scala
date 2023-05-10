@@ -63,6 +63,7 @@ class SamProviderSpec
     // Resource service and states for consumer verification
     val resourceService: ResourceService =
       TestResourceServiceBuilder(policyEvaluatorService, policyDAO, directoryDAO, cloudExtensions)
+        .withDummySamUser(defaultSamUser)
         .withRandomDefaultResourceType()
         .withRandomOtherResourceType()
         .withRandomWorkspaceResourceType()
@@ -144,9 +145,16 @@ class SamProviderSpec
     case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased.mainBranch
   }
 
-  // If the auth header in the request is "correct", we can replace it with an auth header that will actually work with our API,
-  // else we leave it as is to be rejected. This request filter is currently not used as the Sam provider
-  // session defaults to defaultSamUser
+  // The request filter allows the provider to intercept a HTTP request and
+  // to introduce some custom logic to filter the request BEFORE processing takes place.
+  //
+  // Here we implemented a custom filter that allows the provider to intercept an auth header from the HTTP request.
+  //    If the consumer request contains an auth header, the 'parseAuth' filtering logic will be applied.
+  //    Otherwise no filtering logic is applied.
+  //
+  // The 'parseAuth' function parses the auth header and can be used to substitute the original token
+  // sent by the consumer with a 'real' token to satisfy the api auth requirements.
+  //
   def requestFilter: ProviderRequest => ProviderRequestFilter = req =>
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
@@ -174,6 +182,7 @@ class SamProviderSpec
           NoOpFilter
       }
       .getOrElse(NoOpFilter)
+
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
     pactSource = PactSource
