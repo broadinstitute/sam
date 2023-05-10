@@ -44,24 +44,11 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
           policies += policy.id -> policy
           IO {
             val forEachPolicy = policies.collect {
-              case (fqPolicyId @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
+              case (FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
                   if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
-                if (accessPolicy.public) {
-                  ResourceIdWithRolesAndActions(
-                    fqPolicyId.resource.resourceId,
-                    RolesAndActions.empty,
-                    RolesAndActions.empty,
-                    RolesAndActions.fromPolicy(accessPolicy)
-                  )
-                } else {
-                  ResourceIdWithRolesAndActions(
-                    fqPolicyId.resource.resourceId,
-                    RolesAndActions.fromPolicy(accessPolicy),
-                    RolesAndActions.empty,
-                    RolesAndActions.empty
-                  )
-                }
+                constructResourceIdWithRolesAndActions(accessPolicy)
             }
+
             forEachPolicy.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
               rowsForResource.reduce { (left, right) =>
                 ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
@@ -77,6 +64,23 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         )
     }
   }
+
+  private def constructResourceIdWithRolesAndActions(accessPolicy: AccessPolicy): ResourceIdWithRolesAndActions =
+    if (accessPolicy.public) {
+      ResourceIdWithRolesAndActions(
+        accessPolicy.id.resource.resourceId,
+        RolesAndActions.empty,
+        RolesAndActions.empty,
+        RolesAndActions.fromPolicy(accessPolicy)
+      )
+    } else {
+      ResourceIdWithRolesAndActions(
+        accessPolicy.id.resource.resourceId,
+        RolesAndActions.fromPolicy(accessPolicy),
+        RolesAndActions.empty,
+        RolesAndActions.empty
+      )
+    }
 
   def withRandomAccessPolicy(resourceTypeName: ResourceTypeName, members: Set[WorkbenchSubject]): StatefulMockAccessPolicyDaoBuilder = {
     val policy = AccessPolicy(
