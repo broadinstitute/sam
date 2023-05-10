@@ -68,8 +68,6 @@ class SamProviderSpec
         .withRandomWorkspaceResourceType()
         .build
 
-    // val policyEvaluatorService = resourceService.policyEvaluatorService
-
     // The following services are mocked for now
     val googleExt = mock[GoogleExtensions]
     val mockManagedGroupService = mock[ManagedGroupService]

@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
-import org.broadinstitute.dsde.workbench.sam.Generator.genResourceId
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -34,8 +33,6 @@ case class TestResourceServiceBuilder(
     ResourceActionPattern("view", "", false),
     ResourceActionPattern("non_owner_action", "", false)
   )
-
-  var maybePolicyEvaluatorService: Option[PolicyEvaluatorService] = None
 
   def withRandomDefaultResourceType(): TestResourceServiceBuilder = {
     maybeDefaultResourceType = Some(
@@ -89,73 +86,25 @@ case class TestResourceServiceBuilder(
 
   def build: ResourceService = {
     val resourceTypes: mutable.Map[ResourceTypeName, ResourceType] = new TrieMap()
-    val resources: mutable.Map[ResourceType, FullyQualifiedResourceId] = new TrieMap()
 
     maybeDefaultResourceType match {
       case Some(rt) =>
         resourceTypes += rt.name -> rt
-        resources += rt -> FullyQualifiedResourceId(rt.name, genResourceId.sample.get)
       case _ => ()
     }
 
     maybeOtherResourceType match {
       case Some(rt) =>
         resourceTypes += rt.name -> rt
-        resources += rt -> FullyQualifiedResourceId(rt.name, genResourceId.sample.get)
       case _ => ()
     }
 
     maybeWorkspaceResourceType match {
       case Some(rt) =>
         resourceTypes += rt.name -> rt
-        resources += rt -> FullyQualifiedResourceId(rt.name, genResourceId.sample.get)
       case _ => ()
     }
 
-    // val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes.toMap, accessPolicyDAO, directoryDAO)
-    val resourceService = new ResourceService(resourceTypes.toMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain, Set())
-
-    //resourceTypes.collect {
-    //  case (_, resourceType) => resourceService.createResourceType(resourceType, SamRequestContext())
-    //}
-
-    /*resources.collect {
-      case (resourceType, fqResourceId) =>
-        resourceService.createResource(
-          resourceType,
-          fqResourceId.resourceId,
-          maybeDummySamUser.get,
-          SamRequestContext())
-        resourceService.overwritePolicy(
-          resourceType,
-          AccessPolicyName("in-it"),
-          fqResourceId,
-          AccessPolicyMembership(Set(maybeDummySamUser.get.email), Set(ResourceAction("alter_policies")), Set.empty),
-          SamRequestContext()
-        )
-        resourceService.overwritePolicy(
-          resourceType,
-          AccessPolicyName("not-in-it"),
-          fqResourceId,
-          AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty),
-          SamRequestContext()
-        )
-    }*/
-
-    resourceService
+    new ResourceService(resourceTypes.toMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain, Set())
   }
 }
-
-class ResourceService1(
-    resourceTypes: Map[ResourceTypeName, ResourceType],
-    override val policyEvaluatorService: PolicyEvaluatorService,
-    accessPolicyDAO: AccessPolicyDAO,
-    directoryDAO: DirectoryDAO,
-    cloudExtensions: CloudExtensions,
-    emailDomain: String,
-    allowedAdminEmailDomains: Set[String]
-)(implicit executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetrics[IO])
-    extends ResourceService(resourceTypes, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain, allowedAdminEmailDomains)(
-      executionContext,
-      openTelemetry
-    )
