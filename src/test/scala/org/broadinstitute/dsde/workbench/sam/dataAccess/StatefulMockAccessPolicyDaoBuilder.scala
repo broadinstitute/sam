@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genAccessPolicyName, genNonPetEmail, genResourceId}
+import org.broadinstitute.dsde.workbench.sam.matchers.AnyOfMatcher
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
@@ -32,34 +33,33 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       .when(mockedAccessPolicyDAO)
       .loadPolicy(ArgumentMatchers.eq(policy.id), any[SamRequestContext])
 
-    policy.members.foreach { m =>
-      lenient()
-        .doAnswer { (i: InvocationOnMock) =>
-          val resourceTypeName = i.getArgument[ResourceTypeName](0)
-          val workbenchUserId = i.getArgument[WorkbenchUserId](1)
-          val policies = Map(policy.id -> policy)
+    lenient()
+      .doAnswer { (i: InvocationOnMock) =>
+        val resourceTypeName = i.getArgument[ResourceTypeName](0)
+        val workbenchUserId = i.getArgument[WorkbenchUserId](1)
+        val policies = Map(policy.id -> policy)
 
-          IO {
-            val forEachPolicy = policies.collect {
-              case (FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
-                  if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
-                constructResourceIdWithRolesAndActions(accessPolicy)
-            }
+        IO {
+          val forEachPolicy = policies.collect {
+            case (FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
+                if accessPolicy.members.contains(workbenchUserId) || accessPolicy.public =>
+              constructResourceIdWithRolesAndActions(accessPolicy)
+          }
 
-            forEachPolicy.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
-              rowsForResource.reduce { (left, right) =>
-                ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
-              }
+          forEachPolicy.groupBy(_.resourceId).map { case (resourceId, rowsForResource) =>
+            rowsForResource.reduce { (left, right) =>
+              ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
             }
           }
         }
-        .when(mockedAccessPolicyDAO)
-        .listUserResourcesWithRolesAndActions(
-          ArgumentMatchers.eq(policy.id.resource.resourceTypeName),
-          ArgumentMatchers.eq(WorkbenchUserId(m.toString)),
-          any[SamRequestContext]
-        )
-    }
+      }
+      .when(mockedAccessPolicyDAO)
+      .listUserResourcesWithRolesAndActions(
+        ArgumentMatchers.eq(policy.id.resource.resourceTypeName),
+        // ArgumentMatchers.eq(WorkbenchUserId(m.toString)),
+        argThat(new AnyOfMatcher(policy.members.map(m => WorkbenchUserId(m.toString)))),
+        any[SamRequestContext]
+      )
   }
 
   private def constructResourceIdWithRolesAndActions(accessPolicy: AccessPolicy): ResourceIdWithRolesAndActions =
