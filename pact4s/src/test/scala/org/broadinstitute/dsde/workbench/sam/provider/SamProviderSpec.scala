@@ -150,28 +150,30 @@ class SamProviderSpec
   def requestFilter: ProviderRequest => ProviderRequestFilter = req =>
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
-        Authorization
-          .parse(value)
-          .map {
-            case Authorization(Credentials.Token(AuthScheme.Bearer, token)) =>
-              println(s"Captured token ${token}")
-              token match {
-                case "accessToken" =>
-                  println("do bearer 'accessToken'")
-                case _ =>
-                  println("do other bearer token")
-              }
-              SetHeaders("Authorization" -> s"Bearer ${token}")
-            case _ =>
-              println("do other AuthScheme")
-              NoOpFilter
-          }
-          .getOrElse(NoOpFilter)
+        parseAuth(value)
       case None =>
         println("no auth header found")
         NoOpFilter
     }
 
+  private def parseAuth(auth: String) =
+    Authorization
+      .parse(auth)
+      .map {
+        case Authorization(Credentials.Token(AuthScheme.Bearer, token)) =>
+          println(s"Captured token ${token}")
+          token match {
+            case "accessToken" =>
+              println("do bearer 'accessToken'")
+            case _ =>
+              println("do other bearer token")
+          }
+          SetHeaders("Authorization" -> s"Bearer ${token}")
+        case _ =>
+          println("do other AuthScheme")
+          NoOpFilter
+      }
+      .getOrElse(NoOpFilter)
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
     pactSource = PactSource
