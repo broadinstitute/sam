@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.mockito.scalatest.MockitoSugar
 
@@ -44,11 +44,4 @@ case class TestPolicyEvaluatorServiceBuilder(directoryDAO: DirectoryDAO, policyD
   def build: PolicyEvaluatorService =
     new PolicyEvaluatorService(emailDomain, Map(workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
 
-  private def buildAccessPolicyDao(): AccessPolicyDAO = {
-    val mockAccessPolicyDaoBuilder = StatefulMockAccessPolicyDaoBuilder()
-
-    existingPolicies.foreach(p => mockAccessPolicyDaoBuilder.withRandomAccessPolicy(p.id.resource.resourceTypeName, p.members))
-
-    mockAccessPolicyDaoBuilder.build
-  }
 }
