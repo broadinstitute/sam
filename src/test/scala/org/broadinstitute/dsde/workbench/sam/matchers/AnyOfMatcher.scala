@@ -6,15 +6,17 @@ class AnyOfMatcher[T](expectedValues: Iterable[T]) extends ArgumentMatcher[T] {
 
   /** Use in conjunction with argThat.
     *
-    * For example:
-    *
+    * Example usage:
+    * ```
     * import org.mockito.Mockito._
     * import org.mockito.ArgumentMatchers._
     *
     * val mockObj = mock(classOf[MyClass])
     *
-    * when(mockObj.myMethod(argThat(new AnyOfMatcher(Seq("foo", "bar", "baz"))))).thenReturn("matched") mockObj.myMethod("bar")
+    * when(mockObj.myMethod(argThat(new AnyOfMatcher(Seq("foo", "bar", "baz")))))
+    *   .thenReturn("matched") mockObj.myMethod("bar")
     * verify(mockObj).myMethod(argThat(new AnyOfMatcher(Seq("foo", "bar", "baz"))))
+    * ```
     *
     * @param argument
     *   the value to match against any value from expectedValues
