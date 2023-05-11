@@ -148,7 +148,8 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                   } ~
                   pathPrefix("authDomain") {
                     pathEndOrSingleSlash {
-                      getResourceAuthDomain(resource, samUser, samRequestContext)
+                      getResourceAuthDomain(resource, samUser, samRequestContext) ~
+                        putResourceAuthDomain(resource, samUser, samRequestContext)
                     }
                   } ~
                   pathPrefix("roles") {
@@ -360,6 +361,17 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         complete(resourceService.loadResourceAuthDomain(resource, samRequestContext).map { response =>
           StatusCodes.OK -> response
         })
+      }
+    }
+
+  def putResourceAuthDomain(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+    put {
+      requireAction(resource, SamResourceActions.alterPolicies, samUser.id, samRequestContext) {
+        entity(as[Set[WorkbenchGroupName]]) { authDomains =>
+          complete(resourceService.setResourceAuthDomain(resource, authDomains, samRequestContext).map { response =>
+            StatusCodes.OK -> response
+          })
+        }
       }
     }
 

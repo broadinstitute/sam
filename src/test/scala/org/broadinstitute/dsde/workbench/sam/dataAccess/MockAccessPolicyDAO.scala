@@ -80,6 +80,17 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
       }
     }
 
+  override def setResourceAuthDomain(
+      resource: FullyQualifiedResourceId,
+      authDomains: Set[WorkbenchGroupName],
+      samRequestContext: SamRequestContext
+  ): IO[LoadResourceAuthDomainResult] = {
+    val resourceToUpdateOpt = resources.get(resource)
+    val updatedAuthDomains = resourceToUpdateOpt.map(res => res.authDomain).get ++ authDomains
+    resourceToUpdateOpt.map(resourceToUpdate => resources += resource -> resourceToUpdate.copy(authDomain = updatedAuthDomains))
+    loadResourceAuthDomain(resource, samRequestContext)
+  }
+
   override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     val resourceToRemoveOpt = resources.get(resource)
     resourceToRemoveOpt.map(resourceToRemove => resources += resource -> resourceToRemove.copy(authDomain = Set.empty))

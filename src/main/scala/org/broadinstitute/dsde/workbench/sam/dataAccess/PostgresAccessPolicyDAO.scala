@@ -589,6 +589,19 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       }
     }
 
+  override def setResourceAuthDomain(
+      resource: FullyQualifiedResourceId,
+      authDomains: Set[WorkbenchGroupName],
+      samRequestContext: SamRequestContext
+  ): IO[LoadResourceAuthDomainResult] = {
+    serializableWriteTransaction("setResourceAuthDomain", samRequestContext) { implicit session =>
+      val authDomainPks = queryForGroupPKs(authDomains.map(identity))
+      val resourcePk = loadResourcePK(resource)
+      insertAuthDomainsForResource(resourcePk, authDomainPks)
+    }
+    loadResourceAuthDomain(resource, samRequestContext)
+  }
+
   override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
       groupId: WorkbenchGroupIdentity,
       samRequestContext: SamRequestContext

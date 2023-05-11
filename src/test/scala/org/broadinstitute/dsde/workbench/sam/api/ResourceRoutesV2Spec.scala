@@ -1660,6 +1660,48 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
   }
 
+  "Put AuthDomain" should "add additional group to the existing auth domain" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+
+    val authDomain = "authDomain"
+    val authDomain2 = "authDomain2"
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.readAuthDomain, SamResourceActionPatterns.use),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
+
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain), defaultUserInfo, samRequestContext = samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId(authDomain2), defaultUserInfo, samRequestContext = samRequestContext))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(
+      AccessPolicyName("ap") -> AccessPolicyMembership(
+        Set(defaultUserInfo.email),
+        Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
+        Set(ResourceRoleName("owner"))
+      )
+    )
+    runAndWait(
+      samRoutes.resourceService
+        .createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.id, samRequestContext)
+    )
+
+    val result = runAndWait(
+      samRoutes.resourceService
+        .setResourceAuthDomain(FullyQualifiedResourceId(resourceType.name, resourceId), Set(WorkbenchGroupName(authDomain2)), samRequestContext)
+    );
+    result.map(n => n.value) shouldEqual Set(authDomain, authDomain2)
+    /*
+    Put(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain", Array(authDomain2)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set(authDomain, authDomain2)
+    }
+     */
+  }
+
   private def initManagedGroupResourceType(): ResourceType = {
     val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
     val policyActions: Set[ResourceAction] =
