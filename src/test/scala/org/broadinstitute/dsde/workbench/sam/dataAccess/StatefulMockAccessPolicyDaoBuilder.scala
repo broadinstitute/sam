@@ -11,6 +11,11 @@ import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 
+// TODO: Stateful mocks are not what we want.  For now, we are implementing it this way so that we can incrementally
+//  improve tests and production code alike.  First step is to get this MockBuilder in place as it helps us identify
+//  where we should try to refactor production code.  Note that this class is named like `StatefulFoo` intentionally
+//  to call out that this Builder is being naughty and coordinating state and side-effects and may cause problems as
+//  a result.
 case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
   val mockedAccessPolicyDAO: AccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
 
@@ -33,6 +38,9 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       .when(mockedAccessPolicyDAO)
       .loadPolicy(ArgumentMatchers.eq(policy.id), any[SamRequestContext])
 
+    // TODO: Refactor AccessPolicyDao to be less stateful/side-effecty.
+    //  In general, anytime we need to mock with a .doAnswer{}, we should consider that a code smell and an indication
+    //  that our production code is not designed properly.  This is wayyyy more logic than we want in a mock.
     lenient()
       .doAnswer { (i: InvocationOnMock) =>
         val resourceTypeName = i.getArgument[ResourceTypeName](0)
