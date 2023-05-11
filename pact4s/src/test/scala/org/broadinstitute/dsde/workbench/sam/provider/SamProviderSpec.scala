@@ -141,7 +141,7 @@ class SamProviderSpec
   // 1. If verification is triggered by consumer pact change, verify only the changed pact.
   // 2. For normal Sam PR, verify all consumer pacts in Pact Broker labelled with a deployed environment (alpha, dev, prod, staging).
   consumerBranch match {
-    case Some(s) if !s.isBlank() => consumerVersionSelectors = consumerVersionSelectors.branch(s, consumerName)
+    case Some(s) if !s.isBlank => consumerVersionSelectors = consumerVersionSelectors.branch(s, consumerName)
     case _ => consumerVersionSelectors = consumerVersionSelectors.deployedOrReleased.mainBranch
   }
 
@@ -171,14 +171,14 @@ class SamProviderSpec
       .parse(auth)
       .map {
         case Authorization(Credentials.Token(AuthScheme.Bearer, token)) =>
-          println(s"Captured token ${token}")
+          println(s"Captured token $token")
           token match {
             case "accessToken" =>
               println("do bearer 'accessToken'")
             case _ =>
               println("do other bearer token")
           }
-          SetHeaders("Authorization" -> s"Bearer ${token}")
+          SetHeaders("Authorization" -> s"Bearer $token")
         case _ =>
           println("do other AuthScheme")
           NoOpFilter
