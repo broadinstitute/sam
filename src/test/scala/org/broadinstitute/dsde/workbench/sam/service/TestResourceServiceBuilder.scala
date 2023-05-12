@@ -22,16 +22,8 @@ case class TestResourceServiceBuilder(
   private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType] = new TrieMap()
 
   def withResourceTypes(): TestResourceServiceBuilder = {
-    genResourceType.sample match {
-      case Some(rt) =>
-        resourceTypes += rt.name -> rt
-      case _ =>
-    }
-    genWorkspaceResourceType.sample match {
-      case Some(rt) =>
-        resourceTypes += rt.name -> rt
-      case _ =>
-    }
+    Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get)
+      .foreach(rt => resourceTypes += rt.name -> rt)
     this
   }
 
