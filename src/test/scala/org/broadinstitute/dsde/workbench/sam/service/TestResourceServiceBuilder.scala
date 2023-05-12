@@ -19,30 +19,22 @@ case class TestResourceServiceBuilder(
 )(implicit val executionContext: ExecutionContext, val openTelemetry: OpenTelemetryMetrics[IO])
     extends MockitoSugar {
   private val emailDomain = "example.com"
-  private var maybeDefaultResourceType: Option[ResourceType] = None
-  private var maybeWorkspaceResourceType: Option[ResourceType] = None
+  private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType] = new TrieMap()
 
   def withResourceTypes(): TestResourceServiceBuilder = {
-    maybeDefaultResourceType = Some(genResourceType.sample.get)
-    maybeWorkspaceResourceType = Some(genWorkspaceResourceType.sample.get)
+    genResourceType.sample match {
+      case Some(rt) =>
+        resourceTypes += rt.name -> rt
+      case _ =>
+    }
+    genWorkspaceResourceType.sample match {
+      case Some(rt) =>
+        resourceTypes += rt.name -> rt
+      case _ =>
+    }
     this
   }
 
-  def build: ResourceService = {
-    val resourceTypes: mutable.Map[ResourceTypeName, ResourceType] = new TrieMap()
-
-    maybeDefaultResourceType match {
-      case Some(rt) =>
-        resourceTypes += rt.name -> rt
-      case _ => ()
-    }
-
-    maybeWorkspaceResourceType match {
-      case Some(rt) =>
-        resourceTypes += rt.name -> rt
-      case _ => ()
-    }
-
+  def build: ResourceService =
     new ResourceService(resourceTypes.toMap, policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain, Set())
-  }
 }
