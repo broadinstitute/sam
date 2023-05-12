@@ -55,17 +55,15 @@ class SamProviderSpec
     val cloudExtensions: CloudExtensions = userService.cloudExtensions
 
     // Policy service and states for consumer verification
-    val policyDAO = StatefulMockAccessPolicyDaoBuilder()
+    val accessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
       .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
       .build
-    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, policyDAO).build
+    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
 
     // Resource service and states for consumer verification
     val resourceService: ResourceService =
-      TestResourceServiceBuilder(policyEvaluatorService, policyDAO, directoryDAO, cloudExtensions)
-        .withRandomDefaultResourceType()
-        .withRandomOtherResourceType()
-        .withRandomWorkspaceResourceType()
+      TestResourceServiceBuilder(policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions)
+        .withResourceTypes()
         .build
 
     // The following services are mocked for now
@@ -98,7 +96,7 @@ class SamProviderSpec
       statusService,
       mockManagedGroupService,
       directoryDAO,
-      policyDAO,
+      accessPolicyDAO,
       googleExt,
       FakeOpenIDConnectConfiguration,
       azureService

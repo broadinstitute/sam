@@ -19,63 +19,26 @@ case class TestResourceServiceBuilder(
 )(implicit val executionContext: ExecutionContext, val openTelemetry: OpenTelemetryMetrics[IO])
     extends MockitoSugar {
   private val emailDomain = "example.com"
-  // private var maybeDummySamUser: Option[SamUser] = None
   private var maybeDefaultResourceType: Option[ResourceType] = None
-  private var maybeOtherResourceType: Option[ResourceType] = None
   private var maybeWorkspaceResourceType: Option[ResourceType] = None
-  // private[service] val defaultResourceTypeActions =
-  //  Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
-  // private[service] val defaultResourceTypeActionPatterns = Set(
-  //  SamResourceActionPatterns.alterPolicies,
-  //  SamResourceActionPatterns.delete,
-  //  SamResourceActionPatterns.readPolicies,
-  //  ResourceActionPattern("view", "", authDomainConstrainable = false),
-  //  ResourceActionPattern("non_owner_action", "", authDomainConstrainable = false)
-  // )
 
-  def withRandomDefaultResourceType(): TestResourceServiceBuilder = {
+  def withResourceTypes(): TestResourceServiceBuilder = {
     maybeDefaultResourceType = Some(genResourceType.sample.get)
-    this
-  }
-
-  def withRandomOtherResourceType(): TestResourceServiceBuilder = {
-    maybeOtherResourceType = Some(genResourceType.sample.get)
-    this
-  }
-
-  def withRandomWorkspaceResourceType(): TestResourceServiceBuilder = {
     maybeWorkspaceResourceType = Some(genWorkspaceResourceType.sample.get)
     this
   }
-
-  // def withDummySamUser(samUser: SamUser): TestResourceServiceBuilder = {
-  //  maybeDummySamUser = Some(samUser)
-  //  this
-  // }
 
   def build: ResourceService = {
     val resourceTypes: mutable.Map[ResourceTypeName, ResourceType] = new TrieMap()
 
     maybeDefaultResourceType match {
       case Some(rt) =>
-        println("maybeDefaultResourceType")
-        println(rt)
-        resourceTypes += rt.name -> rt
-      case _ => ()
-    }
-
-    maybeOtherResourceType match {
-      case Some(rt) =>
-        println("maybeOtherResourceType")
-        println(rt)
         resourceTypes += rt.name -> rt
       case _ => ()
     }
 
     maybeWorkspaceResourceType match {
       case Some(rt) =>
-        println("maybeWorkspaceResourceType")
-        println(rt)
         resourceTypes += rt.name -> rt
       case _ => ()
     }
