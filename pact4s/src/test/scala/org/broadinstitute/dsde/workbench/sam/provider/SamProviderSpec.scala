@@ -63,7 +63,6 @@ class SamProviderSpec
     // Resource service and states for consumer verification
     val resourceService: ResourceService =
       TestResourceServiceBuilder(policyEvaluatorService, policyDAO, directoryDAO, cloudExtensions)
-        .withDummySamUser(defaultSamUser)
         .withRandomDefaultResourceType()
         .withRandomOtherResourceType()
         .withRandomWorkspaceResourceType()
@@ -162,7 +161,7 @@ class SamProviderSpec
       case Some((_, value)) =>
         parseAuth(value)
       case None =>
-        println("no auth header found")
+        logger.debug("no auth header found")
         NoOpFilter
     }
 
@@ -171,16 +170,21 @@ class SamProviderSpec
       .parse(auth)
       .map {
         case Authorization(Credentials.Token(AuthScheme.Bearer, token)) =>
-          println(s"Captured token $token")
+          var proxyToken = token
+          // intended to match a certain class of user token
           token match {
             case "accessToken" =>
-              println("do bearer 'accessToken'")
+              logger.debug("do bearer 'accessToken'")
+              // e.g. proxy token that impersonates a regular user
+              proxyToken = "user" + token
             case _ =>
-              println("do other bearer token")
+              logger.debug("do other bearer token")
+              // e.g. proxy token that impersonates a super user
+              proxyToken = "su" + token
           }
-          SetHeaders("Authorization" -> s"Bearer $token")
+          SetHeaders("Authorization" -> s"Bearer $proxyToken")
         case _ =>
-          println("do other AuthScheme")
+          logger.debug("do other AuthScheme")
           NoOpFilter
       }
       .getOrElse(NoOpFilter)
@@ -204,9 +208,9 @@ class SamProviderSpec
     .withStateManagementFunction(
       StateManagementFunction {
         case ProviderState("user exists", params) =>
-          println("user exists")
+          logger.debug("user exists")
         case _ =>
-          println("other state")
+          logger.debug("other state")
       }
         .withBeforeEach(() => ())
     )

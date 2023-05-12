@@ -4,6 +4,7 @@ import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
+import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.azure._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LockDetails
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
@@ -133,9 +134,33 @@ object Generator {
       "entity-collection"
     )
     .map(ResourceTypeName.apply)
+
+  val genResourceTypeActionPattern: Gen[ResourceActionPattern] = for {
+    value <- Gen.oneOf(
+      SamResourceActionPatterns.alterPolicies.value,
+      SamResourceActionPatterns.delete.value,
+      SamResourceActionPatterns.readPolicies.value,
+      "view",
+      "non_owner_action"
+    )
+  } yield ResourceActionPattern(value, "", false)
   val genResourceTypeNameExcludeManagedGroup: Gen[ResourceTypeName] = Gen
     .oneOf("workspace", "workflow-collection", "caas", "billing-project", "notebook-cluster", "cloud-extension", "dockstore-tool", "entity-collection")
     .map(ResourceTypeName.apply)
+
+  // We can use this to generate a random resource type and its role privileges.
+  val genResourceType: Gen[ResourceType] = for {
+    name <- genResourceTypeName
+    actionPatterns <- Gen.listOf(genResourceTypeActionPattern).map(_.toSet)
+    roles <- genOwnerAndOtherRoles
+  } yield ResourceType(name, actionPatterns, roles, ResourceRoleName("owner"))
+
+  // We can use this to generate a workspace resource type and its role privileges.
+  val genWorkspaceResourceType: Gen[ResourceType] = for {
+    actionPatterns <- Gen.listOf(genResourceTypeActionPattern).map(_.toSet)
+    roles <- genOwnerAndOtherRoles
+  } yield ResourceType(SamResourceTypes.workspaceName, actionPatterns, roles, ResourceRoleName("owner"))
+
   val genResourceId: Gen[ResourceId] = Gen.uuid.map(x => ResourceId(x.toString))
   val genAccessPolicyName: Gen[AccessPolicyName] = Gen.oneOf("member", "admin", "admin-notifier").map(AccessPolicyName.apply) // there might be possible values
   def genAuthDomains: Gen[Set[WorkbenchGroupName]] = Gen
@@ -145,6 +170,24 @@ object Generator {
     Gen.nonEmptyListOf[ResourceId](genResourceId).map(x => x.map(v => WorkbenchGroupName(v.value)).toSet)
   val genRoleName: Gen[ResourceRoleName] = Gen.oneOf("owner", "other").map(ResourceRoleName.apply) // there might be possible values
   val genResourceAction: Gen[ResourceAction] = Gen.oneOf(readPolicies, alterPolicies, delete, notifyAdmins, setAccessInstructions)
+
+  // Generator for 'owner' role with ALL the permissions defined in genResourceAction.
+  // We use Gen.listOf to generate sufficient large sample size to exhaust ALL possible permissions.
+  val genOwnerRole: Gen[ResourceRole] = for {
+    roleName <- Gen.oneOf(Seq("owner")).map(ResourceRoleName.apply)
+    actions <- Gen.listOf(genResourceAction).map(_.toSet)
+  } yield ResourceRole(roleName, actions)
+
+  // Generator for 'other' role with only 'view' and 'non_owner_action' permissions.
+  val genOtherRole: Gen[ResourceRole] = for {
+    roleName <- Gen.oneOf(Seq("other")).map(ResourceRoleName.apply)
+  } yield ResourceRole(roleName, Set(ResourceAction("view"), ResourceAction("non_owner_action")))
+
+  // Generator of a set of roles that include 'owner' and 'other'.
+  val genOwnerAndOtherRoles: Gen[Set[ResourceRole]] = for {
+    r1 <- genOwnerRole
+    r2 <- genOtherRole
+  } yield Set(r1, r2)
 
   val genResource: Gen[Resource] = for {
     resourceType <- genResourceTypeName
