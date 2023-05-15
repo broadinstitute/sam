@@ -1667,8 +1667,8 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val authDomain2 = "authDomain2"
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
-      Set(SamResourceActionPatterns.readAuthDomain, SamResourceActionPatterns.use),
-      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction))),
+      Set(SamResourceActionPatterns.readAuthDomain, SamResourceActionPatterns.use, SamResourceActionPatterns.alterPolicies),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction, SamResourceActions.alterPolicies))),
       ResourceRoleName("owner")
     )
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType, managedGroupResourceType.name -> managedGroupResourceType))
@@ -1680,7 +1680,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val policiesMap = Map(
       AccessPolicyName("ap") -> AccessPolicyMembership(
         Set(defaultUserInfo.email),
-        Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
+        Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction, SamResourceActions.alterPolicies),
         Set(ResourceRoleName("owner"))
       )
     )
@@ -1689,17 +1689,10 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
         .createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.id, samRequestContext)
     )
 
-    val result = runAndWait(
-      samRoutes.resourceService
-        .setResourceAuthDomain(FullyQualifiedResourceId(resourceType.name, resourceId), Set(WorkbenchGroupName(authDomain2)), samRequestContext)
-    );
-    result.map(n => n.value) shouldEqual Set(authDomain, authDomain2)
-    /*
     Put(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain", Array(authDomain2)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[Set[String]] shouldEqual Set(authDomain, authDomain2)
     }
-     */
   }
 
   private def initManagedGroupResourceType(): ResourceType = {
