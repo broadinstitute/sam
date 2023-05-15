@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.Generator.{genAccessPolicyName, genNonPetEmail, genResourceId}
-import org.broadinstitute.dsde.workbench.sam.matchers.AnyOfMatcher
+import org.broadinstitute.dsde.workbench.sam.matchers.MatchesOneOf
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
@@ -64,7 +64,7 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       .when(mockedAccessPolicyDAO)
       .listUserResourcesWithRolesAndActions(
         ArgumentMatchers.eq(policy.id.resource.resourceTypeName),
-        argThat(new AnyOfMatcher(policy.members.map(m => WorkbenchUserId(m.toString)))),
+        argThat(MatchesOneOf(policy.members.map(m => WorkbenchUserId(m.toString)))),
         any[SamRequestContext]
       )
   }
