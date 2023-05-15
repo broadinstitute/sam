@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
-import org.broadinstitute.dsde.workbench.sam.Generator.{genResourceType, genWorkspaceResourceType}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.mockito.scalatest.MockitoSugar
