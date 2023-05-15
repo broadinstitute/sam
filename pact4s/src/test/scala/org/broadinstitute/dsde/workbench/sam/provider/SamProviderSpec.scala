@@ -62,6 +62,8 @@ class SamProviderSpec
     val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
 
     // Resource service and states for consumer verification
+    // Here we are injecting a random resource type as well as a workspace resource type.
+    // We can also inject all possible Sam resource types by taking a look at genResourceTypeName if needed.
     val resourceService: ResourceService =
       TestResourceServiceBuilder(policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions)
         .withResourceTypes(Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get))
