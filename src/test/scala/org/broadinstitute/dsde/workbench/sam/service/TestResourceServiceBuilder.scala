@@ -21,9 +21,8 @@ case class TestResourceServiceBuilder(
   private val emailDomain = "example.com"
   private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType] = new TrieMap()
 
-  def withResourceTypes(): TestResourceServiceBuilder = {
-    Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get)
-      .foreach(rt => resourceTypes += rt.name -> rt)
+  def withResourceTypes(resourceTypeCollection: Set[ResourceType]): TestResourceServiceBuilder = {
+    resourceTypeCollection.foreach(rt => resourceTypes += rt.name -> rt)
     this
   }
 
