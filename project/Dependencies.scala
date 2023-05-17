@@ -126,10 +126,10 @@ object Dependencies {
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
   // pact deps
-  val pact4sV = "0.6.0"
+  val pact4sV = "0.9.0"
   val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
-  val circeCore = "io.circe" %% "circe-core" % "0.14.3"
+  val circeCore = "io.circe" %% "circe-core" % "0.14.4"
 
   val openCensusDependencies = Seq(
     opencensusScalaCode,
