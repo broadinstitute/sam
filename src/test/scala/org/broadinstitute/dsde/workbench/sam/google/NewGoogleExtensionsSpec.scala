@@ -28,18 +28,18 @@ import fs2.Stream
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.scalatest.{Inside, OptionValues}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.mockito.ArgumentMatchersSugar._
 import org.mockito.MockitoSugar.verify
+import org.scalatest.freespec.AnyFreeSpecLike
 
 import java.net.URL
+import java.util.concurrent.TimeUnit
 import scala.concurrent.ExecutionContextExecutor
-import scala.concurrent.duration.TimeUnit
 
 class NewGoogleExtensionsSpec(_system: ActorSystem)
     extends TestKit(_system)
-    with AnyFlatSpecLike
+    with AnyFreeSpecLike
     with Matchers
     with TestSupport
     with IdiomaticMockito
@@ -51,7 +51,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
 
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
-  "GoogleExtensions.getSignedUrl" should "generate a signed URL for a GCS Object" in {
+  "GoogleExtensions.getSignedUrl" - {
     val newGoogleUser = genWorkbenchUserGoogle.sample.get
     val googleProject = genGoogleProject.sample.get
     val gcsBucket = genGcsBucketName.sample.get
@@ -106,25 +106,43 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         any[Option[TraceId]],
         any[RetryConfig],
         any[Long],
-        any[TimeUnit]
+        any[TimeUnit],
+        any[Map[String, String]]
       )
 
-    val signedUrl = runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, samRequestContext))
+    "generates a signed URL for a GCS Object" in {
+      val signedUrl = runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, samRequestContext))
 
-    signedUrl should be(expectedUrl)
+      signedUrl should be(expectedUrl)
 
-    verify(googleExtensions).createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
+      verify(googleExtensions).createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
 
-    verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
+      verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
 
-    verify(mockGoogleStorageService).getSignedBlobUrl(
-      eqTo(gcsBucket),
-      eqTo(gcsBlob),
-      argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
-      any[Option[TraceId]],
-      any[RetryConfig],
-      any[Long],
-      any[TimeUnit]
-    )
+      verify(mockGoogleStorageService).getSignedBlobUrl(
+        eqTo(gcsBucket),
+        eqTo(gcsBlob),
+        argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
+        any[Option[TraceId]],
+        any[RetryConfig],
+        eqTo(1L),
+        eqTo(TimeUnit.HOURS),
+        eqTo(Map("userProject" -> googleProject.value, "requestedBy" -> newGoogleUser.email.value))
+      )
+    }
+
+    "customizes link duration" in {
+      runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, Some(5L), samRequestContext))
+      verify(mockGoogleStorageService).getSignedBlobUrl(
+        eqTo(gcsBucket),
+        eqTo(gcsBlob),
+        argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
+        any[Option[TraceId]],
+        any[RetryConfig],
+        eqTo(5L),
+        eqTo(TimeUnit.MINUTES),
+        eqTo(Map("userProject" -> googleProject.value, "requestedBy" -> newGoogleUser.email.value))
+      )
+    }
   }
 }
