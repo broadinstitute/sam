@@ -12,7 +12,7 @@ import java.util.Date
 /** Created by dvoet on 5/26/17.
   */
 trait DirectoryDAO {
-  def checkStatus(samRequestContext: SamRequestContext): Boolean
+  def checkStatus(samRequestContext: SamRequestContext): IO[Boolean]
   def createGroup(group: BasicWorkbenchGroup, accessInstructionsOpt: Option[String] = None, samRequestContext: SamRequestContext): IO[BasicWorkbenchGroup]
   def loadGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[BasicWorkbenchGroup]]
   def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]

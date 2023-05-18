@@ -17,66 +17,72 @@ class PostgresAzureManagedResourceGroupDAOSpec extends AnyFreeSpec with Matchers
     TestSupport.truncateAll
 
   "PostgresAzureManagedResourceGroupDAO" - {
-    "insert, query and delete" in forAll(Generator.genManagedResourceGroup) { mrg =>
+    "insert, query and delete" in {
       assume(databaseEnabled, databaseEnabledClue)
 
-      val backgroundMrg = mrg.copy(
-        mrg.managedResourceGroupCoordinates.copy(tenantId = TenantId(mrg.managedResourceGroupCoordinates.tenantId.value + "_other")),
-        BillingProfileId(mrg.billingProfileId.value + "other")
-      )
+      forAll(Generator.genManagedResourceGroup) { mrg =>
+        val backgroundMrg = mrg.copy(
+          mrg.managedResourceGroupCoordinates.copy(tenantId = TenantId(mrg.managedResourceGroupCoordinates.tenantId.value + "_other")),
+          BillingProfileId(mrg.billingProfileId.value + "other")
+        )
 
-      // insert a background record to make sure our queries are not accidentally without restriction
-      dao.insertManagedResourceGroup(backgroundMrg, samRequestContext).unsafeRunSync() shouldBe 1
+        // insert a background record to make sure our queries are not accidentally without restriction
+        dao.insertManagedResourceGroup(backgroundMrg, samRequestContext).unsafeRunSync() shouldBe 1
 
-      // mrg should not be there yet
-      dao.getManagedResourceGroupByCoordinates(mrg.managedResourceGroupCoordinates, samRequestContext).unsafeRunSync() shouldBe None
-      dao.getManagedResourceGroupByBillingProfileId(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe None
+        // mrg should not be there yet
+        dao.getManagedResourceGroupByCoordinates(mrg.managedResourceGroupCoordinates, samRequestContext).unsafeRunSync() shouldBe None
+        dao.getManagedResourceGroupByBillingProfileId(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe None
 
-      // insert mrg
-      dao.insertManagedResourceGroup(mrg, samRequestContext).unsafeRunSync() shouldBe 1
+        // insert mrg
+        dao.insertManagedResourceGroup(mrg, samRequestContext).unsafeRunSync() shouldBe 1
 
-      // should be able to query
-      dao.getManagedResourceGroupByCoordinates(mrg.managedResourceGroupCoordinates, samRequestContext).unsafeRunSync() shouldBe Some(mrg)
-      dao.getManagedResourceGroupByBillingProfileId(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe Some(mrg)
+        // should be able to query
+        dao.getManagedResourceGroupByCoordinates(mrg.managedResourceGroupCoordinates, samRequestContext).unsafeRunSync() shouldBe Some(mrg)
+        dao.getManagedResourceGroupByBillingProfileId(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe Some(mrg)
 
-      // delete background mrg
-      dao.deleteManagedResourceGroup(backgroundMrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe 1
+        // delete background mrg
+        dao.deleteManagedResourceGroup(backgroundMrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe 1
 
-      // verify did not delete mrg by mistake
-      dao.getManagedResourceGroupByCoordinates(mrg.managedResourceGroupCoordinates, samRequestContext).unsafeRunSync() shouldBe Some(mrg)
-      dao.getManagedResourceGroupByBillingProfileId(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe Some(mrg)
+        // verify did not delete mrg by mistake
+        dao.getManagedResourceGroupByCoordinates(mrg.managedResourceGroupCoordinates, samRequestContext).unsafeRunSync() shouldBe Some(mrg)
+        dao.getManagedResourceGroupByBillingProfileId(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe Some(mrg)
 
-      // delete mrg
-      dao.deleteManagedResourceGroup(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe 1
+        // delete mrg
+        dao.deleteManagedResourceGroup(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe 1
 
-      // verify deletes
-      dao.getManagedResourceGroupByCoordinates(mrg.managedResourceGroupCoordinates, samRequestContext).unsafeRunSync() shouldBe None
-      dao.getManagedResourceGroupByBillingProfileId(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe None
+        // verify deletes
+        dao.getManagedResourceGroupByCoordinates(mrg.managedResourceGroupCoordinates, samRequestContext).unsafeRunSync() shouldBe None
+        dao.getManagedResourceGroupByBillingProfileId(mrg.billingProfileId, samRequestContext).unsafeRunSync() shouldBe None
+      }
     }
 
     "insertManagedResourceGroup" - {
-      "detect duplicate coordinates" in forAll(Generator.genManagedResourceGroup) { mrg =>
+      "detect duplicate coordinates" in {
         assume(databaseEnabled, databaseEnabledClue)
 
-        val dupCoords = mrg.copy(billingProfileId = BillingProfileId(mrg.billingProfileId.value + "other"))
-        dao.insertManagedResourceGroup(mrg, samRequestContext).unsafeRunSync() shouldBe 1
-        val error = intercept[WorkbenchExceptionWithErrorReport] {
-          dao.insertManagedResourceGroup(dupCoords, samRequestContext).unsafeRunSync()
+        forAll(Generator.genManagedResourceGroup) { mrg =>
+          val dupCoords = mrg.copy(billingProfileId = BillingProfileId(mrg.billingProfileId.value + "other"))
+          dao.insertManagedResourceGroup(mrg, samRequestContext).unsafeRunSync() shouldBe 1
+          val error = intercept[WorkbenchExceptionWithErrorReport] {
+            dao.insertManagedResourceGroup(dupCoords, samRequestContext).unsafeRunSync()
+          }
+          error.errorReport.statusCode shouldBe Some(StatusCodes.Conflict)
         }
-        error.errorReport.statusCode shouldBe Some(StatusCodes.Conflict)
       }
 
-      "detect duplicate billing profile" in forAll(Generator.genManagedResourceGroup) { mrg =>
+      "detect duplicate billing profile" in {
         assume(databaseEnabled, databaseEnabledClue)
 
-        val dupBilling = mrg.copy(managedResourceGroupCoordinates =
-          mrg.managedResourceGroupCoordinates.copy(tenantId = TenantId(mrg.managedResourceGroupCoordinates.tenantId.value + "_other"))
-        )
-        dao.insertManagedResourceGroup(mrg, samRequestContext).unsafeRunSync() shouldBe 1
-        val error = intercept[WorkbenchExceptionWithErrorReport] {
-          dao.insertManagedResourceGroup(dupBilling, samRequestContext).unsafeRunSync()
+        forAll(Generator.genManagedResourceGroup) { mrg =>
+          val dupBilling = mrg.copy(managedResourceGroupCoordinates =
+            mrg.managedResourceGroupCoordinates.copy(tenantId = TenantId(mrg.managedResourceGroupCoordinates.tenantId.value + "_other"))
+          )
+          dao.insertManagedResourceGroup(mrg, samRequestContext).unsafeRunSync() shouldBe 1
+          val error = intercept[WorkbenchExceptionWithErrorReport] {
+            dao.insertManagedResourceGroup(dupBilling, samRequestContext).unsafeRunSync()
+          }
+          error.errorReport.statusCode shouldBe Some(StatusCodes.Conflict)
         }
-        error.errorReport.statusCode shouldBe Some(StatusCodes.Conflict)
       }
     }
   }

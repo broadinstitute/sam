@@ -24,4 +24,5 @@
     <include file="changesets/20220811_allow_leaving_column.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20221115_azure_managed_resource_group.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20230203_last_quota_error.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20230328_add_date_columns_to_user.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

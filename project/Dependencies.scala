@@ -11,17 +11,17 @@ object Dependencies {
   val postgresDriverVersion = "42.5.0"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "abd44a6"
-  val workbenchUtilV = s"0.6-$workbenchLibV"
-  val workbenchUtil2V = s"0.2-$workbenchLibV"
-  val workbenchModelV = s"0.15-$workbenchLibV"
-  val workbenchGoogleV = s"0.22-$workbenchLibV"
-  val workbenchGoogle2V = s"0.25-$workbenchLibV"
-  val workbenchNotificationsV = s"0.3-$workbenchLibV"
-  val workbenchOauth2V = s"0.2-$workbenchLibV"
-  val workbenchOpenTelemetryV = s"0.3-$workbenchLibV"
+  val workbenchLibV = "1bab754"
+  val workbenchUtilV = s"0.7-$workbenchLibV"
+  val workbenchUtil2V = s"0.3-$workbenchLibV"
+  val workbenchModelV = s"0.17-$workbenchLibV"
+  val workbenchGoogleV = s"0.26-$workbenchLibV"
+  val workbenchGoogle2V = s"0.27-$workbenchLibV"
+  val workbenchNotificationsV = s"0.4-$workbenchLibV"
+  val workbenchOauth2V = s"0.3-$workbenchLibV"
+  val workbenchOpenTelemetryV = s"0.4-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.4-SNAPSHOT"
+  val crlVersion = "1.2.12-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -92,17 +92,18 @@ object Dependencies {
   // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted
   // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
   // workbench-libs dependency so exclude auto-value from there
-  val excludGoogleAutoValue = ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
+  val excludeGoogleAutoValue = ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
   val excludeBouncyCastle = ExclusionRule("org.bouncycastle")
   val workbenchGoogle2: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludGoogleAutoValue, excludeBouncyCastle)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludeGoogleAutoValue, excludeBouncyCastle)
   val workbenchNotifications: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
   val workbenchGoogle2Tests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
-  val googleStorageLocal: ModuleID = "com.google.cloud" % "google-cloud-nio" % "0.123.28" % "test" // needed for mocking google cloud storage
+  val googleStorageLocal: ModuleID =
+    "com.google.cloud" % "google-cloud-nio" % "0.126.10" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
@@ -125,10 +126,10 @@ object Dependencies {
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
   // pact deps
-  val pact4sV = "0.6.0"
+  val pact4sV = "0.9.0"
   val pact4sScalaTest = "io.github.jbwheatley" %% "pact4s-scalatest" % pact4sV % Test
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
-  val circeCore = "io.circe" %% "circe-core" % "0.14.3"
+  val circeCore = "io.circe" %% "circe-core" % "0.14.4"
 
   val openCensusDependencies = Seq(
     opencensusScalaCode,

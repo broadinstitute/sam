@@ -4,26 +4,22 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
-import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, samRequestContext, tosConfig}
-import org.broadinstitute.dsde.workbench.sam.azure.{
-  ManagedIdentityDisplayName,
-  ManagedIdentityObjectId,
-  ManagedResourceGroupName,
-  PetManagedIdentity,
-  PetManagedIdentityId,
-  SubscriptionId,
-  TenantId
-}
+import org.broadinstitute.dsde.workbench.sam.azure._
+import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
+import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
+import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.scalatest.BeforeAndAfterEach
-import org.scalatest.freespec.AnyFreeSpec
+import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFreeSpec, TestSupport}
+import org.scalatest.Inside.inside
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterEach, OptionValues}
 
+import java.time.Instant
 import java.util.Date
 import scala.concurrent.duration._
 
-class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach {
+class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
@@ -70,22 +66,17 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
     BasicWorkbenchGroup(WorkbenchGroupName(groupName), Set.empty, WorkbenchEmail(s"$groupName@test.com"))
 
   "PostgresDirectoryDAO" - {
+    assume(databaseEnabled, databaseEnabledClue)
     "createGroup" - {
       "create a group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync() shouldEqual defaultGroup
       }
 
       "create a group with access instructions" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, Option("access instructions"), samRequestContext = samRequestContext).unsafeRunSync() shouldEqual defaultGroup
       }
 
       "not allow groups with duplicate names" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val duplicateGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -96,8 +87,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "create groups with subGroup members" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set.empty, WorkbenchEmail("bar@baz.com"))
         val members: Set[WorkbenchSubject] = Set(subGroup1.id, subGroup2.id)
@@ -112,8 +101,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "create groups with policy members" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberPolicy = defaultPolicy
         val members: Set[WorkbenchSubject] = Set(memberPolicy.id)
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("baz@qux.com"))
@@ -128,8 +115,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "create groups with both subGroup and policy members" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup = defaultGroup
         dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
@@ -147,8 +132,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "not allow nonexistent group members" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set.empty, WorkbenchEmail("bar@baz.com"))
         val members: Set[WorkbenchSubject] = Set(subGroup1.id, subGroup2.id)
@@ -162,40 +145,30 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "loadGroup" - {
       "load a group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
         loadedGroup shouldEqual defaultGroup
       }
 
       "return None when loading a nonexistent group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.loadGroup(WorkbenchGroupName("fakeGroup"), samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "loadGroupEmail" - {
       "load a group's email" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val loadedEmail = dao.loadGroupEmail(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"Failed to load group ${defaultGroup.id}"))
         loadedEmail shouldEqual defaultGroup.email
       }
 
       "return None when trying to load the email for a nonexistent group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.loadGroupEmail(WorkbenchGroupName("fakeGroup"), samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "deleteGroup" - {
       "delete groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
@@ -207,8 +180,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "not delete a group that is still a member of another group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup = defaultGroup.copy(id = WorkbenchGroupName("subGroup"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup.id), WorkbenchEmail("bar@baz.com"))
 
@@ -227,8 +198,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "addGroupMember" - {
       "add groups to other groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
@@ -240,8 +209,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "add users to groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
@@ -252,8 +219,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "add policies to groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -266,8 +231,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "add groups to policies" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -281,8 +244,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "add users to policies" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -296,8 +257,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "add policies to other policies" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -313,8 +272,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "trying to add a group that does not exist will fail" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
@@ -324,8 +281,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "prevents group cycles" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup = emptyWorkbenchGroup("subGroup")
         val badGroup = emptyWorkbenchGroup("badGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
@@ -346,8 +301,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "batchLoadGroupEmail" - {
       "batch load multiple group emails" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val group1 = emptyWorkbenchGroup("group1")
         val group2 = emptyWorkbenchGroup("group2")
 
@@ -362,8 +315,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "removeGroupMember" - {
       "remove groups from other groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
@@ -378,8 +329,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "remove users from groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
@@ -393,8 +342,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "remove policies from groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -410,8 +357,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "remove groups from policies" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createGroup(defaultGroup.copy(members = Set(defaultUser.id)), samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -431,8 +376,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "remove users from policies" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -447,8 +390,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "remove policies from other policies" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -466,28 +407,137 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
     }
 
     "createUser" - {
-      "create a user" in {
-        assume(databaseEnabled, databaseEnabledClue)
+      "returns the same user" in {
+        // Arrange
+        val expectedInstant = Instant.parse("2007-07-07T07:07:07Z")
+        val expectedUser = defaultUser.copy(registeredAt = Some(expectedInstant))
 
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync() shouldEqual defaultUser
-        val loadedUser = dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
-        loadedUser shouldEqual defaultUser
+        // Act
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+
+        // Assert
+        inside(createdUser) { user =>
+          user.id should equal(expectedUser.id)
+          user.googleSubjectId should equal(expectedUser.googleSubjectId)
+          user.email should equal(expectedUser.email)
+          user.azureB2CId should equal(expectedUser.azureB2CId)
+          user.enabled should equal(expectedUser.enabled)
+          user.acceptedTosVersion should equal(expectedUser.acceptedTosVersion)
+          user.registeredAt should equal(expectedUser.registeredAt)
+        }
+      }
+
+      "returns the samUser with the createdAt datetime set to the current time if one is not specified" in {
+        // Arrange
+        val expectedUser = defaultUser
+
+        // Act
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+
+        // Assert
+        inside(createdUser) { user =>
+          user.createdAt should beAround(Instant.now())
+        }
+      }
+
+      "returns the samUser with the createdAt datetime set to the specified instant" in {
+        val expectedInstant = Instant.parse("2000-01-02T03:04:05Z")
+        // Arrange
+        val expectedUser = defaultUser.copy(createdAt = expectedInstant)
+
+        // Act
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+
+        // Assert
+        inside(createdUser) { user =>
+          user.createdAt shouldBe expectedInstant
+        }
+      }
+
+      "returns the samUser with the updatedAt datetime set to the current time if one is not specified" in {
+        // Arrange
+        val expectedUser = defaultUser
+
+        // Act
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+
+        // Assert
+        inside(createdUser) { user =>
+          user.updatedAt should beAround(Instant.now())
+        }
+      }
+
+      "returns the samUser with the updatedAt datetime set to the specified instant" in {
+        val expectedInstant = Instant.parse("2000-01-02T03:04:05Z")
+        // Arrange
+        val expectedUser = defaultUser.copy(updatedAt = expectedInstant)
+
+        // Act
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+
+        // Assert
+        inside(createdUser) { user =>
+          user.updatedAt shouldBe expectedInstant
+        }
       }
     }
 
     "loadUser" - {
-      "load a user without a google subject id" in {
-        assume(databaseEnabled, databaseEnabledClue)
+      "loads a persisted user" in {
+        // Arrange
+        val instant = Instant.parse("2007-07-07T07:07:07Z")
+        val expectedUser = defaultUser.copy(
+          createdAt = instant,
+          registeredAt = Some(instant),
+          updatedAt = instant
+        )
 
-        dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().map(user => user.googleSubjectId shouldBe None)
+        // Act
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+
+        // Assert
+        inside(createdUser) { user =>
+          user.id should equal(expectedUser.id)
+          user.googleSubjectId should equal(expectedUser.googleSubjectId)
+          user.email should equal(expectedUser.email)
+          user.azureB2CId should equal(expectedUser.azureB2CId)
+          user.enabled should equal(expectedUser.enabled)
+          user.acceptedTosVersion should equal(expectedUser.acceptedTosVersion)
+          user.createdAt should equal(expectedUser.createdAt)
+          user.registeredAt should equal(expectedUser.registeredAt)
+          user.updatedAt should equal(expectedUser.updatedAt)
+        }
+      }
+
+      "loads a user without a google subject id" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserAzure.sample.get
+        assume(user.googleSubjectId.isEmpty)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Act
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        loadedUser.value should have(Symbol("googleSubjectId")(None))
+      }
+
+      "loads a user without an AzureB2C id" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        assume(user.azureB2CId.isEmpty)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Act
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        loadedUser.value should have(Symbol("azureB2CId")(None))
       }
     }
 
     "deleteUser" - {
       "delete users" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync() shouldEqual defaultUser
         val loadedUser = dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
         loadedUser shouldEqual defaultUser
@@ -496,8 +546,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "delete a user that is still a member of a group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val user = defaultUser
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(user.id), WorkbenchEmail("bar@baz.com"))
 
@@ -511,8 +559,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "listUsersGroups" - {
       "list all of the groups a user is in" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroupId = WorkbenchGroupName("subGroup")
         val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUser.id), WorkbenchEmail("subGroup@foo.com"))
         val parentGroupId = WorkbenchGroupName("parentGroup")
@@ -527,8 +573,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "list all of the policies a user is in" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subPolicy = defaultPolicy.copy(
           id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
           email = WorkbenchEmail("sp@policy.com"),
@@ -552,8 +596,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "createPetServiceAccount" - {
       "create pet service accounts" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync() shouldBe defaultPetSA
       }
@@ -561,8 +603,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "loadPetServiceAccount" - {
       "load pet service accounts" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -570,16 +610,12 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return None for nonexistent pet service accounts" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.loadPetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "deletePetServiceAccount" - {
       "delete pet service accounts" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -591,8 +627,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "throw an exception when trying to delete a nonexistent pet service account" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         assertThrows[WorkbenchException] {
           dao.deletePetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync()
         }
@@ -601,8 +635,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "getAllPetServiceAccountsForUser" - {
       "get all pet service accounts for user" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val petSA1 = PetServiceAccount(
@@ -623,8 +655,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "getUserFromPetServiceAccount" - {
       "get user from pet service account subject ID" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
@@ -635,8 +665,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "updatePetServiceAccount" - {
       "update a pet service account" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
@@ -650,8 +678,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "throw an exception when updating a nonexistent pet SA" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val updatedPetSA = defaultPetSA.copy(serviceAccount =
@@ -665,8 +691,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "getManagedGroupAccessInstructions" - {
       "get managed group access instructions" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.getManagedGroupAccessInstructions(defaultGroupName, samRequestContext).unsafeRunSync() shouldBe None
@@ -675,8 +699,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "setManagedGroupAccessInstructions" - {
       "set managed group access instructions" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.setManagedGroupAccessInstructions(defaultGroupName, "testinstructions", samRequestContext).unsafeRunSync()
@@ -687,8 +709,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "isGroupMember" - {
       "return true when member is in sub group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(subGroup1.id), WorkbenchEmail("bar@baz.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup2.id), WorkbenchEmail("baz@qux.com"))
@@ -701,8 +721,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return false when member is not in sub group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(subGroup1.id), WorkbenchEmail("bar@baz.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set.empty, WorkbenchEmail("baz@qux.com"))
@@ -715,8 +733,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return true when user is in sub group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val user = defaultUser
         val subGroup = defaultGroup.copy(members = Set(user.id))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup.id), WorkbenchEmail("parent@group.com"))
@@ -730,8 +746,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
       // https://broadworkbench.atlassian.net/browse/CA-600
       "return true when user is in multiple sub groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val user = defaultUser
         val subGroup1 = defaultGroup.copy(members = Set(user.id))
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(user.id), WorkbenchEmail("group2@foo.com"))
@@ -746,8 +760,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return false when user is not in sub group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val user = defaultUser
         val subGroup = defaultGroup.copy(members = Set(user.id))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set.empty, WorkbenchEmail("parent@group.com"))
@@ -760,8 +772,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return true when user is in policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val user = defaultUser
         val policy = defaultPolicy.copy(members = Set(user.id))
 
@@ -774,8 +784,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return false when user is not in policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val user = defaultUser
         val policy = defaultPolicy
 
@@ -788,8 +796,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return true when policy is in policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberPolicy =
           defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
         val policy = defaultPolicy.copy(members = Set(memberPolicy.id))
@@ -803,8 +809,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return false when policy is not in policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberPolicy =
           defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
         val policy = defaultPolicy
@@ -818,8 +822,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return true when policy is in group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberPolicy = defaultPolicy
         val group = defaultGroup.copy(members = Set(memberPolicy.id))
 
@@ -832,8 +834,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return false when policy is not in group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberPolicy = defaultPolicy
         val group = defaultGroup
 
@@ -846,8 +846,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return true when group is in policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberGroup = defaultGroup
         val policy = defaultPolicy.copy(members = Set(memberGroup.id))
 
@@ -860,8 +858,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return false when group is not in policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberGroup = defaultGroup
         val policy = defaultPolicy
 
@@ -877,8 +873,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
     "listIntersectionGroupUsers" - {
       // DV: I have tried this up to 100 groups to intersect locally with no functional issue, performance seems linear
       "intersect groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         for (groupCount <- 1 to 3) {
           beforeEach()
           val inAllGroups = Generator.genWorkbenchUserGoogle.sample.get
@@ -907,8 +901,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "intersect lots of groups with lots of dups and overlaps" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val groupCount = 40
         val userCount = 50
 
@@ -948,8 +940,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "enableIdentity and disableIdentity" - {
       "can enable and disable users" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
 
@@ -961,8 +951,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "cannot enable and disable pet service accounts" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
         val initialEnabledStatus = dao.isEnabled(defaultPetSA.id, samRequestContext).unsafeRunSync()
@@ -975,8 +963,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "cannot enable and disable groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val initialEnabledStatus = dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync()
 
@@ -988,8 +974,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "cannot enable and disable policies" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -1001,12 +985,46 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.enableIdentity(defaultPolicy.id, samRequestContext).unsafeRunSync()
         dao.isEnabled(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe initialEnabledStatus
       }
+
+      "enableIdentity" - {
+        "sets the updatedAt datetime to the current datetime" in {
+          /// Arrange
+          val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+            enabled = false,
+            updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+          )
+          dao.createUser(user, samRequestContext).unsafeRunSync()
+
+          // Act
+          dao.enableIdentity(user.id, samRequestContext).unsafeRunSync()
+
+          // Assert
+          val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+          loadedUser.value.updatedAt should beAround(Instant.now())
+        }
+      }
+
+      "disableIdentity" - {
+        "sets the updatedAt datetime to the current datetime" in {
+          /// Arrange
+          val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+            enabled = true,
+            updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+          )
+          dao.createUser(user, samRequestContext).unsafeRunSync()
+
+          // Act
+          dao.disableIdentity(user.id, samRequestContext).unsafeRunSync()
+
+          // Assert
+          val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+          loadedUser.value.updatedAt should beAround(Instant.now())
+        }
+      }
     }
 
     "isEnabled" - {
       "gets a user's enabled status" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.disableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
@@ -1017,8 +1035,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "gets a pet's user's enabled status" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -1030,8 +1046,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "returns false for groups" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync() shouldBe false
@@ -1040,8 +1054,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "returns false for policies" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -1054,8 +1066,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "listUserDirectMemberships" - {
       "lists all groups that a user is in directly" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("ssg"), Set(defaultUser.id), WorkbenchEmail("ssg@groups.r.us"))
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(defaultUser.id, subSubGroup.id), WorkbenchEmail("sg@groups.r.us"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("pg"), Set(subGroup.id), WorkbenchEmail("pg@groups.r.us"))
@@ -1069,8 +1079,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "lists all policies that a user is in directly" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         // disclaimer: not sure this ever happens in actual sam usage, but it should still work
         val subSubPolicy = defaultPolicy.copy(
           id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("ssp")),
@@ -1101,8 +1109,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "listAncestorGroups" - {
       "list all of the groups a group is in" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("ssg"), Set.empty, WorkbenchEmail("ssg@groups.r.us"))
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(subSubGroup.id), WorkbenchEmail("sg@groups.r.us"))
         val directParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("dpg"), Set(subGroup.id, subSubGroup.id), WorkbenchEmail("dpg@groups.r.us"))
@@ -1118,8 +1124,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "list all of the policies a group is in" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subPolicy = defaultPolicy.copy(
           id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
           email = WorkbenchEmail("sp@policy.com"),
@@ -1141,8 +1145,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "list all of the groups a policy is in" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(defaultPolicy.id), WorkbenchEmail("sg@groups.r.us"))
         val directParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("dpg"), Set(subGroup.id, defaultPolicy.id), WorkbenchEmail("dpg@groups.r.us"))
         val indirectParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("ipg"), Set(subGroup.id), WorkbenchEmail("ipg@groups.r.us"))
@@ -1159,8 +1161,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "list all of the policies a policy is in" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val subPolicy = defaultPolicy.copy(
           id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
           email = WorkbenchEmail("sp@policy.com"),
@@ -1191,16 +1191,12 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "getSynchronizedEmail" - {
       "load the email for a group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.getSynchronizedEmail(defaultGroup.id, samRequestContext).unsafeRunSync() shouldEqual Option(defaultGroup.email)
       }
 
       "load the email for a policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -1211,8 +1207,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "getSynchronizedDate" - {
       "load the synchronized date for a group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.updateSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync()
@@ -1222,8 +1216,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "load the synchronized date for a policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -1237,8 +1229,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "setGoogleSubjectId" - {
       "update the googleSubjectId for a user" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
         dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
 
@@ -1249,8 +1239,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "throw an exception when trying to overwrite an existing googleSubjectId" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
@@ -1258,20 +1246,88 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
           dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
         }
       }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+          googleSubjectId = None,
+          updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
+      }
+
+      "sets the registeredAt datetime if all cloud ids for this user are blank" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = None)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt.value should beAround(Instant.now())
+        }
+      }
+
+      // This scenario really should never exist.  If one of the cloud IDs is set, then the registeredAt date should
+      // also already be set.  If this initial state exists, something probably went wrong.  Useful test though for
+      // making sure the sql is working correctly.
+      "does not set the registeredAt datetime if it is null and the azureB2CId is already set" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserAzure.sample.get.copy(registeredAt = None)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt shouldBe empty
+        }
+      }
+
+      // Making an assumption that this is the intended behavior/UX we want?  :shrug:  This is a weird scenario that I
+      // cannot imagine we would be in unless something went wrong.  The test is handy though to make sure the sql is
+      // working correctly.
+      "does not change the registeredAt datetime if it is already set" in {
+        // Arrange
+        val expectedRegisteredAt = Instant.parse("2022-02-22T22:22:22Z")
+        val user = Generator.genWorkbenchUserAzure.sample.get.copy(googleSubjectId = None, azureB2CId = None, registeredAt = Option(expectedRegisteredAt))
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt.value should equal(expectedRegisteredAt)
+        }
+      }
     }
 
     "loadSubjectFromEmail" - {
       "load a user subject from their email" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromEmail(defaultUser.email, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
       "load a user subject from their email case insensitive" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val email = WorkbenchEmail("Mixed.Case.Email@foo.com")
         dao.createUser(defaultUser.copy(email = email), samRequestContext).unsafeRunSync()
 
@@ -1279,16 +1335,12 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "load a group subject from its email" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromEmail(defaultGroup.email, samRequestContext).unsafeRunSync() shouldBe Some(defaultGroupName)
       }
 
       "load a pet service account subject from its email" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -1296,8 +1348,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "load a policy subject from its email" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberPolicy = defaultPolicy
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -1308,8 +1358,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "throw an exception when an email refers to more than one subject" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao
           .createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email)), samRequestContext)
@@ -1323,16 +1371,12 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "loadSubjectFromGoogleSubjectId" - {
       "load a user subject from their google subject id" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
       "load a pet service account subject from its google subject id" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -1344,24 +1388,18 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "loadSubjectEmail" - {
       "load the email for a user" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectEmail(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.email)
       }
 
       "load the email for a group" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.loadSubjectEmail(defaultGroup.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultGroup.email)
       }
 
       "load the email for a pet service account" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -1369,8 +1407,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "load the email for a policy" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val memberPolicy = defaultPolicy
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -1383,8 +1419,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "loadUserByAzureB2CId" - {
       "load a user from their azure b2c id" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadUserByAzureB2CId(defaultUser.azureB2CId.get, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
@@ -1393,8 +1427,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "setUserAzureB2CId" - {
       "set the azureB2CId for a user with no pre-existing azureB2CId" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val newAzureB2cId = AzureB2CId("newAzureB2cId")
         dao.createUser(defaultUser.copy(azureB2CId = None), samRequestContext).unsafeRunSync()
 
@@ -1405,8 +1437,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "set the azureB2CId for a user with a pre-existing azureB2CId of the same value" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext).unsafeRunSync()
@@ -1415,8 +1445,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "throw an exception when trying to overwrite a azureB2CId with a different value" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         val newAzureB2cId = AzureB2CId("newAzureB2cId")
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
@@ -1424,12 +1452,86 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
           dao.setUserAzureB2CId(defaultUser.id, newAzureB2cId, samRequestContext).unsafeRunSync()
         }
       }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserAzure.sample.get.copy(
+          azureB2CId = None,
+          updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newAzureB2cId = AzureB2CId("newAzureB2cId")
+
+        // Act
+        dao.setUserAzureB2CId(user.id, newAzureB2cId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
+      }
+
+      "sets the registeredAt datetime if all cloud ids for this user are blank" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserAzure.sample.get.copy(azureB2CId = None)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newAzureB2CId = AzureB2CId("newAzureB2cId")
+
+        // Act
+        dao.setUserAzureB2CId(user.id, newAzureB2CId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt.value should beAround(Instant.now())
+        }
+      }
+
+      // This scenario really should never exist.  If one of the cloud IDs is set, then the registeredAt date should
+      // also already be set.  If this initial state exists, something probably went wrong.  Useful test though for
+      // making sure the sql is working correctly.
+      "does not set the registeredAt datetime if it is null and the googleSubjectId is already set" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = None)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newAzureB2CId = AzureB2CId("newAzureB2cId")
+
+        // Act
+        dao.setUserAzureB2CId(user.id, newAzureB2CId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt shouldBe empty
+        }
+      }
+
+      // Making an assumption that this is the intended behavior/UX we want?  :shrug:  This is a weird scenario that I
+      // cannot imagine we would be in unless something went wrong.  The test is handy though to make sure the sql is
+      // working correctly.
+      "does not change the registeredAt datetime if it is already set" in {
+        // Arrange
+        val expectedRegisteredAt = Instant.parse("2022-02-22T22:22:22Z")
+        val user = Generator.genWorkbenchUserAzure.sample.get.copy(
+          googleSubjectId = None,
+          azureB2CId = None,
+          registeredAt = Option(expectedRegisteredAt)
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newAzureB2CId = AzureB2CId("newAzureB2cId")
+
+        // Act
+        dao.setUserAzureB2CId(user.id, newAzureB2CId, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        inside(loadedUser.value) { user =>
+          user.registeredAt.value should equal(expectedRegisteredAt)
+        }
+      }
     }
 
     "createPetManagedIdentity" - {
       "create pet managed identity" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetManagedIdentity(defaultPetMI, samRequestContext).unsafeRunSync() shouldBe defaultPetMI
       }
@@ -1437,8 +1539,6 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
 
     "loadPetManagedIdentity" - {
       "load pet managed identity" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetManagedIdentity(defaultPetMI, samRequestContext).unsafeRunSync()
 
@@ -1446,41 +1546,99 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
 
       "return None for nonexistent pet managed identities" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.loadPetManagedIdentity(defaultPetMI.id, samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "acceptTermsOfService" - {
       "accept the terms of service for a new user" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
       }
 
       "accept the terms of service for a user who has already accepted a previous version of the terms of service" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, "0", samRequestContext).unsafeRunSync() shouldBe true
         dao.acceptTermsOfService(defaultUser.id, "2", samRequestContext).unsafeRunSync() shouldBe true
+      }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+          updatedAt = Instant.parse("2010-10-10T10:10:10Z")
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Act
+        dao.acceptTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
       }
     }
 
     "rejectTermsOfService" - {
       "reject the terms of service for an existing user" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
         dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
       }
 
       "cannot reject the terms of service for a user who has not accepted terms of service previously" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
+      }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+          updatedAt = Instant.parse("2010-10-10T10:10:10Z"),
+          acceptedTosVersion = Option(tosConfig.version)
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Act
+        dao.rejectTermsOfService(user.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
+      }
+    }
+
+    "checkStatus" - {
+      "is true if database is queryable" in {
+        // Act
+        val samStatus = dao.checkStatus(samRequestContext).unsafeRunSync()
+
+        // Assert
+        samStatus shouldBe true
+      }
+
+      "is false if database cannot be connected to" in {
+        // Arrange
+        val badDBName = Symbol("noDB")
+        val badDbReference = new TestDbReference(badDBName, TestSupport.blockingEc)
+        val badDao = new PostgresDirectoryDAO(badDbReference, badDbReference)
+
+        // Act
+        val samStatus = badDao.checkStatus(samRequestContext).unsafeRunSync()
+
+        // Assert
+        samStatus shouldBe false
+      }
+
+      // Test ignored - not sure how to test it without injecting a mocked DBReference into the DAO or maybe passing
+      // a bad query as a parameter into the checkStatus method
+      "is false if database has connections but cannot be queried" in {
+        // Act
+        val samStatus = dao.checkStatusWithQuery(samsqls"SELECT FOO FROM BAR", samRequestContext).unsafeRunSync()
+
+        // Assert
+        samStatus shouldBe false
       }
     }
   }

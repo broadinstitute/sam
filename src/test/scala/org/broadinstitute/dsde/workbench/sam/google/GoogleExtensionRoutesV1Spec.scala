@@ -246,4 +246,21 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
       status shouldEqual StatusCodes.Forbidden
     }
   }
+
+  "POST /api/google/v1/user/petServiceAccount/{project}/signedUrlForBlob" should "200 with a signed url" in {
+    val (_, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt")
+
+    Post(s"/api/google/v1/user/petServiceAccount/$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should include("my-bucket/my-folder/my-object.txt")
+    }
+  }
+
+  it should "404 when the user doesn't have access to the project" in {
+    val (_, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt")
+    Post(s"/api/google/v1/user/petServiceAccount/not-$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
 }

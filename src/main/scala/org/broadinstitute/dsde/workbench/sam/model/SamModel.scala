@@ -5,6 +5,8 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
+import java.time.Instant
+
 /** Created by dvoet on 5/26/17.
   */
 object SamJsonSupport {
@@ -72,6 +74,8 @@ object SamJsonSupport {
   implicit val CreateResourcePolicyResponseFormat = jsonFormat2(CreateResourcePolicyResponse.apply)
 
   implicit val CreateResourceResponseFormat = jsonFormat4(CreateResourceResponse.apply)
+
+  implicit val SignedUrlRequestFormat = jsonFormat2(SignedUrlRequest.apply)
 }
 
 object RootPrimitiveJsonSupport {
@@ -301,15 +305,42 @@ object BasicWorkbenchGroup {
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
+@Lenses final case class SignedUrlRequest(bucketName: String, blobName: String)
+object SamUser {
+  def apply(
+      id: WorkbenchUserId,
+      googleSubjectId: Option[GoogleSubjectId],
+      email: WorkbenchEmail,
+      azureB2CId: Option[AzureB2CId],
+      enabled: Boolean,
+      acceptedTosVersion: Option[String]
+  ): SamUser =
+    SamUser(id, googleSubjectId, email, azureB2CId, enabled, acceptedTosVersion, Instant.EPOCH, None, Instant.EPOCH)
+}
+
 final case class SamUser(
     id: WorkbenchUserId,
     googleSubjectId: Option[GoogleSubjectId],
     email: WorkbenchEmail,
     azureB2CId: Option[AzureB2CId],
     enabled: Boolean,
-    acceptedTosVersion: Option[String]
+    acceptedTosVersion: Option[String],
+    createdAt: Instant,
+    registeredAt: Option[Instant],
+    updatedAt: Instant
 ) {
   def toUserIdInfo = UserIdInfo(id, email, googleSubjectId)
+
+  override def equals(other: Any): Boolean = other match {
+    case user: SamUser =>
+      this.id == user.id &&
+      this.googleSubjectId == user.googleSubjectId &&
+      this.email == user.email &&
+      this.azureB2CId == user.azureB2CId &&
+      this.enabled == user.enabled &&
+      this.acceptedTosVersion == user.acceptedTosVersion
+    case _ => false
+  }
 }
 
 object SamLenses {

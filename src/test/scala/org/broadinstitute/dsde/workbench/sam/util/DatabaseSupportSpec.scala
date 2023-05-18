@@ -63,7 +63,7 @@ class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterE
     import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
     val userId = WorkbenchUserId(UUID.randomUUID().toString)
     TestSupport.dbRef.inLocalTransaction { implicit session =>
-      samsql"insert into sam_user(id, email, enabled) values ($userId, '', true)".update().apply()
+      samsql"insert into sam_user(id, email, enabled, created_at, updated_at) values ($userId, '', true, now(), now())".update().apply()
     }
 
     val barrier = new CyclicBarrier(2)

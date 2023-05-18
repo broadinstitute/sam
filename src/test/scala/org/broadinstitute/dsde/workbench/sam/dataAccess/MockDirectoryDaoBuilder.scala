@@ -1,121 +1,47 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchers
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.scalatest.MockitoSugar
+import org.mockito.ArgumentMatchersSugar.{any, eqTo}
+import org.mockito.IdiomaticMockito
+import org.mockito.Mockito.RETURNS_SMART_NULLS
 
-case class MockDirectoryDaoBuilder() extends MockitoSugar {
+object MockDirectoryDaoBuilder {
+  def apply(allUsersGroup: WorkbenchGroup) =
+    new MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup)
+}
+
+case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
 
   val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
-  // Default constructor state is an "empty" database.
-  // Get/load requests should not return anything.
-  // Inserts into tables without foreign keys should succeed
-  // Inserts into tables with foreign keys should fail
+  mockedDirectoryDAO.loadUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
+  mockedDirectoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext]) returns IO(None)
+  mockedDirectoryDAO.loadUserByAzureB2CId(any[AzureB2CId], any[SamRequestContext]) returns IO(None)
+  mockedDirectoryDAO.loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext]) returns IO(None)
+  mockedDirectoryDAO.createUser(any[SamUser], any[SamRequestContext]) answers ((u: SamUser, _: SamRequestContext) => IO(u))
+  mockedDirectoryDAO.enableIdentity(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.disableIdentity(any[WorkbenchSubject], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.isEnabled(any[WorkbenchSubject], any[SamRequestContext]) returns IO(false)
+  mockedDirectoryDAO.isGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(false)
+  mockedDirectoryDAO.listUserDirectMemberships(any[WorkbenchUserId], any[SamRequestContext]) returns IO(LazyList.empty)
+  mockedDirectoryDAO.setGoogleSubjectId(any[WorkbenchUserId], any[GoogleSubjectId], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.removeGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
+  mockedDirectoryDAO.deleteUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
 
-  // Attempting to load any user should not find anything
-  lenient()
-    .doReturn(IO(None))
-    .when(mockedDirectoryDAO)
-    .loadUser(any[WorkbenchUserId], any[SamRequestContext])
+  def withHealthyDatabase: MockDirectoryDaoBuilder = {
+    mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(true)
+    this
+  }
 
-  lenient()
-    .doReturn(IO(None))
-    .when(mockedDirectoryDAO)
-    .loadSubjectFromGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext])
-
-  lenient()
-    .doReturn(IO(None))
-    .when(mockedDirectoryDAO)
-    .loadUserByAzureB2CId(any[AzureB2CId], any[SamRequestContext])
-
-  lenient()
-    .doReturn(IO(None))
-    .when(mockedDirectoryDAO)
-    .loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext])
-
-  // Create/Insert user should succeed and then make the user appear to "exist" in the Mock
-  lenient()
-    .doAnswer { (invocation: InvocationOnMock) =>
-      val samUser = invocation.getArgument[SamUser](0)
-      makeUserExist(samUser)
-      IO(samUser)
-    }
-    .when(mockedDirectoryDAO)
-    .createUser(any[SamUser], any[SamRequestContext])
-
-  // Default behavior can check if the user "exists" in the Mock and respond accordingly
-  lenient()
-    .doAnswer { (invocation: InvocationOnMock) =>
-      val samUserId = invocation.getArgument[WorkbenchUserId](0)
-      val samRequestContext = invocation.getArgument[SamRequestContext](1)
-      val maybeUser = mockedDirectoryDAO.loadUser(samUserId, samRequestContext).unsafeRunSync()
-      maybeUser match {
-        case Some(samUser) => makeUserEnabled(samUser)
-        case None => throw new RuntimeException("Mocking error when trying to enable a user that does not exist")
-      }
-      IO.unit
-    }
-    .when(mockedDirectoryDAO)
-    .enableIdentity(any[WorkbenchUserId], any[SamRequestContext])
-
-  lenient()
-    .doAnswer { (invocation: InvocationOnMock) =>
-      val subject = invocation.getArgument[WorkbenchUserId](0)
-      val samRequestContext = invocation.getArgument[SamRequestContext](1)
-      val maybeUser = mockedDirectoryDAO.loadUser(subject, samRequestContext).unsafeRunSync()
-      maybeUser match {
-        case Some(samUser) => makeUserDisabled(samUser)
-        case None => throw new RuntimeException("Mocking error when trying to disable a user that does not exist")
-      }
-      IO.unit
-    }
-    .when(mockedDirectoryDAO)
-    .disableIdentity(any[WorkbenchSubject], any[SamRequestContext])
-
-  // No users "exist" so there are a bunch of queries that should return false/None if they depend on "existing" users
-  lenient()
-    .doReturn(IO(false))
-    .when(mockedDirectoryDAO)
-    .isEnabled(any[WorkbenchSubject], any[SamRequestContext])
-
-  lenient()
-    .doReturn(IO(false))
-    .when(mockedDirectoryDAO)
-    .isGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext])
-
-  lenient()
-    .doReturn(IO(LazyList.empty))
-    .when(mockedDirectoryDAO)
-    .listUserDirectMemberships(any[WorkbenchUserId], any[SamRequestContext])
-
-  // Note, these methods don't actually set any "state" in the mocked DAO.  If you need some sort of coordinated
-  // state in your mocks, you should mock these methods yourself in your tests
-  lenient()
-    .doReturn(IO.unit)
-    .when(mockedDirectoryDAO)
-    .setGoogleSubjectId(any[WorkbenchUserId], any[GoogleSubjectId], any[SamRequestContext])
-  lenient()
-    .doReturn(IO.unit)
-    .when(mockedDirectoryDAO)
-    .setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext])
-
-  lenient()
-    .doReturn(IO(true))
-    .when(mockedDirectoryDAO)
-    .removeGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext])
-
-  lenient()
-    .doReturn(IO.unit)
-    .when(mockedDirectoryDAO)
-    .deleteUser(any[WorkbenchUserId], any[SamRequestContext])
+  def withUnhealthyDatabase: MockDirectoryDaoBuilder = {
+    mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(false)
+    this
+  }
 
   def withExistingUser(samUser: SamUser): MockDirectoryDaoBuilder = withExistingUsers(Set(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
@@ -139,8 +65,14 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
     this
   }
 
-  def withDisabledUser(samUser: SamUser): MockDirectoryDaoBuilder = withDisabledUsers(Set(samUser))
+  // WorkbenchSubjects are weird, they are not full multi-parameter objects, but just identifiers.
+  // Most or all objects identified with a WorkbenchSubject id also have an email.
+  def withWorkbenchSubject(subject: WorkbenchSubject, subjectsEmail: WorkbenchEmail): MockDirectoryDaoBuilder = {
+    mockedDirectoryDAO.loadSubjectFromEmail(eqTo(subjectsEmail), any[SamRequestContext]) returns IO(Option(subject))
+    this
+  }
 
+  def withDisabledUser(samUser: SamUser): MockDirectoryDaoBuilder = withDisabledUsers(Set(samUser))
   def withDisabledUsers(samUsers: Iterable[SamUser]): MockDirectoryDaoBuilder = {
     samUsers.toSet.foreach { u: SamUser =>
       makeUserExist(u)
@@ -152,17 +84,10 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
 
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): MockDirectoryDaoBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
-
-    lenient()
-      .doReturn(IO(Some(BasicWorkbenchGroup(allUsersGroup))))
-      .when(mockedDirectoryDAO)
-      .loadGroup(ArgumentMatchers.eq(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext])
-
-    lenient()
-      .doReturn(IO(true))
-      .when(mockedDirectoryDAO)
-      .addGroupMember(ArgumentMatchers.eq(allUsersGroup.id), any[WorkbenchSubject], any[SamRequestContext])
-
+    mockedDirectoryDAO.loadGroup(eqTo(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext]) returns IO(
+      Some(BasicWorkbenchGroup(allUsersGroup))
+    )
+    mockedDirectoryDAO.addGroupMember(eqTo(allUsersGroup.id), any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
     this
   }
 
@@ -173,76 +98,40 @@ case class MockDirectoryDaoBuilder() extends MockitoSugar {
   // - does not have an azureB2CId
   // - is not enabled
   private def makeUserExist(samUser: SamUser): Unit = {
-    doThrow(new RuntimeException(s"User $samUser is mocked to already exist"))
-      .when(mockedDirectoryDAO)
-      .createUser(ArgumentMatchers.eq(samUser), any[SamRequestContext])
-
-    // A user that only "exists" but isn't enabled or anything also does not have a Cloud Identifier
-    lenient()
-      .doReturn(IO(Option(samUser.copy(googleSubjectId = None, azureB2CId = None))))
-      .when(mockedDirectoryDAO)
-      .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
-
-    lenient()
-      .doReturn(IO(Option(samUser.id)))
-      .when(mockedDirectoryDAO)
-      .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
+    mockedDirectoryDAO.createUser(eqTo(samUser), any[SamRequestContext]) throws new RuntimeException(s"User $samUser is mocked to already exist")
+    mockedDirectoryDAO.loadUser(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUser.copy(googleSubjectId = None, azureB2CId = None)))
+    mockedDirectoryDAO.loadSubjectFromEmail(eqTo(samUser.email), any[SamRequestContext]) returns IO(Option(samUser.id))
   }
 
   private def makeUserEnabled(samUser: SamUser): Unit = {
-    lenient()
-      .doReturn(IO(true))
-      .when(mockedDirectoryDAO)
-      .isEnabled(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
-
-    lenient()
-      .doReturn(IO(Option(samUser.copy(enabled = true))))
-      .when(mockedDirectoryDAO)
-      .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+    mockedDirectoryDAO.isEnabled(eqTo(samUser.id), any[SamRequestContext]) returns IO(true)
+    mockedDirectoryDAO.loadUser(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
 
     if (samUser.azureB2CId.nonEmpty) {
-      lenient()
-        .doReturn(IO(Option(samUser.copy(enabled = true))))
-        .when(mockedDirectoryDAO)
-        .loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext])
+      mockedDirectoryDAO.loadUserByAzureB2CId(eqTo(samUser.azureB2CId.get), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
     }
 
     if (samUser.googleSubjectId.nonEmpty) {
-      lenient()
-        .doReturn(IO(Option(samUser.id)))
-        .when(mockedDirectoryDAO)
-        .loadSubjectFromGoogleSubjectId(ArgumentMatchers.eq(samUser.googleSubjectId.get), any[SamRequestContext])
+      mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.id))
+      mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Some(samUser))
     }
 
     if (maybeAllUsersGroup.nonEmpty) {
-      lenient()
-        .doReturn(IO(true))
-        .when(mockedDirectoryDAO)
-        .isGroupMember(ArgumentMatchers.eq(maybeAllUsersGroup.get.id), ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
-
-      lenient()
-        .doReturn(IO(LazyList(maybeAllUsersGroup.get.id)))
-        .when(mockedDirectoryDAO)
-        .listUserDirectMemberships(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+      mockedDirectoryDAO.isGroupMember(eqTo(maybeAllUsersGroup.get.id), eqTo(samUser.id), any[SamRequestContext]) returns IO(true)
+      mockedDirectoryDAO.listUserDirectMemberships(eqTo(samUser.id), any[SamRequestContext]) returns IO(LazyList(maybeAllUsersGroup.get.id))
     }
   }
 
   private def makeUserDisabled(samUser: SamUser): Unit = {
-    lenient()
-      .doReturn(IO(false))
-      .when(mockedDirectoryDAO)
-      .isEnabled(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+    mockedDirectoryDAO.isEnabled(eqTo(samUser.id), any[SamRequestContext]) returns IO(false)
+    mockedDirectoryDAO.loadUser(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = false)))
 
-    lenient()
-      .doReturn(IO(Option(samUser.copy(enabled = false))))
-      .when(mockedDirectoryDAO)
-      .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+    if (samUser.googleSubjectId.nonEmpty) {
+      mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = false)))
+    }
 
     if (samUser.azureB2CId.nonEmpty) {
-      lenient()
-        .doReturn(IO(Option(samUser.copy(enabled = false))))
-        .when(mockedDirectoryDAO)
-        .loadUserByAzureB2CId(ArgumentMatchers.eq(samUser.azureB2CId.get), any[SamRequestContext])
+      mockedDirectoryDAO.loadUserByAzureB2CId(eqTo(samUser.azureB2CId.get), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = false)))
     }
   }
 
