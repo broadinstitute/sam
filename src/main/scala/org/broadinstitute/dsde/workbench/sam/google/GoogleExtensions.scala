@@ -657,11 +657,17 @@ class GoogleExtensions(
       petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
       petKey <- googleKeyCache.getKey(petServiceAccount)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
-      time = duration.getOrElse(1L)
-      timeUnit = duration.map(_ => TimeUnit.MINUTES).getOrElse(TimeUnit.HOURS)
+      timeInMinutes = duration.getOrElse(60L)
       queryParams = Map(userProjectQueryParam -> project.value, requestedByQueryParam -> samUser.email.value)
       url <- googleStorageService
-        .getSignedBlobUrl(bucket, name, serviceAccountCredentials, expirationTime = time, expirationTimeUnit = timeUnit, queryParams = queryParams)
+        .getSignedBlobUrl(
+          bucket,
+          name,
+          serviceAccountCredentials,
+          expirationTime = timeInMinutes,
+          expirationTimeUnit = TimeUnit.MINUTES,
+          queryParams = queryParams
+        )
         .compile
         .lastOrError
     } yield url
