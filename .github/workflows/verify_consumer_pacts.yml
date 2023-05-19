@@ -171,11 +171,20 @@ jobs:
           restore-keys: |
             v1-${{ runner.os }}-sbt-plugins-
 
+      - name: Cache SBT target directory
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: v1-${{ runner.os }}-sbt-target-${{ hashFiles('**/build.sbt') }}
+          restore-keys: |
+            v1-${{ runner.os }}-sbt-target-
+
       - uses: olafurpg/setup-scala@v11
         with:
           java-version: openjdk@1.17
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
+        id: verification-test
         run: |
           echo "provider-sha=${{ env.PROVIDER_SHA }}" >> $GITHUB_OUTPUT
           sbt "project pact4s" "testOnly *SamProviderSpec"
