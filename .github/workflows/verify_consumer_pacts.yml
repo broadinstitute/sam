@@ -148,6 +148,11 @@ jobs:
           echo "git rev-parse HEAD"
           git rev-parse HEAD
 
+      - name: Setup envvars for Pact Broker
+        run: |
+          echo "PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }}" >> $GITHUB_ENV
+          echo "PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }}" >> $GITHUB_ENV
+
       - name: Cache SBT dependencies
         uses: actions/cache@v3
         with:
