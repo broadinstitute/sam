@@ -153,13 +153,22 @@ jobs:
           echo "PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }}" >> $GITHUB_ENV
           echo "PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }}" >> $GITHUB_ENV
 
+      - name: Cache Scala and Java Distributions
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.SCALA_HOME }}
+            ${{ env.JAVA_HOME }}
+          key: v1-${{ runner.os }}-scala-java-${{ hashFiles('**/build.sbt') }}
+          restore-keys: |
+            v1-${{ runner.os }}-scala-java-
+
       - name: Cache SBT dependencies
         uses: actions/cache@v3
         with:
           path: |
             ~/.ivy2/cache
-            ~/.sbt/boot
-          key: v1-${{ runner.os }}-sbt-${{ hashfiles('**/*.sbt') }}
+          key: v1-${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('**/project/*.scala') }}
           restore-keys: |
             v1-${{ runner.os }}-sbt-
 
@@ -171,17 +180,18 @@ jobs:
           restore-keys: |
             v1-${{ runner.os }}-sbt-plugins-
 
-      - name: Cache SBT target directory
-        uses: actions/cache@v2
+      - name: Cache Build Classes
+        uses: actions/cache@v3
         with:
           path: target
-          key: v1-${{ runner.os }}-sbt-target-${{ hashFiles('**/build.sbt') }}
+          key: v1-${{ runner.os }}-build-classes-${{ hashFiles('**/*.scala') }}-${{ hashFiles('**/*.sbt') }}
           restore-keys: |
-            v1-${{ runner.os }}-sbt-target-
+            v1-${{ runner.os }}-build-classes-
 
-      - uses: olafurpg/setup-scala@v11
+      - uses: olafurpg/setup-scala@v14
         with:
           java-version: openjdk@1.17
+          scala-version: 2.13.7
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
