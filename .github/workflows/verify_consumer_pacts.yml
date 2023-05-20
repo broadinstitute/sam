@@ -200,6 +200,8 @@ jobs:
           echo ${{ env.SCALA_HOME }}
           echo ${{ env.JAVA_HOME }}
           ls ${{ env.JAVA_HOME }}
+          ls ~/.sdkman/candidates/java/current
+          ls ~/scala
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
