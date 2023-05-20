@@ -154,11 +154,13 @@ jobs:
           echo "PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }}" >> $GITHUB_ENV
 
       - name: Cache Scala and Java Distributions
+        if: ${{ env.SCALA_HOME && env.JAVA_HOME }}
+        id: cache
         uses: actions/cache@v3
         with:
           path: |
-            ${{ env.SCALA_HOME }}
-            ${{ env.JAVA_HOME }}
+            ~/scala
+            ~/.sdkman/candidates/java/current
           key: v1-${{ runner.os }}-scala-java-${{ hashFiles('**/build.sbt') }}
           restore-keys: |
             v1-${{ runner.os }}-scala-java-
@@ -192,6 +194,12 @@ jobs:
         with:
           java-version: openjdk@1.17
           scala-version: 2.13.7
+
+      - name: SCALA_HOME and JAVA_HOME
+        run: |
+          echo ${{ env.SCALA_HOME }}
+          echo ${{ env.JAVA_HOME }}
+          ls ${{ env.JAVA_HOME }}
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
