@@ -163,7 +163,7 @@ jobs:
 
       - name: Check sbt-cache hit or miss
         run: |
-          if [ -z "${{ steps.sbt-cache.outputs.restore-keys }}" ]; then
+          if [ "${{ steps.sbt-cache.outputs.cache-hit }}" == 'true' ]; then
             echo "Sbt Cache hit!"
             echo "Cache key: ${{ steps.sbt-cache.outputs.restore-keys }}"
           else
@@ -180,7 +180,7 @@ jobs:
 
       - name: Check sbt-plugins-cache hit or miss
         run: |
-          if [ -z "${{ steps.sbt-plugins-cache.outputs.restore-keys }}" ]; then
+          if [ "${{ steps.sbt-plugins-cache.outputs.cache-hit }}" == 'true' ]; then
             echo "Sbt Plugins Cache hit!"
             echo "Cache key: ${{ steps.sbt-plugins-cache.outputs.restore-keys }}"
           else
@@ -197,7 +197,7 @@ jobs:
 
       - name: Check build-classes hit or miss
         run: |
-          if [ -z "${{ steps.build-classes.outputs.restore-keys }}" ]; then
+          if [ "${{ steps.build-classes.outputs.cache-hit }}" == 'true' ]; then
             echo "Sbt Build Classes Cache hit!"
             echo "Cache key: ${{ steps.build-classes.outputs.restore-keys }}"
           else
