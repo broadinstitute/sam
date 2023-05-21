@@ -165,7 +165,6 @@ jobs:
         run: |
           if [ "${{ steps.sbt-cache.outputs.cache-hit }}" == 'true' ]; then
             echo "Sbt Cache hit!"
-            echo "Cache key: ${{ steps.sbt-cache.outputs.restore-keys }}"
           else
             echo "Sbt Cache missed!"
           fi
@@ -182,13 +181,12 @@ jobs:
         run: |
           if [ "${{ steps.sbt-plugins-cache.outputs.cache-hit }}" == 'true' ]; then
             echo "Sbt Plugins Cache hit!"
-            echo "Cache key: ${{ steps.sbt-plugins-cache.outputs.restore-keys }}"
           else
             echo "Sbt Plugins Cache missed!"
           fi
 
       - name: Cache Build Classes
-        id: build-classes
+        id: build-classes-cache
         uses: actions/cache@v3
         with:
           path: |
@@ -197,9 +195,8 @@ jobs:
 
       - name: Check build-classes hit or miss
         run: |
-          if [ "${{ steps.build-classes.outputs.cache-hit }}" == 'true' ]; then
+          if [ "${{ steps.build-classes-cache.outputs.cache-hit }}" == 'true' ]; then
             echo "Sbt Build Classes Cache hit!"
-            echo "Cache key: ${{ steps.build-classes.outputs.restore-keys }}"
           else
             echo "Sbt Build Classes Cache missed!"
           fi
@@ -229,7 +226,7 @@ jobs:
                           -e PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }} \
                           -e PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }} \
                           sbtscala/scala-sbt:openjdk-17.0.2_1.7.2_2.13.10 \
-                          sbt "project pact4s" "testOnly *SamProviderSpec"
+                          sbt "clean" "compile" "project pact4s" "testOnly *SamProviderSpec"
 
       - name: Check directories to be cached
         run: |
@@ -237,7 +234,6 @@ jobs:
           ls -l ~/.sbt
           ls -l pact4s/target
           ls -l project/target
-          echo "END"
 
   can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest
