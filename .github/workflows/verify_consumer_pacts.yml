@@ -234,7 +234,9 @@ jobs:
       - name: Check directories to be cached
         run: |
           ls -l ~/.ivy2
-          ls =l ~/.sbt
+          ls -l ~/.sbt
+          ls -l pact4s/target
+          ls -l project/target
 
   can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest
