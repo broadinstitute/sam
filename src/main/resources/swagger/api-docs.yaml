@@ -3001,6 +3001,9 @@ components:
         blobName:
           type: string
           description: path to the blob in the bucket
+        duration:
+          type: number
+          description: Optional validity duration of the link in minutes. Defaults to 1 hour.
     CreateResourceRequest:
       required:
         - policies
