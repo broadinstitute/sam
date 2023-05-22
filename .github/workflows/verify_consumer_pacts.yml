@@ -21,7 +21,7 @@ on:
       - 'README.md'
   push:
     branches:
-      - develop
+      - iv-fix-git-push
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
@@ -142,8 +142,13 @@ jobs:
             echo "git branch"
             git branch
           else
-            echo "git checkout ${{ env.CURRENT_BRANCH }} ${{ env.CURRENT_SHA }}"
-            git checkout -b ${{ env.CURRENT_BRANCH }} ${{ env.CURRENT_SHA }}
+            if [[ "${{ github.event_name }}" == "push" ]]; then
+              echo "git checkout ${{ env.CURRENT_BRANCH }}"
+              git checkout ${{ env.CURRENT_BRANCH }}
+            else
+              echo "git checkout ${{ env.CURRENT_BRANCH }} ${{ env.CURRENT_SHA }}"
+              git checkout -b ${{ env.CURRENT_BRANCH }} ${{ env.CURRENT_SHA }}
+            fi
           fi
           echo "git rev-parse HEAD"
           git rev-parse HEAD
