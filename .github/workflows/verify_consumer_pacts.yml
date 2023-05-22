@@ -209,6 +209,15 @@ jobs:
             echo "Sbt Build Classes Cache missed!"
           fi
 
+      - name: Cache Docker image layers
+        id: cache-docker-layers
+        uses: actions/cache@v3
+        with:
+          path: /var/lib/docker/image
+          key: ${{ runner.os }}-docker-layers-${{ hashFiles('**/Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-docker-layers-
+
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
         run: |
