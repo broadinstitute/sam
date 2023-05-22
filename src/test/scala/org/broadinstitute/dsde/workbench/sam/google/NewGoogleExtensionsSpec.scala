@@ -125,8 +125,8 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
         any[Option[TraceId]],
         any[RetryConfig],
-        eqTo(1L),
-        eqTo(TimeUnit.HOURS),
+        eqTo(60L),
+        eqTo(TimeUnit.MINUTES),
         eqTo(Map("userProject" -> googleProject.value, "requestedBy" -> newGoogleUser.email.value))
       )
     }
