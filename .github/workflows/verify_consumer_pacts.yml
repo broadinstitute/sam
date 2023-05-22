@@ -21,7 +21,7 @@ on:
       - 'README.md'
   push:
     branches:
-      - iv-fix-git-push
+      - develop
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
