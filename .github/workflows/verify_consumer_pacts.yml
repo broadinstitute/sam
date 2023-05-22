@@ -165,6 +165,14 @@ jobs:
         run: |
           if [ "${{ steps.sbt-cache.outputs.cache-hit }}" == 'true' ]; then
             echo "Sbt Cache hit!"
+            ls -l ~/.cache
+            ls -l ~/.cache/coursier
+            ls -l ~/.cache/coursier/v1
+            ls -l ~/.cache/coursier/v1/https
+            ls -l ~/.cache/coursier/v1/https/repo1.maven.org
+            ls -l ~/.cache/coursier/v1/https/repo1.maven.org/maven2
+            ls -l ~/.cache/coursier/v1/https/repo.scala-sbt.org
+            ls -l ~/.cache/coursier/v1/https/artifactory.broadinstitute.org
           else
             echo "Sbt Cache missed!"
           fi
@@ -235,6 +243,10 @@ jobs:
           ls -l ~/.cache/coursier
           ls -l ~/.cache/coursier/v1
           ls -l ~/.cache/coursier/v1/https
+          ls -l ~/.cache/coursier/v1/https/repo1.maven.org
+          ls -l ~/.cache/coursier/v1/https/repo1.maven.org/maven2
+          ls -l ~/.cache/coursier/v1/https/repo.scala-sbt.org
+          ls -l ~/.cache/coursier/v1/https/artifactory.broadinstitute.org
 
   can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest
