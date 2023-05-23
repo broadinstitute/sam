@@ -177,6 +177,7 @@ jobs:
             ls -l ~/.cache/coursier/v1/https/repo1.maven.org/maven2
             ls -l ~/.cache/coursier/v1/https/repo.scala-sbt.org
             ls -l ~/.cache/coursier/v1/https/artifactory.broadinstitute.org
+            ls -l ~/.cache/coursier/v1/https/artifactory.broadinstitute.org/artifactory
           else
             echo "Coursier Cache missed!"
           fi
