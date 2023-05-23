@@ -209,7 +209,7 @@ jobs:
         with:
           path: |
             **/target
-          key: sam-${{ runner.os }}-target-cache-${{ hashFiles('**/*.scala') }}-${{ hashFiles('**/*.sbt') }}
+          key: sam-${{ runner.os }}-target-cache
 
       - name: Check target hit or miss
         run: |
