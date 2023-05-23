@@ -263,7 +263,6 @@ jobs:
           ls -l ~/.cache/coursier/v1/https/repo1.maven.org/maven2
           ls -l ~/.cache/coursier/v1/https/repo.scala-sbt.org
           ls -l ~/.cache/coursier/v1/https/artifactory.broadinstitute.org
-          ls -l ~/.cache/coursier/v1/https/artifactory.broadinstitute.org/artifactory
 
   can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest
