@@ -237,11 +237,10 @@ jobs:
           # On Linux, the location is
           #     sbt "show csrCacheDirectory"
           # with a default value of ~/.cache/coursier/v1
-          docker run --rm -u sbtuser \
-                          -w /home/sbtuser/sam \
-                          -v $PWD:/home/sbtuser/sam \
-                          -v "$HOME/.cache":/home/sbtuser/.cache \
-                          -v "$HOME/.sbt":/home/sbtuser/.sbt \
+          docker run --rm -w /working/sam \
+                          -v $PWD:/working/sam \
+                          -v "$HOME/.cache":/root/.cache \
+                          -v "$HOME/.sbt":/root/.sbt \
                           -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
                           -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
                           -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \
