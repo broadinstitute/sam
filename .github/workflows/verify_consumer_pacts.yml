@@ -69,6 +69,8 @@ on:
 
 env:
   PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
+  COURSIER_CACHE: $HOME/.cache
+  SBT_CACHE: $HOME/.sbt
 
 jobs:
   verify-consumer-pact:
@@ -166,24 +168,15 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            ~/.cache
+            ${{ env.COURSIER_CACHE }}
           key: sam-${{ runner.os }}-coursier-cache-${{ hashFiles('**/*.sbt', '**/project/*.scala', '**/project/build.properties') }}
 
       - name: Check coursier-cache hit
         run: |
-          cloc=~/.cache
           if [ "${{ steps.coursier-cache.outputs.cache-hit }}" == 'true' ]; then
-            echo "Coursier $cloc restored!"
-            ls -l $cloc
-            ls -l $cloc/coursier
-            ls -l $cloc/coursier/v1
-            ls -l $cloc/coursier/v1/https
-            ls -l $cloc/coursier/v1/https/repo1.maven.org
-            ls -l $cloc/coursier/v1/https/repo1.maven.org/maven2
-            ls -l $cloc/coursier/v1/https/repo.scala-sbt.org
-            ls -l $cloc/coursier/v1/https/artifactory.broadinstitute.org
+            echo "Coursier cache ${{ env.COURSIER_CACHE }} restored!"
           else
-            echo "Coursier $cloc needs update!"
+            echo "Coursier cache ${{ env.COURSIER_CACHE }} needs update!"
           fi
 
 # Caching .sbt directory
@@ -201,15 +194,15 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            ~/.sbt
+            ${{ env.SBT_CACHE }}
           key: sam-${{ runner.os }}-sbt-cache-${{ hashFiles('**/*.sbt', '**/*.scala') }}
 
       - name: Check sbt cache hit
         run: |
           if [ "${{ steps.sbt-cache.outputs.cache-hit }}" == 'true' ]; then
-            echo "~/.sbt restored!"
+            echo "${{ env.SBT_CACHE }} cache restored!"
           else
-            echo "~/.sbt needs update!"
+            echo "${{ env.SBT_CACHE }} cache needs update!"
           fi
 
 # Caching sbt target directories
@@ -262,8 +255,8 @@ jobs:
           # with a default value of ~/.cache/coursier/v1
           docker run --rm -w /working/sam \
                           -v "$PWD":/working/sam \
-                          -v "$HOME/.cache":/root/.cache \
-                          -v "$HOME/.sbt":/root/.sbt \
+                          -v ${{ env.COURSIER_CACHE }}:/root/.cache \
+                          -v ${{ env.SBT_CACHE }}:/root/.sbt \
                           -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
                           -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
                           -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \
