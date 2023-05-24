@@ -109,7 +109,7 @@ class SamProviderSpec
   override def beforeAll(): Unit = {
     startSam.unsafeToFuture()
     startSam.start
-    sleep(6000)
+    sleep(5000)
   }
 
   def startSam: IO[Http.ServerBinding] =
