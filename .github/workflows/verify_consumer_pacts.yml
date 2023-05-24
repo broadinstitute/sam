@@ -168,7 +168,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            ${{ env.COURSIER_CACHE }}
+            ~/.cache
           key: sam-${{ runner.os }}-coursier-cache-${{ hashFiles('**/*.sbt', '**/project/*.scala', '**/project/build.properties') }}
 
       - name: Check coursier-cache hit
@@ -194,7 +194,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            ${{ env.SBT_CACHE }}
+            ~/.sbt
           key: sam-${{ runner.os }}-sbt-cache-${{ hashFiles('**/*.sbt', '**/*.scala') }}
 
       - name: Check sbt cache hit
