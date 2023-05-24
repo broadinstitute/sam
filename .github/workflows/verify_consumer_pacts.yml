@@ -157,8 +157,8 @@ jobs:
 # Recent sbt versions use Coursier instead of Ivy for dependency management.
 # The .coursier cache in the sbtscala docker container is located under its .cache directory, which is mounted to the host $PWD/.cache dir.
 # The hashFiles function calculates the hash based on the file contents from
-#   .cache/**
-# under the runner working directory.
+#   .sbt, .scala, build.properties
+# under the project root directory.
 #
 # Any changes to these files will result in a different cache key, triggering a cache update.
       - name: Coursier cache
@@ -166,23 +166,24 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            .cache
-          key: sam-${{ runner.os }}-coursier-cache-${{ hashFiles('.cache/**') }}
+            ~/.cache
+          key: sam-${{ runner.os }}-coursier-cache-${{ hashFiles('**/*.sbt', '**/project/*.scala', '**/project/build.properties') }}
 
       - name: Check coursier-cache hit
         run: |
+          cloc="~/.cache"
           if [ "${{ steps.coursier-cache.outputs.cache-hit }}" == 'true' ]; then
-            echo "Coursier .cache restored!"
-            ls -l .cache
-            ls -l .cache/coursier
-            ls -l .cache/coursier/v1
-            ls -l .cache/coursier/v1/https
-            ls -l .cache/coursier/v1/https/repo1.maven.org
-            ls -l .cache/coursier/v1/https/repo1.maven.org/maven2
-            ls -l .cache/coursier/v1/https/repo.scala-sbt.org
-            ls -l .cache/coursier/v1/https/artifactory.broadinstitute.org
+            echo "Coursier $cloc restored!"
+            ls -l $cloc
+            ls -l $cloc/coursier
+            ls -l $cloc/coursier/v1
+            ls -l $cloc/coursier/v1/https
+            ls -l $cloc/coursier/v1/https/repo1.maven.org
+            ls -l $cloc/coursier/v1/https/repo1.maven.org/maven2
+            ls -l $cloc/coursier/v1/https/repo.scala-sbt.org
+            ls -l $cloc/coursier/v1/https/artifactory.broadinstitute.org
           else
-            echo "Coursier .cache needs update!"
+            echo "Coursier $cloc needs update!"
           fi
 
 # Caching .sbt directory
@@ -261,7 +262,7 @@ jobs:
           # with a default value of ~/.cache/coursier/v1
           docker run --rm -w /working/sam \
                           -v "$PWD":/working/sam \
-                          -v "$PWD/.cache":/root/.cache \
+                          -v "$HOME/.cache":/root/.cache \
                           -v "$HOME/.sbt":/root/.sbt \
                           -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
                           -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
@@ -276,15 +277,16 @@ jobs:
 
       - name: Check directories to be cached
         run: |
+          cloc="~/.cache"
           ls -l ~/.sbt
-          ls -l .cache
-          ls -l .cache/coursier
-          ls -l .cache/coursier/v1
-          ls -l .cache/coursier/v1/https
-          ls -l .cache/coursier/v1/https/repo1.maven.org
-          ls -l .cache/coursier/v1/https/repo1.maven.org/maven2
-          ls -l .cache/coursier/v1/https/repo.scala-sbt.org
-          ls -l .cache/coursier/v1/https/artifactory.broadinstitute.org
+          ls -l $cloc
+          ls -l $cloc/coursier
+          ls -l $cloc/coursier/v1
+          ls -l $cloc/coursier/v1/https
+          ls -l $cloc/coursier/v1/https/repo1.maven.org
+          ls -l $cloc/coursier/v1/https/repo1.maven.org/maven2
+          ls -l $cloc/coursier/v1/https/repo.scala-sbt.org
+          ls -l $cloc/coursier/v1/https/artifactory.broadinstitute.org
 
   can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest
