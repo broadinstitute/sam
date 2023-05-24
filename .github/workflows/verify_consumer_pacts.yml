@@ -207,7 +207,7 @@ jobs:
 
 # Caching sbt target directories
 # The hashFiles function calculates the hash based on the file contents from all
-#  .sbt, .scala
+#  .sbt, src/, project/
 # files under the project root directory.
 #
 # In general, you would include all relevant files that affect the build targets,
@@ -235,13 +235,19 @@ jobs:
             echo "sbt targets need update!"
           fi
 
+      # Caching sbt pact4s target directory
+      # The hashFiles function calculates the hash based on the file contents from all
+      #  pact4s/src/
+      # files under the project root directory.
+      #
+      # This is similar to sbt-targets cache but limited to pact4s targets.
       - name: Cache pact4s targets
         id: sbt-pact4s-targets
         uses: actions/cache@v3
         with:
           path: |
             pact4s/**/target
-          key: sam-${{ runner.os }}-sbt-pact4s-targets-${{ hashFiles('pact4s/**/*.scala', 'pact4s/**/resources/*') }}
+          key: sam-${{ runner.os }}-sbt-pact4s-targets-${{ hashFiles('pact4s/src/**/*') }}
 
       - name: Check sbt pact4s targets cache hit
         run: |
