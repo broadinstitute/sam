@@ -22,8 +22,7 @@ case class TestPolicyEvaluatorServiceBuilder(directoryDAO: DirectoryDAO, policyD
       ResourceAction("delete"),
       ResourceAction("read_policies"),
       ResourceAction("view"),
-      ResourceAction("non_owner_action"),
-      ResourceAction("other_action")
+      ResourceAction("non_owner_action")
     )
   private val defaultResourceTypeActionPatterns = Set(
     SamResourceActionPatterns.alterPolicies,
