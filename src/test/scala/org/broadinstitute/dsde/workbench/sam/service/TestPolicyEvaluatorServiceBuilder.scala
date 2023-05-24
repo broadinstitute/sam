@@ -17,7 +17,14 @@ case class TestPolicyEvaluatorServiceBuilder(directoryDAO: DirectoryDAO, policyD
   private val existingPolicies: mutable.Set[AccessPolicy] = mutable.Set.empty
   private val emailDomain = "example.com"
   private val defaultResourceTypeActions =
-    Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
+    Set(
+      ResourceAction("alter_policies"),
+      ResourceAction("delete"),
+      ResourceAction("read_policies"),
+      ResourceAction("view"),
+      ResourceAction("non_owner_action"),
+      ResourceAction("other_action")
+    )
   private val defaultResourceTypeActionPatterns = Set(
     SamResourceActionPatterns.alterPolicies,
     SamResourceActionPatterns.delete,
