@@ -175,7 +175,6 @@ class SamProviderSpec
           // intended to match a certain class of user token
           token match {
             case "accessToken" =>
-              println("do bearer 'accessToken'")
               logger.debug("do bearer 'accessToken'")
               // e.g. proxy token that impersonates a regular user
               proxyToken = "user" + token
