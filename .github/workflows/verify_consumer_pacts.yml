@@ -160,14 +160,14 @@ jobs:
           echo "PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }}" >> $GITHUB_ENV
           echo "PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }}" >> $GITHUB_ENV
 
-# Caching Coursier
-# Recent sbt versions use Coursier instead of Ivy for dependency management.
-# The .coursier cache in the sbtscala docker container is located under its .cache directory, which is mounted to the host $PWD/.cache dir.
-# The hashFiles function calculates the hash based on the file contents from
-#   .sbt, .scala, build.properties
-# under the project root directory.
-#
-# Any changes to these files will result in a different cache key, triggering a cache update.
+      # Caching Coursier
+      # Recent sbt versions use Coursier instead of Ivy for dependency management.
+      # The .coursier cache in the sbtscala docker container is located under its .cache directory, which is mounted to the host $PWD/.cache dir.
+      # The hashFiles function calculates the hash based on the file contents from
+      #   .sbt, .scala, build.properties
+      # under the project root directory.
+      #
+      # Any changes to these files will result in a different cache key, triggering a cache update.
       - name: Coursier cache
         id: coursier-cache
         uses: actions/cache@v3
@@ -184,16 +184,16 @@ jobs:
             echo "Coursier cache ${{ env.COURSIER_CACHE }} needs update!"
           fi
 
-# Caching .sbt directory
-# The hashFiles function calculates the hash based on the file contents from all
-#  .sbt, .scala
-# files under the project root directory.
-#
-# In general, you would include all relevant files that affect the build,
-# such as build definition files (build.sbt), project files (*.scala),
-# and any other files that impact the build process.
-#
-# Any changes to these files will result in a different cache key, triggering a cache update.
+      # Caching .sbt directory
+      # The hashFiles function calculates the hash based on the file contents from all
+      #  .sbt, .scala
+      # files under the project root directory.
+      #
+      # In general, you would include all relevant files that affect the build,
+      # such as build definition files (build.sbt), project files (*.scala),
+      # and any other files that impact the build process.
+      #
+      # Any changes to these files will result in a different cache key, triggering a cache update.
       - name: Cache .sbt directory
         id: sbt-cache
         uses: actions/cache@v3
@@ -210,20 +210,20 @@ jobs:
             echo "${{ env.SBT_CACHE }} cache needs update!"
           fi
 
-# Caching sbt target directories
-# The hashFiles function calculates the hash based on the file contents from all
-#  .sbt, src/, project/
-# files under the project root directory.
-#
-# In general, you would include all relevant files that affect the build targets,
-# such as build definition files (build.sbt), project files (*.scala),
-# and any other files that impact the build process.
-#
-# Any changes to these files will result in a different cache key, triggering a cache update.
-#
-# Caching target directories offers significant performance improvements by avoiding
-# unnecessary compilation and task executions, enabling incremental compilation, and ensuring
-# consistent and reproducible build outputs.
+      # Caching sbt target directories
+      # The hashFiles function calculates the hash based on the file contents from all
+      #  .sbt, src/, project/
+      # files under the project root directory.
+      #
+      # In general, you would include all relevant files that affect the build targets,
+      # such as build definition files (build.sbt), project files (*.scala),
+      # and any other files that impact the build process.
+      #
+      # Any changes to these files will result in a different cache key, triggering a cache update.
+      #
+      # Caching target directories offers significant performance improvements by avoiding
+      # unnecessary compilation and task executions, enabling incremental compilation, and ensuring
+      # consistent and reproducible build outputs.
       - name: Cache sbt targets
         id: sbt-targets
         uses: actions/cache@v3
