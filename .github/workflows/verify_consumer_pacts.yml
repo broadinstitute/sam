@@ -225,7 +225,7 @@ jobs:
         with:
           path: |
             **/target
-          key: sam-${{ runner.os }}-sbt-targets-${{ hashFiles('**/*.sbt', '**/*.scala') }}
+          key: sam-${{ runner.os }}-sbt-targets-${{ hashFiles('*.sbt', 'src/**/*', '**/project/*.sbt', '**/project/*.scala', '**/project/build.properties') }}
 
       - name: Check sbt targets cache hit
         run: |
@@ -233,6 +233,22 @@ jobs:
             echo "sbt targets restored!"
           else
             echo "sbt targets need update!"
+          fi
+
+      - name: Cache pact4s targets
+        id: sbt-pact4s-targets
+        uses: actions/cache@v3
+        with:
+          path: |
+            pact4s/**/target
+          key: sam-${{ runner.os }}-sbt-pact4s-targets-${{ hashFiles('pact4s/**/*.scala', 'pact4s/**/resources/*') }}
+
+      - name: Check sbt pact4s targets cache hit
+        run: |
+          if [ "${{ steps.sbt-pact4s-targets.outputs.cache-hit }}" == 'true' ]; then
+            echo "sbt pact4s targets restored!"
+          else
+            echo "sbt pact4s targets need update!"
           fi
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
