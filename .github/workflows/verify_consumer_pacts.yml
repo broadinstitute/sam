@@ -153,70 +153,92 @@ jobs:
           echo "PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }}" >> $GITHUB_ENV
           echo "PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }}" >> $GITHUB_ENV
 
-# When sbt resolves dependencies for a project, it checks the Coursier cache to see if the
-# required artifacts are already present locally. If the artifacts are found in the cache,
-# sbt can retrieve them directly without having to download them again from remote repositories.
-# This caching mechanism helps improve build performance and reduces the need for repeated network requests.
+# Caching Coursier
+# Recent sbt versions use Coursier instead of Ivy for dependency management.
+# The .coursier cache in the sbtscala docker container is located under its .cache directory, which is mounted to the host $PWD/.cache dir.
+# The hashFiles function calculates the hash based on the file contents from
+#   .cache/**
+# under the runner working directory.
+#
+# Any changes to these files will result in a different cache key, triggering a cache update.
       - name: Coursier cache
         id: coursier-cache
         uses: actions/cache@v3
         with:
           path: |
-            ~/.cache
-          key: sam-${{ runner.os }}-coursier-cache
+            .cache
+          key: sam-${{ runner.os }}-coursier-cache-${{ hashFiles('.cache/**') }}
 
-      - name: Check coursier-cache hit or miss
+      - name: Check coursier-cache hit
         run: |
           if [ "${{ steps.coursier-cache.outputs.cache-hit }}" == 'true' ]; then
-            echo "Coursier Cache hit!"
-            ls -l ~/.cache
-            ls -l ~/.cache/coursier
-            ls -l ~/.cache/coursier/v1
-            ls -l ~/.cache/coursier/v1/https
-            ls -l ~/.cache/coursier/v1/https/repo1.maven.org
-            ls -l ~/.cache/coursier/v1/https/repo1.maven.org/maven2
-            ls -l ~/.cache/coursier/v1/https/repo.scala-sbt.org
-            ls -l ~/.cache/coursier/v1/https/artifactory.broadinstitute.org
+            echo "Coursier .cache restored!"
+            ls -l .cache
+            ls -l .cache/coursier
+            ls -l .cache/coursier/v1
+            ls -l .cache/coursier/v1/https
+            ls -l .cache/coursier/v1/https/repo1.maven.org
+            ls -l .cache/coursier/v1/https/repo1.maven.org/maven2
+            ls -l .cache/coursier/v1/https/repo.scala-sbt.org
+            ls -l .cache/coursier/v1/https/artifactory.broadinstitute.org
           else
-            echo "Coursier Cache missed!"
+            echo "Coursier .cache needs update!"
           fi
 
-# Cache .sbt directory
-# These files help configure the build process and manage dependencies,
-# making it easier to compile, test, and package Scala projects using sbt.
+# Caching .sbt directory
+# The hashFiles function calculates the hash based on the file contents from all
+#  .sbt, .scala
+# files under the project root directory.
+#
+# In general, you would include all relevant files that affect the build,
+# such as build definition files (build.sbt), project files (*.scala),
+# and any other files that impact the build process.
+#
+# Any changes to these files will result in a different cache key, triggering a cache update.
       - name: Cache .sbt directory
         id: sbt-cache
         uses: actions/cache@v3
         with:
           path: |
             ~/.sbt
-          key: sam-${{ runner.os }}-sbt-cache
+          key: sam-${{ runner.os }}-sbt-cache-${{ hashFiles('**/*.sbt', '**/*.scala') }}
 
-      - name: Check sbt-cache hit or miss
+      - name: Check sbt cache hit
         run: |
           if [ "${{ steps.sbt-cache.outputs.cache-hit }}" == 'true' ]; then
-            echo "Sbt Cache hit!"
+            echo "~/.sbt restored!"
           else
-            echo "Sbt Cache missed!"
+            echo "~/.sbt needs update!"
           fi
 
-# Caching the target directory in sbt offers significant performance improvements by avoiding
+# Caching sbt target directories
+# The hashFiles function calculates the hash based on the file contents from all
+#  .sbt, .scala
+# files under the project root directory.
+#
+# In general, you would include all relevant files that affect the build targets,
+# such as build definition files (build.sbt), project files (*.scala),
+# and any other files that impact the build process.
+#
+# Any changes to these files will result in a different cache key, triggering a cache update.
+#
+# Caching target directories offers significant performance improvements by avoiding
 # unnecessary compilation and task executions, enabling incremental compilation, and ensuring
 # consistent and reproducible build outputs.
-      - name: Cache target
-        id: target-cache
+      - name: Cache sbt targets
+        id: sbt-targets
         uses: actions/cache@v3
         with:
           path: |
             **/target
-          key: sam-${{ runner.os }}-target-cache
+          key: sam-${{ runner.os }}-sbt-targets-${{ hashFiles('**/*.sbt', '**/*.scala') }}
 
-      - name: Check target hit or miss
+      - name: Check sbt targets cache hit
         run: |
-          if [ "${{ steps.target-cache.outputs.cache-hit }}" == 'true' ]; then
-            echo "Target Cache hit!"
+          if [ "${{ steps.sbt-targets.outputs.cache-hit }}" == 'true' ]; then
+            echo "sbt targets restored!"
           else
-            echo "Target Cache missed!"
+            echo "sbt targets need update!"
           fi
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
@@ -238,8 +260,8 @@ jobs:
           #     sbt "show csrCacheDirectory"
           # with a default value of ~/.cache/coursier/v1
           docker run --rm -w /working/sam \
-                          -v $PWD:/working/sam \
-                          -v "$HOME/.cache":/root/.cache \
+                          -v "$PWD":/working/sam \
+                          -v "$PWD/.cache":/root/.cache \
                           -v "$HOME/.sbt":/root/.sbt \
                           -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
                           -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
