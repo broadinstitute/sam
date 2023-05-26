@@ -1,21 +1,20 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
 import org.mockito.ArgumentMatchersSugar.{any, argThat}
-import org.mockito.IdiomaticMockito
-import org.mockito.Mockito.RETURNS_SMART_NULLS
+import org.mockito.{IdiomaticMockito, Strictness}
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 
 case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends IdiomaticMockito {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
-  val mockedCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
+  val mockedCloudExtensions: CloudExtensions = mock[CloudExtensions](withSettings.strictness(Strictness.Lenient))
 
   mockedCloudExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]) returns IO(allUsersGroup)
   mockedCloudExtensions.onUserCreate(any[SamUser], any[SamRequestContext]) returns IO.unit
@@ -35,6 +34,11 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
   def withDisabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withDisabledUsers(Set(samUser))
   def withDisabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
     samUsers.foreach(makeUserAppearDisabled)
+    this
+  }
+
+  def withAdminUser(adminUserEmail: WorkbenchEmail): MockCloudExtensionsBuilder = {
+    mockedCloudExtensions.isWorkbenchAdmin(adminUserEmail) returns Future.successful(true)
     this
   }
 

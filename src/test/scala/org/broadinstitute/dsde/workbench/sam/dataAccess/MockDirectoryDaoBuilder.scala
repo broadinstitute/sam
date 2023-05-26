@@ -5,8 +5,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
-import org.mockito.IdiomaticMockito
-import org.mockito.Mockito.RETURNS_SMART_NULLS
+import org.mockito.{IdiomaticMockito, Strictness}
 
 object MockDirectoryDaoBuilder {
   def apply(allUsersGroup: WorkbenchGroup) =
@@ -16,7 +15,7 @@ object MockDirectoryDaoBuilder {
 case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
 
-  val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+  val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](withSettings.strictness(Strictness.Lenient))
 
   mockedDirectoryDAO.loadUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
   mockedDirectoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext]) returns IO(None)

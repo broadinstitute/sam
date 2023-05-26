@@ -6,26 +6,62 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{enabledMapNoTosAccepted, genSamDependencies, genSamRoutes}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockDirectoryDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
+import org.broadinstitute.dsde.workbench.sam.google.MockHttpGoogleDirectoryDaoBuilder
+import org.broadinstitute.dsde.workbench.sam.matchers.BeEnabledInMatcher.beEnabledIn
+import org.broadinstitute.dsde.workbench.sam.matchers.BeForUserMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser, TermsOfServiceAcceptance, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, SamDependencies, TestSupport}
+import org.mockito.scalatest.MockitoSugar
+import org.scalatest.Inside.inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.mockito.scalatest.MockitoSugar
 
 import scala.concurrent.Future
 
 class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+  val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+  val tosService = MockTosServiceBuilder().withAllAccepted().build
+  val adminUser = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
+  override val adminGroupEmail = Generator.genFirecloudEmail.sample.get
 
   "GET /admin/v1/user/{userSubjectId}" should "get the user status of a user (as an admin)" in {
-    val (user, getRoutes) = setUpAdminTest()
-    Get(s"/api/admin/v1/user/${user.id}") ~> getRoutes.route ~> check {
+    // Arrange
+    val otherUser = Generator.genWorkbenchUserBoth.sample.get
+    val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+      .withEnabledUsers(List(adminUser, otherUser))
+      .build
+    val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup)
+      .withAdminUser(adminUser.email)
+      .build
+    val adminRoutes = new TestSamRoutes(
+      null,
+      null,
+      new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService),
+      null,
+      null,
+      adminUser,
+      directoryDAO,
+      cloudExtensions,
+      tosService = tosService
+    )
+
+    // Act and Assert
+    Get(s"/api/admin/v1/user/${otherUser.id}") ~> adminRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), enabledMapNoTosAccepted)
+      inside(responseAs[UserStatus]) { status =>
+        status should beForUser(otherUser)
+        "google" shouldNot beEnabledIn(status)
+        "ldap" should beEnabledIn(status)
+        "allUsersGroup" should beEnabledIn(status)
+        "adminEnabled" should beEnabledIn(status)
+        "tosAccepted" should beEnabledIn(status)
+      }
     }
   }
 
@@ -126,29 +162,21 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
   val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
   val defaultUserId = defaultUser.id
   val defaultUserEmail = defaultUser.email
+  val adminGroupEmail = Generator.genFirecloudEmail.sample.get
 
-  val adminUser = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
+  val adminUserFoo = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
 
   val petSAUser = Generator.genWorkbenchUserServiceAccount.sample.get
   val petSAUserId = petSAUser.id
   val petSAEmail = petSAUser.email
 
-  def setupAdminsGroup(googleDirectoryDAO: MockGoogleDirectoryDAO): Future[WorkbenchEmail] = {
-    val adminGroupEmail = WorkbenchEmail("fc-admins@dev.test.firecloud.org")
-    for {
-      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName("fc-admins"), adminGroupEmail)
-      _ <- googleDirectoryDAO.addMemberToGroup(adminGroupEmail, WorkbenchEmail(adminUser.email.value))
-    } yield adminGroupEmail
-  }
-
   def setUpAdminTest(): (SamUser, SamRoutes) = {
     val googDirectoryDAO = new MockGoogleDirectoryDAO()
-    val adminGroupEmail = runAndWait(setupAdminsGroup(googDirectoryDAO))
     val cloudExtensions = new NoExtensions {
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
     val (_, _, routes) =
-      createTestUser(testUser = adminUser, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO), tosAccepted = true)
+      createTestUser(testUser = adminUserFoo, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO), tosAccepted = true)
     val user = Generator.genWorkbenchUserGoogle.sample.get
     runAndWait(routes.userService.createUser(user, samRequestContext))
     (user.copy(enabled = true), routes) // userService.createUser enables the user
@@ -187,18 +215,16 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
   def withAdminRoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
-    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
+    val googleDirectoryDAO = MockHttpGoogleDirectoryDaoBuilder().build
     val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
     val tosService = MockTosServiceBuilder().withAllAccepted().build
-
-    val adminGroupEmail = runAndWait(setupAdminsGroup(googleDirectoryDAO))
 
     val cloudExtensions = new NoExtensions {
       override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googleDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
 
-    directoryDAO.createUser(adminUser, samRequestContext).unsafeRunSync()
-    tosService.acceptTosStatus(adminUser.id, samRequestContext).unsafeRunSync()
+    directoryDAO.createUser(adminUserFoo, samRequestContext).unsafeRunSync()
+    tosService.acceptTosStatus(adminUserFoo.id, samRequestContext).unsafeRunSync()
 
     val samRoutes = new TestSamRoutes(
       null,
