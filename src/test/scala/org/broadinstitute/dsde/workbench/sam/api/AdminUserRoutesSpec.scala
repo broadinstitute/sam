@@ -8,9 +8,9 @@ import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{enabledMapNoTosAccepted, genSamDependencies, genSamRoutes}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAcceptance, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser, TermsOfServiceAcceptance, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, SamDependencies, TestSupport}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -185,9 +185,11 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
   }
 
   def withAdminRoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
+    val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val directoryDAO = new MockDirectoryDAO()
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+    val tosService = MockTosServiceBuilder().withAllAccepted().build
 
     val adminGroupEmail = runAndWait(setupAdminsGroup(googleDirectoryDAO))
 
