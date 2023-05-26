@@ -275,13 +275,13 @@ class ResourceService(
       resource: FullyQualifiedResourceId,
       authDomains: Set[WorkbenchGroupName],
       samRequestContext: SamRequestContext
-  ): IO[Set[WorkbenchGroupName]] =
-    // check EnvVariable/Feature Flag allows auth domain changes.
+  ): IO[Set[WorkbenchGroupName]] = {
     for {
       currentDomains <- loadResourceAuthDomain(resource, samRequestContext)
       _ <- accessPolicyDAO.setResourceAuthDomain(resource, authDomains.diff(currentDomains), samRequestContext)
       updatedDomains <- loadResourceAuthDomain(resource, samRequestContext)
     } yield updatedDomains
+  }
 
   @VisibleForTesting
   def createPolicy(

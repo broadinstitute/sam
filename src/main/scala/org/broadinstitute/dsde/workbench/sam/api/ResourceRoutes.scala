@@ -366,7 +366,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
 
   def putResourceAuthDomain(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     put {
-      requireAction(resource, SamResourceActions.alterPolicies, samUser.id, samRequestContext) {
+      requireAction(resource, SamResourceActions.readAuthDomain, samUser.id, samRequestContext) {
         entity(as[Set[WorkbenchGroupName]]) { authDomains =>
           complete(resourceService.setResourceAuthDomain(resource, authDomains, samRequestContext).map { response =>
             StatusCodes.OK -> response
