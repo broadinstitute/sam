@@ -6,7 +6,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
-import org.mockito.ArgumentMatchersSugar.{any, argThat}
+import org.mockito.ArgumentMatchersSugar.{any, argThat, eqTo}
 import org.mockito.{IdiomaticMockito, Strictness}
 
 import scala.collection.mutable
@@ -37,8 +37,14 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
     this
   }
 
+  def withAdminUser(samUser: SamUser): MockCloudExtensionsBuilder = withAdminUser(samUser.email)
   def withAdminUser(adminUserEmail: WorkbenchEmail): MockCloudExtensionsBuilder = {
-    mockedCloudExtensions.isWorkbenchAdmin(adminUserEmail) returns Future.successful(true)
+    mockedCloudExtensions.isWorkbenchAdmin(eqTo(adminUserEmail)) returns Future.successful(true)
+    this
+  }
+
+  def withAdminUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
+    samUsers.foreach(u => withAdminUser(u))
     this
   }
 
