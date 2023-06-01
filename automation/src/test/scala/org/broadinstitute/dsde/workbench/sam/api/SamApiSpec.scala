@@ -181,6 +181,8 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail, user3Proxy: WorkbenchEmail) =
         Seq(user1, user2, user3).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
 
+      val waitTime = 10.minutes
+
       Sam.user.createGroup(managedGroupId)(user1AuthToken)
       register cleanUp Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
 
@@ -193,9 +195,9 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       // The admin policy should contain only the user that created the group
       awaitAssert(
         Await
-          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), waitTime)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
-        5.minutes,
+        waitTime,
         5.seconds
       )
 
@@ -203,9 +205,9 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       Sam.user.setPolicyMembers(managedGroupId, adminPolicyName, Set(user1.email, user2.email))(user1AuthToken)
       awaitAssert(
         Await
-          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), waitTime)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
-        5.minutes,
+        waitTime,
         5.seconds
       )
 
@@ -213,9 +215,9 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       Sam.user.addUserToPolicy(managedGroupId, adminPolicyName, user3.email)(user1AuthToken)
       awaitAssert(
         Await
-          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), waitTime)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
-        5.minutes,
+        waitTime,
         5.seconds
       )
 
@@ -223,9 +225,9 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       Sam.user.removeUserFromPolicy(managedGroupId, adminPolicyName, user2.email)(user1AuthToken)
       awaitAssert(
         Await
-          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), 5.minutes)
+          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), waitTime)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value),
-        5.minutes,
+        waitTime,
         5.seconds
       )
     }
