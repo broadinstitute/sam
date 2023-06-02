@@ -128,6 +128,8 @@ class SamProviderSpec
   lazy val pactBrokerPass: String = sys.env.getOrElse("PACT_BROKER_PASSWORD", "")
   // Provider branch, sha
   lazy val branch: String = sys.env.getOrElse("PROVIDER_BRANCH", "")
+  println("branch=")
+  println(branch)
   lazy val gitSha: String = sys.env.getOrElse("PROVIDER_SHA", "")
   // Consumer name, bran, sha (used for webhook events only)
   lazy val consumerName: Option[String] = sys.env.get("CONSUMER_NAME")
