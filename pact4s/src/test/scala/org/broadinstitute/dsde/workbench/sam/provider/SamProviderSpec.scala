@@ -200,7 +200,7 @@ class SamProviderSpec
       )
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-      .withPendingPacts(true)
+      .withPendingPactsEnabled(ProviderTags("develop", "iv-pact4s-enable-pending"))
   ).withHost("localhost")
     .withPort(8080)
     // .withRequestFiltering(requestFilter)
