@@ -233,7 +233,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
     }
 
     "should only synchronize the intersection group for policies constrained by auth domains" taggedAs Tags.ExcludeInAlpha in {
-      val awaitTime = 10.minutes
+      val waitTime = 10.minutes
       val authDomainId = UUID.randomUUID.toString
       val Seq(inPolicyUser: Credentials, inAuthDomainUser: Credentials, inBothUser: Credentials) = UserPool.chooseStudents(3)
       val inBothUserAuthToken = inBothUser.makeAuthToken()
@@ -255,7 +255,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
         Await
           .result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
-        awaitTime,
+        waitTime,
         5.seconds
       )
 
@@ -264,7 +264,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
         Await
           .result(googleDirectoryDAO.listGroupMembers(authDomainAdminEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value, inAuthDomainUserProxy.value),
-        awaitTime,
+        waitTime,
         5.seconds
       )
 
@@ -291,7 +291,7 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
         Await
           .result(googleDirectoryDAO.listGroupMembers(resourceOwnerEmail.head), 5.minutes)
           .getOrElse(Set.empty) should contain theSameElementsAs Set(inBothUserProxy.value),
-        awaitTime,
+        waitTime,
         5.seconds
       )
     }
