@@ -40,9 +40,6 @@ class SamProviderSpec
     with LazyLogging
     with MockitoSugar {
 
-  // Provider tags. For use with Pact Broker Pending feature
-  val providerTags = List("develop", "main")
-
   // The default login user
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
@@ -201,7 +198,7 @@ class SamProviderSpec
       )
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-      .withPendingPactsEnabled(ProviderTags.fromList(providerTags).get)
+      .withPendingPactsEnabled(ProviderTags(branch))
   ).withHost("localhost")
     .withPort(8080)
     // .withRequestFiltering(requestFilter)
