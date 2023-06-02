@@ -128,8 +128,6 @@ class SamProviderSpec
   lazy val pactBrokerPass: String = sys.env.getOrElse("PACT_BROKER_PASSWORD", "")
   // Provider branch, sha
   lazy val branch: String = sys.env.getOrElse("PROVIDER_BRANCH", "")
-  println("branch=")
-  println(branch)
   lazy val gitSha: String = sys.env.getOrElse("PROVIDER_SHA", "")
   // Consumer name, bran, sha (used for webhook events only)
   lazy val consumerName: Option[String] = sys.env.get("CONSUMER_NAME")
@@ -200,7 +198,7 @@ class SamProviderSpec
       )
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-      .withPendingPactsEnabled(ProviderTags("develop", "iv-pact4s-enable-pending"))
+      .withPendingPactsEnabled(ProviderTags("develop"))
   ).withHost("localhost")
     .withPort(8080)
     // .withRequestFiltering(requestFilter)
