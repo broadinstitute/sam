@@ -198,6 +198,7 @@ class SamProviderSpec
       )
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
+      .withPendingPactsEnabled(ProviderTags(gitSha))
   ).withHost("localhost")
     .withPort(8080)
     // .withRequestFiltering(requestFilter)

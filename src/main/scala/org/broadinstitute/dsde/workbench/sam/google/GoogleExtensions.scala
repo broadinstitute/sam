@@ -36,6 +36,7 @@ import spray.json._
 import java.io.ByteArrayInputStream
 import java.net.URL
 import java.util.Date
+import java.util.concurrent.TimeUnit
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -80,6 +81,9 @@ class GoogleExtensions(
   private[google] val allUsersGroupEmail = WorkbenchEmail(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"
   )
+
+  private val userProjectQueryParam = "userProject"
+  private val requestedByQueryParam = "requestedBy"
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
@@ -641,12 +645,31 @@ class GoogleExtensions(
     )
   }
 
-  def getSignedUrl(samUser: SamUser, project: GoogleProject, bucket: GcsBucketName, name: GcsBlobName, samRequestContext: SamRequestContext): IO[URL] =
+  def getSignedUrl(
+      samUser: SamUser,
+      project: GoogleProject,
+      bucket: GcsBucketName,
+      name: GcsBlobName,
+      duration: Option[Long],
+      samRequestContext: SamRequestContext
+  ): IO[URL] =
     for {
       petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
       petKey <- googleKeyCache.getKey(petServiceAccount)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
-      url <- googleStorageService.getSignedBlobUrl(bucket, name, serviceAccountCredentials).compile.lastOrError
+      timeInMinutes = duration.getOrElse(60L)
+      queryParams = Map(userProjectQueryParam -> project.value, requestedByQueryParam -> samUser.email.value)
+      url <- googleStorageService
+        .getSignedBlobUrl(
+          bucket,
+          name,
+          serviceAccountCredentials,
+          expirationTime = timeInMinutes,
+          expirationTimeUnit = TimeUnit.MINUTES,
+          queryParams = queryParams
+        )
+        .compile
+        .lastOrError
     } yield url
 
   override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)

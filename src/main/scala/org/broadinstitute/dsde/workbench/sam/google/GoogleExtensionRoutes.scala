@@ -153,7 +153,14 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                       entity(as[SignedUrlRequest]) { request =>
                         complete {
                           googleExtensions
-                            .getSignedUrl(samUser, GoogleProject(project), GcsBucketName(request.bucketName), GcsBlobName(request.blobName), samRequestContext)
+                            .getSignedUrl(
+                              samUser,
+                              GoogleProject(project),
+                              GcsBucketName(request.bucketName),
+                              GcsBlobName(request.blobName),
+                              request.duration,
+                              samRequestContext
+                            )
                             .map { signedUrl =>
                               StatusCodes.OK -> JsString(signedUrl.toString)
                             }
