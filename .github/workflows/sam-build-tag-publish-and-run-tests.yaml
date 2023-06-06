@@ -192,7 +192,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt}}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}", "test-group-name": "${{ matrix.test-group.group_name }}", "test-command": "${{ env.rawls_base_test_entrypoint }} ${{ matrix.test-group.tag }}", "java-version": "17" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}", "test-group-name": "${{ matrix.test-group.group_name }}", "test-command": "${{ env.rawls_base_test_entrypoint }} ${{ matrix.test-group.tag }}", "java-version": "17" }'
 
   orch-swat-test-job:
     strategy:
