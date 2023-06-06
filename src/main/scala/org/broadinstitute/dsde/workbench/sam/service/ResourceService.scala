@@ -277,10 +277,10 @@ class ResourceService(
       samRequestContext: SamRequestContext
   ): IO[Set[WorkbenchGroupName]] = {
     for {
-      currentDomains <- loadResourceAuthDomain(resource, samRequestContext)
-      _ <- accessPolicyDAO.setResourceAuthDomain(resource, authDomains.diff(currentDomains), samRequestContext)
-      updatedDomains <- loadResourceAuthDomain(resource, samRequestContext)
-    } yield updatedDomains
+      _ <- accessPolicyDAO.setResourceAuthDomain(resource, authDomains, samRequestContext)
+    } yield ()
+
+    loadResourceAuthDomain(resource, samRequestContext)
   }
 
   @VisibleForTesting

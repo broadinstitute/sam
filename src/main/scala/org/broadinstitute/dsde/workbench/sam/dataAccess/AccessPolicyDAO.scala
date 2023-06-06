@@ -25,7 +25,7 @@ trait AccessPolicyDAO {
       resource: FullyQualifiedResourceId,
       authDomains: Set[WorkbenchGroupName],
       samRequestContext: SamRequestContext
-  ): IO[LoadResourceAuthDomainResult]
+  ): IO[Unit]
 
   def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
       groupId: WorkbenchGroupIdentity,
