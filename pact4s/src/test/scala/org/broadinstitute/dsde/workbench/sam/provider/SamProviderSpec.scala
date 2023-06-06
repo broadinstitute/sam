@@ -109,24 +109,22 @@ class SamProviderSpec
 
   override def beforeAll(): Unit = {
     println("Initial bind")
-    startSam.unsafeToFuture()
+    bindingFuture = startSam.unsafeToFuture()
     startSam.start
     println("Initial bind suceeded")
     sleep(5000)
   }
 
-  def startSam: IO[Http.ServerBinding] = {
-    bindingFuture = Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route)
+  def startSam: IO[Http.ServerBinding] =
     for {
       binding <- IO
-        .fromFuture(IO(bindingFuture))
+        .fromFuture(IO(Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route)))
         .onError { t: Throwable =>
           IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
       _ <- IO.fromFuture(IO(binding.whenTerminated))
       _ <- IO(system.terminate())
     } yield binding
-  }
 
   def stopSam: Http.ServerBinding = {
     // val onceAllConnectionsTerminated: Future[Http.HttpTerminated] =
@@ -247,8 +245,8 @@ class SamProviderSpec
             )
           }
           stopSam
-          genSamDependencies.statusService = statusService
-          startSam
+        // genSamDependencies.statusService = statusService
+        // startSam
         case ProviderState("Sam is ok", params) =>
           println("Detected Sam is ok state")
           val statusService = mock[StatusService]
@@ -268,8 +266,8 @@ class SamProviderSpec
             )
           }
           stopSam
-          genSamDependencies.statusService = statusService
-          startSam
+        // genSamDependencies.statusService = statusService
+        // startSam
         case _ =>
           logger.debug("other state")
       }
