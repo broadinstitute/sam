@@ -28,8 +28,8 @@ import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
 import java.lang.Thread.sleep
+import scala.concurrent.duration.{Duration, DurationInt}
 import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 
 class SamProviderSpec
     extends AnyFlatSpec
@@ -128,7 +128,7 @@ class SamProviderSpec
     } yield binding
   }
 
-  def restartSam(binding: Future[Http.ServerBinding], atMost: Duration, hardDeadline: FiniteDuration): IO[Http.ServerBinding] = {
+  def stopSam: Http.ServerBinding = {
     // val onceAllConnectionsTerminated: Future[Http.HttpTerminated] =
     //  Await
     //    .result(binding, atMost)
@@ -137,12 +137,12 @@ class SamProviderSpec
     // onceAllConnectionsTerminated.flatMap { _ =>
     //  system.terminate()
     // }
+    println("Initial unbind")
     bindingFuture
       .flatMap(_.unbind())
       .onComplete(_ => system.terminate())
+    println("Initial terminate")
     Await.result(bindingFuture, Duration.Inf)
-
-    startSam
   }
 
   lazy val pactBrokerUrl: String = sys.env.getOrElse("PACT_BROKER_URL", "")
@@ -246,8 +246,9 @@ class SamProviderSpec
               )
             )
           }
+          stopSam
           genSamDependencies.statusService = statusService
-          restartSam(bindingFuture, 10.seconds, 3.seconds)
+          startSam
         case ProviderState("Sam is ok", params) =>
           println("Detected Sam is ok state")
           val statusService = mock[StatusService]
@@ -266,8 +267,9 @@ class SamProviderSpec
               )
             )
           }
+          stopSam
           genSamDependencies.statusService = statusService
-          restartSam(bindingFuture, 10.seconds, 3.seconds)
+          startSam
         case _ =>
           logger.debug("other state")
       }
