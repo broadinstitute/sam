@@ -108,10 +108,9 @@ class SamProviderSpec
   }
 
   override def beforeAll(): Unit = {
-    println("Initial bind")
     bindingFuture = startSam.unsafeToFuture()
     startSam.start
-    println("Initial bind suceeded")
+    println("Initial bind succeeded")
     sleep(5000)
   }
 
@@ -127,19 +126,10 @@ class SamProviderSpec
     } yield binding
 
   def stopSam: Http.ServerBinding = {
-    // val onceAllConnectionsTerminated: Future[Http.HttpTerminated] =
-    //  Await
-    //    .result(binding, atMost)
-    //    .terminate(hardDeadline = hardDeadline)
-
-    // onceAllConnectionsTerminated.flatMap { _ =>
-    //  system.terminate()
-    // }
-    println("Initial unbind")
     bindingFuture
       .flatMap(_.unbind())
       .onComplete(_ => system.terminate())
-    println("Initial terminate")
+    println("system terminate")
     Await.result(bindingFuture, Duration.Inf)
   }
 
@@ -245,8 +235,11 @@ class SamProviderSpec
             )
           }
           stopSam
-        // genSamDependencies.statusService = statusService
-        // startSam
+          genSamDependencies.statusService = statusService
+          bindingFuture = startSam.unsafeToFuture()
+          startSam.start
+          println("bind succeeded")
+          sleep(5000)
         case ProviderState("Sam is ok", params) =>
           println("Detected Sam is ok state")
           val statusService = mock[StatusService]
@@ -266,8 +259,11 @@ class SamProviderSpec
             )
           }
           stopSam
-        // genSamDependencies.statusService = statusService
-        // startSam
+          genSamDependencies.statusService = statusService
+          bindingFuture = startSam.unsafeToFuture()
+          startSam.start
+          println("bind succeeded")
+          sleep(5000)
         case _ =>
           logger.debug("other state")
       }
