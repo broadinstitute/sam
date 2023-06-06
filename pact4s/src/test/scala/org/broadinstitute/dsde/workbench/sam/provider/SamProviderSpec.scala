@@ -128,7 +128,7 @@ class SamProviderSpec
     } yield binding
   }
 
-  def restartSam(binding: IO[Future[Http.ServerBinding]], atMost: Duration, hardDeadline: FiniteDuration): IO[Http.ServerBinding] = {
+  def restartSam(binding: Future[Http.ServerBinding], atMost: Duration, hardDeadline: FiniteDuration): IO[Http.ServerBinding] = {
     // val onceAllConnectionsTerminated: Future[Http.HttpTerminated] =
     //  Await
     //    .result(binding, atMost)
@@ -247,7 +247,7 @@ class SamProviderSpec
             )
           }
           genSamDependencies.statusService = statusService
-          restartSam(binding, 10.seconds, 3.seconds)
+          restartSam(bindingFuture, 10.seconds, 3.seconds)
         case ProviderState("Sam is ok", params) =>
           println("Detected Sam is ok state")
           val statusService = mock[StatusService]
@@ -267,7 +267,7 @@ class SamProviderSpec
             )
           }
           genSamDependencies.statusService = statusService
-          restartSam(binding, 10.seconds, 3.seconds)
+          restartSam(bindingFuture, 10.seconds, 3.seconds)
         case _ =>
           logger.debug("other state")
       }
