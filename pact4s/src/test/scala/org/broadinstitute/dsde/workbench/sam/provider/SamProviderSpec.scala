@@ -28,7 +28,7 @@ import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
 import java.lang.Thread.sleep
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 
 class SamProviderSpec
@@ -43,7 +43,7 @@ class SamProviderSpec
   // The default login user
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
-  var binding: Future[Http.ServerBinding] = _
+  var binding: IO[Future[Http.ServerBinding]] = _
 
   def genSamDependencies: MockSamDependencies = {
     // Minimally viable Sam service and states for consumer verification
@@ -108,16 +108,18 @@ class SamProviderSpec
   }
 
   override def beforeAll(): Unit = {
+    println("Initial bind")
     startSam.unsafeToFuture()
     startSam.start
+    println("Initial bind suceeded")
     sleep(5000)
   }
 
   def startSam: IO[Http.ServerBinding] = {
-    binding = Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route)
+    binding = IO(Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route))
     for {
       binding <- IO
-        .fromFuture(IO(binding))
+        .fromFuture(binding)
         .onError { t: Throwable =>
           IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
@@ -126,16 +128,16 @@ class SamProviderSpec
     } yield binding
   }
 
-  def restartSam(binding: Future[Http.ServerBinding], atMost: Duration, hardDeadline: FiniteDuration): IO[Http.ServerBinding] = {
-    val onceAllConnectionsTerminated: Future[Http.HttpTerminated] =
-      Await
-        .result(binding, atMost)
-        .terminate(hardDeadline = hardDeadline)
+  def restartSam(binding: IO[Future[Http.ServerBinding]], atMost: Duration, hardDeadline: FiniteDuration): IO[Http.ServerBinding] = {
+    // val onceAllConnectionsTerminated: Future[Http.HttpTerminated] =
+    //  Await
+    //    .result(binding, atMost)
+    //    .terminate(hardDeadline = hardDeadline)
 
-    onceAllConnectionsTerminated.flatMap { _ =>
-      system.terminate()
-    }
-
+    // onceAllConnectionsTerminated.flatMap { _ =>
+    //  system.terminate()
+    // }
+    system.terminate()
     startSam
   }
 
