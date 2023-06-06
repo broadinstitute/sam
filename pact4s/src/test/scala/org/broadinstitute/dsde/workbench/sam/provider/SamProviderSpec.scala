@@ -211,6 +211,39 @@ class SamProviderSpec
       StateManagementFunction {
         case ProviderState("user exists", params) =>
           logger.debug("user exists")
+        case ProviderState("Sam is not ok", params) =>
+          println("Detected Sam is not ok state")
+          val statusService = mock[StatusService]
+          when {
+            statusService.getStatus()
+          } thenReturn {
+            Future.successful(
+              StatusCheckResponse(
+                ok = false,
+                Map()
+              )
+            )
+          }
+          genSamDependencies.statusService = statusService
+        case ProviderState("Sam is ok", params) =>
+          println("Detected Sam is ok state")
+          val statusService = mock[StatusService]
+          when {
+            statusService.getStatus()
+          } thenReturn {
+            Future.successful(
+              StatusCheckResponse(
+                ok = true,
+                Map(
+                  Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
+                  Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
+                  Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
+                  Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
+                )
+              )
+            )
+          }
+          genSamDependencies.statusService = statusService
         case _ =>
           logger.debug("other state")
       }
