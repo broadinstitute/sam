@@ -28,7 +28,7 @@ import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
 import java.lang.Thread.sleep
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 
 class SamProviderSpec
@@ -43,7 +43,7 @@ class SamProviderSpec
   // The default login user
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
-  var binding: IO[Future[Http.ServerBinding]] = _
+  var bindingFuture: Future[Http.ServerBinding] = _
 
   def genSamDependencies: MockSamDependencies = {
     // Minimally viable Sam service and states for consumer verification
@@ -116,10 +116,10 @@ class SamProviderSpec
   }
 
   def startSam: IO[Http.ServerBinding] = {
-    binding = IO(Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route))
+    bindingFuture = Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route)
     for {
       binding <- IO
-        .fromFuture(binding)
+        .fromFuture(IO(bindingFuture))
         .onError { t: Throwable =>
           IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
@@ -137,7 +137,11 @@ class SamProviderSpec
     // onceAllConnectionsTerminated.flatMap { _ =>
     //  system.terminate()
     // }
-    system.terminate()
+    bindingFuture
+      .flatMap(_.unbind())
+      .onComplete(_ => system.terminate())
+    Await.result(bindingFuture, Duration.Inf)
+
     startSam
   }
 
