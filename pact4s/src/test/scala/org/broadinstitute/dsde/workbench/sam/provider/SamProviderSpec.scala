@@ -28,8 +28,8 @@ import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
 import java.lang.Thread.sleep
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 
 class SamProviderSpec
     extends AnyFlatSpec
@@ -43,6 +43,7 @@ class SamProviderSpec
   // The default login user
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
+  var binding: Future[Http.ServerBinding] = _
 
   def genSamDependencies: MockSamDependencies = {
     // Minimally viable Sam service and states for consumer verification
@@ -112,16 +113,31 @@ class SamProviderSpec
     sleep(5000)
   }
 
-  def startSam: IO[Http.ServerBinding] =
+  def startSam: IO[Http.ServerBinding] = {
+    binding = Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route)
     for {
       binding <- IO
-        .fromFuture(IO(Http().newServerAt("localhost", 8080).bind(genSamRoutes(genSamDependencies, defaultSamUser).route)))
+        .fromFuture(IO(binding))
         .onError { t: Throwable =>
           IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
       _ <- IO.fromFuture(IO(binding.whenTerminated))
       _ <- IO(system.terminate())
     } yield binding
+  }
+
+  def restartSam(binding: Future[Http.ServerBinding], atMost: Duration, hardDeadline: FiniteDuration): IO[Http.ServerBinding] = {
+    val onceAllConnectionsTerminated: Future[Http.HttpTerminated] =
+      Await
+        .result(binding, atMost)
+        .terminate(hardDeadline = hardDeadline)
+
+    onceAllConnectionsTerminated.flatMap { _ =>
+      system.terminate()
+    }
+
+    startSam
+  }
 
   lazy val pactBrokerUrl: String = sys.env.getOrElse("PACT_BROKER_URL", "")
   lazy val pactBrokerUser: String = sys.env.getOrElse("PACT_BROKER_USERNAME", "")
@@ -225,6 +241,7 @@ class SamProviderSpec
             )
           }
           genSamDependencies.statusService = statusService
+          restartSam(binding, 10.seconds, 3.seconds)
         case ProviderState("Sam is ok", params) =>
           println("Detected Sam is ok state")
           val statusService = mock[StatusService]
@@ -244,6 +261,7 @@ class SamProviderSpec
             )
           }
           genSamDependencies.statusService = statusService
+          restartSam(binding, 10.seconds, 3.seconds)
         case _ =>
           logger.debug("other state")
       }
