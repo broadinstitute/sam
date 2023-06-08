@@ -278,9 +278,8 @@ class ResourceService(
   ): IO[Set[WorkbenchGroupName]] = {
     for {
       _ <- accessPolicyDAO.setResourceAuthDomain(resource, authDomains, samRequestContext)
-    } yield ()
-
-    loadResourceAuthDomain(resource, samRequestContext)
+      authDomains <- loadResourceAuthDomain(resource, samRequestContext)
+    } yield authDomains
   }
 
   @VisibleForTesting
