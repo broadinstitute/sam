@@ -18,6 +18,7 @@ jobs:
       id-token: 'write'
     outputs:
       custom-version-json: ${{ steps.render-sam-version.outputs.custom-version-json }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: 'actions/checkout@v3'
 
@@ -30,24 +31,32 @@ jobs:
           RELEASE_BRANCHES: develop
           WITH_V: true
 
+      - name: debug outputs
+        run: |-
+          echo "github.ref ${{ github.ref }}"
+          echo "github.ref_name ${{ github.ref_name }}"
+          echo "GITHUB_REF_NAME ${GITHUB_REF_NAME}"
+          echo "github.ref_type ${{ github.ref_type }}"
+          echo "github.head_ref ${{ github.head_ref }}"
+          echo "github ${{ github }}"
+
+      # we need this because github can't actually provide the branch name reliably
+      # https://github.com/orgs/community/discussions/5251
       - name: Extract branch
         id: extract-branch
         run: |
-          GITHUB_EVENT_NAME=${{ github.event_name }}
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            GITHUB_REF=${{ github.ref }}
-            GITHUB_SHA=${{ github.sha }}
-          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            GITHUB_REF=refs/heads/${{ github.head_ref }}
-            GITHUB_SHA=${{ github.event.pull_request.head.sha }}
+          if [[ '${{ github.event_name }}' == 'push' ]]; then
+            BRANCH_NAME=${{ github.ref_name }}
+          elif [[ '${{ github.event_name }}' == 'pull_request' ]]; then
+            BRANCH_NAME=${{ github.head_ref }}
           else
             echo "Failed to extract branch information"
             exit 1
           fi
 
-          echo "ref=$GITHUB_REF" >> $GITHUB_OUTPUT
-          echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
+          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
+      # Builds Sam elsewhere to protect secrets.  Upon success, will tag the commit in git.
       - name: dispatch build to terra-github-workflows
         uses: broadinstitute/workflow-dispatch@v3
         with:
@@ -55,7 +64,7 @@ jobs:
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.ref }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
+          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.name }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
 
       - name: Render Sam version
         id: render-sam-version
@@ -64,6 +73,31 @@ jobs:
         run: |
           echo "$GITHUB_CONTEXT"
           echo 'custom-version-json={\"sam\":{\"appVersion\":\"${{ steps.tag.outputs.tag }}\"}}' >> $GITHUB_OUTPUT
+
+  report-to-sherlock:
+    # Report new Sam version to Broad DevOps
+    uses: broadinstitute/sherlock/.github/workflows/client-report-app-version.yaml@main
+    needs: [ sam-build-tag-publish-job ]
+    with:
+      new-version: ${{ needs.sam-build-tag-publish-job.outputs.tag }}
+      chart-name: 'sam'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+  set-version-in-dev:
+    # Put new Sam version in Broad dev environment
+    uses: broadinstitute/sherlock/.github/workflows/client-set-environment-app-version.yaml@main
+    needs: [ sam-build-tag-publish-job, report-to-sherlock ]
+    if: ${{ github.ref_name == 'develop' }}
+    with:
+      new-version: ${{ needs.sam-build-tag-publish-job.outputs.tag }}
+      chart-name: 'sam'
+      environment-name: 'dev'
+    secrets:
+      sync-git-token: ${{ secrets.BROADBOT_TOKEN }}
+    permissions:
+      id-token: 'write'
 
   create-bee-workflow:
     strategy:
@@ -132,12 +166,61 @@ jobs:
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}" }'
 
+  rawls-swat-test-job:
+    strategy:
+      matrix:
+        terra-env: [ dev ] # what versions of apps do we use to emulate types of environments
+        testing-env: [ qa ] # what env resources to use, e.g. SA keys
+        test-group: [
+          { group_name: workspaces, tag: "-n org.broadinstitute.dsde.test.api.AuthDomainsTest -n org.broadinstitute.dsde.test.api.BillingsTest -n org.broadinstitute.dsde.test.api.WorkspacesTest" },
+          { group_name: analysis_journeys, tag: "-n org.broadinstitute.dsde.test.api.DataRepoSnapshotsTest" },
+          { group_name: workflows, tag: "-n org.broadinstitute.dsde.test.api.MethodsTest" }
+        ] # Rawls test groups
+    runs-on: ubuntu-latest
+    needs: [sam-smoke-test-job]
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: dispatch to terra-github-workflows
+        env:
+          rawls_base_test_entrypoint: "testOnly -- -l ProdTest -l NotebooksCanaryTest"
+        uses: broadinstitute/workflow-dispatch@v3
+        with:
+          workflow: .github/workflows/rawls-swat-tests.yaml
+          repo: broadinstitute/terra-github-workflows
+          ref: refs/heads/main
+          token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
+          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}", "test-group-name": "${{ matrix.test-group.group_name }}", "test-command": "${{ env.rawls_base_test_entrypoint }} ${{ matrix.test-group.tag }}", "java-version": "17" }'
+
+  orch-swat-test-job:
+    strategy:
+      matrix:
+        terra-env: [ dev ] # what versions of apps do we use to emulate types of environments
+        testing-env: [ qa ] # what env resources to use, e.g. SA keys
+    runs-on: ubuntu-latest
+    needs: [sam-smoke-test-job]
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: dispatch to terra-github-workflows
+        uses: broadinstitute/workflow-dispatch@v3
+        with:
+          workflow: .github/workflows/orch-swat-tests.yaml
+          repo: broadinstitute/terra-github-workflows
+          ref: refs/heads/main
+          token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
+          # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}" }'
+
   destroy-bee-workflow:
     strategy:
       matrix:
         terra-env: [ dev ] # what versions of apps do we use to emulate types of environments
     runs-on: ubuntu-latest
-    needs: [sam-swat-test-job]
+    needs: [sam-swat-test-job, rawls-swat-test-job, orch-swat-test-job]
     if: always() # always run to confirm bee is destroyed
     permissions:
       contents: 'read'
