@@ -69,6 +69,8 @@ on:
 
 env:
   PACT_BROKER_URL: https://pact-broker.dsp-eng-tools.broadinstitute.org
+  COURSIER_CACHE: $HOME/.cache
+  SBT_CACHE: $HOME/.sbt
 
 jobs:
   verify-consumer-pact:
@@ -142,11 +144,123 @@ jobs:
             echo "git branch"
             git branch
           else
-          echo "git checkout ${{ env.PROVIDER_BRANCH }}"
-            git checkout ${{ env.PROVIDER_BRANCH }}
+            if [[ "${{ github.event_name }}" == "push" ]]; then
+              echo "git checkout ${{ env.CURRENT_BRANCH }}"
+              git checkout ${{ env.CURRENT_BRANCH }}
+            else
+              echo "git checkout ${{ env.CURRENT_BRANCH }} ${{ env.CURRENT_SHA }}"
+              git checkout -b ${{ env.CURRENT_BRANCH }} ${{ env.CURRENT_SHA }}
+            fi
           fi
           echo "git rev-parse HEAD"
           git rev-parse HEAD
+
+      - name: Setup envvars for Pact Broker
+        run: |
+          echo "PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }}" >> $GITHUB_ENV
+          echo "PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }}" >> $GITHUB_ENV
+
+      # Caching Coursier
+      # Recent sbt versions use Coursier instead of Ivy for dependency management.
+      # The .coursier cache in the sbtscala docker container is located under its .cache directory, which is mounted to the host $PWD/.cache dir.
+      # The hashFiles function calculates the hash based on the file contents from
+      #   .sbt, .scala, build.properties
+      # under the project root directory.
+      #
+      # Any changes to these files will result in a different cache key, triggering a cache update.
+      - name: Coursier cache
+        id: coursier-cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache
+          key: sam-${{ runner.os }}-coursier-cache-${{ hashFiles('**/*.sbt', '**/project/*.scala', '**/project/build.properties') }}
+
+      - name: Check coursier-cache hit
+        run: |
+          if [ "${{ steps.coursier-cache.outputs.cache-hit }}" == 'true' ]; then
+            echo "Coursier cache ${{ env.COURSIER_CACHE }} restored!"
+          else
+            echo "Coursier cache ${{ env.COURSIER_CACHE }} needs update!"
+          fi
+
+      # Caching .sbt directory
+      # The hashFiles function calculates the hash based on the file contents from all
+      #  .sbt, .scala
+      # files under the project root directory.
+      #
+      # In general, you would include all relevant files that affect the build,
+      # such as build definition files (build.sbt), project files (*.scala),
+      # and any other files that impact the build process.
+      #
+      # Any changes to these files will result in a different cache key, triggering a cache update.
+      - name: Cache .sbt directory
+        id: sbt-cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.sbt
+          key: sam-${{ runner.os }}-sbt-cache-${{ hashFiles('**/*.sbt', '**/*.scala') }}
+
+      - name: Check sbt cache hit
+        run: |
+          if [ "${{ steps.sbt-cache.outputs.cache-hit }}" == 'true' ]; then
+            echo "${{ env.SBT_CACHE }} cache restored!"
+          else
+            echo "${{ env.SBT_CACHE }} cache needs update!"
+          fi
+
+      # Caching sbt target directories
+      # The hashFiles function calculates the hash based on the file contents from all
+      #  .sbt, src/, project/
+      # files under the project root directory.
+      #
+      # In general, you would include all relevant files that affect the build targets,
+      # such as build definition files (build.sbt), project files (*.scala),
+      # and any other files that impact the build process.
+      #
+      # Any changes to these files will result in a different cache key, triggering a cache update.
+      #
+      # Caching target directories offers significant performance improvements by avoiding
+      # unnecessary compilation and task executions, enabling incremental compilation, and ensuring
+      # consistent and reproducible build outputs.
+      - name: Cache sbt targets
+        id: sbt-targets
+        uses: actions/cache@v3
+        with:
+          path: |
+            **/target
+          key: sam-${{ runner.os }}-sbt-targets-${{ hashFiles('*.sbt', 'src/**/*', '**/project/*.sbt', '**/project/*.scala', '**/project/build.properties') }}
+
+      - name: Check sbt targets cache hit
+        run: |
+          if [ "${{ steps.sbt-targets.outputs.cache-hit }}" == 'true' ]; then
+            echo "sbt targets restored!"
+          else
+            echo "sbt targets need update!"
+          fi
+
+      # Caching sbt pact4s target directory
+      # The hashFiles function calculates the hash based on the file contents from all
+      #  pact4s/src/
+      # files under the project root directory.
+      #
+      # This is similar to sbt-targets cache but limited to pact4s targets.
+      - name: Cache pact4s targets
+        id: sbt-pact4s-targets
+        uses: actions/cache@v3
+        with:
+          path: |
+            pact4s/**/target
+          key: sam-${{ runner.os }}-sbt-pact4s-targets-${{ hashFiles('pact4s/src/**/*') }}
+
+      - name: Check sbt pact4s targets cache hit
+        run: |
+          if [ "${{ steps.sbt-pact4s-targets.outputs.cache-hit }}" == 'true' ]; then
+            echo "sbt pact4s targets restored!"
+          else
+            echo "sbt pact4s targets need update!"
+          fi
 
       - name: Verify consumer pacts and publish verification status to Pact Broker
         id: verification-test
@@ -160,20 +274,26 @@ jobs:
           echo "env.PROVIDER_SHA=${{ env.PROVIDER_SHA }}       # This reflects the provider version for pact verification"
           echo "env.CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} # This reflects the consumer branch for pact verification (generated by Pact Broker)"
           echo "env.CONSUMER_SHA=${{ env.CONSUMER_SHA }}       # This reflects the consumer version for pact verification (generated by Pact Broker)"
-          docker run --rm -v $PWD:/working \
-                          -v jar-cache:/root/.ivy \
-                          -v jar-cache:/root/.ivy2 \
-                          -w /working \
+
+          # Refer to https://github.com/sbt/docker-sbt on this Docker image
+          # Recent sbt versions use Coursier instead of Ivy for dependency management.
+          # On Linux, the location is
+          #     sbt "show csrCacheDirectory"
+          # with a default value of ~/.cache/coursier/v1
+          docker run --rm -w /working/sam \
+                          -v "$PWD":/working/sam \
+                          -v ${{ env.COURSIER_CACHE }}:/root/.cache \
+                          -v ${{ env.SBT_CACHE }}:/root/.sbt \
                           -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
                           -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
                           -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \
                           -e CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} \
                           -e CONSUMER_SHA=${{ env.CONSUMER_SHA }} \
                           -e PACT_BROKER_URL=${{ env.PACT_BROKER_URL }} \
-                          -e PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }} \
-                          -e PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }} \
+                          -e PACT_BROKER_USERNAME=${{ env.PACT_BROKER_USERNAME }} \
+                          -e PACT_BROKER_PASSWORD=${{ env.PACT_BROKER_PASSWORD }} \
                           sbtscala/scala-sbt:openjdk-17.0.2_1.7.2_2.13.10 \
-                          sbt "project pact4s" "testOnly *SamProviderSpec"
+                          sbt "set scalafmtOnCompile := false" "project pact4s" "testOnly *SamProviderSpec"
 
   can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest

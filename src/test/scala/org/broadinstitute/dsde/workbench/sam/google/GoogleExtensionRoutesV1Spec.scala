@@ -13,6 +13,8 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.concurrent.ScalaFutures
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import scala.concurrent.duration._
 
 /** Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
@@ -244,6 +246,35 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     // create a pet service account key
     Get(s"/api/google/v1/petServiceAccount/myproject/I-do-not-exist@foo.bar") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  "POST /api/google/v1/user/petServiceAccount/{project}/signedUrlForBlob" should "200 with a signed url" in {
+    val (user, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt")
+    val urlEncodedEmail = URLEncoder.encode(user.email.value, StandardCharsets.UTF_8)
+
+    Post(s"/api/google/v1/user/petServiceAccount/$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should include("my-bucket/my-folder/my-object.txt")
+      responseAs[String] should include(s"userProject=$projectName")
+      responseAs[String] should include(s"requestedBy=$urlEncodedEmail")
+    }
+  }
+
+  it should "set a duration for a signed url" in {
+    val (_, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt", Some(1))
+
+    Post(s"/api/google/v1/user/petServiceAccount/$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should include("X-Goog-Expires=60")
+    }
+  }
+
+  it should "404 when the user doesn't have access to the project" in {
+    val (_, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt")
+    Post(s"/api/google/v1/user/petServiceAccount/not-$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 }

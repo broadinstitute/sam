@@ -45,7 +45,7 @@ class GooglePubSubMonitor(
     */
   protected def init: IO[Unit] = for {
     _ <- IO.fromFuture(IO(pubSubDao.createTopic(config.topic)))
-    _ <- IO.fromFuture(IO(pubSubDao.createSubscription(config.topic, config.subscription)))
+    _ <- IO.fromFuture(IO(pubSubDao.createSubscription(config.topic, config.subscription, None)))
   } yield ()
 }
 
