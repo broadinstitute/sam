@@ -19,6 +19,7 @@ import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, Subsy
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
 import org.mockito.scalatest.MockitoSugar
+import org.mockito.stubbing.ScalaOngoingStubbing
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
@@ -74,21 +75,36 @@ class SamProviderSpec
   val tosService = MockTosServiceBuilder().withAllAccepted().build
   val azureService = mock[AzureService]
   val statusService = mock[StatusService]
-  when {
-    statusService.getStatus()
-  } thenReturn {
-    Future.successful(
-      StatusCheckResponse(
-        ok = true,
-        Map(
-          Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
-          Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
-          Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
-          Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
+
+  val nonCriticalSubsystemsStatus = Map(
+    Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
+    Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
+    Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
+    Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
+  )
+
+  private def criticalSubsystemsStatus(healthy: Boolean) = StatusService.criticalSubsystems.map(key => key -> SubsystemStatus(ok = healthy, None)).toMap
+
+  // We are doing this to quickly mock the response shape of /status route
+  // without giving much consideration to the side effects of the real getStatus function.
+  /** Use in conjunction with StateManagementFunction to mock critical systems status.
+    *
+    * @param healthy
+    *   represent status of critical subsystems
+    * @return
+    *   a mockito stub representing a Future of Sam status
+    */
+  def mockCriticalSystemsStatus(healthy: Boolean): ScalaOngoingStubbing[Future[StatusCheckResponse]] =
+    when {
+      statusService.getStatus()
+    } thenReturn {
+      Future.successful(
+        StatusCheckResponse(
+          ok = healthy,
+          criticalSubsystemsStatus(healthy) + nonCriticalSubsystemsStatus
         )
       )
-    )
-  }
+    }
 
   def genSamDependencies: MockSamDependencies =
     MockSamDependencies(
@@ -211,38 +227,9 @@ class SamProviderSpec
         case ProviderState("user exists", _) =>
           logger.debug("user exists")
         case ProviderState("Sam is ok", _) =>
-          when {
-            statusService.getStatus()
-          } thenReturn {
-            Future.successful(
-              StatusCheckResponse(
-                ok = true,
-                Map(
-                  Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
-                  Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
-                  Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
-                  Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
-                )
-              )
-            )
-          }
+          mockCriticalSystemsStatus(true)
         case ProviderState("Sam is not ok", _) =>
-          when {
-            statusService.getStatus()
-          } thenReturn {
-            Future.successful(
-              StatusCheckResponse(
-                ok = false,
-                Map(
-                  Subsystems.Database -> SubsystemStatus(ok = false, None),
-                  Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
-                  Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
-                  Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
-                  Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
-                )
-              )
-            )
-          }
+          mockCriticalSystemsStatus(false)
         case _ =>
           logger.debug("other state")
       }
