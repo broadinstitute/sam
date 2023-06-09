@@ -94,14 +94,14 @@ class SamProviderSpec
     * @return
     *   a mockito stub representing a Future of Sam status
     */
-  def mockCriticalSystemsStatus(healthy: Boolean): ScalaOngoingStubbing[Future[StatusCheckResponse]] =
+  def mockCriticalSubsystemsStatus(healthy: Boolean): ScalaOngoingStubbing[Future[StatusCheckResponse]] =
     when {
       statusService.getStatus()
     } thenReturn {
       Future.successful(
         StatusCheckResponse(
           ok = healthy,
-          criticalSubsystemsStatus(healthy) + nonCriticalSubsystemsStatus
+          criticalSubsystemsStatus(healthy) ++ nonCriticalSubsystemsStatus
         )
       )
     }
@@ -227,9 +227,9 @@ class SamProviderSpec
         case ProviderState("user exists", _) =>
           logger.debug("user exists")
         case ProviderState("Sam is ok", _) =>
-          mockCriticalSystemsStatus(true)
+          mockCriticalSubsystemsStatus(true)
         case ProviderState("Sam is not ok", _) =>
-          mockCriticalSystemsStatus(false)
+          mockCriticalSubsystemsStatus(false)
         case _ =>
           logger.debug("other state")
       }
