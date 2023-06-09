@@ -45,12 +45,6 @@ class SamProviderSpec
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
 
-  // Policy service and states for consumer verification
-  val accessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
-    .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
-    .build
-  val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
-
   // Minimally viable Sam service and states for consumer verification
   val userService: UserService = TestUserServiceBuilder()
     .withAllUsersGroup(allUsersGroup)
@@ -60,6 +54,12 @@ class SamProviderSpec
 
   val directoryDAO: DirectoryDAO = userService.directoryDAO
   val cloudExtensions: CloudExtensions = userService.cloudExtensions
+
+  // Policy service and states for consumer verification
+  val accessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
+    .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
+    .build
+  val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
 
   // Resource service and states for consumer verification
   // Here we are injecting a random resource type as well as a workspace resource type.
