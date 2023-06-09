@@ -7,10 +7,8 @@ on:
     paths-ignore: ['**.md']
 
 jobs:
-  test:
-
+  run-unit-tests:
     runs-on: ubuntu-20.04
-
     env:
       SBT_OPTS: >-
         -Xmx3g
@@ -70,7 +68,7 @@ jobs:
 
   generateAndPublishClient:
     runs-on: ubuntu-20.04
-    needs: test
+    needs: run-unit-tests
 
     env:
       ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
@@ -84,11 +82,6 @@ jobs:
       - name: coursier-cache-action
         uses: coursier/cache-action@v5
 
-      - name: Extract branch name
-        shell: bash
-        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        id: extractBranch
-
       - name: Generate java client
         id: generateJavaClient
         run: bash scripts/gen_java_client.sh
@@ -96,11 +89,11 @@ jobs:
       - name: Publish java client for merge to develop branch
         working-directory: codegen_java
         id: publishJavaClient
-        if: ${{steps.extractBranch.outputs.branch == 'develop'}}
+        if: ${{ github.ref_name == 'develop' }}
         run: sbt "+ publish" -Dproject.isSnapshot=false
 
       - name: Publish java client as snapshot for PRs
         working-directory: codegen_java
         id: publishJavaClientSnapshot
-        if: ${{steps.extractBranch.outputs.branch != 'develop'}}
+        if: ${{ github.ref_name != 'develop' }}
         run: sbt "+ publish" -Dproject.isSnapshot=true
