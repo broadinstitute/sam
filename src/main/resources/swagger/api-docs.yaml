@@ -2097,6 +2097,11 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
       responses:
         204:
           description: Successfully added a member policy to the parent policy
