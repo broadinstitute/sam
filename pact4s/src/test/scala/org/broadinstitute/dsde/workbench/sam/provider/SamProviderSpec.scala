@@ -44,6 +44,12 @@ class SamProviderSpec
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
 
+  // Policy service and states for consumer verification
+  val accessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
+    .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
+    .build
+  val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
+
   // Minimally viable Sam service and states for consumer verification
   val userService: UserService = TestUserServiceBuilder()
     .withAllUsersGroup(allUsersGroup)
@@ -54,6 +60,19 @@ class SamProviderSpec
   val directoryDAO: DirectoryDAO = userService.directoryDAO
   val cloudExtensions: CloudExtensions = userService.cloudExtensions
 
+  // Resource service and states for consumer verification
+  // Here we are injecting a random resource type as well as a workspace resource type.
+  // We can also inject all possible Sam resource types by taking a look at genResourceTypeName if needed.
+  val resourceService: ResourceService =
+    TestResourceServiceBuilder(policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions)
+      .withResourceTypes(Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get))
+      .build
+
+  // The following services are mocked for now
+  val googleExt = mock[GoogleExtensions]
+  val mockManagedGroupService = mock[ManagedGroupService]
+  val tosService = MockTosServiceBuilder().withAllAccepted().build
+  val azureService = mock[AzureService]
   val statusService = mock[StatusService]
   when {
     statusService.getStatus()
@@ -71,28 +90,7 @@ class SamProviderSpec
     )
   }
 
-  def genSamDependencies: MockSamDependencies = {
-    // Policy service and states for consumer verification
-    val accessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
-      .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
-      .build
-    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
-
-    // Resource service and states for consumer verification
-    // Here we are injecting a random resource type as well as a workspace resource type.
-    // We can also inject all possible Sam resource types by taking a look at genResourceTypeName if needed.
-    val resourceService: ResourceService =
-      TestResourceServiceBuilder(policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions)
-        .withResourceTypes(Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get))
-        .build
-
-    // The following services are mocked for now
-    val googleExt = mock[GoogleExtensions]
-    val mockManagedGroupService = mock[ManagedGroupService]
-    val tosService = MockTosServiceBuilder().withAllAccepted().build
-    val azureService = mock[AzureService]
-    // val statusService = mock[StatusService]
-
+  def genSamDependencies: MockSamDependencies =
     MockSamDependencies(
       resourceService,
       policyEvaluatorService,
@@ -106,7 +104,6 @@ class SamProviderSpec
       FakeOpenIDConnectConfiguration,
       azureService
     )
-  }
 
   override def beforeAll(): Unit = {
     startSam.unsafeToFuture()
