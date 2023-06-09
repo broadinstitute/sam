@@ -44,17 +44,34 @@ class SamProviderSpec
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
 
+  // Minimally viable Sam service and states for consumer verification
+  val userService: UserService = TestUserServiceBuilder()
+    .withAllUsersGroup(allUsersGroup)
+    .withEnabledUser(defaultSamUser)
+    .withAllUsersHavingAcceptedTos()
+    .build
+
+  val directoryDAO: DirectoryDAO = userService.directoryDAO
+  val cloudExtensions: CloudExtensions = userService.cloudExtensions
+
+  val statusService = mock[StatusService]
+  when {
+    statusService.getStatus()
+  } thenReturn {
+    Future.successful(
+      StatusCheckResponse(
+        ok = true,
+        Map(
+          Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
+          Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
+          Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
+          Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
+        )
+      )
+    )
+  }
+
   def genSamDependencies: MockSamDependencies = {
-    // Minimally viable Sam service and states for consumer verification
-    val userService: UserService = TestUserServiceBuilder()
-      .withAllUsersGroup(allUsersGroup)
-      .withEnabledUser(defaultSamUser)
-      .withAllUsersHavingAcceptedTos()
-      .build
-
-    val directoryDAO: DirectoryDAO = userService.directoryDAO
-    val cloudExtensions: CloudExtensions = userService.cloudExtensions
-
     // Policy service and states for consumer verification
     val accessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
       .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
@@ -74,22 +91,7 @@ class SamProviderSpec
     val mockManagedGroupService = mock[ManagedGroupService]
     val tosService = MockTosServiceBuilder().withAllAccepted().build
     val azureService = mock[AzureService]
-    val statusService = mock[StatusService]
-    when {
-      statusService.getStatus()
-    } thenReturn {
-      Future.successful(
-        StatusCheckResponse(
-          ok = true,
-          Map(
-            Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
-            Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
-            Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
-            Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
-          )
-        )
-      )
-    }
+    // val statusService = mock[StatusService]
 
     MockSamDependencies(
       resourceService,
@@ -209,8 +211,41 @@ class SamProviderSpec
     // how to verify external states of cloud services through mocking and stubbing
     .withStateManagementFunction(
       StateManagementFunction {
-        case ProviderState("user exists", params) =>
+        case ProviderState("user exists", _) =>
           logger.debug("user exists")
+        case ProviderState("Sam is ok", _) =>
+          when {
+            statusService.getStatus()
+          } thenReturn {
+            Future.successful(
+              StatusCheckResponse(
+                ok = true,
+                Map(
+                  Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
+                  Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
+                  Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
+                  Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
+                )
+              )
+            )
+          }
+        case ProviderState("Sam is not ok", _) =>
+          when {
+            statusService.getStatus()
+          } thenReturn {
+            Future.successful(
+              StatusCheckResponse(
+                ok = false,
+                Map(
+                  Subsystems.Database -> SubsystemStatus(ok = false, None),
+                  Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
+                  Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
+                  Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
+                  Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
+                )
+              )
+            )
+          }
         case _ =>
           logger.debug("other state")
       }
