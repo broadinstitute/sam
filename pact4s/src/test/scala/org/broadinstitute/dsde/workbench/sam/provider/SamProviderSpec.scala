@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfigurat
 import org.broadinstitute.dsde.workbench.sam.Generator.{genResourceType, genWorkspaceResourceType}
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -19,7 +19,6 @@ import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, Subsy
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
 import org.mockito.scalatest.MockitoSugar
-import org.mockito.stubbing.ScalaOngoingStubbing
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
@@ -56,10 +55,10 @@ class SamProviderSpec
   val cloudExtensions: CloudExtensions = userService.cloudExtensions
 
   // Policy service and states for consumer verification
-  val accessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
+  val accessPolicyDAO: AccessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
     .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
     .build
-  val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
+  val policyEvaluatorService: PolicyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
 
   // Resource service and states for consumer verification
   // Here we are injecting a random resource type as well as a workspace resource type.
@@ -70,11 +69,11 @@ class SamProviderSpec
       .build
 
   // The following services are mocked for now
-  val googleExt = mock[GoogleExtensions]
-  val mockManagedGroupService = mock[ManagedGroupService]
-  val tosService = MockTosServiceBuilder().withAllAccepted().build
-  val azureService = mock[AzureService]
-  val statusService = mock[StatusService]
+  val googleExt: GoogleExtensions = mock[GoogleExtensions]
+  val mockManagedGroupService: ManagedGroupService = mock[ManagedGroupService]
+  val tosService: TosService = MockTosServiceBuilder().withAllAccepted().build
+  val azureService: AzureService = mock[AzureService]
+  val statusService: StatusService = mock[StatusService]
 
   val nonCriticalSubsystemsStatus = Map(
     Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
@@ -85,17 +84,18 @@ class SamProviderSpec
 
   private def criticalSubsystemsStatus(healthy: Boolean) = StatusService.criticalSubsystems.map(key => key -> SubsystemStatus(ok = healthy, None)).toMap
 
-  // We are doing this to quickly mock the response shape of /status route
-  // without giving much consideration to the side effects of the real getStatus function.
   /** Use in conjunction with StateManagementFunction to mock critical systems status.
+    *
+    * We are doing this to quickly mock the response shape of /status route without giving much consideration to the side effects of the real getStatus
+    * function. Specifically we are stubbing some computation that returns a Future of StatusCheckResponse according to the input parameter `healthy` flag.
     *
     * @param healthy
     *   represent status of critical subsystems
     * @return
     *   a mockito stub representing a Future of Sam status
     */
-  def mockCriticalSubsystemsStatus(healthy: Boolean): ScalaOngoingStubbing[Future[StatusCheckResponse]] =
-    when {
+  private def mockCriticalSubsystemsStatus(healthy: Boolean): IO[Unit] = for {
+    _ <- IO(when {
       statusService.getStatus()
     } thenReturn {
       Future.successful(
@@ -104,7 +104,8 @@ class SamProviderSpec
           criticalSubsystemsStatus(healthy) ++ nonCriticalSubsystemsStatus
         )
       )
-    }
+    })
+  } yield ()
 
   def genSamDependencies: MockSamDependencies =
     MockSamDependencies(
@@ -172,6 +173,8 @@ class SamProviderSpec
   //
   def requestFilter: ProviderRequest => ProviderRequestFilter = customFilter
 
+  private def reset(): Unit = mockCriticalSubsystemsStatus(true).unsafeRunSync()
+
   private def customFilter(req: ProviderRequest): ProviderRequestFilter =
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
@@ -227,13 +230,13 @@ class SamProviderSpec
         case ProviderState("user exists", _) =>
           logger.debug("user exists")
         case ProviderState("Sam is ok", _) =>
-          mockCriticalSubsystemsStatus(true)
+          mockCriticalSubsystemsStatus(true).unsafeRunSync()
         case ProviderState("Sam is not ok", _) =>
-          mockCriticalSubsystemsStatus(false)
+          mockCriticalSubsystemsStatus(false).unsafeRunSync()
         case _ =>
           logger.debug("other state")
       }
-        .withBeforeEach(() => ())
+        .withBeforeEach(() => reset())
     )
 
   it should "Verify pacts" in {
