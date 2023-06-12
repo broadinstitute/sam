@@ -113,6 +113,17 @@ class SamProviderSpec
     })
   } yield ()
 
+  private val providerStatesHandler: StateManagementFunction = StateManagementFunction {
+    case ProviderState(States.UserExists, _) =>
+      logger.debug(States.UserExists)
+    case ProviderState(States.SamOK, _) =>
+      mockCriticalSubsystemsStatus(true).unsafeRunSync()
+    case ProviderState(States.SamNotOK, _) =>
+      mockCriticalSubsystemsStatus(false).unsafeRunSync()
+    case _ =>
+      logger.debug("other state")
+  }
+
   def genSamDependencies: MockSamDependencies =
     MockSamDependencies(
       resourceService,
@@ -233,16 +244,7 @@ class SamProviderSpec
     // TestPolicyEvaluatorServiceBuilder, and TestResourceServiceBuilder
     // how to verify external states of cloud services through mocking and stubbing
     .withStateManagementFunction(
-      StateManagementFunction {
-        case ProviderState(States.UserExists, _) =>
-          logger.debug(States.UserExists)
-        case ProviderState(States.SamOK, _) =>
-          mockCriticalSubsystemsStatus(true).unsafeRunSync()
-        case ProviderState(States.SamNotOK, _) =>
-          mockCriticalSubsystemsStatus(false).unsafeRunSync()
-        case _ =>
-          logger.debug("other state")
-      }
+      providerStatesHandler
         .withBeforeEach(() => reInitializeStates())
     )
 
