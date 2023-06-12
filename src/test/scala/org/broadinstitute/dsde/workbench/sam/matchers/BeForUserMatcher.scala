@@ -7,7 +7,8 @@ import scala.collection.mutable.ListBuffer
 
 /** Asserts that the passed UserStatus.userInfo matches the passed in SamUser Id and Email
   *
-  * @param expectedUser: user to expect
+  * @param expectedUser:
+  *   user to expect
   */
 class BeForUserMatcher(expectedUser: SamUser) extends Matcher[UserStatus] {
   def apply(userStatus: UserStatus): MatchResult = {

@@ -32,7 +32,7 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
     // Arrange
     val enabledUser = Generator.genWorkbenchUserBoth.sample.get
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .withAdminUser(adminUser)     // enabled "admin" user who is making the http request
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
       .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
       .build
 
@@ -46,6 +46,25 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
   it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
     Get(s"/api/admin/v1/user/$defaultUserId") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  // TODO figure out JSON payloads
+  //descriptive test name
+  //
+  "PUT /admin/v1/user/{userSubjectId}" should "update a user record" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    val email = Some(WorkbenchEmail("fake@gmail.com"))
+    // Act and Assert
+    Put(s"/api/admin/v1/user/${enabledUser.id}", AdminUpdateUserRequest(None, email, None, None, None)) ~> samRoutes.route ~> check {
+      //
+      withClue(s"Response Body: ${ responseAs[String] }") {status shouldEqual StatusCodes.OK}
+      // responseAs[UserStatus] should beForUser(enabledUser)
     }
   }
 

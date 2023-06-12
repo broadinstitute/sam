@@ -8,6 +8,4 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{Inside, OptionValues}
 
 // See: https://www.scalatest.org/user_guide/defining_base_classes
-abstract class UserServiceTestTraits extends AnyFunSpec with Matchers with TestSupport with IdiomaticMockito with ScalaFutures with OptionValues with Inside {
-
-}
+abstract class UserServiceTestTraits extends AnyFunSpec with Matchers with TestSupport with IdiomaticMockito with ScalaFutures with OptionValues with Inside {}

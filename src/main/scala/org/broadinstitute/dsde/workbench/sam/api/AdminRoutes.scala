@@ -51,59 +51,68 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                 userService.deleteUser(WorkbenchUserId(userId), samRequestContext).map(_ => OK)
               }
             } ~
-            get {
-              complete {
-                userService
-                  .getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext)
-                  .map(status => (if (status.isDefined) OK else NotFound) -> status)
-              }
-            }
-          } ~
-          pathPrefix("enable") {
-            pathEndOrSingleSlash {
-              put {
+              get {
                 complete {
                   userService
-                    .enableUser(WorkbenchUserId(userId), samRequestContext)
+                    .getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext)
                     .map(status => (if (status.isDefined) OK else NotFound) -> status)
                 }
-              }
-            }
-          } ~
-          pathPrefix("disable") {
-            pathEndOrSingleSlash {
+              } ~
               put {
-                complete {
-                  userService
-                    .disableUser(WorkbenchUserId(userId), samRequestContext)
-                    .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                entity(as[AdminUpdateUserRequest]) { request =>
+                  complete {
+                    userService
+                      .updateUserCrud(WorkbenchUserId(userId), request, samRequestContext)
+                      .map(_ => OK)
+                  }
                 }
               }
-            }
           } ~
-          // This will get removed once ID-87 is resolved
-          pathPrefix("repairAllUsersGroup") {
-            pathEndOrSingleSlash {
-              put {
-                complete {
-                  userService
-                    .addToAllUsersGroup(WorkbenchUserId(userId), samRequestContext)
-                    .map(_ => OK)
+            pathPrefix("enable") {
+              pathEndOrSingleSlash {
+                put {
+                  complete {
+                    userService
+                      .enableUser(WorkbenchUserId(userId), samRequestContext)
+                      .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                  }
+                }
+              }
+            } ~
+            pathPrefix("disable") {
+              pathEndOrSingleSlash {
+                put {
+                  complete {
+                    userService
+                      .disableUser(WorkbenchUserId(userId), samRequestContext)
+                      .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                  }
+                }
+              }
+            } ~
+            // This will get removed once ID-87 is resolved
+            pathPrefix("repairAllUsersGroup") {
+              pathEndOrSingleSlash {
+                put {
+                  complete {
+                    userService
+                      .addToAllUsersGroup(WorkbenchUserId(userId), samRequestContext)
+                      .map(_ => OK)
+                  }
+                }
+              }
+            } ~
+            pathPrefix("petServiceAccount") {
+              path(Segment) { project =>
+                delete {
+                  complete {
+                    cloudExtensions
+                      .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), samRequestContext)
+                      .map(_ => NoContent)
+                  }
                 }
               }
             }
-          } ~
-          pathPrefix("petServiceAccount") {
-            path(Segment) { project =>
-              delete {
-                complete {
-                  cloudExtensions
-                    .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), samRequestContext)
-                    .map(_ => NoContent)
-                }
-              }
-            }
-          }
         }
       }
     }

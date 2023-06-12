@@ -103,6 +103,14 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     users.get(userId)
   }
 
+  override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO {
+    // TODO add validation for email
+    users.get(userId) match { //
+      case Some(user) => IO.pure(users += userId -> user.copy(email = email))
+      case None => IO.unit
+    }
+  }
+
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     users -= userId
   }

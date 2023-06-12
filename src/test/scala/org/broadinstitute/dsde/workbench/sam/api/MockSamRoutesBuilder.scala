@@ -17,10 +17,7 @@ import scala.concurrent.Future
 
 // Don't like having any required parameters in the constructor, but alas, they're needed to be able to finally
 // build the routes.  *sniff sniff* I smell potential refactoring.
-class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)
-  (implicit system: ActorSystem,
-            materializer: Materializer,
-            openTelemetry: OpenTelemetryMetrics[IO]) {
+class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetrics[IO]) {
 
   private val directoryDaoBuilder: MockDirectoryDaoBuilder = MockDirectoryDaoBuilder(allUsersGroup)
   private val cloudExtensionsBuilder: MockCloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup)
@@ -69,7 +66,8 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)
   // Can only have 1 active user when making a request.  If the adminUser is set, that takes precedence, otherwise try
   // to get the enabledUser.
   private def getActiveUser: SamUser =
-    adminUser.orElse(enabledUser)
+    adminUser
+      .orElse(enabledUser)
       .getOrElse(throw new Exception("Try building MockSamRoutes .withAdminUser() or .withEnabledUser() first"))
 
   // TODO: This is not great.  We need to do a little state management to set and look up users and admin users.  This
@@ -105,11 +103,10 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)
       }
 
       override def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-        Future.successful(
-          newUser match {
-            case Some(user) => user
-            case None => throw new Exception("Try building MockSamRoutes .withNewUser() first")
-          })
+        Future.successful(newUser match {
+          case Some(user) => user
+          case None => throw new Exception("Try building MockSamRoutes .withNewUser() first")
+        })
       }
 
       override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route = reject
