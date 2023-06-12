@@ -31,6 +31,12 @@ import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
+object States {
+  val SamOK = "Sam is ok"
+  val SamNotOK = "Sam is not ok"
+  val UserExists = "user exists"
+}
+
 class SamProviderSpec
     extends AnyFlatSpec
     with ScalatestRouteTest
@@ -173,7 +179,8 @@ class SamProviderSpec
   //
   def requestFilter: ProviderRequest => ProviderRequestFilter = customFilter
 
-  private def reset(): Unit = mockCriticalSubsystemsStatus(true).unsafeRunSync()
+  // Convenient method to reset provider states
+  private def reInitializeStates(): Unit = mockCriticalSubsystemsStatus(true).unsafeRunSync()
 
   private def customFilter(req: ProviderRequest): ProviderRequestFilter =
     req.getFirstHeader("Authorization") match {
@@ -227,16 +234,16 @@ class SamProviderSpec
     // how to verify external states of cloud services through mocking and stubbing
     .withStateManagementFunction(
       StateManagementFunction {
-        case ProviderState("user exists", _) =>
-          logger.debug("user exists")
-        case ProviderState("Sam is ok", _) =>
+        case ProviderState(States.UserExists, _) =>
+          logger.debug(States.UserExists)
+        case ProviderState(States.SamOK, _) =>
           mockCriticalSubsystemsStatus(true).unsafeRunSync()
-        case ProviderState("Sam is not ok", _) =>
+        case ProviderState(States.SamNotOK, _) =>
           mockCriticalSubsystemsStatus(false).unsafeRunSync()
         case _ =>
           logger.debug("other state")
       }
-        .withBeforeEach(() => reset())
+        .withBeforeEach(() => reInitializeStates())
     )
 
   it should "Verify pacts" in {
