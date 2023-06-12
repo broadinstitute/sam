@@ -275,12 +275,11 @@ class ResourceService(
       resource: FullyQualifiedResourceId,
       authDomains: Set[WorkbenchGroupName],
       samRequestContext: SamRequestContext
-  ): IO[Set[WorkbenchGroupName]] = {
+  ): IO[Set[WorkbenchGroupName]] =
     for {
       _ <- accessPolicyDAO.setResourceAuthDomain(resource, authDomains, samRequestContext)
       authDomains <- loadResourceAuthDomain(resource, samRequestContext)
     } yield authDomains
-  }
 
   @VisibleForTesting
   def createPolicy(
