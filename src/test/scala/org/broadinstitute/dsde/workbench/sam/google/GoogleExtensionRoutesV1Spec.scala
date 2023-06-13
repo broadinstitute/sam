@@ -275,7 +275,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt", Some(1), noRequesterPays = Option(true))
 
     Post(s"/api/google/v1/user/petServiceAccount/$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
-      responseAs[String] should not include("userProject")
+      responseAs[String] should not include "userProject"
     }
   }
 
