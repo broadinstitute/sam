@@ -5,7 +5,7 @@ import akka.stream.Materializer
 import cats.effect._
 import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.mock._
@@ -36,37 +36,37 @@ import scalikejdbc.withSQL
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.duration._
-import scala.concurrent.{Await, Awaitable, ExecutionContext}
+import scala.concurrent.{Await, Awaitable, ExecutionContext, ExecutionContextExecutor}
 
 trait MockTestSupport {
   def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
   def runAndWait[T](f: IO[T]): T = f.unsafeRunSync()
 
-  implicit val futureTimeout = Timeout(Span(10, Seconds))
+  implicit val futureTimeout: Timeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
-  implicit val openTelemetry = FakeOpenTelemetryMetricsInterpreter
+  implicit val openTelemetry: FakeOpenTelemetryMetricsInterpreter.type = FakeOpenTelemetryMetricsInterpreter
 
-  val samRequestContext = SamRequestContext()
+  val samRequestContext: SamRequestContext = SamRequestContext()
 
-  def dummyResourceType(name: ResourceTypeName) =
+  def dummyResourceType(name: ResourceTypeName): ResourceType =
     ResourceType(name, Set.empty, Set(ResourceRole(ResourceRoleName("owner"), Set.empty)), ResourceRoleName("owner"))
 }
 
 object MockTestSupport extends MockTestSupport {
   private val executor = Executors.newCachedThreadPool()
-  val blockingEc = ExecutionContext.fromExecutor(executor)
+  val blockingEc: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
 
-  val config = ConfigFactory.load()
-  val appConfig = AppConfig.readConfig(config)
-  val petServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
-  val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
-  val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
-  val adminConfig = config.as[AdminConfig]("admin")
-  val databaseEnabled = config.getBoolean("db.enabled")
+  val config: Config = ConfigFactory.load()
+  val appConfig: AppConfig = AppConfig.readConfig(config)
+  val petServiceAccountConfig: PetServiceAccountConfig = appConfig.googleConfig.get.petServiceAccountConfig
+  val googleServicesConfig: GoogleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
+  val configResourceTypes: Map[ResourceTypeName, ResourceType] = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
+  val adminConfig: AdminConfig = config.as[AdminConfig]("admin")
+  val databaseEnabled: Boolean = config.getBoolean("db.enabled")
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
 
-  lazy val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
-  def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
+  lazy val distributedLock: PostgresDistributedLockDAO[IO] = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
+  def proxyEmail(workbenchUserId: WorkbenchUserId): WorkbenchEmail = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def genGoogleSubjectId(): Option[GoogleSubjectId] = Option(GoogleSubjectId(genRandom(System.currentTimeMillis())))
   def genAzureB2CId(): AzureB2CId = AzureB2CId(genRandom(System.currentTimeMillis()))
 
@@ -80,7 +80,7 @@ object MockTestSupport extends MockTestSupport {
       policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
       resourceServiceOpt: Option[ResourceService] = None,
       tosEnabled: Boolean = false
-  )(implicit system: ActorSystem) = {
+  )(implicit system: ActorSystem): MockSamDependencies = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
     val googleIamDAO = googIamDAO.getOrElse(new MockGoogleIamDAO())
@@ -154,7 +154,7 @@ object MockTestSupport extends MockTestSupport {
     )
   }
 
-  val tosConfig = config.as[TermsOfServiceConfig]("termsOfService")
+  val tosConfig: TermsOfServiceConfig = config.as[TermsOfServiceConfig]("termsOfService")
 
   def genSamRoutes(samDependencies: MockSamDependencies, uInfo: SamUser)(implicit
       system: ActorSystem,
@@ -169,7 +169,7 @@ object MockTestSupport extends MockTestSupport {
     samDependencies.directoryDAO,
     samDependencies.policyEvaluatorService,
     samDependencies.tosService,
-    LiquibaseConfig("", false),
+    LiquibaseConfig("", initWithLiquibase = false),
     samDependencies.oauth2Config,
     Some(samDependencies.azureService)
   ) with MockSamUserDirectives with GoogleExtensionRoutes {
@@ -188,7 +188,7 @@ object MockTestSupport extends MockTestSupport {
           googleExtensions.resourceTypes
         )
       } else null
-    val googleKeyCache = samDependencies.cloudExtensions match {
+    val googleKeyCache: GoogleKeyCache = samDependencies.cloudExtensions match {
       case extensions: GoogleExtensions => extensions.googleKeyCache
       case _ => null
     }
@@ -206,7 +206,8 @@ So the situation is a little messy and I favor having more mess on the test side
 (i.e. I don't want to add a new database name just for tests).
 So, just use the DatabaseNames.Read connection pool for tests.
    */
-  lazy val dbRef = TestDbReference.init(config.as[LiquibaseConfig]("liquibase"), appConfig.samDatabaseConfig.samRead.dbName, MockTestSupport.blockingEc)
+  lazy val dbRef: TestDbReference =
+    TestDbReference.init(config.as[LiquibaseConfig]("liquibase"), appConfig.samDatabaseConfig.samRead.dbName, MockTestSupport.blockingEc)
 
   def truncateAll: Int =
     if (databaseEnabled) {

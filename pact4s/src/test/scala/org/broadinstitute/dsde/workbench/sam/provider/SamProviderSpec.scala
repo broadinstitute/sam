@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfigurat
 import org.broadinstitute.dsde.workbench.sam.Generator.{genResourceType, genWorkspaceResourceType}
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -31,6 +31,12 @@ import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
+object States {
+  val SamOK = "Sam is ok"
+  val SamNotOK = "Sam is not ok"
+  val UserExists = "user exists"
+}
+
 class SamProviderSpec
     extends AnyFlatSpec
     with ScalatestRouteTest
@@ -44,53 +50,81 @@ class SamProviderSpec
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
 
-  def genSamDependencies: MockSamDependencies = {
-    // Minimally viable Sam service and states for consumer verification
-    val userService: UserService = TestUserServiceBuilder()
-      .withAllUsersGroup(allUsersGroup)
-      .withEnabledUser(defaultSamUser)
-      .withAllUsersHavingAcceptedTos()
+  // Minimally viable Sam service and states for consumer verification
+  val userService: UserService = TestUserServiceBuilder()
+    .withAllUsersGroup(allUsersGroup)
+    .withEnabledUser(defaultSamUser)
+    .withAllUsersHavingAcceptedTos()
+    .build
+
+  val directoryDAO: DirectoryDAO = userService.directoryDAO
+  val cloudExtensions: CloudExtensions = userService.cloudExtensions
+
+  // Policy service and states for consumer verification
+  val accessPolicyDAO: AccessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
+    .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
+    .build
+  val policyEvaluatorService: PolicyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
+
+  // Resource service and states for consumer verification
+  // Here we are injecting a random resource type as well as a workspace resource type.
+  // We can also inject all possible Sam resource types by taking a look at genResourceTypeName if needed.
+  val resourceService: ResourceService =
+    TestResourceServiceBuilder(policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions)
+      .withResourceTypes(Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get))
       .build
 
-    val directoryDAO: DirectoryDAO = userService.directoryDAO
-    val cloudExtensions: CloudExtensions = userService.cloudExtensions
+  // The following services are mocked for now
+  val googleExt: GoogleExtensions = mock[GoogleExtensions]
+  val mockManagedGroupService: ManagedGroupService = mock[ManagedGroupService]
+  val tosService: TosService = MockTosServiceBuilder().withAllAccepted().build
+  val azureService: AzureService = mock[AzureService]
+  val statusService: StatusService = mock[StatusService]
 
-    // Policy service and states for consumer verification
-    val accessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
-      .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
-      .build
-    val policyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
+  val nonCriticalSubsystemsStatus = Map(
+    Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
+    Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
+    Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
+    Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
+  )
 
-    // Resource service and states for consumer verification
-    // Here we are injecting a random resource type as well as a workspace resource type.
-    // We can also inject all possible Sam resource types by taking a look at genResourceTypeName if needed.
-    val resourceService: ResourceService =
-      TestResourceServiceBuilder(policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions)
-        .withResourceTypes(Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get))
-        .build
+  private def criticalSubsystemsStatus(healthy: Boolean) = StatusService.criticalSubsystems.map(key => key -> SubsystemStatus(ok = healthy, None)).toMap
 
-    // The following services are mocked for now
-    val googleExt = mock[GoogleExtensions]
-    val mockManagedGroupService = mock[ManagedGroupService]
-    val tosService = MockTosServiceBuilder().withAllAccepted().build
-    val azureService = mock[AzureService]
-    val statusService = mock[StatusService]
-    when {
+  /** Use in conjunction with StateManagementFunction to mock critical systems status.
+    *
+    * We are doing this to quickly mock the response shape of /status route without giving much consideration to the side effects of the real getStatus
+    * function. Specifically we are stubbing some computation that returns a Future of StatusCheckResponse according to the input parameter `healthy` flag.
+    *
+    * @param healthy
+    *   represent status of critical subsystems
+    * @return
+    *   a mockito stub representing a Future of Sam status
+    */
+  private def mockCriticalSubsystemsStatus(healthy: Boolean): IO[Unit] = for {
+    _ <- IO(when {
       statusService.getStatus()
     } thenReturn {
       Future.successful(
         StatusCheckResponse(
-          ok = true,
-          Map(
-            Subsystems.GoogleGroups -> SubsystemStatus(ok = true, None),
-            Subsystems.GoogleIam -> SubsystemStatus(ok = true, None),
-            Subsystems.GooglePubSub -> SubsystemStatus(ok = true, None),
-            Subsystems.OpenDJ -> SubsystemStatus(ok = true, None)
-          )
+          ok = healthy,
+          criticalSubsystemsStatus(healthy) ++ nonCriticalSubsystemsStatus
         )
       )
-    }
+    })
+  } yield ()
 
+  private val providerStatesHandler: StateManagementFunction = StateManagementFunction {
+    case ProviderState(States.UserExists, _) =>
+      logger.debug(States.UserExists)
+    case ProviderState(States.SamOK, _) =>
+      mockCriticalSubsystemsStatus(true).unsafeRunSync()
+    case ProviderState(States.SamNotOK, _) =>
+      mockCriticalSubsystemsStatus(false).unsafeRunSync()
+    case _ =>
+      logger.debug("other state")
+  }
+
+  def genSamDependencies: MockSamDependencies =
     MockSamDependencies(
       resourceService,
       policyEvaluatorService,
@@ -104,7 +138,6 @@ class SamProviderSpec
       FakeOpenIDConnectConfiguration,
       azureService
     )
-  }
 
   override def beforeAll(): Unit = {
     startSam.unsafeToFuture()
@@ -157,6 +190,9 @@ class SamProviderSpec
   //
   def requestFilter: ProviderRequest => ProviderRequestFilter = customFilter
 
+  // Convenient method to reset provider states
+  private def reInitializeStates(): Unit = mockCriticalSubsystemsStatus(true).unsafeRunSync()
+
   private def customFilter(req: ProviderRequest): ProviderRequestFilter =
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
@@ -208,13 +244,8 @@ class SamProviderSpec
     // TestPolicyEvaluatorServiceBuilder, and TestResourceServiceBuilder
     // how to verify external states of cloud services through mocking and stubbing
     .withStateManagementFunction(
-      StateManagementFunction {
-        case ProviderState("user exists", params) =>
-          logger.debug("user exists")
-        case _ =>
-          logger.debug("other state")
-      }
-        .withBeforeEach(() => ())
+      providerStatesHandler
+        .withBeforeEach(() => reInitializeStates())
     )
 
   it should "Verify pacts" in {
