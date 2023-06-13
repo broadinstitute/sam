@@ -515,9 +515,17 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
     val authDomainColumn = AuthDomainTable.column
     val insertAuthDomainQuery =
-      samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues}"
+      samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues} on conflict do nothing"
 
     insertAuthDomainQuery.update().apply()
+  }
+
+  private def removeExtraAuthDomainGroupsFromResource(resourcePK: ResourcePK, authDomainGroupPKs: Seq[GroupPK])(implicit session: DBSession): Unit = {
+    val a = AuthDomainTable.syntax("a")
+    val removeAuthDomainQuery =
+      samsql"""delete from ${AuthDomainTable as a}
+               where ${a.resourceId} = ${resourcePK}
+               and ${a.groupId} not in (${authDomainGroupPKs})""".update().apply()
   }
 
   /** Queries the database for the PK of the resource and throws an error if it does not exist
@@ -594,9 +602,10 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       authDomains: Set[WorkbenchGroupName],
       samRequestContext: SamRequestContext
   ): IO[Unit] =
-    serializableWriteTransaction("removeAuthDomainFromResource", samRequestContext) { implicit session =>
+    serializableWriteTransaction("setResourceAuthDomain", samRequestContext) { implicit session =>
       val resourcePK = loadResourcePK(resource)
       val authDomainPks = queryForGroupPKs(authDomains.map(identity))
+      removeExtraAuthDomainGroupsFromResource(resourcePK, authDomainPks)
       insertAuthDomainsForResource(resourcePK, authDomainPks)
     }
 
