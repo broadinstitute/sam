@@ -3009,6 +3009,11 @@ components:
         duration:
           type: number
           description: Optional validity duration of the link in minutes. Defaults to 1 hour.
+          default: 60
+        noRequesterPays:
+          type: boolean
+          description: Do not use the pet service account project as the user project in the request
+          default: false
     CreateResourceRequest:
       required:
         - policies

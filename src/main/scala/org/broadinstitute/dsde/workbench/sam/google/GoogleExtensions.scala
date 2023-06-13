@@ -651,14 +651,16 @@ class GoogleExtensions(
       bucket: GcsBucketName,
       name: GcsBlobName,
       duration: Option[Long],
+      noRequesterPays: Boolean,
       samRequestContext: SamRequestContext
-  ): IO[URL] =
+  ): IO[URL] = {
+    val urlParamsMap: Map[String, String] = if (noRequesterPays) Map.empty else Map(userProjectQueryParam -> project.value)
     for {
       petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
       petKey <- googleKeyCache.getKey(petServiceAccount)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
       timeInMinutes = duration.getOrElse(60L)
-      queryParams = Map(userProjectQueryParam -> project.value, requestedByQueryParam -> samUser.email.value)
+      queryParams = urlParamsMap + (requestedByQueryParam -> samUser.email.value)
       url <- googleStorageService
         .getSignedBlobUrl(
           bucket,
@@ -671,6 +673,7 @@ class GoogleExtensions(
         .compile
         .lastOrError
     } yield url
+  }
 
   override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
 }
