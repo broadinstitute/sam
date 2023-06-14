@@ -305,7 +305,7 @@ object BasicWorkbenchGroup {
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
-@Lenses final case class SignedUrlRequest(bucketName: String, blobName: String, duration: Option[Long] = None, noRequesterPays: Option[Boolean] = Option(false))
+@Lenses final case class SignedUrlRequest(bucketName: String, blobName: String, duration: Option[Long] = None, requesterPays: Option[Boolean] = Option(true))
 object SamUser {
   def apply(
       id: WorkbenchUserId,

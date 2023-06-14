@@ -112,7 +112,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
 
     "generates a signed URL for a GCS Object" in {
       val signedUrl =
-        runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, noRequesterPays = false, samRequestContext))
+        runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, requesterPays = true, samRequestContext))
 
       signedUrl should be(expectedUrl)
 
@@ -133,7 +133,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
     }
 
     "customizes link duration" in {
-      runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, Some(5L), noRequesterPays = false, samRequestContext))
+      runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, Some(5L), requesterPays = true, samRequestContext))
       verify(mockGoogleStorageService).getSignedBlobUrl(
         eqTo(gcsBucket),
         eqTo(gcsBlob),
@@ -147,7 +147,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
     }
 
     "does not include requester pays user project if told to skip it" in {
-      runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, noRequesterPays = true, samRequestContext))
+      runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, requesterPays = false, samRequestContext))
       verify(mockGoogleStorageService).getSignedBlobUrl(
         eqTo(gcsBucket),
         eqTo(gcsBlob),

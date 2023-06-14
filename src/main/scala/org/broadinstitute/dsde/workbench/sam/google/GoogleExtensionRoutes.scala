@@ -159,7 +159,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                               GcsBucketName(request.bucketName),
                               GcsBlobName(request.blobName),
                               request.duration,
-                              request.noRequesterPays.exists(identity),
+                              request.requesterPays.exists(identity),
                               samRequestContext
                             )
                             .map { signedUrl =>
