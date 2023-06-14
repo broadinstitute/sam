@@ -270,6 +270,15 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     }
   }
 
+  it should "skip requester pays" in {
+    val (_, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt", Some(1), noRequesterPays = Option(true))
+
+    Post(s"/api/google/v1/user/petServiceAccount/$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should not include "userProject"
+    }
+  }
+
   it should "404 when the user doesn't have access to the project" in {
     val (_, samRoutes, projectName) = setupSignedUrlTest()
     val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt")
