@@ -312,6 +312,7 @@ object BasicWorkbenchGroup {
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
 @Lenses final case class SignedUrlRequest(bucketName: String, blobName: String, duration: Option[Long] = None, requesterPays: Option[Boolean] = Option(true))
+
 @Lenses final case class AdminUpdateUserRequest(
     googleSubjectId: Option[GoogleSubjectId],
     email: Option[WorkbenchEmail],
