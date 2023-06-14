@@ -651,10 +651,10 @@ class GoogleExtensions(
       bucket: GcsBucketName,
       name: GcsBlobName,
       duration: Option[Long],
-      noRequesterPays: Boolean,
+      requesterPays: Boolean,
       samRequestContext: SamRequestContext
   ): IO[URL] = {
-    val urlParamsMap: Map[String, String] = if (noRequesterPays) Map.empty else Map(userProjectQueryParam -> project.value)
+    val urlParamsMap: Map[String, String] = if (requesterPays) Map(userProjectQueryParam -> project.value) else Map.empty
     for {
       petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
       petKey <- googleKeyCache.getKey(petServiceAccount)

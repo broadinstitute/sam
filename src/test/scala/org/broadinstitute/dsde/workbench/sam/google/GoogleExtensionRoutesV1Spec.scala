@@ -272,7 +272,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
 
   it should "skip requester pays" in {
     val (_, samRoutes, projectName) = setupSignedUrlTest()
-    val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt", Some(1), noRequesterPays = Option(true))
+    val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt", Some(1), requesterPays = Option(false))
 
     Post(s"/api/google/v1/user/petServiceAccount/$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
       responseAs[String] should not include "userProject"
