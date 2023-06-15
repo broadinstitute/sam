@@ -7,10 +7,14 @@ import akka.stream.Materializer
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroup
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
+import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDaoBuilder
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.{SamUser, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchersSugar.{any, eqTo}
+import org.mockito.IdiomaticMockito.StubbingOps
+import org.mockito.MockitoSugar.mock
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -19,8 +23,13 @@ import scala.concurrent.Future
 // build the routes.  *sniff sniff* I smell potential refactoring.
 class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetrics[IO]) {
 
+  //This should be able to be removed, but SamRoutes is dependant on having a DirectoryDAO
+  //object. Maybe that can be changed but would require additional work
   private val directoryDaoBuilder: MockDirectoryDaoBuilder = MockDirectoryDaoBuilder(allUsersGroup)
   private val cloudExtensionsBuilder: MockCloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup)
+  //mock user service builder?
+  private val mockUserService = mock[UserService]
+  //mockUserService.
 
   // newUser is used on requests testing the creation of that user
   private var newUser: Option[SamUser] = None
@@ -38,22 +47,36 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   //  cloudExtensions.  Same for other methods too.
   def withEnabledUser(samUser: SamUser): MockSamRoutesBuilder = {
     enabledUser = Option(samUser)
-    directoryDaoBuilder.withEnabledUser(samUser)
-    cloudExtensionsBuilder.withEnabledUser(samUser)
+    //directoryDaoBuilder.withEnabledUser(samUser)
+    //cloudExtensionsBuilder.withEnabledUser(samUser)
+    //we want to remove directory dao and cloud extension and replace with all user service calls since that is what is called by admin routes
+    mockUserService.disableUser(eqTo(samUser.id), any[SamRequestContext]) returns {
+      IO(Option(UserStatus(UserStatusDetails(samUser.id, samUser.email),
+        enabledMapNoTosAccepted + ("ldap" -> false) + ("adminEnabled" -> false))))
+    }
+    //mockedCloudExtensions.onUserDisable(any[SamUser], any[SamRequestContext]) returns IO.unit
     this
   }
 
   def withDisabledUser(samUser: SamUser): MockSamRoutesBuilder = {
     disabledUser = Option(samUser)
-    directoryDaoBuilder.withDisabledUser(samUser)
-    cloudExtensionsBuilder.withDisabledUser(samUser)
+    //directoryDaoBuilder.withDisabledUser(samUser)
+    //cloudExtensionsBuilder.withDisabledUser(samUser)
+    mockUserService.disableUser(eqTo(samUser.id), any[SamRequestContext]) returns {
+      IO(Option(UserStatus(UserStatusDetails(samUser.id, samUser.email), enabledMapNoTosAccepted)))
+    }
     this
   }
 
   def withAdminUser(samUser: SamUser): MockSamRoutesBuilder = {
     adminUser = Option(samUser)
-    cloudExtensionsBuilder.withAdminUser(samUser)
-    cloudExtensionsBuilder.withAdminUser(samUser)
+    //cloudExtensionsBuilder.withAdminUser(samUser) // duplicated line
+    this
+  }
+
+  def withNonAdminUser(samUser: SamUser): MockSamRoutesBuilder = {
+    // adminUser = Option(samUser)
+    //cloudExtensionsBuilder.withNonAdminUser(samUser) // duplicated line
     this
   }
 
@@ -81,7 +104,8 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
 
     new SamRoutes(
       null,
-      new UserService(mockDirectoryDao, mockCloudExtensions, Seq.empty, mockTosService),
+      mockUserService,
+      //new UserService(mockDirectoryDao, mockCloudExtensions, Seq.empty, mockTosService),
       null,
       null,
       null,

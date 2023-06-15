@@ -22,7 +22,10 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   mockedDirectoryDAO.loadUserByAzureB2CId(any[AzureB2CId], any[SamRequestContext]) returns IO(None)
   mockedDirectoryDAO.loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext]) returns IO(None)
   mockedDirectoryDAO.createUser(any[SamUser], any[SamRequestContext]) answers ((u: SamUser, _: SamRequestContext) => IO(u))
-  mockedDirectoryDAO.enableIdentity(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.enableIdentity(any[WorkbenchSubject], any[SamRequestContext]) returns IO.unit
+  // TODO check here to flip
+  // maybe make disableIdentity make loading user send back a disabled user?
+  // withDisablableUser?
   mockedDirectoryDAO.disableIdentity(any[WorkbenchSubject], any[SamRequestContext]) returns IO.unit
   mockedDirectoryDAO.isEnabled(any[WorkbenchSubject], any[SamRequestContext]) returns IO(false)
   mockedDirectoryDAO.isGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(false)
@@ -81,6 +84,13 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
     this
   }
 
+  def withDisabilableUser(samUser: SamUser) : MockDirectoryDaoBuilder = {
+    mockedDirectoryDAO.disableIdentity(eqTo(samUser.id), any[SamRequestContext]) returns {
+      makeUserDisabled(samUser)
+      IO.unit
+    }
+    this
+  }
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): MockDirectoryDaoBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
     mockedDirectoryDAO.loadGroup(eqTo(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext]) returns IO(
@@ -105,14 +115,15 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   private def makeUserEnabled(samUser: SamUser): Unit = {
     mockedDirectoryDAO.isEnabled(eqTo(samUser.id), any[SamRequestContext]) returns IO(true)
     mockedDirectoryDAO.loadUser(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
+    mockedDirectoryDAO.disableIdentity(any[WorkbenchSubject], any[SamRequestContext]) returns IO.unit
 
     if (samUser.azureB2CId.nonEmpty) {
       mockedDirectoryDAO.loadUserByAzureB2CId(eqTo(samUser.azureB2CId.get), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
     }
 
     if (samUser.googleSubjectId.nonEmpty) {
-      mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.id))
-      mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Some(samUser))
+      // mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.id))
+      mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
     }
 
     if (maybeAllUsersGroup.nonEmpty) {

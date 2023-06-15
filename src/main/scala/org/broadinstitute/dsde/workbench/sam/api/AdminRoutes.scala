@@ -44,76 +44,76 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
               .map(status => (if (status.isDefined) OK else NotFound) -> status)
           }
         } ~
-        pathPrefix(Segment) { userId =>
-          pathEnd {
-            delete {
-              complete {
-                userService.deleteUser(WorkbenchUserId(userId), samRequestContext).map(_ => OK)
-              }
-            } ~
-              get {
+          pathPrefix(Segment) { userId =>
+            pathEnd {
+              delete {
                 complete {
-                  userService
-                    .getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext)
-                    .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                  userService.deleteUser(WorkbenchUserId(userId), samRequestContext).map(_ => OK)
                 }
               } ~
-              put {
-                entity(as[AdminUpdateUserRequest]) { request =>
+                get {
                   complete {
                     userService
-                      .updateUserCrud(WorkbenchUserId(userId), request, samRequestContext)
-                      .map(_ => OK)
-                  }
-                }
-              }
-          } ~
-            pathPrefix("enable") {
-              pathEndOrSingleSlash {
-                put {
-                  complete {
-                    userService
-                      .enableUser(WorkbenchUserId(userId), samRequestContext)
+                      .getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext)
                       .map(status => (if (status.isDefined) OK else NotFound) -> status)
                   }
-                }
-              }
-            } ~
-            pathPrefix("disable") {
-              pathEndOrSingleSlash {
+                } ~
                 put {
-                  complete {
-                    userService
-                      .disableUser(WorkbenchUserId(userId), samRequestContext)
-                      .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                  entity(as[AdminUpdateUserRequest]) { request =>
+                    complete {
+                      userService
+                        .updateUserCrud(WorkbenchUserId(userId), request, samRequestContext)
+                        .map(user => (if (user.isDefined) OK else NotFound) -> user)
+                    }
                   }
                 }
-              }
             } ~
-            // This will get removed once ID-87 is resolved
-            pathPrefix("repairAllUsersGroup") {
-              pathEndOrSingleSlash {
-                put {
-                  complete {
-                    userService
-                      .addToAllUsersGroup(WorkbenchUserId(userId), samRequestContext)
-                      .map(_ => OK)
+              pathPrefix("enable") {
+                pathEndOrSingleSlash {
+                  put {
+                    complete {
+                      userService
+                        .enableUser(WorkbenchUserId(userId), samRequestContext)
+                        .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                    }
+                  }
+                }
+              } ~
+              pathPrefix("disable") {
+                pathEndOrSingleSlash {
+                  put {
+                    complete {
+                      userService
+                        .disableUser(WorkbenchUserId(userId), samRequestContext)
+                        .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                    }
+                  }
+                }
+              } ~
+              // This will get removed once ID-87 is resolved
+              pathPrefix("repairAllUsersGroup") {
+                pathEndOrSingleSlash {
+                  put {
+                    complete {
+                      userService
+                        .addToAllUsersGroup(WorkbenchUserId(userId), samRequestContext)
+                        .map(_ => OK)
+                    }
+                  }
+                }
+              } ~
+              pathPrefix("petServiceAccount") {
+                path(Segment) { project =>
+                  delete {
+                    complete {
+                      cloudExtensions
+                        .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), samRequestContext)
+                        .map(_ => NoContent)
+                    }
                   }
                 }
               }
-            } ~
-            pathPrefix("petServiceAccount") {
-              path(Segment) { project =>
-                delete {
-                  complete {
-                    cloudExtensions
-                      .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), samRequestContext)
-                      .map(_ => NoContent)
-                  }
-                }
-              }
-            }
-        }
+          }
       }
     }
 

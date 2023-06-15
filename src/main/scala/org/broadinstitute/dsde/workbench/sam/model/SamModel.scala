@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.model
 
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
@@ -24,6 +25,8 @@ object SamJsonSupport {
   implicit val ResourceRoleFormat = jsonFormat4(ResourceRole.apply)
 
   implicit val ResourceTypeFormat = jsonFormat6(ResourceType.apply)
+
+  implicit val SamUserFormat = jsonFormat9(SamUser.apply)
 
   implicit val UserStatusDetailsFormat = jsonFormat2(UserStatusDetails.apply)
 
