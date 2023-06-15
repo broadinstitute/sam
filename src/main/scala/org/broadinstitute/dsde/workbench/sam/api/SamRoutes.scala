@@ -34,7 +34,6 @@ abstract class SamRoutes(
     val statusService: StatusService,
     val managedGroupService: ManagedGroupService,
     val termsOfServiceConfig: TermsOfServiceConfig,
-    // val directoryDAO: DirectoryDAO,
     val policyEvaluatorService: PolicyEvaluatorService,
     val tosService: TosService,
     val liquibaseConfig: LiquibaseConfig,

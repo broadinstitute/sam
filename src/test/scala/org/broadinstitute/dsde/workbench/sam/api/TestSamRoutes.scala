@@ -31,7 +31,6 @@ class TestSamRoutes(
     statusService: StatusService,
     managedGroupService: ManagedGroupService,
     val user: SamUser,
-    // directoryDAO: DirectoryDAO,
     val cloudExtensions: CloudExtensions = NoExtensions,
     override val newSamUser: Option[SamUser] = None,
     tosService: TosService,
@@ -57,7 +56,6 @@ class TestSamRoutes(
     with ExtensionRoutes
     with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
-  // def mockDirectoryDao: DirectoryDAO = directoryDAO
   def createUserAndAcceptTos(samUser: SamUser, samRequestContext: SamRequestContext): Unit = {
     TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
     TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))

@@ -26,7 +26,6 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
   def directives(dirDAO: DirectoryDAO = new MockDirectoryDAO(), tosConfig: TermsOfServiceConfig = TestSupport.tosConfig): StandardSamUserDirectives =
     new StandardSamUserDirectives {
       override implicit val executionContext: ExecutionContext = null
-      // override val directoryDAO: DirectoryDAO = dirDAO
       override val cloudExtensions: CloudExtensions = null
       override val termsOfServiceConfig: TermsOfServiceConfig = null
       override val userService: UserService = new MockUserService(directoryDAO = dirDAO)
@@ -35,7 +34,6 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {
     forAll(minSuccessful(20)) { (token: OAuth2BearerToken, email: WorkbenchEmail, externalId: Either[GoogleSubjectId, AzureB2CId]) =>
-      // val directoryDAO = new MockDirectoryDAO()
       val userService = new MockUserService()
       val user = Generator.genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = externalId.left.toOption, azureB2CId = externalId.toOption)
       val oidcHeaders = OIDCHeaders(token, externalId, email, None)
