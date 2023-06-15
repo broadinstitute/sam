@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
