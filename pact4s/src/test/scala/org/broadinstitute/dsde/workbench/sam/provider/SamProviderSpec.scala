@@ -70,11 +70,11 @@ class SamProviderSpec
 
   lenient()
     .doReturn {
-      print("listUserResourceActions")
-      IO(Set(ResourceAction("delete"), ResourceAction("write")))
+      print("hasPermission")
+      IO(true)
     }
     .when(policyEvaluatorService)
-    .listUserResourceActions(any[FullyQualifiedResourceId], any[WorkbenchUserId], any[SamRequestContext])
+    .hasPermission(any[FullyQualifiedResourceId], any[ResourceAction], any[WorkbenchUserId], any[SamRequestContext])
 
   // Resource service and states for consumer verification
   // Here we are injecting a random resource type as well as a workspace resource type.
