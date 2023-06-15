@@ -57,7 +57,6 @@ class StatusRouteSpec extends RetryableAnyFlatSpec with Matchers with ScalatestR
       mockStatusService,
       mockManagedGroupService,
       Generator.genWorkbenchUserGoogle.sample.get,
-      directoryDAO,
       tosService = tosService
     )
 

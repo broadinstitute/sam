@@ -205,7 +205,6 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
       new StatusService(directoryDAO, NoExtensions),
       null,
       defaultUser,
-      directoryDAO,
       cloudExtensions,
       tosService = tosService
     )
@@ -216,7 +215,6 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
       new StatusService(directoryDAO, NoExtensions),
       null,
       adminUser,
-      directoryDAO,
       cloudExtensions,
       tosService = tosService
     )

@@ -83,7 +83,6 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
       mockStatusService,
       mockManagedGroupService,
       user,
-      directoryDAO,
       cloudExtensions,
       tosService = tosService
     )
