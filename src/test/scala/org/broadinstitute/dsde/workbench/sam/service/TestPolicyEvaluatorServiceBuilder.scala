@@ -48,6 +48,6 @@ case class TestPolicyEvaluatorServiceBuilder(directoryDAO: DirectoryDAO, policyD
   }
 
   def build: PolicyEvaluatorService =
-    new PolicyEvaluatorService(emailDomain, Map(workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
+    spy(new PolicyEvaluatorService(emailDomain, Map(workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO))
 
 }
