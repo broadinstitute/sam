@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
@@ -65,7 +66,12 @@ class SamProviderSpec
     .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
     .build
   val policyEvaluatorService: PolicyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
-
+  when {
+    policyEvaluatorService.listUserResourceActions(any[FullyQualifiedResourceId], any[WorkbenchUserId], any[SamRequestContext])
+  } thenReturn {
+    print("listUserResourceActions")
+    IO(Set(ResourceAction("delete"), ResourceAction("write")))
+  }
   // Resource service and states for consumer verification
   // Here we are injecting a random resource type as well as a workspace resource type.
   // We can also inject all possible Sam resource types by taking a look at genResourceTypeName if needed.
