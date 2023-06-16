@@ -69,7 +69,7 @@ class SamProviderSpec
   val policyEvaluatorService: PolicyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
   // lenient()
   //  .doReturn {
-  //    print("hasPermission")
+  //    print("listUserResources")
   //    IO(true)
   //  }
   //  .when(policyEvaluatorService)
