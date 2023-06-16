@@ -67,7 +67,13 @@ class SamProviderSpec
     .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
     .build
   val policyEvaluatorService: PolicyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
-
+  // lenient()
+  //  .doReturn {
+  //    print("hasPermission")
+  //    IO(true)
+  //  }
+  //  .when(policyEvaluatorService)
+  //  .listUserResources(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
   lenient()
     .doReturn {
       print("hasPermission")
