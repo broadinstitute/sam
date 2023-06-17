@@ -206,12 +206,16 @@ class PolicyEvaluatorService(
       }
     }
 
-  private def getResourceType(resourceTypeName: ResourceTypeName): IO[ResourceType] =
+  private def getResourceType(resourceTypeName: ResourceTypeName): IO[ResourceType] = {
+    println("policy evaluator getResourceType")
+    println(resourceTypeName)
+    println(resourceTypes)
     IO.fromEither(
       resourceTypes
         .get(resourceTypeName)
         .toRight(new WorkbenchException(s"missing configration for resourceType ${resourceTypeName}"))
     )
+  }
 
   def listUserManagedGroupsWithRole(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ManagedGroupAndRole]] =
     for {

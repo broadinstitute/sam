@@ -52,6 +52,10 @@ class SamProviderSpec
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
 
+  // Generate some random Sam resource types.
+  // These resource types are injected into ResourceService and PolicyEvaluatorService
+  val samResourceTypes = Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get)
+
   // Minimally viable Sam service and states for consumer verification
   val userService: UserService = TestUserServiceBuilder()
     .withAllUsersGroup(allUsersGroup)
@@ -87,7 +91,7 @@ class SamProviderSpec
   // We can also inject all possible Sam resource types by taking a look at genResourceTypeName if needed.
   val resourceService: ResourceService =
     TestResourceServiceBuilder(policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions)
-      .withResourceTypes(Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get))
+      .withResourceTypes(samResourceTypes)
       .build
 
   // The following services are mocked for now
