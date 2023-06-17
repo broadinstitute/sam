@@ -117,21 +117,26 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         pathPrefix(Segment) { resourceTypeName =>
           println("withNonAdminResourceType")
           withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+            println("found resourceType")
+            println(resourceType)
             pathEndOrSingleSlash {
               println("getUserResourcesOfType or postResource")
               getUserResourcesOfType(resourceType, samUser, samRequestContext) ~
                 postResource(resourceType, samUser, samRequestContext)
             } ~
               pathPrefix(Segment) { resourceId =>
-                val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
                 println("resource")
+                println(resourceId)
+                val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
                 println(resource)
 
                 pathEndOrSingleSlash {
+                  println("deleteResource")
                   deleteResource(resource, samUser, samRequestContext) ~
                     postDefaultResource(resourceType, resource, samUser, samRequestContext)
                 } ~
                   pathPrefix("action") {
+                    println("action")
                     pathPrefix(Segment) { action =>
                       pathEndOrSingleSlash {
                         getActionPermissionForUser(resource, samUser, action, samRequestContext)
