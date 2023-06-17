@@ -21,6 +21,8 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
   lenient()
     .doAnswer { (invocation: InvocationOnMock) =>
       val policy = invocation.getArgument[AccessPolicy](0)
+      println("Created policy")
+      println(policy.id)
       makePolicyExist(policy)
       IO(policy)
     }

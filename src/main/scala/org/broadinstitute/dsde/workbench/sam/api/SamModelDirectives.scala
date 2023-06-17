@@ -46,9 +46,11 @@ trait SamModelDirectives {
     }
 
   def withNonAdminResourceType(name: ResourceTypeName): Directive1[ResourceType] =
-    if (name != resourceTypeAdminName)
+    if (name != resourceTypeAdminName) {
+      println("withResourceType")
+      println(name.value)
       withResourceType(name)
-    else
+    } else
       failWith(
         new WorkbenchExceptionWithErrorReport(
           ErrorReport(
