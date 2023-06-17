@@ -70,7 +70,8 @@ class SamProviderSpec
   val accessPolicyDAO: AccessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
     .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
     .build
-  val policyEvaluatorService: PolicyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
+  val policyEvaluatorService: PolicyEvaluatorService =
+    TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).withResourceTypes(samResourceTypes).build
   // lenient()
   //  .doReturn {
   //    print("listUserResources")
