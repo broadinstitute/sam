@@ -125,7 +125,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                 postResource(resourceType, samUser, samRequestContext)
             } ~
               pathPrefix(Segment) { resourceId =>
-                println("resource")
+                println("resourceId")
                 println(resourceId)
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
                 println(resource)
@@ -138,12 +138,17 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                   pathPrefix("action") {
                     println("action")
                     pathPrefix(Segment) { action =>
+                      println(action)
                       pathEndOrSingleSlash {
+                        println("getActionPermissionForUser")
                         getActionPermissionForUser(resource, samUser, action, samRequestContext)
                       } ~
                         pathPrefix("userEmail") {
+                          println("userEmail")
                           pathPrefix(Segment) { userEmail =>
+                            println(userEmail)
                             pathEndOrSingleSlash {
+                              println("getActionPermissionForUserEmail")
                               getActionPermissionForUserEmail(resource, samUser, ResourceAction(action), WorkbenchEmail(userEmail), samRequestContext)
                             }
                           }
