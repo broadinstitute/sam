@@ -140,7 +140,7 @@ class SamProviderSpec
       lenient()
         .doReturn {
           println(action + " permission mocked to " + hasPermission)
-          hasPermission
+          IO.pure(hasPermission)
         }
         .when(policyEvaluatorService)
         .hasPermission(any[FullyQualifiedResourceId], eqTo(ResourceAction(action)), any[WorkbenchUserId], any[SamRequestContext])
