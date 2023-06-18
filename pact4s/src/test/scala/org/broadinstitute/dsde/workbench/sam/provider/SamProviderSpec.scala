@@ -80,13 +80,13 @@ class SamProviderSpec
   //  }
   //  .when(policyEvaluatorService)
   //  .listUserResources(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
-  lenient()
-    .doReturn {
-      print("hasPermission")
-      IO(true)
-    }
-    .when(policyEvaluatorService)
-    .hasPermission(any[FullyQualifiedResourceId], any[ResourceAction], any[WorkbenchUserId], any[SamRequestContext])
+  // lenient()
+  //  .doReturn {
+  //    print("hasPermission")
+  //    IO(true)
+  //  }
+  //  .when(policyEvaluatorService)
+  //  .hasPermission(any[FullyQualifiedResourceId], any[ResourceAction], any[WorkbenchUserId], any[SamRequestContext])
 
   // Resource service and states for consumer verification
   // Here we are injecting a random resource type as well as a workspace resource type.
@@ -135,6 +135,18 @@ class SamProviderSpec
     })
   } yield ()
 
+  private def mockResourceActionPermission(action: String, hasPermission: Boolean): IO[Unit] = for {
+    _ <- IO(
+      lenient()
+        .doReturn {
+          println(action + " permission mocked to " + hasPermission)
+          hasPermission
+        }
+        .when(policyEvaluatorService)
+        .hasPermission(any[FullyQualifiedResourceId], ResourceAction(action), any[WorkbenchUserId], any[SamRequestContext])
+    )
+  } yield ()
+
   private val providerStatesHandler: StateManagementFunction = StateManagementFunction {
     case ProviderState(States.UserExists, _) =>
       logger.debug(States.UserExists)
@@ -142,9 +154,14 @@ class SamProviderSpec
       mockCriticalSubsystemsStatus(true).unsafeRunSync()
     case ProviderState(States.SamNotOK, _) =>
       mockCriticalSubsystemsStatus(false).unsafeRunSync()
-    case ProviderState("user has delete permission", params) =>
-      println("user has delete permission")
-      println(params)
+    case ProviderState("user has delete permission", _) =>
+      mockResourceActionPermission("delete", true).unsafeRunSync()
+    case ProviderState("user has write permission", _) =>
+      mockResourceActionPermission("write", true).unsafeRunSync()
+    case ProviderState("user does not have delete permission", _) =>
+      mockResourceActionPermission("delete", false).unsafeRunSync()
+    case ProviderState("user does not have write permission", _) =>
+      mockResourceActionPermission("write", false).unsafeRunSync()
     case _ =>
       logger.debug("other state")
   }
@@ -216,7 +233,11 @@ class SamProviderSpec
   def requestFilter: ProviderRequest => ProviderRequestFilter = customFilter
 
   // Convenient method to reset provider states
-  private def reInitializeStates(): Unit = mockCriticalSubsystemsStatus(true).unsafeRunSync()
+  private def reInitializeStates(): Unit = {
+    mockCriticalSubsystemsStatus(true).unsafeRunSync()
+    mockResourceActionPermission("write", true).unsafeRunSync()
+    mockResourceActionPermission("delete", true).unsafeRunSync()
+  }
 
   private def customFilter(req: ProviderRequest): ProviderRequestFilter = {
     println("recv req")

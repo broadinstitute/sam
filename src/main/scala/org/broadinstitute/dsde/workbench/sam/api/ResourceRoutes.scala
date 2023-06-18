@@ -126,8 +126,9 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
             } ~
               pathPrefix(Segment) { resourceId =>
                 println("resourceId")
-                // println(resourceId)
+                println(resourceId)
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
+                println("resource")
                 println(resource)
 
                 pathEndOrSingleSlash {
