@@ -143,7 +143,7 @@ class SamProviderSpec
           hasPermission
         }
         .when(policyEvaluatorService)
-        .hasPermission(any[FullyQualifiedResourceId], ResourceAction(action), any[WorkbenchUserId], any[SamRequestContext])
+        .hasPermission(any[FullyQualifiedResourceId], eqTo(ResourceAction(action)), any[WorkbenchUserId], any[SamRequestContext])
     )
   } yield ()
 
