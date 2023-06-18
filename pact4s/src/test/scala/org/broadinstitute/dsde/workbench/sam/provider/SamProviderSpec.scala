@@ -141,6 +141,8 @@ class SamProviderSpec
       mockCriticalSubsystemsStatus(true).unsafeRunSync()
     case ProviderState(States.SamNotOK, _) =>
       mockCriticalSubsystemsStatus(false).unsafeRunSync()
+    case ProviderState("user has delete permission", _) =>
+      println("user has delete permission")
     case _ =>
       logger.debug("other state")
   }
