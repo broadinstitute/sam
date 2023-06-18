@@ -220,12 +220,19 @@ class SamProviderSpec
   private def customFilter(req: ProviderRequest): ProviderRequestFilter = {
     println("recv req")
     println(req.uri.getRawPath)
+    println(req.uri.getPath)
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
         parseAuth(value)
       case None =>
         logger.debug("no auth header found")
         NoOpFilter
+    }
+    req.uri.getPath match {
+      case p if p.equals("/api/resources/v2/workspace//action/delete") =>
+        println("detect action delete")
+        SetHeaders("Location" -> "/api/resources/v2/workspace/92276398-fbe4-414a-9304-e7dcf18ac80e/action/delete")
+      case _ => NoOpFilter
     }
   }
 
