@@ -261,7 +261,7 @@ class SamProviderSpec
       .withPendingPactsEnabled(ProviderTags(gitSha))
   ).withHost("localhost")
     .withPort(8080)
-    // .withRequestFiltering(requestFilter)
+    .withRequestFiltering(requestFilter)
     // More sophisticated state management can be done here.
     // It's recommended to have predefined states, e.g.
     // TestUserServiceBuilder, StatefulMockAccessPolicyDaoBuilder,
