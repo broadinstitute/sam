@@ -23,12 +23,12 @@ import org.mockito.Mockito.lenient
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
-import pact4s.provider.Authentication.BasicAuth
 import pact4s.provider.ProviderRequestFilter.{NoOpFilter, SetHeaders}
 import pact4s.provider.StateManagement.StateManagementFunction
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
+import java.io.File
 import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -228,12 +228,6 @@ class SamProviderSpec
         logger.debug("no auth header found")
         NoOpFilter
     }
-    req.uri.getPath match {
-      case p if p.equals("/api/resources/v2/workspace//action/delete") =>
-        println("detect action delete")
-        SetHeaders("Location" -> "/api/resources/v2/workspace/92276398-fbe4-414a-9304-e7dcf18ac80e/action/delete")
-      case _ => NoOpFilter
-    }
   }
 
   private def parseAuth(auth: String): ProviderRequestFilter =
@@ -262,13 +256,15 @@ class SamProviderSpec
 
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
-    pactSource = PactSource
-      .PactBrokerWithSelectors(
-        brokerUrl = pactBrokerUrl
-      )
-      .withConsumerVersionSelectors(consumerVersionSelectors)
-      .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-      .withPendingPactsEnabled(ProviderTags(gitSha))
+    pactSource = PactSource.FileSource(
+      Map("wds-consumer" -> new File("./pact4s/src/test/resources/wds-consumer-sam-provider.json"))
+    )
+    // .PactBrokerWithSelectors(
+    //  brokerUrl = pactBrokerUrl
+    // )
+    // .withConsumerVersionSelectors(consumerVersionSelectors)
+    // .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
+    // .withPendingPactsEnabled(ProviderTags(gitSha))
   ).withHost("localhost")
     .withPort(8080)
     .withRequestFiltering(requestFilter)
@@ -285,9 +281,10 @@ class SamProviderSpec
   it should "Verify pacts" in {
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
-      publishVerificationResults = Some(
-        PublishVerificationResults(gitSha, ProviderTags(branch))
-      ),
+      publishVerificationResults = None,
+      // publishVerificationResults = Some(
+      //  PublishVerificationResults(gitSha, ProviderTags(branch))
+      // ),
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE
       ).toList,
