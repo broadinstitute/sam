@@ -216,7 +216,7 @@ class SamProviderSpec
 
   private def customFilter(req: ProviderRequest): ProviderRequestFilter = {
     println("recv req")
-    println(req)
+    println(req.uri.getRawPath)
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
         parseAuth(value)
