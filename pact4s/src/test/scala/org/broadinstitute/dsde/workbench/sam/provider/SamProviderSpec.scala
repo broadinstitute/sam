@@ -30,6 +30,7 @@ import pact4s.scalatest.PactVerifier
 
 import java.io.File
 import java.lang.Thread.sleep
+import java.nio.file.Paths
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
@@ -257,7 +258,7 @@ class SamProviderSpec
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
     pactSource = PactSource.FileSource(
-      Map("wds-consumer" -> new File("./pact4s/src/test/resources/wds-consumer-sam-provider.json"))
+      Map("wds-consumer" -> new File("./src/test/resources/wds-consumer-sam-provider.json"))
     )
     // .PactBrokerWithSelectors(
     //  brokerUrl = pactBrokerUrl
@@ -277,6 +278,10 @@ class SamProviderSpec
       providerStatesHandler
         .withBeforeEach(() => reInitializeStates())
     )
+
+  val currentDirectory = Paths.get(".").toAbsolutePath.normalize.toString
+  println("currentDirectory")
+  println(currentDirectory)
 
   it should "Verify pacts" in {
     verifyPacts(
