@@ -214,7 +214,9 @@ class SamProviderSpec
   // Convenient method to reset provider states
   private def reInitializeStates(): Unit = mockCriticalSubsystemsStatus(true).unsafeRunSync()
 
-  private def customFilter(req: ProviderRequest): ProviderRequestFilter =
+  private def customFilter(req: ProviderRequest): ProviderRequestFilter = {
+    println("recv req")
+    println(req)
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
         parseAuth(value)
@@ -222,6 +224,7 @@ class SamProviderSpec
         logger.debug("no auth header found")
         NoOpFilter
     }
+  }
 
   private def parseAuth(auth: String): ProviderRequestFilter =
     Authorization

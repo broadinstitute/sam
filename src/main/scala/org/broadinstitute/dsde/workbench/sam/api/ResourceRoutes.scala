@@ -124,9 +124,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
               getUserResourcesOfType(resourceType, samUser, samRequestContext) ~
                 postResource(resourceType, samUser, samRequestContext)
             } ~
-              pathPrefix("92276398-fbe4-414a-9304-e7dcf18ac80e") {
-                // resourceId =>
-                val resourceId = "92276398-fbe4-414a-9304-e7dcf18ac80e"
+              pathPrefix(Segment) { resourceId =>
                 println("resourceId")
                 // println(resourceId)
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
