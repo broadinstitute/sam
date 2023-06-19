@@ -30,7 +30,6 @@ import pact4s.scalatest.PactVerifier
 
 import java.io.File
 import java.lang.Thread.sleep
-import java.nio.file.Paths
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
@@ -299,10 +298,6 @@ class SamProviderSpec
       providerStatesHandler
         .withBeforeEach(() => reInitializeStates())
     )
-
-  val currentDirectory = Paths.get(".").toAbsolutePath.normalize.toString
-  println("currentDirectory")
-  println(currentDirectory)
 
   it should "Verify pacts" in {
     verifyPacts(

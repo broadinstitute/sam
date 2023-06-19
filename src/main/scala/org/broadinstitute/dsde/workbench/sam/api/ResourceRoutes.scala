@@ -117,39 +117,30 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         pathPrefix(Segment) { resourceTypeName =>
           println("withNonAdminResourceType")
           withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
-            println("found resourceType")
-            println(resourceType)
+            println("parse resourceType: " + resourceType)
             pathEndOrSingleSlash {
-              println("getUserResourcesOfType or postResource")
               getUserResourcesOfType(resourceType, samUser, samRequestContext) ~
                 postResource(resourceType, samUser, samRequestContext)
             } ~
               pathPrefix(Segment) { resourceId =>
-                println("resourceId")
-                println(resourceId)
+                println("parse resourceId: " + resourceId)
                 val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
-                println("resource")
-                println(resource)
 
                 pathEndOrSingleSlash {
-                  println("deleteResource")
                   deleteResource(resource, samUser, samRequestContext) ~
                     postDefaultResource(resourceType, resource, samUser, samRequestContext)
                 } ~
                   pathPrefix("action") {
-                    println("action")
                     pathPrefix(Segment) { action =>
-                      println(action)
+                      println("parse action: " + action)
                       pathEndOrSingleSlash {
                         println("getActionPermissionForUser")
                         getActionPermissionForUser(resource, samUser, action, samRequestContext)
                       } ~
                         pathPrefix("userEmail") {
-                          println("userEmail")
                           pathPrefix(Segment) { userEmail =>
                             println(userEmail)
                             pathEndOrSingleSlash {
-                              println("getActionPermissionForUserEmail")
                               getActionPermissionForUserEmail(resource, samUser, ResourceAction(action), WorkbenchEmail(userEmail), samRequestContext)
                             }
                           }
