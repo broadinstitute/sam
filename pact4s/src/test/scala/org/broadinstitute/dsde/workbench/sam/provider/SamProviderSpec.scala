@@ -23,12 +23,12 @@ import org.mockito.Mockito.lenient
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
+import pact4s.provider.Authentication.BasicAuth
 import pact4s.provider.ProviderRequestFilter.{NoOpFilter, SetHeaders}
 import pact4s.provider.StateManagement.StateManagementFunction
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
-import java.io.File
 import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -37,6 +37,10 @@ object States {
   val SamOK = "Sam is ok"
   val SamNotOK = "Sam is not ok"
   val UserExists = "user exists"
+  val HasResourceDeletePermission = "user has delete permission"
+  val HasResourceWritePermission = "user has write permission"
+  val DoesNotHaveResourceDeletePermission = "user does not have delete permission"
+  val DoesNotHaveResourceWritePermission = "user does not have write permission"
 }
 
 class SamProviderSpec
@@ -134,15 +138,14 @@ class SamProviderSpec
     })
   } yield ()
 
-  private def mockResourceActionPermission(action: String, hasPermission: Boolean): IO[Unit] = for {
+  private def mockResourceActionPermission(action: ResourceAction, hasPermission: Boolean): IO[Unit] = for {
     _ <- IO(
       lenient()
         .doReturn {
-          println(action + " permission mocked to " + hasPermission)
           IO.pure(hasPermission)
         }
         .when(policyEvaluatorService)
-        .hasPermission(any[FullyQualifiedResourceId], eqTo(ResourceAction(action)), any[WorkbenchUserId], any[SamRequestContext])
+        .hasPermission(any[FullyQualifiedResourceId], eqTo(action), any[WorkbenchUserId], any[SamRequestContext])
     )
   } yield ()
 
@@ -153,14 +156,14 @@ class SamProviderSpec
       mockCriticalSubsystemsStatus(true).unsafeRunSync()
     case ProviderState(States.SamNotOK, _) =>
       mockCriticalSubsystemsStatus(false).unsafeRunSync()
-    case ProviderState("user has delete permission", _) =>
-      mockResourceActionPermission("delete", true).unsafeRunSync()
-    case ProviderState("user has write permission", _) =>
-      mockResourceActionPermission("write", true).unsafeRunSync()
-    case ProviderState("user does not have delete permission", _) =>
-      mockResourceActionPermission("delete", false).unsafeRunSync()
-    case ProviderState("user does not have write permission", _) =>
-      mockResourceActionPermission("write", false).unsafeRunSync()
+    case ProviderState(States.HasResourceDeletePermission, _) =>
+      mockResourceActionPermission(SamResourceActions.delete, true).unsafeRunSync()
+    case ProviderState(States.HasResourceWritePermission, _) =>
+      mockResourceActionPermission(SamResourceActions.write, true).unsafeRunSync()
+    case ProviderState(States.DoesNotHaveResourceDeletePermission, _) =>
+      mockResourceActionPermission(SamResourceActions.delete, false).unsafeRunSync()
+    case ProviderState(States.DoesNotHaveResourceWritePermission, _) =>
+      mockResourceActionPermission(SamResourceActions.write, false).unsafeRunSync()
     case _ =>
       logger.debug("other state")
   }
@@ -234,14 +237,12 @@ class SamProviderSpec
   // Convenient method to reset provider states
   private def reInitializeStates(): Unit = {
     mockCriticalSubsystemsStatus(true).unsafeRunSync()
-    mockResourceActionPermission("write", true).unsafeRunSync()
-    mockResourceActionPermission("delete", true).unsafeRunSync()
+    mockResourceActionPermission(SamResourceActions.write, true).unsafeRunSync()
+    mockResourceActionPermission(SamResourceActions.delete, true).unsafeRunSync()
   }
 
   private def customFilter(req: ProviderRequest): ProviderRequestFilter = {
-    println("recv req")
-    println(req.uri.getRawPath)
-    println(req.uri.getPath)
+    logger.debug("Sam route requested: " + req.uri.getPath)
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
         parseAuth(value)
@@ -277,15 +278,13 @@ class SamProviderSpec
 
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
-    pactSource = PactSource.FileSource(
-      Map("wds-consumer" -> new File("./src/test/resources/wds-consumer-sam-provider.json"))
-    )
-    // .PactBrokerWithSelectors(
-    //  brokerUrl = pactBrokerUrl
-    // )
-    // .withConsumerVersionSelectors(consumerVersionSelectors)
-    // .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-    // .withPendingPactsEnabled(ProviderTags(gitSha))
+    pactSource = PactSource
+      .PactBrokerWithSelectors(
+        brokerUrl = pactBrokerUrl
+      )
+      .withConsumerVersionSelectors(consumerVersionSelectors)
+      .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
+      .withPendingPactsEnabled(ProviderTags(gitSha))
   ).withHost("localhost")
     .withPort(8080)
     .withRequestFiltering(requestFilter)
@@ -302,10 +301,9 @@ class SamProviderSpec
   it should "Verify pacts" in {
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
-      publishVerificationResults = None,
-      // publishVerificationResults = Some(
-      //  PublishVerificationResults(gitSha, ProviderTags(branch))
-      // ),
+      publishVerificationResults = Some(
+        PublishVerificationResults(gitSha, ProviderTags(branch))
+      ),
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE
       ).toList,
