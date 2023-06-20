@@ -75,21 +75,9 @@ class SamProviderSpec
     .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
     .build
   val policyEvaluatorService: PolicyEvaluatorService =
-    TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).withResourceTypes(samResourceTypes).build
-  // lenient()
-  //  .doReturn {
-  //    print("listUserResources")
-  //    IO(true)
-  //  }
-  //  .when(policyEvaluatorService)
-  //  .listUserResources(any[ResourceTypeName], any[WorkbenchUserId], any[SamRequestContext])
-  // lenient()
-  //  .doReturn {
-  //    print("hasPermission")
-  //    IO(true)
-  //  }
-  //  .when(policyEvaluatorService)
-  //  .hasPermission(any[FullyQualifiedResourceId], any[ResourceAction], any[WorkbenchUserId], any[SamRequestContext])
+    TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO)
+      .withResourceTypes(samResourceTypes)
+      .build
 
   // Resource service and states for consumer verification
   // Here we are injecting a random resource type as well as a workspace resource type.
