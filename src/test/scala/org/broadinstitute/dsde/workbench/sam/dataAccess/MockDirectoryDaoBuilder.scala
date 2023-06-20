@@ -84,7 +84,7 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
     this
   }
 
-  def withDisabilableUser(samUser: SamUser) : MockDirectoryDaoBuilder = {
+  def withDisabilableUser(samUser: SamUser): MockDirectoryDaoBuilder = {
     mockedDirectoryDAO.disableIdentity(eqTo(samUser.id), any[SamRequestContext]) returns {
       makeUserDisabled(samUser)
       IO.unit

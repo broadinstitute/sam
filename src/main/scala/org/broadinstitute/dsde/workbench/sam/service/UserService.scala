@@ -120,15 +120,14 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
           // validate all fields to be updated
-          val errorReports = Seq[ErrorReport]()
-          request.email.map(email => errorReports ++ validateEmail(email, blockedEmailDomains))
+          var errorReports = Seq[ErrorReport]()
+          request.email.foreach(email => errorReports = errorReports ++ validateEmail(email, blockedEmailDomains))
           if (errorReports.nonEmpty) {
             IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
           } else { // apply all updates
             var updatedUser = user
-            request.email.map { email =>
+            request.email.foreach { email =>
               directoryDAO.updateUserEmail(userId, email, samRequestContext)
-              // TODO add error handling (do not update the user email if the DB call fails)
               updatedUser = user.copy(email = email)
             }
             IO(Some(updatedUser))
@@ -480,6 +479,7 @@ object UserService {
 
   // from https://www.regular-expressions.info/email.html
   val emailRegex: Regex = "(?i)^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$".r
+  // val emailRegex: Regex = "\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b".r
 
   // Generate a 21 digits unique identifier. First char is fixed 2
   // CurrentMillis.append(randomString)

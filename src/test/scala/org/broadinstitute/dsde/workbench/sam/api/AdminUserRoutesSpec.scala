@@ -19,11 +19,11 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.Future
+//import scala.concurrent.Future
 
 class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+  // val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
   val tosService = MockTosServiceBuilder().withAllAccepted().build
   val adminUser = Generator.genWorkbenchUserBoth.sample.get
   override val adminGroupEmail = Generator.genFirecloudEmail.sample.get
@@ -76,7 +76,7 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
       withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.OK)
       // Is there a better way to do the comparison?
       // Enabled in particular since we cant directly extract the user from the builder
-      responseAs[SamUser] shouldEqual enabledUser.copy(enabled = true, email = email.get)
+      responseAs[SamUser] shouldEqual enabledUser.copy(email = email.get)
     }
   }
 
@@ -116,7 +116,6 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
     val enabledUser = Generator.genWorkbenchUserBoth.sample.get
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withAdminUser(adminUser) // enabled "admin" user who is making the http request
-      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
       .build
     // Act
     Get(s"/api/admin/v1/user/email/fc-admins@dev.test.firecloud.org") ~> samRoutes.route ~> check {
@@ -144,7 +143,6 @@ class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withAdminUser(adminUser) // enabled "admin" user who is making the http request
       .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
-      //.withDisablableUser(enabledUser)
       .build
     // Act
     Put(s"/api/admin/v1/user/${enabledUser.id}/disable") ~> samRoutes.route ~> check {
@@ -264,7 +262,7 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
   def setUpAdminTest(): (SamUser, SamRoutes) = {
     val googDirectoryDAO = new MockGoogleDirectoryDAO()
     val cloudExtensions = new NoExtensions {
-      override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
+      // override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
     val (_, _, routes) =
       createTestUser(testUser = adminUserFoo, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO), tosAccepted = true)
@@ -311,7 +309,7 @@ trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with Scalatest
     val tosService = MockTosServiceBuilder().withAllAccepted().build
 
     val cloudExtensions = new NoExtensions {
-      override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googleDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
+      // override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googleDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
     }
 
     directoryDAO.createUser(adminUserFoo, samRequestContext).unsafeRunSync()
