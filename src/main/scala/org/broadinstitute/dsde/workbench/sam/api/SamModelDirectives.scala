@@ -41,20 +41,14 @@ trait SamModelDirectives {
 
   def withResourceType(name: ResourceTypeName): Directive1[ResourceType] =
     onSuccess(resourceService.getResourceType(name)).map {
-      case Some(resourceType) =>
-        println("success")
-        resourceType
-      case None =>
-        println("fail")
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
+      case Some(resourceType) => resourceType
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"resource type ${name.value} not found"))
     }
 
   def withNonAdminResourceType(name: ResourceTypeName): Directive1[ResourceType] =
-    if (name != resourceTypeAdminName) {
-      println("withResourceType")
-      println(name.value)
+    if (name != resourceTypeAdminName)
       withResourceType(name)
-    } else
+    else
       failWith(
         new WorkbenchExceptionWithErrorReport(
           ErrorReport(

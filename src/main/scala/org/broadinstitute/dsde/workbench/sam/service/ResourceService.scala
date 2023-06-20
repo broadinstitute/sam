@@ -46,13 +46,8 @@ class ResourceService(
   def getResourceTypes(): IO[Map[ResourceTypeName, ResourceType]] =
     IO.pure(resourceTypes)
 
-  def getResourceType(name: ResourceTypeName): IO[Option[ResourceType]] = {
-    println("resourceTypes")
-    println(resourceTypes)
-    println(name)
-    println(resourceTypes.get(name))
+  def getResourceType(name: ResourceTypeName): IO[Option[ResourceType]] =
     IO.pure(resourceTypes.get(name))
-  }
 
   /** Creates each resource type in the database and creates a resource for each with the resource type SamResourceTypes.resourceTypeAdmin.
     *

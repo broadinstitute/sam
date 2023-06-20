@@ -22,8 +22,6 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
   lenient()
     .doAnswer { (invocation: InvocationOnMock) =>
       val policy = invocation.getArgument[AccessPolicy](0)
-      println("Created policy")
-      println(policy.id)
       makePolicyExist(policy)
       IO(policy)
     }
@@ -45,12 +43,8 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
     //  that our production code is not designed properly.  This is wayyyy more logic than we want in a mock.
     lenient()
       .doAnswer { (i: InvocationOnMock) =>
-        println("listUserResourcesWithRolesAndActions")
         val resourceTypeName = i.getArgument[ResourceTypeName](0)
-        println(resourceTypeName.value)
         val workbenchUserId = i.getArgument[WorkbenchUserId](1)
-        println(policy.members)
-        println(workbenchUserId.value)
         val policies = Map(policy.id -> policy)
 
         IO {
@@ -70,7 +64,6 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       .when(mockedAccessPolicyDAO)
       .listUserResourcesWithRolesAndActions(
         ArgumentMatchers.eq(policy.id.resource.resourceTypeName),
-        // any[WorkbenchUserId],
         argThat(MatchesOneOf(policy.members.map(m => WorkbenchUserId(m.toString)))),
         any[SamRequestContext]
       )
