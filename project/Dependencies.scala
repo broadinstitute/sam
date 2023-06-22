@@ -152,7 +152,7 @@ object Dependencies {
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.16.0"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
