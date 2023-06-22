@@ -90,6 +90,7 @@ object SamResourceActions {
   val readPolicies = ResourceAction("read_policies")
   val alterPolicies = ResourceAction("alter_policies")
   val delete = ResourceAction("delete")
+  val write = ResourceAction("write")
   val notifyAdmins = ResourceAction("notify_admins")
   val setAccessInstructions = ResourceAction("set_access_instructions")
   val setPublic = ResourceAction("set_public")
