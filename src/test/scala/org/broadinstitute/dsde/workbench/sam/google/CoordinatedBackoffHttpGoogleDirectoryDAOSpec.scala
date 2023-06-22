@@ -29,7 +29,7 @@ class CoordinatedBackoffHttpGoogleDirectoryDAOSpec extends AnyFreeSpec with Matc
         Await.result(test, Duration.Inf) match {
           case Right(_) => fail("expected error")
           case Left(errors) =>
-            errors.length shouldBe 7
+            errors.length shouldBe 8
             errors.forall(_ == googleDao.usageLimitedException)
         }
       }
