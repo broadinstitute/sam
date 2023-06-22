@@ -168,6 +168,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v1/resources/{resourceTypeName}/{resourceId}:
+    delete:
+      tags:
+        - Admin
+      summary: Delete a resource
+      operationId: adminDeleteResource
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Resource successfully deleted
+          content: {}
+        403:
+          description: You do not have admin privileges
+          content: {}
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/resources/{resourceTypeName}/{resourceId}/policies:
     get:
       tags:
