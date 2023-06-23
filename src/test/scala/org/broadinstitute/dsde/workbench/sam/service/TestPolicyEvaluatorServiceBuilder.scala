@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.mockito.scalatest.MockitoSugar
 
+import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 
@@ -16,6 +17,8 @@ case class TestPolicyEvaluatorServiceBuilder(directoryDAO: DirectoryDAO, policyD
 ) extends MockitoSugar {
   private val existingPolicies: mutable.Set[AccessPolicy] = mutable.Set.empty
   private val emailDomain = "example.com"
+  private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType] = new TrieMap()
+
   private val defaultResourceTypeActions =
     Set(
       ResourceAction("alter_policies"),
@@ -47,7 +50,12 @@ case class TestPolicyEvaluatorServiceBuilder(directoryDAO: DirectoryDAO, policyD
     this
   }
 
+  def withResourceTypes(resourceTypeCollection: Set[ResourceType]): TestPolicyEvaluatorServiceBuilder = {
+    resourceTypeCollection.foreach(rt => resourceTypes += rt.name -> rt)
+    this
+  }
+
   def build: PolicyEvaluatorService =
-    new PolicyEvaluatorService(emailDomain, Map(workspaceResourceType.name -> workspaceResourceType), policyDAO, directoryDAO)
+    spy(new PolicyEvaluatorService(emailDomain, resourceTypes.toMap, policyDAO, directoryDAO))
 
 }
