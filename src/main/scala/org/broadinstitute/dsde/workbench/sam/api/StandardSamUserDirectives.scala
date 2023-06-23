@@ -91,6 +91,8 @@ object StandardSamUserDirectives {
   def getSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] = {
     println("oidcHeaders")
     println(oidcHeaders)
+    println("oidcHeaders.token")
+    println(oidcHeaders.token)
     oidcHeaders match {
       case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _, _) =>
         // If it's a PET account, we treat it as its owner
