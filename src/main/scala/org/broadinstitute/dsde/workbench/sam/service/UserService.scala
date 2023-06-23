@@ -479,7 +479,6 @@ object UserService {
 
   // from https://www.regular-expressions.info/email.html
   val emailRegex: Regex = "(?i)^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$".r
-  // val emailRegex: Regex = "\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b".r
 
   // Generate a 21 digits unique identifier. First char is fixed 2
   // CurrentMillis.append(randomString)
