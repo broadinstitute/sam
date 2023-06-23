@@ -56,7 +56,8 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   /** Utility function that knows how to convert all the various headers into OIDCHeaders
     */
-  private def requireOidcHeaders: Directive1[OIDCHeaders] =
+  private def requireOidcHeaders: Directive1[OIDCHeaders] = {
+    println("In requireOidcHeaders")
     (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
       externalIdFromHeaders &
       headerValueByName(emailHeader).as(WorkbenchEmail) &
@@ -67,6 +68,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
         logger.info(s"Auth Headers: $oidcHeaders")
         oidcHeaders
       }
+  }
 
   private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
     Try(BigInt(idString)).fold(
