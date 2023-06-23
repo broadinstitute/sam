@@ -24,7 +24,6 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       new StatusService(directoryDAO, NoExtensions),
       null,
       defaultUser,
-      directoryDAO,
       NoExtensions,
       tosService = tosService
     )
@@ -35,7 +34,6 @@ class UserRoutesV2Spec extends UserRoutesSpecHelper {
       new StatusService(directoryDAO, NoExtensions),
       null,
       petSAUser,
-      directoryDAO,
       NoExtensions,
       tosService = tosService
     )

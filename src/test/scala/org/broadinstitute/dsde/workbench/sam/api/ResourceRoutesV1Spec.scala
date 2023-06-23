@@ -1607,7 +1607,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.user, samRequestContext))
 
-    val user = samRoutes.directoryDAO.loadUser(samRoutes.user.id, samRequestContext).unsafeRunSync().get
+    val user = samRoutes.userService.directoryDAO.loadUser(samRoutes.user.id, samRequestContext).unsafeRunSync().get
     val userIdInfo = UserIdInfo(user.id, user.email, user.googleSubjectId)
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {
@@ -1666,7 +1666,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
     val resourceId = ResourceId("foo")
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, samRoutes.user, samRequestContext))
 
-    val user = samRoutes.directoryDAO.loadUser(samRoutes.user.id, samRequestContext).unsafeRunSync().get
+    val user = samRoutes.userService.directoryDAO.loadUser(samRoutes.user.id, samRequestContext).unsafeRunSync().get
     val userIdInfo = UserIdInfo(user.id, user.email, user.googleSubjectId)
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/allUsers") ~> samRoutes.route ~> check {

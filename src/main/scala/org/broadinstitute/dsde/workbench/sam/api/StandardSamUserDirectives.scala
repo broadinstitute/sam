@@ -13,9 +13,8 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
-import org.broadinstitute.dsde.workbench.sam.service.TosService
+import org.broadinstitute.dsde.workbench.sam.service.{TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -28,7 +27,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getActiveSamUser(oidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
+      getActiveSamUser(oidcHeaders, userService, tosService, samRequestContext).unsafeToFuture()
     }.tmap { samUser =>
       logger.info(s"Handling request for active Sam User: $samUser")
       samUser
@@ -37,7 +36,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getSamUser(oidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
+      getSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
     }.tmap { samUser =>
       logger.info(s"Handling request for (in)active Sam User: $samUser")
       samUser
@@ -86,32 +85,32 @@ object StandardSamUserDirectives {
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
   val managedIdentityObjectIdHeader = "OAUTH2_CLAIM_xms_mirid"
 
-  def getSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] =
+  def getSamUser(oidcHeaders: OIDCHeaders, userService: UserService, samRequestContext: SamRequestContext): IO[SamUser] =
     oidcHeaders match {
       case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _, _) =>
         // If it's a PET account, we treat it as its owner
-        directoryDAO.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
+        userService.getUserFromPetServiceAccount(ServiceAccountSubjectId(googleSubjectId.value), samRequestContext).flatMap {
           case Some(petsOwner) => IO.pure(petsOwner)
-          case None => lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext)
+          case None => lookUpByGoogleSubjectId(googleSubjectId, userService, samRequestContext)
         }
 
       case OIDCHeaders(_, Left(googleSubjectId), _, _, _) =>
-        lookUpByGoogleSubjectId(googleSubjectId, directoryDAO, samRequestContext)
+        lookUpByGoogleSubjectId(googleSubjectId, userService, samRequestContext)
 
       case OIDCHeaders(_, Right(azureB2CId), _, _, Some(objectId @ ManagedIdentityObjectId(UamiPattern(_)))) =>
         // If it's a managed identity, treat it as its owner
-        directoryDAO.getUserFromPetManagedIdentity(objectId, samRequestContext).flatMap {
+        userService.getUserFromPetManagedIdentity(objectId, samRequestContext).flatMap {
           case Some(petsOwner) => IO.pure(petsOwner)
-          case None => loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, samRequestContext)
+          case None => loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, userService, samRequestContext)
         }
 
       case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
-        loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, samRequestContext)
+        loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, userService, samRequestContext)
     }
 
-  def getActiveSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
+  def getActiveSamUser(oidcHeaders: OIDCHeaders, userService: UserService, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
-      user <- getSamUser(oidcHeaders, directoryDAO, samRequestContext)
+      user <- getSamUser(oidcHeaders, userService, samRequestContext)
       tosComplianceDetails <- tosService.getTosComplianceStatus(user)
     } yield {
       if (!tosComplianceDetails.permitsSystemUsage) {
@@ -127,31 +126,31 @@ object StandardSamUserDirectives {
   private def loadUserMaybeUpdateAzureB2CId(
       azureB2CId: AzureB2CId,
       maybeGoogleSubjectId: Option[GoogleSubjectId],
-      directoryDAO: DirectoryDAO,
+      userService: UserService,
       samRequestContext: SamRequestContext
   ) =
     for {
-      maybeUser <- directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext)
+      maybeUser <- userService.getUserByAzureB2CId(azureB2CId, samRequestContext)
       maybeUserAgain <- (maybeUser, maybeGoogleSubjectId) match {
         case (None, Some(googleSubjectId)) =>
-          updateUserAzureB2CId(azureB2CId, googleSubjectId, directoryDAO, samRequestContext)
+          updateUserAzureB2CId(azureB2CId, googleSubjectId, userService, samRequestContext)
         case _ => IO.pure(maybeUser)
       }
     } yield maybeUserAgain.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Azure Id $azureB2CId not found in sam")))
 
-  private def updateUserAzureB2CId(azureB2CId: AzureB2CId, googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext) =
+  private def updateUserAzureB2CId(azureB2CId: AzureB2CId, googleSubjectId: GoogleSubjectId, userService: UserService, samRequestContext: SamRequestContext) =
     for {
-      maybeSubject <- directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
+      maybeSubject <- userService.getSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
       _ <- maybeSubject match {
         case Some(userId: WorkbenchUserId) =>
-          directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
+          userService.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
         case _ => IO.unit
       }
-      maybeUser <- directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext)
+      maybeUser <- userService.getUserByAzureB2CId(azureB2CId, samRequestContext)
     } yield maybeUser
 
-  private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] =
-    directoryDAO.loadUserByGoogleSubjectId(googleSubjectId, samRequestContext).flatMap { maybeUser =>
+  private def lookUpByGoogleSubjectId(googleSubjectId: GoogleSubjectId, userService: UserService, samRequestContext: SamRequestContext): IO[SamUser] =
+    userService.getUserFromGoogleSubjectId(googleSubjectId, samRequestContext).flatMap { maybeUser =>
       IO.fromOption(maybeUser)(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"Google Id $googleSubjectId not found in sam")))
     }
 }

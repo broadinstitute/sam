@@ -63,7 +63,6 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
       mockStatusService,
       mockManagedGroupService,
       samUser,
-      directoryDAO,
       tosService = tosService
     )
   }
