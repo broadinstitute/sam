@@ -17,8 +17,11 @@ trait MockSamUserDirectives extends SamUserDirectives {
   private lazy val fakeOidcHeaders =
     OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
 
-  override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-    StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
+  override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = {
+    println("in withActiveUser")
+    onSuccess {
+      StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
+    }
   }
 
   override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
