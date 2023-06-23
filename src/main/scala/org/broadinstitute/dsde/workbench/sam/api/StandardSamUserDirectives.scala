@@ -114,7 +114,9 @@ object StandardSamUserDirectives {
     }
   }
 
-  def getActiveSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
+  def getActiveSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] = {
+    println("oidcHeaders.token")
+    println(oidcHeaders.token)
     for {
       user <- getSamUser(oidcHeaders, directoryDAO, samRequestContext)
       tosComplianceDetails <- tosService.getTosComplianceStatus(user)
@@ -128,6 +130,7 @@ object StandardSamUserDirectives {
 
       user
     }
+  }
 
   private def loadUserMaybeUpdateAzureB2CId(
       azureB2CId: AzureB2CId,
