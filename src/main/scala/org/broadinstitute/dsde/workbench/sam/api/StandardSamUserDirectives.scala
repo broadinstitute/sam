@@ -88,7 +88,9 @@ object StandardSamUserDirectives {
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
   val managedIdentityObjectIdHeader = "OAUTH2_CLAIM_xms_mirid"
 
-  def getSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] =
+  def getSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[SamUser] = {
+    println("oidcHeaders")
+    println(oidcHeaders)
     oidcHeaders match {
       case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _, _) =>
         // If it's a PET account, we treat it as its owner
@@ -110,6 +112,7 @@ object StandardSamUserDirectives {
       case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
         loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, directoryDAO, samRequestContext)
     }
+  }
 
   def getActiveSamUser(oidcHeaders: OIDCHeaders, directoryDAO: DirectoryDAO, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
     for {

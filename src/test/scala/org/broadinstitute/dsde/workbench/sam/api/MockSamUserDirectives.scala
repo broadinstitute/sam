@@ -24,8 +24,11 @@ trait MockSamUserDirectives extends SamUserDirectives {
     }
   }
 
-  override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-    StandardSamUserDirectives.getSamUser(fakeOidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
+  override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = {
+    println("in withUserAllowInactive")
+    onSuccess {
+      StandardSamUserDirectives.getSamUser(fakeOidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
+    }
   }
 
   override def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = newSamUser match {
