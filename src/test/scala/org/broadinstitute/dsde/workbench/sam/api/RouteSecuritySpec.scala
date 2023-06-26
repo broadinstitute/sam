@@ -77,6 +77,7 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
   private def createRequest(path: String, method: String) =
     method.toLowerCase match {
       case "get" => Get(path)
+      case "patch" => Patch(path)
       case "put" => Put(path)
       case "post" => Post(path)
       case "delete" => Delete(path)

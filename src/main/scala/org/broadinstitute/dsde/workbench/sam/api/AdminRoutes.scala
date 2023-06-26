@@ -58,7 +58,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                       .map(status => (if (status.isDefined) OK else NotFound) -> status)
                   }
                 } ~
-                put {
+                patch {
                   entity(as[AdminUpdateUserRequest]) { request =>
                     complete {
                       userService

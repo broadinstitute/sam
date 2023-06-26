@@ -40,7 +40,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStatus'
-    put:
+    patch:
       tags:
         - Admin
       summary: Updates given fields on a user, by user id
