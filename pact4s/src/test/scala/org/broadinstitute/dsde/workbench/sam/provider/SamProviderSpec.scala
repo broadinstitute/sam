@@ -283,7 +283,7 @@ class SamProviderSpec
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
     pactSource = PactSource.FileSource(
-      Map("scalatest-consumer" -> new File("./pact4s/src/test/resources/wds-consumer-sam-provider.json"))
+      Map("scalatest-consumer" -> new File("./src/test/resources/wds-consumer-sam-provider.json"))
     )
     // .PactBrokerWithSelectors(
     //  brokerUrl = pactBrokerUrl
