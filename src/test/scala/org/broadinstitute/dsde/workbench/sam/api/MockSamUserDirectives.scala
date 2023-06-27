@@ -17,17 +17,17 @@ trait MockSamUserDirectives extends SamUserDirectives {
   private lazy val fakeOidcHeaders =
     OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
 
-  override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = {
+  override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = { 
     println("in withActiveUser")
     onSuccess {
-      StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, directoryDAO, tosService, samRequestContext).unsafeToFuture()
+      StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, userService, tosService, samRequestContext).unsafeToFuture()
     }
   }
 
   override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = {
     println("in withUserAllowInactive")
     onSuccess {
-      StandardSamUserDirectives.getSamUser(fakeOidcHeaders, directoryDAO, samRequestContext).unsafeToFuture()
+      StandardSamUserDirectives.getSamUser(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
     }
   }
 

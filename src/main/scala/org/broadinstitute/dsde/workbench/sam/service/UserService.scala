@@ -7,7 +7,9 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
+import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
@@ -248,8 +250,25 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       } yield createdUser
     }
 
+  def getUserFromGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.loadUserByGoogleSubjectId(userId, samRequestContext)
+
+  def getUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.loadUserByAzureB2CId(userId, samRequestContext)
+
+  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.getUserFromPetServiceAccount(petSA, samRequestContext)
+
+  def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.getUserFromPetManagedIdentity(petManagedIdentityObjectId, samRequestContext)
+
+  def getSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
+    directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext)
+
+  def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
+    directoryDAO.setUserAzureB2CId(userId, b2cId, samRequestContext)
 
   // Get User Status v1
   // This endpoint/method should probably be deprecated.

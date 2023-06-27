@@ -177,7 +177,6 @@ object TestSupport extends TestSupport {
     samDependencies.statusService,
     samDependencies.managedGroupService,
     samDependencies.tosService.tosConfig,
-    samDependencies.directoryDAO,
     samDependencies.policyEvaluatorService,
     samDependencies.tosService,
     LiquibaseConfig("", false),
@@ -258,9 +257,9 @@ object TestSupport extends TestSupport {
     }
 
   def newUserWithAcceptedTos(services: StandardSamUserDirectives, samUser: SamUser, samRequestContext: SamRequestContext): SamUser = {
-    TestSupport.runAndWait(services.directoryDAO.createUser(samUser, samRequestContext))
+    TestSupport.runAndWait(services.userService.directoryDAO.createUser(samUser, samRequestContext))
     TestSupport.runAndWait(services.tosService.acceptTosStatus(samUser.id, samRequestContext))
-    TestSupport.runAndWait(services.directoryDAO.loadUser(samUser.id, samRequestContext)).orNull
+    TestSupport.runAndWait(services.userService.directoryDAO.loadUser(samUser.id, samRequestContext)).orNull
   }
 
   def newUserStatusWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
