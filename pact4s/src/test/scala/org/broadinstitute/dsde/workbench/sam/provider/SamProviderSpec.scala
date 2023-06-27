@@ -23,12 +23,12 @@ import org.mockito.Mockito.lenient
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
-import pact4s.provider.Authentication.BasicAuth
 import pact4s.provider.ProviderRequestFilter.{NoOpFilter, SetHeaders}
 import pact4s.provider.StateManagement.StateManagementFunction
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
+import java.io.File
 import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -41,6 +41,12 @@ object States {
   val HasResourceWritePermission = "user has write permission"
   val DoesNotHaveResourceDeletePermission = "user does not have delete permission"
   val DoesNotHaveResourceWritePermission = "user does not have write permission"
+  val TokenIsInvalidOrMissing = "token is invalid or missing"
+}
+
+object Constants {
+  val InvalidToken = "?"
+  val ValidToken = ""
 }
 
 class SamProviderSpec
@@ -51,6 +57,8 @@ class SamProviderSpec
     with PactVerifier
     with LazyLogging
     with MockitoSugar {
+
+  var token = ""
 
   // The default login user
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
@@ -152,6 +160,8 @@ class SamProviderSpec
       mockResourceActionPermission(SamResourceActions.delete, false).unsafeRunSync()
     case ProviderState(States.DoesNotHaveResourceWritePermission, _) =>
       mockResourceActionPermission(SamResourceActions.write, false).unsafeRunSync()
+    case ProviderState(States.TokenIsInvalidOrMissing, _) =>
+      token = Constants.InvalidToken
     case _ =>
       logger.debug("other state")
   }
@@ -227,15 +237,21 @@ class SamProviderSpec
     mockCriticalSubsystemsStatus(true).unsafeRunSync()
     mockResourceActionPermission(SamResourceActions.write, true).unsafeRunSync()
     mockResourceActionPermission(SamResourceActions.delete, true).unsafeRunSync()
+    token = Constants.ValidToken
   }
 
   private def customFilter(req: ProviderRequest): ProviderRequestFilter = {
-    logger.debug("Sam route requested: " + req.uri.getPath)
+    // logger.debug("Sam route requested: " + req.uri.getPath)
+    println("Sam route requested: " + req.uri.getPath)
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
         parseAuth(value)
       case None =>
-        logger.debug("no auth header found")
+        // logger.debug("no auth header found")
+        println("no auth header found")
+        if (!token.isEmpty) {
+          SetHeaders("Authorization" -> s"Bearer $token")
+        }
         NoOpFilter
     }
   }
@@ -266,13 +282,15 @@ class SamProviderSpec
 
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
-    pactSource = PactSource
-      .PactBrokerWithSelectors(
-        brokerUrl = pactBrokerUrl
-      )
-      .withConsumerVersionSelectors(consumerVersionSelectors)
-      .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-      .withPendingPactsEnabled(ProviderTags(gitSha))
+    pactSource = PactSource.FileSource(
+      Map("scalatest-consumer" -> new File("./pact4s/src/test/resources/wds-consumer-sam-provider.json"))
+    )
+    // .PactBrokerWithSelectors(
+    //  brokerUrl = pactBrokerUrl
+    // )
+    // .withConsumerVersionSelectors(consumerVersionSelectors)
+    // .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
+    // .withPendingPactsEnabled(ProviderTags(gitSha))
   ).withHost("localhost")
     .withPort(8080)
     .withRequestFiltering(requestFilter)
@@ -289,9 +307,9 @@ class SamProviderSpec
   it should "Verify pacts" in {
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
-      publishVerificationResults = Some(
-        PublishVerificationResults(gitSha, ProviderTags(branch))
-      ),
+      // publishVerificationResults = Some(
+      //  PublishVerificationResults(gitSha, ProviderTags(branch))
+      // ),
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE
       ).toList,
