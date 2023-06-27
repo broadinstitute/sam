@@ -161,8 +161,10 @@ class SamProviderSpec
     case ProviderState(States.DoesNotHaveResourceWritePermission, _) =>
       mockResourceActionPermission(SamResourceActions.write, false).unsafeRunSync()
     case ProviderState(States.TokenIsInvalidOrMissing, _) =>
+      println("Set invalid token")
       token = Constants.InvalidToken
     case _ =>
+      println("other state")
       logger.debug("other state")
   }
 
