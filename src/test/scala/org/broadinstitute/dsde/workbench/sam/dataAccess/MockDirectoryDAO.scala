@@ -105,7 +105,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO {
     // TODO add validation for email
-    users.get(userId) match { //
+    users.get(userId) match {
       case Some(user) => IO.pure(users += userId -> user.copy(email = email))
       case None => IO.unit
     }

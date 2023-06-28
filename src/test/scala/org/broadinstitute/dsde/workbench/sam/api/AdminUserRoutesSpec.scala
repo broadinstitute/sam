@@ -21,7 +21,8 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
   val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
   val adminUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  private val badUserId = -200
+  private val badUserId = WorkbenchUserId(s"-$defaultUserId")
+  private val newUserEmail = WorkbenchEmail(s"XXX${defaultUserEmail}XXX")
 
   "GET /admin/v1/user/{userSubjectId}" should "get the user status of a user (as an admin)" in {
     // Arrange
@@ -73,14 +74,13 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withAdminUser(adminUser) // enabled "admin" user who is making the http request
       .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
       .build
-    val email = Some(WorkbenchEmail("fake@gmail.com"))
-    val requestBody = AdminUpdateUserRequest(None, email, None, None, None)
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
     // Act
     Patch(s"/api/admin/v1/user/${enabledUser.id}", requestBody) ~> samRoutes.route ~> check {
       // Assert
       withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.OK)
       // Enabled in particular since we cant directly extract the user from the builder
-      responseAs[SamUser] shouldEqual enabledUser.copy(email = email.get)
+      responseAs[SamUser] shouldEqual enabledUser.copy(email = newUserEmail)
     }
   }
 
@@ -92,8 +92,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
       .withBadEmail()
       .build
-    val email = Some(WorkbenchEmail("fake@gmail.com"))
-    val requestBody = AdminUpdateUserRequest(None, email, None, None, None)
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
 
     // Act
     Patch(s"/api/admin/v1/user/$enabledUser.id", requestBody) ~> samRoutes.route ~> check {
@@ -109,8 +108,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withAdminUser(adminUser)
       .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
       .build
-    val email = Some(WorkbenchEmail("fake@gmail.com"))
-    val requestBody = AdminUpdateUserRequest(None, email, None, None, None)
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
 
     // Act
     Patch(s"/api/admin/v1/user/$badUserId", requestBody) ~> samRoutes.route ~> check {
@@ -126,8 +124,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withNonAdminUser(enabledUser)
       .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
       .build
-    val email = Some(WorkbenchEmail("fake@gmail.com"))
-    val requestBody = AdminUpdateUserRequest(None, email, None, None, None)
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
 
     // Act
     Patch(s"/api/admin/v1/user/${enabledUser.id}", requestBody) ~> samRoutes.route ~> check {
@@ -143,8 +140,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withNonAdminUser(enabledUser)
       .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
       .build
-    val email = Some(WorkbenchEmail("fake@gmail.com"))
-    val requestBody = AdminUpdateUserRequest(None, email, None, None, None)
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
 
     // Act
     Patch(s"/api/admin/v1/user/$badUserId", requestBody) ~> samRoutes.route ~> check {
@@ -177,7 +173,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
       .build
     // Act
-    Get(s"/api/admin/v1/user/email/XXX${defaultUserEmail}XXX") ~> samRoutes.route ~> check {
+    Get(s"/api/admin/v1/user/email/$newUserEmail") ~> samRoutes.route ~> check {
       // Assert
       status shouldEqual StatusCodes.NotFound
     }
