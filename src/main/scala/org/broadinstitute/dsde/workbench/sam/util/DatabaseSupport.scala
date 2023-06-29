@@ -61,7 +61,7 @@ trait DatabaseSupport {
       transactionIO: IO[A],
       maxTries: Int,
       trialNumber: Int = 1,
-      sleepDuration: FiniteDuration = 10 millis
+      sleepDuration: FiniteDuration = 20 millis
   )(implicit timer: Temporal[IO]): IO[A] =
     writeDbRef
       .runDatabaseIO(dbQueryName, samRequestContext, transactionIO, Map("trial" -> AttributeValue.longAttributeValue(trialNumber.longValue())))
