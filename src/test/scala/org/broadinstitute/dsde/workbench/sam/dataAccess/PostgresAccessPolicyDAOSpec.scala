@@ -475,6 +475,85 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
     }
 
+    "setResourceAuthDomain" - {
+      "ZeroToOneGroups" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
+        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
+
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set.empty)
+        dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
+
+        dao.setResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, Set(authDomainGroupName1), samRequestContext).unsafeRunSync()
+
+        dao.loadResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
+          case Constrained(authDomain) => authDomain.toList should contain theSameElementsAs Set(authDomainGroupName1)
+          case wrong => fail(s"result was $wrong, not Constrained");
+        }
+      }
+
+      "AddAdditionalGroup" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
+        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
+        val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
+        val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail("authDomain2@foo.com"))
+
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1))
+        dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
+
+        dao
+          .setResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, Set(authDomainGroupName1, authDomainGroupName2), samRequestContext)
+          .unsafeRunSync()
+
+        dao.loadResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
+          case Constrained(authDomain) => authDomain.toList should contain theSameElementsAs Set(authDomainGroupName1, authDomainGroupName2)
+          case wrong => fail(s"result was $wrong, not Constrained");
+        }
+      }
+
+      "AddDuplicateGroup" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
+        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
+        val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
+        val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail("authDomain2@foo.com"))
+
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1))
+        dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
+
+        dao
+          .setResourceAuthDomain(
+            resourceWithoutAuthDomain.fullyQualifiedId,
+            Set(authDomainGroupName1, authDomainGroupName2, authDomainGroupName1),
+            samRequestContext
+          )
+          .unsafeRunSync()
+
+        dao.loadResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
+          case Constrained(authDomain) =>
+            val authDomainList = authDomain.toList
+            authDomainList should contain theSameElementsAs Set(authDomainGroupName1, authDomainGroupName2)
+            authDomainList.size should equal(2)
+          case wrong => fail(s"result was $wrong, not Constrained");
+        }
+      }
+    }
+
     "listResourceWithAuthdomains" - {
       "loads a resource with its auth domain" in {
         assume(databaseEnabled, databaseEnabledClue)
