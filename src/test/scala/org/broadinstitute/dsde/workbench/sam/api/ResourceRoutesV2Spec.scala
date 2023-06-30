@@ -97,15 +97,19 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
   "POST /api/resources/v2/{resourceType}" should "204 create resource" in {
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
-      Set(ResourceActionPattern("run", "", false)),
+      Set(ResourceActionPattern("run", "", false), ResourceActionPattern("doStuff", "", false)),
       Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))),
       ResourceRoleName("owner")
     )
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
+    val gooberPolicyName = AccessPolicyName("goober")
+    val gooberPolicyMembership =
+      AccessPolicyMembership(memberEmails = Set(defaultUserInfo.email), actions = Set(ResourceAction("run")), roles = Set(resourceType.ownerRoleName))
+    val fooResourceId = ResourceId("foo")
     val createResourceRequest = CreateResourceRequest(
-      ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      fooResourceId,
+      Map(gooberPolicyName -> gooberPolicyMembership),
       Set.empty
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -116,6 +120,38 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       status shouldEqual StatusCodes.OK
       responseAs[JsValue] shouldEqual JsBoolean(true)
     }
+
+    val fooFullyQualifiedResourceId = FullyQualifiedResourceId(resourceType.name, fooResourceId)
+    val previousResourcesPolicyId = FullyQualifiedPolicyId(fooFullyQualifiedResourceId, gooberPolicyName)
+    val memberPolicyIds = Set(previousResourcesPolicyId)
+    val doStuffResourceAction = ResourceAction("doStuff")
+    val bananaPolicyMembership = AccessPolicyMembership(
+      memberEmails = Set(defaultUserInfo.email),
+      actions = Set(doStuffResourceAction),
+      roles = Set(resourceType.ownerRoleName),
+      memberPolicyIds = Some(memberPolicyIds)
+    )
+    val gooberPolicyMembership2 =
+      AccessPolicyMembership(memberEmails = Set(defaultUserInfo.email), actions = Set(ResourceAction("run")), roles = Set(resourceType.ownerRoleName))
+
+    val barResourceId = ResourceId("bar")
+    val bananaPolicyName = AccessPolicyName("banana")
+    val createResourceRequest2 = CreateResourceRequest(
+      barResourceId,
+      Map(bananaPolicyName -> bananaPolicyMembership),
+      Set.empty
+    )
+
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest2) ~> samRoutes.route ~> check {
+      response.toString() equals "Hello"
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resources/v2/${resourceType.name}/$barResourceId/action/$doStuffResourceAction") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(true)
+    }
+
   }
 
   it should "400 for resourceTypeAdmin" in {

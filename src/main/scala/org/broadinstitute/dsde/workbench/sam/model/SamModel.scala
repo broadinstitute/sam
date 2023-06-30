@@ -47,11 +47,13 @@ object SamJsonSupport {
 
   implicit val FullyQualifiedResourceIdFormat = jsonFormat2(FullyQualifiedResourceId.apply)
 
+  implicit val FullyQualifiedPolicyIdFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
+
   implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
 
   implicit val PolicyIdentifiersFormat = jsonFormat4(PolicyIdentifiers.apply)
 
-  implicit val AccessPolicyMembershipFormat = jsonFormat5(AccessPolicyMembership.apply)
+  implicit val AccessPolicyMembershipFormat = jsonFormat6(AccessPolicyMembership.apply)
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
@@ -60,8 +62,6 @@ object SamJsonSupport {
   implicit val RolesAndActionsFormat = jsonFormat2(RolesAndActions.apply)
 
   implicit val UserResourcesResponseFormat = jsonFormat6(UserResourcesResponse.apply)
-
-  implicit val FullyQualifiedPolicyIdFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
 
   implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
 
@@ -273,7 +273,8 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     actions: Set[ResourceAction],
     roles: Set[ResourceRoleName],
     descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
-    memberPolicies: Option[Set[PolicyIdentifiers]] = Option(Set.empty)
+    memberPolicies: Option[Set[PolicyIdentifiers]] = Option(Set.empty),
+    memberPolicyIds: Option[Set[FullyQualifiedPolicyId]] = None
 ) {
   def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
 }

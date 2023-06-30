@@ -229,7 +229,12 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
               }
           }
         }
-      }
+      } // ~ pathPrefix("resources" / "v3") {
+  // POST
+  // Take request object
+  // Pass to services for logic
+  // Take services response and forward
+  // }
 
   // this object supresses the deprecation warning on listUserAccessPolicies
   // see https://github.com/scala/bug/issues/7934
