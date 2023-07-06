@@ -299,9 +299,9 @@ class SamProviderSpec
   it should "Verify pacts" in {
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
-      // publishVerificationResults = Some(
-      //  PublishVerificationResults(gitSha, ProviderTags(branch))
-      // ),
+      publishVerificationResults = Some(
+        PublishVerificationResults(gitSha, ProviderTags(branch))
+      ),
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE
       ).toList,
