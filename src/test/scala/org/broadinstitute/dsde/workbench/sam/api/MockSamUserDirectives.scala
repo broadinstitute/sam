@@ -15,20 +15,14 @@ trait MockSamUserDirectives extends SamUserDirectives {
   val newSamUser: Option[SamUser] = None
 
   private lazy val fakeOidcHeaders =
-    OIDCHeaders(OAuth2BearerToken("?"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
+    OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
 
-  override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = {
-    println("in withActiveUser")
-    onSuccess {
-      StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, userService, tosService, samRequestContext).unsafeToFuture()
-    }
+  override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
+    StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, userService, tosService, samRequestContext).unsafeToFuture()
   }
 
-  override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = {
-    println("in withUserAllowInactive")
-    onSuccess {
-      StandardSamUserDirectives.getSamUser(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
-    }
+  override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
+    StandardSamUserDirectives.getSamUser(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
   }
 
   override def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = newSamUser match {

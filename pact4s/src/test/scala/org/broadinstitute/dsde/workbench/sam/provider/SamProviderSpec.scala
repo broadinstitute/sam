@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.Generator.{genResourceType, genWorkspaceResourceType}
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
+import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
@@ -23,12 +24,12 @@ import org.mockito.Mockito.lenient
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
-import pact4s.provider.ProviderRequestFilter.{NoOpFilter, SetHeaders}
+import pact4s.provider.Authentication.BasicAuth
+import pact4s.provider.ProviderRequestFilter.{AddHeaders, NoOpFilter, SetHeaders}
 import pact4s.provider.StateManagement.StateManagementFunction
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
 
-import java.io.File
 import java.lang.Thread.sleep
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
@@ -41,12 +42,8 @@ object States {
   val HasResourceWritePermission = "user has write permission"
   val DoesNotHaveResourceDeletePermission = "user does not have delete permission"
   val DoesNotHaveResourceWritePermission = "user does not have write permission"
-  val TokenIsInvalidOrMissing = "token is invalid or missing"
-}
-
-object Constants {
-  val InvalidToken = "?"
-  val ValidToken = ""
+  val UserStatusInfoRequestWithAccessToken = "user status info request with access token"
+  val UserStatusInfoRequestWithoutAccessToken = "user status info request without access token"
 }
 
 class SamProviderSpec
@@ -57,8 +54,6 @@ class SamProviderSpec
     with PactVerifier
     with LazyLogging
     with MockitoSugar {
-
-  var token = ""
 
   // The default login user
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
@@ -153,18 +148,18 @@ class SamProviderSpec
     case ProviderState(States.SamNotOK, _) =>
       mockCriticalSubsystemsStatus(false).unsafeRunSync()
     case ProviderState(States.HasResourceDeletePermission, _) =>
-      mockResourceActionPermission(SamResourceActions.delete, true).unsafeRunSync()
+      mockResourceActionPermission(SamResourceActions.delete, hasPermission = true).unsafeRunSync()
     case ProviderState(States.HasResourceWritePermission, _) =>
-      mockResourceActionPermission(SamResourceActions.write, true).unsafeRunSync()
+      mockResourceActionPermission(SamResourceActions.write, hasPermission = true).unsafeRunSync()
     case ProviderState(States.DoesNotHaveResourceDeletePermission, _) =>
-      mockResourceActionPermission(SamResourceActions.delete, false).unsafeRunSync()
+      mockResourceActionPermission(SamResourceActions.delete, hasPermission = false).unsafeRunSync()
     case ProviderState(States.DoesNotHaveResourceWritePermission, _) =>
-      mockResourceActionPermission(SamResourceActions.write, false).unsafeRunSync()
-    case ProviderState(States.TokenIsInvalidOrMissing, _) =>
-      println("Set invalid token")
-      token = Constants.InvalidToken
+      mockResourceActionPermission(SamResourceActions.write, hasPermission = false).unsafeRunSync()
+    case ProviderState(States.UserStatusInfoRequestWithAccessToken, _) =>
+      logger.debug(s"you may stub provider behaviors here for the state: ${States.UserStatusInfoRequestWithAccessToken}")
+    case ProviderState(States.UserStatusInfoRequestWithoutAccessToken, _) =>
+      logger.debug(s"you may stub provider behaviors here for the state: ${States.UserStatusInfoRequestWithoutAccessToken}")
     case _ =>
-      println("other state")
       logger.debug("other state")
   }
 
@@ -237,23 +232,17 @@ class SamProviderSpec
   // Convenient method to reset provider states
   private def reInitializeStates(): Unit = {
     mockCriticalSubsystemsStatus(true).unsafeRunSync()
-    mockResourceActionPermission(SamResourceActions.write, true).unsafeRunSync()
-    mockResourceActionPermission(SamResourceActions.delete, true).unsafeRunSync()
-    token = Constants.ValidToken
+    mockResourceActionPermission(SamResourceActions.write, hasPermission = true).unsafeRunSync()
+    mockResourceActionPermission(SamResourceActions.delete, hasPermission = true).unsafeRunSync()
   }
 
   private def customFilter(req: ProviderRequest): ProviderRequestFilter = {
-    // logger.debug("Sam route requested: " + req.uri.getPath)
-    println("Sam route requested: " + req.uri.getPath)
+    logger.debug("Sam route requested: " + req.uri.getPath)
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
         parseAuth(value)
       case None =>
-        // logger.debug("no auth header found")
-        println("no auth header found")
-        if (!token.isEmpty) {
-          SetHeaders("Authorization" -> s"Bearer $token")
-        }
+        logger.debug("no auth header found")
         NoOpFilter
     }
   }
@@ -275,7 +264,10 @@ class SamProviderSpec
               // e.g. proxy token that impersonates a super user
               proxyToken = "su" + token
           }
+          // Use this to include any special headers that the application
+          // will need to process the HTTP request.
           SetHeaders("Authorization" -> s"Bearer $proxyToken")
+          AddHeaders(StandardSamUserDirectives.accessTokenHeader -> s"$proxyToken")
         case _ =>
           logger.debug("do other AuthScheme")
           NoOpFilter
@@ -284,15 +276,13 @@ class SamProviderSpec
 
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
     name = "sam-provider",
-    pactSource = PactSource.FileSource(
-      Map("scalatest-consumer" -> new File("./src/test/resources/wds-consumer-sam-provider.json"))
-    )
-    // .PactBrokerWithSelectors(
-    //  brokerUrl = pactBrokerUrl
-    // )
-    // .withConsumerVersionSelectors(consumerVersionSelectors)
-    // .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-    // .withPendingPactsEnabled(ProviderTags(gitSha))
+    pactSource = PactSource
+      .PactBrokerWithSelectors(
+        brokerUrl = pactBrokerUrl
+      )
+      .withConsumerVersionSelectors(consumerVersionSelectors)
+      .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
+      .withPendingPactsEnabled(ProviderTags(gitSha))
   ).withHost("localhost")
     .withPort(8080)
     .withRequestFiltering(requestFilter)

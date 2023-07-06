@@ -55,8 +55,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   /** Utility function that knows how to convert all the various headers into OIDCHeaders
     */
-  private def requireOidcHeaders: Directive1[OIDCHeaders] = {
-    println("In requireOidcHeaders")
+  private def requireOidcHeaders: Directive1[OIDCHeaders] =
     (headerValueByName(accessTokenHeader).as(OAuth2BearerToken) &
       externalIdFromHeaders &
       headerValueByName(emailHeader).as(WorkbenchEmail) &
@@ -67,7 +66,6 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
         logger.info(s"Auth Headers: $oidcHeaders")
         oidcHeaders
       }
-  }
 
   private def externalIdFromHeaders: Directive1[Either[GoogleSubjectId, AzureB2CId]] = headerValueByName(userIdHeader).map { idString =>
     Try(BigInt(idString)).fold(
@@ -87,11 +85,7 @@ object StandardSamUserDirectives {
   val googleIdFromAzureHeader = "OAUTH2_CLAIM_google_id"
   val managedIdentityObjectIdHeader = "OAUTH2_CLAIM_xms_mirid"
 
-  def getSamUser(oidcHeaders: OIDCHeaders, userService: UserService, samRequestContext: SamRequestContext): IO[SamUser] = {
-    println("oidcHeaders")
-    println(oidcHeaders)
-    println("oidcHeaders.token")
-    println(oidcHeaders.token)
+  def getSamUser(oidcHeaders: OIDCHeaders, userService: UserService, samRequestContext: SamRequestContext): IO[SamUser] =
     oidcHeaders match {
       case OIDCHeaders(_, Left(googleSubjectId), WorkbenchEmail(SAdomain(_)), _, _) =>
         // If it's a PET account, we treat it as its owner
@@ -113,11 +107,8 @@ object StandardSamUserDirectives {
       case OIDCHeaders(_, Right(azureB2CId), _, _, _) =>
         loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, userService, samRequestContext)
     }
-  }
 
-  def getActiveSamUser(oidcHeaders: OIDCHeaders, userService: UserService, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] = {
-    println("oidcHeaders.token")
-    println(oidcHeaders.token)
+  def getActiveSamUser(oidcHeaders: OIDCHeaders, userService: UserService, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
       user <- getSamUser(oidcHeaders, userService, samRequestContext)
       tosComplianceDetails <- tosService.getTosComplianceStatus(user)
@@ -131,7 +122,6 @@ object StandardSamUserDirectives {
 
       user
     }
-  }
 
   private def loadUserMaybeUpdateAzureB2CId(
       azureB2CId: AzureB2CId,
