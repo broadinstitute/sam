@@ -11,7 +11,7 @@ import com.google.api.client.http.{HttpHeaders, HttpResponseException}
 import com.google.api.services.cloudresourcemanager.model.Ancestor
 import com.google.api.services.groupssettings.model.Groups
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
-import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.MessageRequest
 import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
@@ -109,6 +109,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       val mockGoogleNotificationsPubSubDAO = new MockGooglePubSubDAO
       val mockGoogleGroupSyncPubSubDAO = new MockGooglePubSubDAO
       val mockGoogleDisableUsersPubSubDAO = new MockGooglePubSubDAO
+      val mockGoogleIamDao = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
       val ge = new GoogleExtensions(
         TestSupport.distributedLock,
         mockDirectoryDAO,
@@ -117,7 +118,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
         mockGoogleNotificationsPubSubDAO,
         mockGoogleGroupSyncPubSubDAO,
         mockGoogleDisableUsersPubSubDAO,
-        null,
+        mockGoogleIamDao,
         null,
         null,
         null,
@@ -430,6 +431,51 @@ class GoogleExtensionSpec(_system: ActorSystem)
     // the pet should not exist in Google
     mockGoogleIamDAO.serviceAccounts should not contain key(petServiceAccount.serviceAccount.email)
 
+  }
+
+  it should "throw an exception with a readable message when the number of pet service accounts has reached its maximum quota" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Arrange
+    val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
+    val googleProject = GoogleProject("testproject")
+
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
+    val mockGoogleNotificationsPubSubDAO = new MockGooglePubSubDAO
+    val mockGoogleGroupSyncPubSubDAO = new MockGooglePubSubDAO
+    val mockGoogleDisableUsersPubSubDAO = new MockGooglePubSubDAO
+    val mockGoogleIamDao = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
+
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      mockGoogleDirectoryDAO,
+      mockGoogleNotificationsPubSubDAO,
+      mockGoogleGroupSyncPubSubDAO,
+      mockGoogleDisableUsersPubSubDAO,
+      mockGoogleIamDao,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
+    val (saName, saDisplayName) = ge.toPetSAFromUser(defaultUser)
+    lenient.when(mockGoogleIamDao.createServiceAccount(googleProject, saName, saDisplayName)).thenReturn(Future.failed(new Exception("{\n  \"code\": 429,\n  \"details\": [\n    {\n      \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n      \"retryDelay\": \"86401s\"\n    }\n  ],\n  \"errors\": [\n    {\n      \"domain\": \"global\",\n      \"message\": \"A quota has been reached for project number 1234567890: Service accounts per project.\",\n      \"reason\": \"rateLimitExceeded\"\n    }\n  ],\n  \"message\": \"A quota has been reached for project number 1234567890: Service accounts per project.\",\n  \"status\": \"RESOURCE_EXHAUSTED\"\n}")))
+//    lenient.when(mockDirectoryDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject))).thenReturn()
+
+    // Act
+    ge.createUserPetServiceAccount(defaultUser, googleProject, SamRequestContext())
+
+    // Assert
   }
 
   private def initPetTest: (DirectoryDAO, TosService, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchEmail, SamUser) = {

@@ -382,7 +382,7 @@ class GoogleExtensions(
     } yield p
   }
 
-  private def createPetServiceAccount(project: GoogleProject, petSaName: ServiceAccountName, petSaDisplayName: ServiceAccountDisplayName) = {
+  private[google] def createPetServiceAccount(project: GoogleProject, petSaName: ServiceAccountName, petSaDisplayName: ServiceAccountDisplayName): IO[ServiceAccount] = {
     val accountFuture: Future[ServiceAccount] = googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)
     val recovered = accountFuture.recoverWith({
       case throwable: Throwable =>
