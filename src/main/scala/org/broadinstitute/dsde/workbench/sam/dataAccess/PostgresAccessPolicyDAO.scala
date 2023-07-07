@@ -520,19 +520,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     insertAuthDomainQuery.update().apply()
   }
 
-  private def removeExtraAuthDomainGroupsFromResource(resourcePK: ResourcePK, authDomainGroupPKs: Seq[GroupPK])(implicit session: DBSession): Unit = {
-    val a = AuthDomainTable.syntax("a")
-
-    if (authDomainGroupPKs.nonEmpty) {
-      samsql"""delete from ${AuthDomainTable as a}
-        where ${a.resourceId} = ${resourcePK}
-        and ${a.groupId} not in (${authDomainGroupPKs})""".update().apply()
-    } else {
-      samsql"""delete from ${AuthDomainTable as a}
-        where ${a.resourceId} = ${resourcePK}""".update().apply()
-    }
-  }
-
   /** Queries the database for the PK of the resource and throws an error if it does not exist
     * @param resourceId
     * @return
@@ -613,7 +600,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       if (authDomainPks.nonEmpty) {
         insertAuthDomainsForResource(resourcePK, authDomainPks)
       }
-      removeExtraAuthDomainGroupsFromResource(resourcePK, authDomainPks)
     }
 
   override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
