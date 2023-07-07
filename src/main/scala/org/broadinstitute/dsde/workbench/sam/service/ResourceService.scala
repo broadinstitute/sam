@@ -216,7 +216,7 @@ class ResourceService(
     parentOpt match {
       case None =>
         // make sure there is an owner policy if there is no parent
-        policies.exists { policy =>
+        policies.exists { policy => // if email isn't provided, use the triple here
           policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty
         } match {
           case true => None
@@ -359,6 +359,7 @@ class ResourceService(
     }
 
   /** Overwrites an existing policy (keyed by resourceType/resourceId/policyName), saves a new one if it doesn't exist yet
+    *
     * @param resourceType
     * @param policyName
     * @param resource
@@ -375,7 +376,7 @@ class ResourceService(
   ): IO[AccessPolicy] =
     openTelemetry.time("api.v1.resource.overwritePolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
       for {
-        policy <- makeCreatablePolicy(policyName, policyMembership, samRequestContext)
+        policy <- makeValidatablePolicy(policyName, policyMembership, samRequestContext)
         _ <- validatePolicy(resourceType, policy).map {
           case Some(errorReport) =>
             throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
@@ -446,6 +447,7 @@ class ResourceService(
   /** Overwrites the policy if it already exists or creates a new policy entry if it does not exist. Triggers update to Google Group upon successfully updating
     * the policy. Note: This method DOES NOT validate the policy and should probably not be called directly unless you know the contents are valid. To validate
     * and save the policy, use overwritePolicy() Note: this function DOES NOT update the email or public fields of a policy
+    *
     * @param policyIdentity
     * @param policy
     * @return
@@ -544,6 +546,7 @@ class ResourceService(
 
   /** Validates a policy in the context of a ResourceType. When validating the policy, we want to collect each entity that was problematic and report that back
     * using ErrorReports
+    *
     * @param resourceType
     * @param policy
     * @return
@@ -553,7 +556,8 @@ class ResourceService(
       descendantPermissionsErrors <- validateDescendantPermissions(policy.descendantPermissions)
     } yield {
       val validationErrors =
-        validateMemberEmails(policy.emailsToSubjects) ++
+        validateMemberEmails(policy.emailsToSubjects) ++ // if email is provided
+          // else validate triple
           validateActions(resourceType, policy.actions) ++
           validateRoles(resourceType, policy.roles) ++
           validateUrlSafe(policy.policyName.value) ++
@@ -565,6 +569,7 @@ class ResourceService(
     }
 
   /** A valid email is one that matches the email address for a previously persisted WorkbenchSubject.
+    *
     * @param emailsToSubjects
     *   Keys are the member email addresses we want to add to the policy, values are the corresponding result of trying to lookup the subject in the Directory
     *   using that email address. If we failed to find a matching subject, then the email address is invalid
@@ -708,19 +713,33 @@ class ResourceService(
   ): IO[Set[ValidatableAccessPolicy]] =
     policies.toList
       .traverse { case (accessPolicyName, accessPolicyMembership) =>
-        makeCreatablePolicy(accessPolicyName, accessPolicyMembership, samRequestContext)
+        val maybeOwnerPolicyEmails = accessPolicyMembership.memberPolicies.map { memberPolicies =>
+          memberPolicies.map { memberPolicy =>
+            val ownerPolicy = accessPolicyDAO.loadPolicy(
+              FullyQualifiedPolicyId(FullyQualifiedResourceId(memberPolicy.resourceTypeName, memberPolicy.resourceId), memberPolicy.policyName),
+              samRequestContext
+            )
+            ownerPolicy.map(p => p.map(_.email))
+          }
+        }
+        makeValidatablePolicy(
+          accessPolicyName,                         //need to convert maybeOwnerPolicyEmail to a set and not an IO of a set
+          accessPolicyMembership.copy(memberEmails = maybeOwnerPolicyEmails += accessPolicyMembership.memberEmails),
+          samRequestContext
+        )
       }
       .map(_.toSet)
 
-  private def makeCreatablePolicy(
+  private def makeValidatablePolicy(
       accessPolicyName: AccessPolicyName,
       accessPolicyMembership: AccessPolicyMembership,
       samRequestContext: SamRequestContext
-  ): IO[ValidatableAccessPolicy] =
+  ): IO[ValidatableAccessPolicy] = // TODO
+
     mapEmailsToSubjects(accessPolicyMembership.memberEmails, samRequestContext).map { emailsToSubjects =>
       ValidatableAccessPolicy(
         accessPolicyName,
-        emailsToSubjects,
+        emailsToSubjects, // this can be swapped for the triple
         accessPolicyMembership.roles,
         accessPolicyMembership.actions,
         accessPolicyMembership.getDescendantPermissions,

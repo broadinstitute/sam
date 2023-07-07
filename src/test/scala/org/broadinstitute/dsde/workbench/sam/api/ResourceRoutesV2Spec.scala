@@ -108,31 +108,38 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       AccessPolicyMembership(memberEmails = Set(defaultUserInfo.email), actions = Set(ResourceAction("run")), roles = Set(resourceType.ownerRoleName))
     val fooResourceId = ResourceId("foo")
     val createResourceRequest = CreateResourceRequest(
-      fooResourceId,
-      Map(gooberPolicyName -> gooberPolicyMembership),
-      Set.empty
+      resourceId = fooResourceId,
+      policies = Map(gooberPolicyName -> gooberPolicyMembership),
+      authDomain = Set.empty,
+      returnResource = Option(true)
     )
-    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NoContent
-    }
+     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+       status shouldEqual StatusCodes.Created
+       responseAs[CreateResourceResponse] shouldEqual "test"
+     }
 
-    Get(s"/api/resources/v2/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      responseAs[JsValue] shouldEqual JsBoolean(true)
-    }
+     Get(s"/api/resources/v2/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
+       status shouldEqual StatusCodes.OK
+       responseAs[JsValue] shouldEqual JsBoolean(true)
+     }
 
     val fooFullyQualifiedResourceId = FullyQualifiedResourceId(resourceType.name, fooResourceId)
     val previousResourcesPolicyId = FullyQualifiedPolicyId(fooFullyQualifiedResourceId, gooberPolicyName)
     val memberPolicyIds = Set(previousResourcesPolicyId)
     val doStuffResourceAction = ResourceAction("doStuff")
+
+    val policyIdentifiers = PolicyIdentifiers(
+      gooberPolicyName,
+      defaultUserInfo.email,
+      resourceTypeName = resourceType.name,
+      resourceId = ???) //this needs to either be mocked or gotten from the previous create resource call
     val bananaPolicyMembership = AccessPolicyMembership(
       memberEmails = Set(defaultUserInfo.email),
       actions = Set(doStuffResourceAction),
       roles = Set(resourceType.ownerRoleName),
-      memberPolicyIds = Some(memberPolicyIds)
+      memberPolicies = Option(Set(policyIdentifiers))
+      // memberPolicyIds = Some(memberPolicyIds)
     )
-    val gooberPolicyMembership2 =
-      AccessPolicyMembership(memberEmails = Set(defaultUserInfo.email), actions = Set(ResourceAction("run")), roles = Set(resourceType.ownerRoleName))
 
     val barResourceId = ResourceId("bar")
     val bananaPolicyName = AccessPolicyName("banana")

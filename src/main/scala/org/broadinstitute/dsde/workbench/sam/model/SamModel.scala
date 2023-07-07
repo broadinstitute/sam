@@ -237,7 +237,7 @@ object RolesAndActions {
 }
 @Lenses final case class PolicyIdentifiers(
     policyName: AccessPolicyName,
-    policyEmail: WorkbenchEmail,
+    policyEmail: WorkbenchEmail, // do we need this email?
     resourceTypeName: ResourceTypeName,
     resourceId: ResourceId
 )
