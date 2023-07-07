@@ -344,7 +344,7 @@ class GoogleExtensions(
         case None =>
           for {
             _ <- assertProjectInTerraOrg(project)
-            sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
+            sa <- createPetServiceAccount(project, petSaName, petSaDisplayName)
             _ <- withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
               // See: https://broadworkbench.atlassian.net/browse/CA-1005
@@ -380,6 +380,20 @@ class GoogleExtensions(
       shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
       p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
     } yield p
+  }
+
+  private def createPetServiceAccount(project: GoogleProject, petSaName: ServiceAccountName, petSaDisplayName: ServiceAccountDisplayName) = {
+    val accountFuture: Future[ServiceAccount] = googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)
+    val recovered = accountFuture.recoverWith({
+      case throwable: Throwable =>
+        if (throwable.getMessage.contains("Service accounts per project")) {
+          val errorMessage = "Service account quota reached for this project. Please contact Customer Support."
+          val errorReport: ErrorReport = ErrorReport(StatusCodes.InternalServerError, errorMessage, throwable)
+          Future.failed(new WorkbenchExceptionWithErrorReport(errorReport))
+        }
+        Future.failed(throwable)
+    })
+    IO.fromFuture(IO(recovered))
   }
 
   private def assertProjectInTerraOrg(project: GoogleProject): IO[Unit] = {
