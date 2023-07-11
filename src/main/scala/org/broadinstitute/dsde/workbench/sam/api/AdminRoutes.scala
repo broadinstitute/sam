@@ -57,6 +57,15 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                       .getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext)
                       .map(status => (if (status.isDefined) OK else NotFound) -> status)
                   }
+                } ~
+                patch {
+                  entity(as[AdminUpdateUserRequest]) { request =>
+                    complete {
+                      userService
+                        .updateUserCrud(WorkbenchUserId(userId), request, samRequestContext)
+                        .map(user => (if (user.isDefined) OK else NotFound) -> user)
+                    }
+                  }
                 }
             } ~
               pathPrefix("enable") {

@@ -3,221 +3,349 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import cats.effect.unsafe.implicits.global
-import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{enabledMapNoTosAccepted, genSamDependencies, genSamRoutes}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
+import org.broadinstitute.dsde.workbench.sam.matchers.BeForUserMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAcceptance, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
-import org.broadinstitute.dsde.workbench.sam.{Generator, SamDependencies, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.mockito.scalatest.MockitoSugar
 
-import scala.concurrent.Future
-
-class AdminUserRoutesSpec extends AdminUserRoutesSpecHelper {
+class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
+  val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
+  val defaultUserId: WorkbenchUserId = defaultUser.id
+  val defaultUserEmail: WorkbenchEmail = defaultUser.email
+  val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
+  val adminUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+  private val badUserId = WorkbenchUserId(s"-$defaultUserId")
+  private val newUserEmail = WorkbenchEmail(s"XXX${defaultUserEmail}XXX")
 
   "GET /admin/v1/user/{userSubjectId}" should "get the user status of a user (as an admin)" in {
-    val (user, getRoutes) = setUpAdminTest()
-    Get(s"/api/admin/v1/user/${user.id}") ~> getRoutes.route ~> check {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+
+    // Act and Assert
+    Get(s"/api/admin/v1/user/${enabledUser.id}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), enabledMapNoTosAccepted)
+      responseAs[UserStatus] should beForUser(enabledUser)
     }
   }
 
-  it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
+  it should "not allow a non-admin to get the status of another user" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withNonAdminUser(enabledUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+
+    // Act
     Get(s"/api/admin/v1/user/$defaultUserId") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Forbidden
+      // Assert
+      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.Forbidden)
+    }
+  }
+
+  it should "not find a user that does not exist" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act and Assert
+    Get(s"/api/admin/v1/user/$badUserId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "PATCH /admin/v1/user/{userSubjectId}" should "update a user" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
+    // Act
+    Patch(s"/api/admin/v1/user/${enabledUser.id}", requestBody) ~> samRoutes.route ~> check {
+      // Assert
+      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.OK)
+      // Enabled in particular since we cant directly extract the user from the builder
+      responseAs[SamUser] shouldEqual enabledUser.copy(email = newUserEmail)
+    }
+  }
+
+  it should "not update a user with an invalid email in the request" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .withBadEmail()
+      .build
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
+
+    // Act
+    Patch(s"/api/admin/v1/user/$enabledUser.id", requestBody) ~> samRoutes.route ~> check {
+      // Assert
+      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.BadRequest)
+    }
+  }
+
+  it should "not update a user for a user that does not exist" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
+
+    // Act
+    Patch(s"/api/admin/v1/user/$badUserId", requestBody) ~> samRoutes.route ~> check {
+      // Assert
+      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.NotFound)
+    }
+  }
+
+  it should "not allow a non-admin to update a user" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withNonAdminUser(enabledUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
+
+    // Act
+    Patch(s"/api/admin/v1/user/${enabledUser.id}", requestBody) ~> samRoutes.route ~> check {
+      // Assert
+      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.Forbidden)
+    }
+  }
+
+  it should "not allow a non-admin to update a user for a user that does not exist" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withNonAdminUser(enabledUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None, None, None)
+
+    // Act
+    Patch(s"/api/admin/v1/user/$badUserId", requestBody) ~> samRoutes.route ~> check {
+      // Assert
+      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.Forbidden)
     }
   }
 
   "GET /admin/v1/user/email/{email}" should "get the user status of a user by email (as an admin)" in {
-    val (user, adminRoutes) = setUpAdminTest()
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
 
-    Get(s"/api/admin/v1/user/email/${user.email}") ~> adminRoutes.route ~> check {
+    // Act
+    Get(s"/api/admin/v1/user/email/${enabledUser.email}") ~> samRoutes.route ~> check {
+      // Assert
       status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), enabledMapNoTosAccepted)
+      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(enabledUser.id, enabledUser.email), enabledMapNoTosAccepted)
     }
   }
 
-  it should "return 404 for an unknown user by email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
-    Get(s"/api/admin/v1/user/email/XXX${defaultUserEmail}XXX") ~> adminRoutes.route ~> check {
+  it should "return 404 for an unknown user by email (as an admin)" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
+    Get(s"/api/admin/v1/user/email/$newUserEmail") ~> samRoutes.route ~> check {
+      // Assert
       status shouldEqual StatusCodes.NotFound
     }
   }
 
-  it should "return 404 for an group's email (as an admin)" in withAdminRoutes { (samRoutes, adminRoutes) =>
-    Get(s"/api/admin/v1/user/email/fc-admins@dev.test.firecloud.org") ~> adminRoutes.route ~> check {
+  it should "return 404 for an group's email (as an admin)" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .build
+    // Act
+    Get(s"/api/admin/v1/user/email/fc-admins@dev.test.firecloud.org") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
     }
   }
 
-  it should "not allow a non-admin to get the status of another user" in withAdminRoutes { (samRoutes, _) =>
+  it should "not allow a non-admin to get the status of another user" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withNonAdminUser(enabledUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
     Get(s"/api/admin/v1/user/email/$defaultUserEmail") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
-  "PUT /admin/v1/user/{userSubjectId}/(re|dis)able" should "disable and then re-enable a user (as an admin)" in {
-    val (user, adminRoutes) = setUpAdminTest()
-
-    Put(s"/api/admin/v1/user/${user.id}/disable") ~> adminRoutes.route ~> check {
+  "PUT /admin/v1/user/{userSubjectId}/disable" should "disable a user (as an admin)" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
+    Put(s"/api/admin/v1/user/${enabledUser.id}/disable") ~> samRoutes.route ~> check {
+      // Assert
       status shouldEqual StatusCodes.OK
       responseAs[UserStatus] shouldEqual UserStatus(
-        UserStatusDetails(user.id, user.email),
+        UserStatusDetails(enabledUser.id, enabledUser.email),
         enabledMapNoTosAccepted + ("ldap" -> false) + ("adminEnabled" -> false)
       )
     }
+  }
 
-    Put(s"/api/admin/v1/user/${user.id}/enable") ~> adminRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      responseAs[UserStatus] shouldEqual UserStatus(UserStatusDetails(user.id, user.email), enabledMapNoTosAccepted)
+  it should "not disable a user that does not exist" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(enabledUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
+    Put(s"/api/admin/v1/user/$badUserId/disable") ~> samRoutes.route ~> check {
+      // Assert
+      status shouldEqual StatusCodes.NotFound
     }
   }
 
-  it should "not allow a non-admin to enable or disable a user" in withAdminRoutes { (samRoutes, _) =>
+  it should "not allow a non-admin to disable a user" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withNonAdminUser(enabledUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
     Put(s"/api/admin/v1/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
+      // Assert
       status shouldEqual StatusCodes.Forbidden
     }
+  }
 
+  "PUT /admin/v1/user/{userSubjectId}/enable" should "enable a user (as an admin)" in {
+    // Arrange
+    val user = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withDisabledUser(user) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
+    Put(s"/api/admin/v1/user/${user.id}/enable") ~> samRoutes.route ~> check {
+      // Assert
+      status shouldEqual StatusCodes.OK
+      responseAs[UserStatus] shouldEqual UserStatus(
+        UserStatusDetails(user.id, user.email),
+        enabledMapNoTosAccepted
+      )
+    }
+  }
+
+  it should "not enable a user that does not exist" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(enabledUser)
+      .withDisabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
+    Put(s"/api/admin/v1/user/$badUserId/enable") ~> samRoutes.route ~> check {
+      // Assert
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "not allow a non-admin to enable a user" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withNonAdminUser(enabledUser)
+      .withDisabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
     Put(s"/api/admin/v1/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
+      // Assert
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   "DELETE /admin/v1/user/{userSubjectId}" should "delete a user (as an admin)" in {
-    val (user, adminRoutes) = setUpAdminTest()
-
-    Delete(s"/api/admin/v1/user/${user.id}") ~> adminRoutes.route ~> check {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
+    Delete(s"/api/admin/v1/user/${enabledUser.id}") ~> samRoutes.route ~> check {
+      // Assert
       status shouldEqual StatusCodes.OK
-    }
-
-    Get(s"/api/admin/v1/user/${user.id}") ~> adminRoutes.route ~> check {
-      status shouldEqual StatusCodes.NotFound
     }
   }
 
-  it should "not allow a non-admin to delete a user" in withAdminRoutes { (samRoutes, _) =>
+  it should "not allow a non-admin to delete a user" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withNonAdminUser(enabledUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
     Delete(s"/api/admin/v1/user/$defaultUserId") ~> samRoutes.route ~> check {
+      // Assert
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
   "DELETE /admin/v1/user/{userSubjectId}/petServiceAccount/{project}" should "delete a pet (as an admin)" in {
-    val (user, adminRoutes) = setUpAdminTest()
-
-    Delete(s"/api/admin/v1/user/${user.id}/petServiceAccount/myproject") ~> adminRoutes.route ~> check {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withAdminUser(adminUser) // enabled "admin" user who is making the http request
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
+    Delete(s"/api/admin/v1/user/${enabledUser.id}/petServiceAccount/myproject") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
   }
 
-  it should "not allow a non-admin to delete a pet" in withAdminRoutes { (samRoutes, _) =>
+  it should "not allow a non-admin to delete a pet" in {
+    // Arrange
+    val enabledUser = Generator.genWorkbenchUserBoth.sample.get
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withNonAdminUser(enabledUser)
+      .withEnabledUser(enabledUser) // "persisted/enabled" user we will check the status of
+      .build
+    // Act
     Delete(s"/api/admin/v1/user/$defaultUserId/petServiceAccount/myproject") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
-  }
-}
-
-trait AdminUserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
-  val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
-  val defaultUserId = defaultUser.id
-  val defaultUserEmail = defaultUser.email
-
-  val adminUser = Generator.genWorkbenchUserGoogle.sample.get.copy(enabled = true)
-
-  val petSAUser = Generator.genWorkbenchUserServiceAccount.sample.get
-  val petSAUserId = petSAUser.id
-  val petSAEmail = petSAUser.email
-
-  def setupAdminsGroup(googleDirectoryDAO: MockGoogleDirectoryDAO): Future[WorkbenchEmail] = {
-    val adminGroupEmail = WorkbenchEmail("fc-admins@dev.test.firecloud.org")
-    for {
-      _ <- googleDirectoryDAO.createGroup(WorkbenchGroupName("fc-admins"), adminGroupEmail)
-      _ <- googleDirectoryDAO.addMemberToGroup(adminGroupEmail, WorkbenchEmail(adminUser.email.value))
-    } yield adminGroupEmail
-  }
-
-  def setUpAdminTest(): (SamUser, SamRoutes) = {
-    val googDirectoryDAO = new MockGoogleDirectoryDAO()
-    val adminGroupEmail = runAndWait(setupAdminsGroup(googDirectoryDAO))
-    val cloudExtensions = new NoExtensions {
-      override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
-    }
-    val (_, _, routes) =
-      createTestUser(testUser = adminUser, cloudExtensions = Option(cloudExtensions), googleDirectoryDAO = Option(googDirectoryDAO), tosAccepted = true)
-    val user = Generator.genWorkbenchUserGoogle.sample.get
-    runAndWait(routes.userService.createUser(user, samRequestContext))
-    (user.copy(enabled = true), routes) // userService.createUser enables the user
-  }
-
-  def createTestUser(
-      testUser: SamUser = Generator.genWorkbenchUserBoth.sample.get,
-      cloudExtensions: Option[CloudExtensions] = None,
-      googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
-      tosAccepted: Boolean = false
-  ): (SamUser, SamDependencies, SamRoutes) = {
-    val samDependencies = genSamDependencies(cloudExtensions = cloudExtensions, googleDirectoryDAO = googleDirectoryDAO)
-    val routes = genSamRoutes(samDependencies, testUser)
-
-    Post("/register/user/v1/") ~> routes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      val res = responseAs[UserStatus]
-      res.userInfo.userEmail shouldBe testUser.email
-      val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)
-      res.enabled shouldBe enabledBaseArray
-    }
-
-    if (tosAccepted) {
-      Post("/register/user/v1/termsofservice", TermsOfServiceAcceptance("app.terra.bio/#terms-of-service")) ~> routes.route ~> check {
-        status shouldEqual StatusCodes.OK
-        val res = responseAs[UserStatus]
-        res.userInfo.userEmail shouldBe testUser.email
-        val enabledBaseArray = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
-        res.enabled shouldBe enabledBaseArray
-      }
-    }
-
-    (testUser, samDependencies, routes)
-  }
-
-  def withAdminRoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
-    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val directoryDAO = new MockDirectoryDAO()
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
-
-    val adminGroupEmail = runAndWait(setupAdminsGroup(googleDirectoryDAO))
-
-    val cloudExtensions = new NoExtensions {
-      override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = googleDirectoryDAO.isGroupMember(adminGroupEmail, memberEmail)
-    }
-
-    directoryDAO.createUser(adminUser, samRequestContext).unsafeRunSync()
-    tosService.acceptTosStatus(adminUser.id, samRequestContext).unsafeRunSync()
-
-    val samRoutes = new TestSamRoutes(
-      null,
-      null,
-      new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions),
-      null,
-      defaultUser,
-      cloudExtensions,
-      tosService = tosService
-    )
-    val adminRoutes = new TestSamRoutes(
-      null,
-      null,
-      new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions),
-      null,
-      adminUser,
-      cloudExtensions,
-      tosService = tosService
-    )
-    testCode(samRoutes, adminRoutes)
   }
 }
