@@ -279,10 +279,10 @@ class ResourceService(
   ): IO[Set[WorkbenchGroupName]] =
     for {
       resourceType <- getResourceType(resource.resourceTypeName)
-      policies <- listResourcePolicies(resource, samRequestContext)
       _ <- validateAuthDomain(resourceType.get, authDomains, userId, samRequestContext)
-      _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), samRequestContext)
+      policies <- listResourcePolicies(resource, samRequestContext)
       _ <- accessPolicyDAO.setResourceAuthDomain(resource, authDomains, samRequestContext)
+      _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), samRequestContext)
       authDomains <- loadResourceAuthDomain(resource, samRequestContext)
     } yield authDomains
 
