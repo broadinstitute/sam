@@ -149,7 +149,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                   pathPrefix("authDomain") {
                     pathEndOrSingleSlash {
                       getResourceAuthDomain(resource, samUser, samRequestContext) ~
-                        postResourceAuthDomain(resource, samUser, samRequestContext)
+                        patchResourceAuthDomain(resource, samUser, samRequestContext)
                     }
                   } ~
                   pathPrefix("roles") {
@@ -364,8 +364,8 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     }
 
-  def postResourceAuthDomain(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    post {
+  def patchResourceAuthDomain(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+    patch {
       requireAction(resource, SamResourceActions.updateAuthDomain, samUser.id, samRequestContext) {
         entity(as[Set[WorkbenchGroupName]]) { authDomains =>
           complete(resourceService.setResourceAuthDomain(resource, authDomains, samUser.id, samRequestContext).map { response =>

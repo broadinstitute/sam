@@ -1675,11 +1675,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-    post:
+    patch:
       tags:
         - Resources
       summary: Update the groups in the Auth Domain for a resource
-      operationId: postAuthDomainV2
+      operationId: patchAuthDomainV2
       parameters:
         - name: resourceTypeName
           in: path

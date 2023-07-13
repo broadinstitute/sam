@@ -1689,7 +1689,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
         .createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.id, samRequestContext)
     )
 
-    Post(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain", Array(authDomain2)) ~> samRoutes.route ~> check {
+    Patch(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain", Array(authDomain2)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[Set[String]] shouldEqual Set(authDomain, authDomain2)
     }
@@ -1724,7 +1724,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
         .createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.id, samRequestContext)
     )
 
-    Post(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain", Array(authDomain2)) ~> samRoutes.route ~> check {
+    Patch(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/authDomain", Array(authDomain2)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
