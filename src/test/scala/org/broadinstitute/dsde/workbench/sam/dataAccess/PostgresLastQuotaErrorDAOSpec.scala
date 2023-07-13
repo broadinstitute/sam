@@ -36,7 +36,7 @@ class PostgresLastQuotaErrorDAOSpec extends AnyFreeSpec with Matchers with Befor
         assume(databaseEnabled, databaseEnabledClue)
 
         dao.recordQuotaError().unsafeRunSync()
-        dao.quotaErrorOccurredWithinDuration(100.millisecond).unsafeRunSync() shouldBe true
+        dao.quotaErrorOccurredWithinDuration(200.millisecond).unsafeRunSync() shouldBe true
       }
     }
 

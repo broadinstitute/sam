@@ -310,12 +310,13 @@ class OldUserServiceSpec
     val user = genWorkbenchUserGoogle.sample.get
 
     // Act
+    val createdAt = Instant.now()
     service.createUser(user, samRequestContext).unsafeRunSync()
 
     // Assert
     val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     inside(maybeUser.value) { user =>
-      user.createdAt should beAround(Instant.now())
+      user.createdAt should beAround(createdAt)
     }
   }
 
@@ -325,12 +326,13 @@ class OldUserServiceSpec
     val user = genWorkbenchUserGoogle.sample.get
 
     // Act
+    val createdAt = Instant.now()
     service.createUser(user, samRequestContext).unsafeRunSync()
 
     // Assert
     val maybeUser = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
     inside(maybeUser.value) { persistedUser =>
-      persistedUser.registeredAt.value should beAround(Instant.now())
+      persistedUser.registeredAt.value should beAround(createdAt)
     }
   }
 
