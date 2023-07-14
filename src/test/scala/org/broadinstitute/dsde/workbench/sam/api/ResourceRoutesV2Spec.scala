@@ -9,21 +9,24 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockAccessPolicyDaoBuilder, MockDirectoryDAO, MockGoogleDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFlatSpec, TestSupport, model}
-import org.mockito.ArgumentMatcher
+import org.mockito.{ArgumentMatcher, Strictness}
 import org.mockito.ArgumentMatchers.{eq => mockitoEq}
+import org.mockito.IdiomaticMockito.StubbingOps
 import org.mockito.Mockito._
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.AppendedClues
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
 import spray.json.{JsBoolean, JsValue}
+
+import java.time.Instant
 
 //TODO This test is flaky. It looks like the tests run too fast and cause some sort of timeout error or race condition
 class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
@@ -94,67 +97,225 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
   }
 
-  "POST /api/resources/v2/{resourceType}" should "204 create resource" in {
+  "POST /api/resources/v2/{resourceType}" should "create a resource when provided with only member emails" in {
     val resourceType = ResourceType(
-      ResourceTypeName("rt"),
-      Set(ResourceActionPattern("run", "", false), ResourceActionPattern("doStuff", "", false)),
-      Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))),
-      ResourceRoleName("owner")
+      name = ResourceTypeName("rt"),
+      actionPatterns = Set(
+        ResourceActionPattern(value = "run", description = "", authDomainConstrainable = false),
+        ResourceActionPattern(value = "doStuff", description = "", authDomainConstrainable = false)
+      ),
+      roles = Set(ResourceRole(roleName = ResourceRoleName("owner"), actions = Set(ResourceAction("run")))),
+      ownerRoleName = ResourceRoleName("owner")
     )
-    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    // val mockAccessPolicyDAO = StatefulMockAccessPolicyDaoBuilder().build
+    // mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val samRoutes = TestSamRoutes(
+      resourceTypes = Map(resourceType.name -> resourceType)
+      // policyAccessDAO = Option(mockAccessPolicyDAO)
+    )
 
-    val gooberPolicyName = AccessPolicyName("goober")
-    val gooberPolicyMembership =
+    val policyName = AccessPolicyName("goober")
+    val policyMembership =
       AccessPolicyMembership(memberEmails = Set(defaultUserInfo.email), actions = Set(ResourceAction("run")), roles = Set(resourceType.ownerRoleName))
-    val fooResourceId = ResourceId("foo")
+    val resourceId = ResourceId("foo")
     val createResourceRequest = CreateResourceRequest(
-      resourceId = fooResourceId,
-      policies = Map(gooberPolicyName -> gooberPolicyMembership),
-      authDomain = Set.empty,
-      returnResource = Option(true)
+      resourceId = resourceId,
+      policies = Map(policyName -> policyMembership),
+      authDomain = Set.empty
     )
-     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
-       status shouldEqual StatusCodes.Created
-       responseAs[CreateResourceResponse] shouldEqual "test"
-     }
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
 
-     Get(s"/api/resources/v2/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
-       status shouldEqual StatusCodes.OK
-       responseAs[JsValue] shouldEqual JsBoolean(true)
-     }
+    Get(s"/api/resources/v2/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(true)
+    }
+  }
 
-    val fooFullyQualifiedResourceId = FullyQualifiedResourceId(resourceType.name, fooResourceId)
-    val previousResourcesPolicyId = FullyQualifiedPolicyId(fooFullyQualifiedResourceId, gooberPolicyName)
-    val memberPolicyIds = Set(previousResourcesPolicyId)
+  /*
+    TODO: Write tests for emails only, member policies only, both emails and member policies
+    TODO: Add new type to replace policy identifiers param
+    TODO: clean up makeValidatablePolicy with helpers/comments
+    TODO: Clean up tests to follow Arrange, Act, Assert
+   */
+
+  it should "create a resource when provided with no member emails and only memberPolicies" in {
+    // Arrange
+    val runAction = ResourceAction("run")
+    val doStuffAction = ResourceAction("doStuff")
+    val resourceType = ResourceType(
+      name = ResourceTypeName("rt"),
+      actionPatterns = Set(ResourceActionPattern(runAction.value, "", false), ResourceActionPattern(doStuffAction.value, "", false)),
+      roles = Set(ResourceRole(ResourceRoleName("owner"), Set(runAction))),
+      ownerRoleName = ResourceRoleName("owner")
+    )
+    val ownerUser = Generator.genWorkbenchUserGoogle.sample.get
+      //SamUser(WorkbenchUserId("ownerId"), Option(GoogleSubjectId("testing")), WorkbenchEmail("ownerPolicyEmail@gmail.com"), None, enabled = true, None)
+
+    val ownerPolicyName = AccessPolicyName("ownerPolicy")
+    val ownerPolicyMembership =
+      AccessPolicyMembership(memberEmails = Set(ownerUser.email), actions = Set(runAction), roles = Set(resourceType.ownerRoleName))
+    val ownerResourceId = ResourceId("ownerResourceId")
+
+    val ownerFullyQualifiedResourceId = FullyQualifiedResourceId(resourceType.name, ownerResourceId)
+    val ownerResourcesPolicyId = FullyQualifiedPolicyId(ownerFullyQualifiedResourceId, ownerPolicyName)
+    val ownerPolicy = AccessPolicy(
+      id = ownerResourcesPolicyId,
+      members = Set(ownerUser.id),
+      email = defaultTestUser.email, // This normally is generated
+      roles = ownerPolicyMembership.roles,
+      actions = ownerPolicyMembership.actions,
+      descendantPermissions = Set.empty,
+      public = false
+    )
+
+    val resource = Resource(
+      resourceTypeName = resourceType.name,
+      resourceId = ownerResourceId,
+      authDomain = Set.empty,
+      accessPolicies = Set(ownerPolicy),
+      parent = None
+    )
+
+    val mockAccessPolicyDAO = MockAccessPolicyDaoBuilder().withExistingPolicy(ownerPolicy).withExistingResource(resource).build
+    //val mockDirectoryDAO = MockDirectoryDaoBuilder().withEnabledUser(ownerUser).build
+    val mockDirectoryDAO = new MockDirectoryDAO()
+    mockDirectoryDAO.createUser(ownerUser, samRequestContext)
+    val mockGoogleDirectoryDAO = MockGoogleDirectoryDaoBuilder().build
+    val samRoutes = TestSamRoutes(
+      resourceTypes = Map(resourceType.name -> resourceType),
+      policyAccessDAO = Option(mockAccessPolicyDAO),
+      maybeDirectoryDAO = Option(mockDirectoryDAO),
+      maybeGoogleDirectoryDAO = Option(mockGoogleDirectoryDAO),
+    )
+    //samRoutes.createUserAndAcceptTos(ownerUser, samRequestContext)
+
+    val policyIdentifiers = PolicyIdentifiers(
+      policyName = ownerPolicyName,
+      resourceTypeName = resourceType.name,
+      resourceId = ownerResourceId
+    )
+    val policyMembership = AccessPolicyMembership(
+      memberEmails = Set.empty, // no member emails
+      actions = Set(doStuffAction),
+      roles = Set(resourceType.ownerRoleName),
+      memberPolicies = Option(Set(policyIdentifiers))
+    )
+    val resourceId = ResourceId("resourceId")
+    val policyName = AccessPolicyName("policyName")
+    val createResourceRequest = CreateResourceRequest(
+      resourceId,
+      Map(policyName -> policyMembership),
+      Set.empty
+    )
+
+    // Act
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      // Assert
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest.copy(returnResource = Option(true))) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[CreateResourceResponse] shouldEqual "test"
+      // response.entity shouldEqual "test"
+    }
+
+  }
+
+  it should "create a resource when provided with both member emails and memberPolicies" in {
+    val runAction = ResourceAction("run")
+    val resourceType = ResourceType(
+      name = ResourceTypeName("rt"),
+      actionPatterns = Set(ResourceActionPattern("run", "", false), ResourceActionPattern("doStuff", "", false)),
+      roles = Set(ResourceRole(ResourceRoleName("owner"), Set(runAction))),
+      ownerRoleName = ResourceRoleName("owner")
+    )
+
+    val ownerPolicyName = AccessPolicyName("ownerPolicy")
+    val ownerPolicyMembership =
+      AccessPolicyMembership(memberEmails = Set(defaultUserInfo.email), actions = Set(runAction), roles = Set(resourceType.ownerRoleName))
+    val ownerResourceId = ResourceId("ownerResourceId")
+    val ownerCreateResourceRequest = CreateResourceRequest(
+      resourceId = ownerResourceId,
+      policies = Map(ownerPolicyName -> ownerPolicyMembership),
+      authDomain = Set.empty
+      // returnResource = Option(true)
+    )
     val doStuffResourceAction = ResourceAction("doStuff")
 
     val policyIdentifiers = PolicyIdentifiers(
-      gooberPolicyName,
-      defaultUserInfo.email,
+      policyName = ownerPolicyName,
       resourceTypeName = resourceType.name,
-      resourceId = ???) //this needs to either be mocked or gotten from the previous create resource call
-    val bananaPolicyMembership = AccessPolicyMembership(
+      resourceId = ownerResourceId
+    ) // this needs to either be mocked or gotten from the previous create resource call
+    val policyMembership = AccessPolicyMembership(
       memberEmails = Set(defaultUserInfo.email),
       actions = Set(doStuffResourceAction),
       roles = Set(resourceType.ownerRoleName),
       memberPolicies = Option(Set(policyIdentifiers))
-      // memberPolicyIds = Some(memberPolicyIds)
     )
 
-    val barResourceId = ResourceId("bar")
-    val bananaPolicyName = AccessPolicyName("banana")
-    val createResourceRequest2 = CreateResourceRequest(
-      barResourceId,
-      Map(bananaPolicyName -> bananaPolicyMembership),
+    val resourceId = ResourceId("resourceId")
+    val policyName = AccessPolicyName("policyName")
+    val createResourceRequest = CreateResourceRequest(
+      resourceId,
+      Map(policyName -> policyMembership),
       Set.empty
     )
 
-    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest2) ~> samRoutes.route ~> check {
-      response.toString() equals "Hello"
+    val ownerFullyQualifiedResourceId = FullyQualifiedResourceId(resourceType.name, ownerResourceId)
+    val ownerResourcesPolicyId = FullyQualifiedPolicyId(ownerFullyQualifiedResourceId, ownerPolicyName)
+
+    val mockDirectoryDAO = new MockDirectoryDAO()
+    val user = SamUser(WorkbenchUserId("testUser"), None, WorkbenchEmail("testUser@gmail.com"), None, true, None, Instant.now(), None, Instant.now())
+
+    mockDirectoryDAO.createUser(user, samRequestContext)
+
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](withSettings.strictness(Strictness.Lenient))
+
+    // want to have a specific resource/policy already exist when I call this
+    mockAccessPolicyDAO.upsertResourceTypes(any[Set[ResourceType]], any[SamRequestContext]) answers ((resourceTypes: Set[ResourceType], _: SamRequestContext) =>
+      IO(resourceTypes.map(types => types.name))
+    )
+
+    mockAccessPolicyDAO.createResource(any[Resource], any[SamRequestContext]) answers ((resource: Resource, _: SamRequestContext) => IO(resource))
+
+    mockAccessPolicyDAO.loadPolicy(any[FullyQualifiedPolicyId], any[SamRequestContext]) answers ((policyId: FullyQualifiedPolicyId, _: SamRequestContext) => {
+      val policy = if (policyId == ownerResourcesPolicyId) {
+        Option(
+          AccessPolicy(
+            ownerResourcesPolicyId,
+            Set(user.id),
+            // ownerPolicyMembership.memberEmails,
+            user.email,
+            // WorkbenchEmail("ownerPolicyEmail@gmail.com"),
+            ownerPolicyMembership.roles,
+            ownerPolicyMembership.actions,
+            descendantPermissions = Set.empty,
+            public = false
+          )
+        )
+      } else None
+      IO(policy)
+    })
+
+    mockAccessPolicyDAO.listUserResourceActions(any[FullyQualifiedResourceId], any[WorkbenchUserId], any[SamRequestContext]) answers (
+      (resourceId: FullyQualifiedResourceId, _: WorkbenchUserId, _: SamRequestContext) => IO(Set(runAction, doStuffResourceAction))
+    )
+
+    val samRoutes = TestSamRoutes(
+      resourceTypes = Map(resourceType.name -> resourceType),
+      policyAccessDAO = Option(mockAccessPolicyDAO),
+      maybeDirectoryDAO = Option(mockDirectoryDAO)
+    )
+
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
     }
 
-    Get(s"/api/resources/v2/${resourceType.name}/$barResourceId/action/$doStuffResourceAction") ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2/${resourceType.name}/$resourceId/action/$doStuffResourceAction") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[JsValue] shouldEqual JsBoolean(true)
     }

@@ -29,7 +29,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     this(Map.empty[ResourceTypeName, ResourceType], directoryDAO)
 
   val resources = new TrieMap[FullyQualifiedResourceId, Resource]()
-  val policies = directoryDAO.groups
+  val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = directoryDAO.groups
 
   override def upsertResourceTypes(resourceTypesToInit: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]] =
     for {
@@ -320,7 +320,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
 
     policyIds
       .traverse(loadPolicy(_, samRequestContext))
-      .map(_.flatMap(_.map(p => PolicyIdentifiers(p.id.accessPolicyName, p.email, p.id.resource.resourceTypeName, p.id.resource.resourceId))))
+      .map(_.flatMap(_.map(p => PolicyIdentifiers(p.id.accessPolicyName, Option(p.email), p.id.resource.resourceTypeName, p.id.resource.resourceId))))
   }
 
   override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
@@ -338,7 +338,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
         } yield AccessPolicyWithMembership(
           policy.id.accessPolicyName,
           AccessPolicyMembership(
-            users.toSet ++ groups ++ subPolicies.map(_.policyEmail),
+            users.toSet ++ groups ++ subPolicies.flatMap(_.policyEmail),
             policy.actions,
             policy.roles,
             Option(policy.descendantPermissions),

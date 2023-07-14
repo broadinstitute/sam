@@ -707,6 +707,7 @@ class ResourceService(
   def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
     accessPolicyDAO.loadPolicyMembership(policyIdentity, samRequestContext)
 
+  // TODO Clean up this method and split into helper functions
   private def makeValidatablePolicies(
       policies: Map[AccessPolicyName, AccessPolicyMembership],
       samRequestContext: SamRequestContext
@@ -722,11 +723,28 @@ class ResourceService(
             ownerPolicy.map(p => p.map(_.email))
           }
         }
-        makeValidatablePolicy(
-          accessPolicyName,                         //need to convert maybeOwnerPolicyEmail to a set and not an IO of a set
-          accessPolicyMembership.copy(memberEmails = maybeOwnerPolicyEmails += accessPolicyMembership.memberEmails),
-          samRequestContext
-        )
+
+        val allEmails = maybeOwnerPolicyEmails
+          .map { policyEmails =>
+            val listIOPolicyEmails = policyEmails.toList
+            val ioListPolicyEmails = listIOPolicyEmails.sequence
+            val ioSetPolicyEmails = for {
+              listPolicyEmails <- ioListPolicyEmails
+            } yield listPolicyEmails.flatten.toSet
+            for {
+              setPolicyEmails <- ioSetPolicyEmails
+            } yield setPolicyEmails ++ accessPolicyMembership.memberEmails
+          }
+          .getOrElse(IO(accessPolicyMembership.memberEmails))
+
+        for {
+          memberEmails <- allEmails
+          validatablePolicy <- makeValidatablePolicy(
+            accessPolicyName,
+            accessPolicyMembership.copy(memberEmails = memberEmails),
+            samRequestContext
+          )
+        } yield validatablePolicy
       }
       .map(_.toSet)
 
@@ -734,12 +752,11 @@ class ResourceService(
       accessPolicyName: AccessPolicyName,
       accessPolicyMembership: AccessPolicyMembership,
       samRequestContext: SamRequestContext
-  ): IO[ValidatableAccessPolicy] = // TODO
-
+  ): IO[ValidatableAccessPolicy] =
     mapEmailsToSubjects(accessPolicyMembership.memberEmails, samRequestContext).map { emailsToSubjects =>
       ValidatableAccessPolicy(
         accessPolicyName,
-        emailsToSubjects, // this can be swapped for the triple
+        emailsToSubjects,
         accessPolicyMembership.roles,
         accessPolicyMembership.actions,
         accessPolicyMembership.getDescendantPermissions,

@@ -1,0 +1,27 @@
+{
+  "authDomain": [],
+  "policies": {
+    "banana": {
+      "actions": [
+        "doStuff"
+      ],
+      "descendantPermissions": [],
+      "memberEmails": [
+        "tWJ@gmail.com"
+      ],
+      "memberPolicyIdentifiers": [
+        {
+          "policyName": "goober",
+          "resourceId": "foo",
+          "resourceTypeName": "rt"
+        }
+      ],
+      "roles": [
+        "owner"
+      ]
+    }
+  },
+  "resourceId": "bar",
+  "returnResource": false
+}
+

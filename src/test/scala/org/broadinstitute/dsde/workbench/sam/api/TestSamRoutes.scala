@@ -6,13 +6,14 @@ import akka.http.scaladsl.server.Directives.reject
 import akka.stream.Materializer
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, _}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -149,7 +150,8 @@ object TestSamRoutes {
       resourceTypes: Map[ResourceTypeName, ResourceType],
       user: SamUser = defaultUserInfo,
       policyAccessDAO: Option[AccessPolicyDAO] = None,
-      maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
+      maybeDirectoryDAO: Option[DirectoryDAO] = None,
+      maybeGoogleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None,
@@ -158,9 +160,13 @@ object TestSamRoutes {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
+    val googleDirectoryDAO = maybeGoogleDirectoryDAO.getOrElse(new MockGoogleDirectoryDAO())
     val directoryDAO = maybeDirectoryDAO.getOrElse(new MockDirectoryDAO())
-    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], directoryDAO))
+    val policyDAO =
+      directoryDAO match {
+        case mock: MockDirectoryDAO => new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], mock)
+        case _ => policyAccessDAO.getOrElse(throw new RuntimeException("policy access dao does not exist but you are trying to access it"))
+      }
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)

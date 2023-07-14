@@ -834,14 +834,14 @@ class ResourceServiceSpec
     val ownerPolicy = actualPolicies.head
 
     val expectedMemberPolicies = sidePolicies.map { p =>
-      PolicyIdentifiers(p.policyName, p.email, sideResource.resourceTypeName, sideResource.resourceId)
+      PolicyIdentifiers(p.policyName, Option(p.email), sideResource.resourceTypeName, sideResource.resourceId)
     }
 
     ownerPolicy.policy.memberPolicies.value shouldBe expectedMemberPolicies.toSet
 
     // all memberPolicies emails should also be in the memberEmails array
     expectedMemberPolicies.foreach { p =>
-      ownerPolicy.policy.memberEmails should contain(p.policyEmail)
+      ownerPolicy.policy.memberEmails should contain(p.policyEmail.get)
     }
   }
 
@@ -922,7 +922,9 @@ class ResourceServiceSpec
     // overwrite policy with members in memberPolicy
     val memberPolicy = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testMemberR")), AccessPolicyName("testB"))
     val memberPolicyIdSet =
-      Set(PolicyIdentifiers(memberPolicy.accessPolicyName, WorkbenchEmail(""), memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId))
+      Set(
+        PolicyIdentifiers(memberPolicy.accessPolicyName, Option(WorkbenchEmail("")), memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId)
+      )
     runAndWait(
       resourceService.overwritePolicy(
         defaultResourceType,

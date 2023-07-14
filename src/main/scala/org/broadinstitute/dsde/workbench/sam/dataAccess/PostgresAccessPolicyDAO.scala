@@ -832,7 +832,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           rs.get[AccessPolicyName](p.resultName.name),
           PolicyIdentifiers(
             rs.get[AccessPolicyName](mp.resultName.name),
-            rs.get[WorkbenchEmail](mpg.resultName.email),
+            Option(rs.get[WorkbenchEmail](mpg.resultName.email)),
             rs.get[ResourceTypeName](mprt.resultName.name),
             rs.get[ResourceId](mpr.resultName.name)
           )
@@ -1229,7 +1229,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           AccessPolicyWithMembership(
             policyInfo.name,
             AccessPolicyMembership(
-              memberPolicies.map(_.policyEmail) ++ memberUsers ++ memberGroups,
+              memberPolicies.flatMap(_.policyEmail) ++ memberUsers ++ memberGroups,
               policyActions,
               policyRoles,
               Option(policyDescendantPermissions),
