@@ -119,8 +119,7 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
 
     if (samUser.googleSubjectId.nonEmpty) {
       mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.id))
-      // mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser))
-      mockedDirectoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext]) returns IO(Option(samUser))
+      mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser))
     }
 
     if (maybeAllUsersGroup.nonEmpty) {

@@ -556,8 +556,7 @@ class ResourceService(
       descendantPermissionsErrors <- validateDescendantPermissions(policy.descendantPermissions)
     } yield {
       val validationErrors =
-        validateMemberEmails(policy.emailsToSubjects) ++ // if email is provided
-          // else validate triple
+        validateMemberEmails(policy.emailsToSubjects) ++
           validateActions(resourceType, policy.actions) ++
           validateRoles(resourceType, policy.roles) ++
           validateUrlSafe(policy.policyName.value) ++
@@ -713,8 +712,8 @@ class ResourceService(
   ): IO[Set[ValidatableAccessPolicy]] =
     policies.toList
       .traverse { case (accessPolicyName, accessPolicyMembership) =>
-        val maybeOwnerPolicyEmails = getOwnerPolicyEmailsFromAccessPolicyMembership(accessPolicyMembership, samRequestContext)
-        val allEmails = collateMemberAndOwnerEmails(accessPolicyMembership.memberEmails, maybeOwnerPolicyEmails)
+        val maybeOwnerPolicyEmails = getPolicyEmailsFromAccessPolicyMembership(accessPolicyMembership, samRequestContext)
+        val allEmails = collateMemberAndPolicyEmails(accessPolicyMembership.memberEmails, maybeOwnerPolicyEmails)
         for {
           newMemberEmails <- allEmails
           validatablePolicy <- makeValidatablePolicy(
@@ -726,26 +725,26 @@ class ResourceService(
       }
       .map(_.toSet)
 
-  private def getOwnerPolicyEmailsFromAccessPolicyMembership(
+  private def getPolicyEmailsFromAccessPolicyMembership(
       accessPolicyMembership: AccessPolicyMembership,
       samRequestContext: SamRequestContext
   ): Option[Set[IO[Option[WorkbenchEmail]]]] =
     accessPolicyMembership.memberPolicies.map { memberPolicies =>
       memberPolicies.map { memberPolicy =>
-        val ownerPolicy = loadOwnerPolicyByPolicyIdentifiers(memberPolicy, samRequestContext)
+        val ownerPolicy = loadPolicyByPolicyIdentifiers(memberPolicy, samRequestContext)
         ownerPolicy.map(p => p.map(_.email))
       }
     }
 
-  private def loadOwnerPolicyByPolicyIdentifiers(policyIdentifiers: PolicyIdentifiers, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
+  private def loadPolicyByPolicyIdentifiers(policyIdentifiers: PolicyIdentifiers, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
     accessPolicyDAO.loadPolicy(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(policyIdentifiers.resourceTypeName, policyIdentifiers.resourceId), policyIdentifiers.policyName),
       samRequestContext
     )
 
-  //Need to group both member emails and owner emails together, this function mainly serves to simplify the complex structure of owner emails
-  private def collateMemberAndOwnerEmails(memberEmails: Set[WorkbenchEmail], ownerEmails: Option[Set[IO[Option[WorkbenchEmail]]]]): IO[Set[WorkbenchEmail]] =
-    ownerEmails
+  // Need to group both member emails and policy emails together, this function mainly serves to simplify the complex structure of owner emails
+  private def collateMemberAndPolicyEmails(memberEmails: Set[WorkbenchEmail], policyEmails: Option[Set[IO[Option[WorkbenchEmail]]]]): IO[Set[WorkbenchEmail]] =
+    policyEmails
       .map { policyEmails =>
         val listIOPolicyEmails = policyEmails.toList
         val ioListPolicyEmails = listIOPolicyEmails.sequence

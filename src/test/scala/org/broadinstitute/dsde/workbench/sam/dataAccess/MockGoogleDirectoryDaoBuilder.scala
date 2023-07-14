@@ -16,12 +16,5 @@ case class MockGoogleDirectoryDaoBuilder() extends IdiomaticMockito {
 
   mockedGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[GroupSettings]]) returns Future.unit
 
-  // def withExistingResource(resource: Resource): MockAccessPolicyDaoBuilder = withExistingResources(Set(resource))
-
-  // def withExistingResources(resources: Iterable[Resource]): MockAccessPolicyDaoBuilder = {
-  //   resources.toSet.foreach(makeResourceExist)
-  //  this
-  // }
-
   def build: GoogleDirectoryDAO = mockedGoogleDirectoryDAO
 }
