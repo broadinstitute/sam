@@ -133,7 +133,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
   }
 
-  "POST /api/resources/v2/{resourceType}" should "204 create resource" in {
+  "POST /api/resources/v2/{resourceType}" should "create a resource with only member policy identifiers and no member emails" in {
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(ResourceActionPattern("run", "", false), ResourceActionPattern("doStuff", "", false)),
@@ -165,7 +165,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val memberPolicyIds = Set(previousResourcesPolicyId)
     val doStuffResourceAction = ResourceAction("doStuff")
     val bananaPolicyMembership = AccessPolicyMembership(
-      memberEmails = Set(defaultUserInfo.email),
+      memberEmails = Set(),
       actions = Set(doStuffResourceAction),
       roles = Set(resourceType.ownerRoleName),
       memberPolicies = Option(Set(
