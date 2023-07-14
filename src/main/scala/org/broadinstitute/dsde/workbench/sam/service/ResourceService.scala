@@ -707,46 +707,56 @@ class ResourceService(
   def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
     accessPolicyDAO.loadPolicyMembership(policyIdentity, samRequestContext)
 
-  // TODO Clean up this method and split into helper functions
   private def makeValidatablePolicies(
       policies: Map[AccessPolicyName, AccessPolicyMembership],
       samRequestContext: SamRequestContext
   ): IO[Set[ValidatableAccessPolicy]] =
     policies.toList
       .traverse { case (accessPolicyName, accessPolicyMembership) =>
-        val maybeOwnerPolicyEmails = accessPolicyMembership.memberPolicies.map { memberPolicies =>
-          memberPolicies.map { memberPolicy =>
-            val ownerPolicy = accessPolicyDAO.loadPolicy(
-              FullyQualifiedPolicyId(FullyQualifiedResourceId(memberPolicy.resourceTypeName, memberPolicy.resourceId), memberPolicy.policyName),
-              samRequestContext
-            )
-            ownerPolicy.map(p => p.map(_.email))
-          }
-        }
-
-        val allEmails = maybeOwnerPolicyEmails
-          .map { policyEmails =>
-            val listIOPolicyEmails = policyEmails.toList
-            val ioListPolicyEmails = listIOPolicyEmails.sequence
-            val ioSetPolicyEmails = for {
-              listPolicyEmails <- ioListPolicyEmails
-            } yield listPolicyEmails.flatten.toSet
-            for {
-              setPolicyEmails <- ioSetPolicyEmails
-            } yield setPolicyEmails ++ accessPolicyMembership.memberEmails
-          }
-          .getOrElse(IO(accessPolicyMembership.memberEmails))
-
+        val maybeOwnerPolicyEmails = getOwnerPolicyEmailsFromAccessPolicyMembership(accessPolicyMembership, samRequestContext)
+        val allEmails = collateMemberAndOwnerEmails(accessPolicyMembership.memberEmails, maybeOwnerPolicyEmails)
         for {
-          memberEmails <- allEmails
+          newMemberEmails <- allEmails
           validatablePolicy <- makeValidatablePolicy(
             accessPolicyName,
-            accessPolicyMembership.copy(memberEmails = memberEmails),
+            accessPolicyMembership.copy(memberEmails = newMemberEmails),
             samRequestContext
           )
         } yield validatablePolicy
       }
       .map(_.toSet)
+
+  private def getOwnerPolicyEmailsFromAccessPolicyMembership(
+      accessPolicyMembership: AccessPolicyMembership,
+      samRequestContext: SamRequestContext
+  ): Option[Set[IO[Option[WorkbenchEmail]]]] =
+    accessPolicyMembership.memberPolicies.map { memberPolicies =>
+      memberPolicies.map { memberPolicy =>
+        val ownerPolicy = loadOwnerPolicyByPolicyIdentifiers(memberPolicy, samRequestContext)
+        ownerPolicy.map(p => p.map(_.email))
+      }
+    }
+
+  private def loadOwnerPolicyByPolicyIdentifiers(policyIdentifiers: PolicyIdentifiers, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
+    accessPolicyDAO.loadPolicy(
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(policyIdentifiers.resourceTypeName, policyIdentifiers.resourceId), policyIdentifiers.policyName),
+      samRequestContext
+    )
+
+  //Need to group both member emails and owner emails together, this function mainly serves to simplify the complex structure of owner emails
+  private def collateMemberAndOwnerEmails(memberEmails: Set[WorkbenchEmail], ownerEmails: Option[Set[IO[Option[WorkbenchEmail]]]]): IO[Set[WorkbenchEmail]] =
+    ownerEmails
+      .map { policyEmails =>
+        val listIOPolicyEmails = policyEmails.toList
+        val ioListPolicyEmails = listIOPolicyEmails.sequence
+        val ioSetPolicyEmails = for {
+          listPolicyEmails <- ioListPolicyEmails
+        } yield listPolicyEmails.flatten.toSet
+        for {
+          setPolicyEmails <- ioSetPolicyEmails
+        } yield setPolicyEmails ++ memberEmails
+      }
+      .getOrElse(IO(memberEmails))
 
   private def makeValidatablePolicy(
       accessPolicyName: AccessPolicyName,

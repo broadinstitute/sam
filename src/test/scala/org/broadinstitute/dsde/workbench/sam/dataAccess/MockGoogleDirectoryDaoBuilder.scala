@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail}
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.mockito.ArgumentMatchersSugar.any
 import org.mockito.{IdiomaticMockito, Strictness}
 import com.google.api.services.groupssettings.model.{Groups => GroupSettings}
@@ -16,12 +16,12 @@ case class MockGoogleDirectoryDaoBuilder() extends IdiomaticMockito {
 
   mockedGoogleDirectoryDAO.createGroup(any[String], any[WorkbenchEmail], any[Option[GroupSettings]]) returns Future.unit
 
-  //def withExistingResource(resource: Resource): MockAccessPolicyDaoBuilder = withExistingResources(Set(resource))
+  // def withExistingResource(resource: Resource): MockAccessPolicyDaoBuilder = withExistingResources(Set(resource))
 
-  //def withExistingResources(resources: Iterable[Resource]): MockAccessPolicyDaoBuilder = {
- //   resources.toSet.foreach(makeResourceExist)
+  // def withExistingResources(resources: Iterable[Resource]): MockAccessPolicyDaoBuilder = {
+  //   resources.toSet.foreach(makeResourceExist)
   //  this
-  //}
+  // }
 
   def build: GoogleDirectoryDAO = mockedGoogleDirectoryDAO
 }

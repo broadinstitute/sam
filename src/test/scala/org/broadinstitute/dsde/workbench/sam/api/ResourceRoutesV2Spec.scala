@@ -9,7 +9,13 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockAccessPolicyDaoBuilder, MockDirectoryDAO, MockGoogleDirectoryDaoBuilder}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{
+  AccessPolicyDAO,
+  MockAccessPolicyDAO,
+  MockAccessPolicyDaoBuilder,
+  MockDirectoryDAO,
+  MockGoogleDirectoryDaoBuilder
+}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -150,8 +156,8 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       roles = Set(ResourceRole(ResourceRoleName("owner"), Set(runAction))),
       ownerRoleName = ResourceRoleName("owner")
     )
-    val ownerUser = Generator.genWorkbenchUserGoogle.sample.get
-      //SamUser(WorkbenchUserId("ownerId"), Option(GoogleSubjectId("testing")), WorkbenchEmail("ownerPolicyEmail@gmail.com"), None, enabled = true, None)
+    val ownerUser = defaultTestUser
+    // SamUser(WorkbenchUserId("ownerId"), Option(GoogleSubjectId("testing")), WorkbenchEmail("ownerPolicyEmail@gmail.com"), None, enabled = true, None)
 
     val ownerPolicyName = AccessPolicyName("ownerPolicy")
     val ownerPolicyMembership =
@@ -179,7 +185,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     )
 
     val mockAccessPolicyDAO = MockAccessPolicyDaoBuilder().withExistingPolicy(ownerPolicy).withExistingResource(resource).build
-    //val mockDirectoryDAO = MockDirectoryDaoBuilder().withEnabledUser(ownerUser).build
+    // val mockDirectoryDAO = MockDirectoryDaoBuilder().withEnabledUser(ownerUser).build
     val mockDirectoryDAO = new MockDirectoryDAO()
     mockDirectoryDAO.createUser(ownerUser, samRequestContext)
     val mockGoogleDirectoryDAO = MockGoogleDirectoryDaoBuilder().build
@@ -187,9 +193,18 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       resourceTypes = Map(resourceType.name -> resourceType),
       policyAccessDAO = Option(mockAccessPolicyDAO),
       maybeDirectoryDAO = Option(mockDirectoryDAO),
-      maybeGoogleDirectoryDAO = Option(mockGoogleDirectoryDAO),
+      maybeGoogleDirectoryDAO = Option(mockGoogleDirectoryDAO)
     )
-    //samRoutes.createUserAndAcceptTos(ownerUser, samRequestContext)
+    val resourceForState = samRoutes.resourceService.createResource(
+      resourceType = resourceType,
+      resourceId = ownerResourceId,
+      policiesMap = Map(ownerPolicyName -> ownerPolicyMembership),
+      authDomain = resource.authDomain,
+      parentOpt = resource.parent,
+      userId = defaultTestUser.id,
+      samRequestContext = samRequestContext
+    )
+    // samRoutes.createUserAndAcceptTos(ownerUser, samRequestContext)
 
     val policyIdentifiers = PolicyIdentifiers(
       policyName = ownerPolicyName,
