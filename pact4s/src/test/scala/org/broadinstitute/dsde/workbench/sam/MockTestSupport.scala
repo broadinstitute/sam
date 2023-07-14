@@ -1,6 +1,10 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
+import akka.http.scaladsl.server.Directive1
+import akka.http.scaladsl.server.Directives.{complete, extractRequest, onSuccess, optionalHeaderValueByName}
 import akka.stream.Materializer
 import cats.effect._
 import cats.effect.unsafe.implicits.global
@@ -194,6 +198,28 @@ object MockTestSupport extends MockTestSupport {
     }
     override val user: SamUser = uInfo
     override val newSamUser: Option[SamUser] = Option(uInfo)
+
+    // Override the withUserAllowInactive in MockSamUserDirectives to include
+    // support for user status info request with or without access token
+    override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] =
+      extractRequest.flatMap { request =>
+        // Use an extractRequest Directive to capture the headers for debugging purpose
+        val headers = request.headers
+        headers.foreach(header => logger.debug(s"${header.name}: ${header.value}"))
+
+        optionalHeaderValueByName(StandardSamUserDirectives.accessTokenHeader).flatMap {
+          case Some(headerValue) =>
+            // Behavior when access token is present
+            val fakeOidcHeaders =
+              OIDCHeaders(OAuth2BearerToken(headerValue), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
+            onSuccess {
+              StandardSamUserDirectives.getSamUser(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
+            }
+          case None =>
+            // Behavior when access token is NOT present
+            complete(StatusCodes.Unauthorized)
+        }
+      }
   }
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): MockSamRoutes =

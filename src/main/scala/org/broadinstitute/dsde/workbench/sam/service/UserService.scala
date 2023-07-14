@@ -115,6 +115,28 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case None => IO(user)
     }
 
+  def updateUserCrud(userId: WorkbenchUserId, request: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    openTelemetry.time("api.v1.user.updateUserCrud.time", API_TIMING_DURATION_BUCKET) {
+      directoryDAO.loadUser(userId, samRequestContext).flatMap {
+        case Some(user) =>
+          // validate all fields to be updated
+          var errorReports = Seq[ErrorReport]()
+          request.email.foreach(email => errorReports = errorReports ++ validateEmail(email, blockedEmailDomains))
+          if (errorReports.nonEmpty) {
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
+          } else { // apply all updates
+            var updatedUser = user
+            request.email.foreach { email =>
+              directoryDAO.updateUserEmail(userId, email, samRequestContext)
+              updatedUser = user.copy(email = email)
+            }
+            IO(Some(updatedUser))
+          }
+        case None => IO(None)
+      }
+
+    }
+
   // In most cases when this is called we will have a scenario where 1 or more Cloud Ids are set.  For any Cloud Ids
   // that are `Some(id)`, we should try to update the User record in the database with that id.  At this point it will
   // either successfully set the id or throw an exception if the user could not be found or if the id is already set to

@@ -40,6 +40,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStatus'
+    patch:
+      tags:
+        - Admin
+      summary: Updates given fields on a user, by user id
+      operationId: adminUpdateUser
+      parameters:
+        - name: userId
+          in: path
+          description: User ID of the user to be updated
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        200:
+          description: User was updated successfully
+        403:
+          description: You do not have admin privileges
+          content: { }
+        404:
+          description: User not found
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/user/email/{email}:
     get:
       tags:
@@ -3520,6 +3552,15 @@ components:
           description: the name of the Azure managed resource group
           example: my-managed-resource-group
       description: specifies a request for a pet managed identity
+    User:
+      required:
+        - email
+      type: object
+      properties:
+        email:
+          type: string
+          description: User's email address
+      description: specification of a User
   securitySchemes:
     googleoauth:
       type: oauth2

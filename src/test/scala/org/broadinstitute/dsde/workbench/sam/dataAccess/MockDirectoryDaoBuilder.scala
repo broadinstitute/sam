@@ -5,8 +5,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
-import org.mockito.IdiomaticMockito
-import org.mockito.Mockito.RETURNS_SMART_NULLS
+import org.mockito.{IdiomaticMockito, Strictness}
 
 object MockDirectoryDaoBuilder {
   def apply(allUsersGroup: WorkbenchGroup) =
@@ -16,14 +15,17 @@ object MockDirectoryDaoBuilder {
 case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   var maybeAllUsersGroup: Option[WorkbenchGroup] = None
 
-  val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+  val mockedDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](withSettings.strictness(Strictness.Lenient))
 
   mockedDirectoryDAO.loadUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
   mockedDirectoryDAO.loadUserByGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext]) returns IO(None)
   mockedDirectoryDAO.loadUserByAzureB2CId(any[AzureB2CId], any[SamRequestContext]) returns IO(None)
   mockedDirectoryDAO.loadSubjectFromEmail(any[WorkbenchEmail], any[SamRequestContext]) returns IO(None)
   mockedDirectoryDAO.createUser(any[SamUser], any[SamRequestContext]) answers ((u: SamUser, _: SamRequestContext) => IO(u))
-  mockedDirectoryDAO.enableIdentity(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.enableIdentity(any[WorkbenchSubject], any[SamRequestContext]) returns IO.unit
+  // TODO check here to flip
+  // maybe make disableIdentity make loading user send back a disabled user?
+  // withDisablableUser?
   mockedDirectoryDAO.disableIdentity(any[WorkbenchSubject], any[SamRequestContext]) returns IO.unit
   mockedDirectoryDAO.isEnabled(any[WorkbenchSubject], any[SamRequestContext]) returns IO(false)
   mockedDirectoryDAO.isGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(false)
@@ -88,6 +90,13 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
     this
   }
 
+  def withDisabilableUser(samUser: SamUser): MockDirectoryDaoBuilder = {
+    mockedDirectoryDAO.disableIdentity(eqTo(samUser.id), any[SamRequestContext]) returns {
+      makeUserDisabled(samUser)
+      IO.unit
+    }
+    this
+  }
   def withAllUsersGroup(allUsersGroup: WorkbenchGroup): MockDirectoryDaoBuilder = {
     maybeAllUsersGroup = Option(allUsersGroup)
     mockedDirectoryDAO.loadGroup(eqTo(WorkbenchGroupName(allUsersGroup.id.toString)), any[SamRequestContext]) returns IO(
@@ -112,6 +121,7 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   private def makeUserEnabled(samUser: SamUser): Unit = {
     mockedDirectoryDAO.isEnabled(eqTo(samUser.id), any[SamRequestContext]) returns IO(true)
     mockedDirectoryDAO.loadUser(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
+    mockedDirectoryDAO.disableIdentity(any[WorkbenchSubject], any[SamRequestContext]) returns IO.unit
 
     if (samUser.azureB2CId.nonEmpty) {
       mockedDirectoryDAO.loadUserByAzureB2CId(eqTo(samUser.azureB2CId.get), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
@@ -119,7 +129,7 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
 
     if (samUser.googleSubjectId.nonEmpty) {
       mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.id))
-      mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser))
+      mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
     }
 
     if (maybeAllUsersGroup.nonEmpty) {
