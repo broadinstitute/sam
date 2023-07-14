@@ -9,13 +9,7 @@ import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{
-  AccessPolicyDAO,
-  MockAccessPolicyDAO,
-  MockAccessPolicyDaoBuilder,
-  MockDirectoryDAO,
-  MockGoogleDirectoryDaoBuilder
-}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, MockAccessPolicyDAO, MockAccessPolicyDaoBuilder, MockDirectoryDAO, MockDirectoryDaoBuilder, MockGoogleDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -139,6 +133,72 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
   }
 
+  "POST /api/resources/v2/{resourceType}" should "204 create resource" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(ResourceActionPattern("run", "", false), ResourceActionPattern("doStuff", "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val gooberPolicyName = AccessPolicyName("goober")
+    val gooberPolicyMembership =
+      AccessPolicyMembership(memberEmails = Set(defaultUserInfo.email), actions = Set(ResourceAction("run")), roles = Set(resourceType.ownerRoleName))
+    val fooResourceId = ResourceId("foo")
+    val createResourceRequest = CreateResourceRequest(
+      fooResourceId,
+      Map(gooberPolicyName -> gooberPolicyMembership),
+      Set.empty
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resources/v2/${resourceType.name}/foo/action/run") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(true)
+    }
+
+    val fooFullyQualifiedResourceId = FullyQualifiedResourceId(resourceType.name, fooResourceId)
+    val previousResourcesPolicyId = FullyQualifiedPolicyId(fooFullyQualifiedResourceId, gooberPolicyName)
+    val memberPolicyIds = Set(previousResourcesPolicyId)
+    val doStuffResourceAction = ResourceAction("doStuff")
+    val bananaPolicyMembership = AccessPolicyMembership(
+      memberEmails = Set(defaultUserInfo.email),
+      actions = Set(doStuffResourceAction),
+      roles = Set(resourceType.ownerRoleName),
+      memberPolicies = Option(Set(
+        PolicyIdentifiers(
+          gooberPolicyName,
+          None,
+          resourceTypeName = resourceType.name,
+          resourceId = fooResourceId)))
+      //memberPolicyIds = Some(memberPolicyIds)
+    )
+    val gooberPolicyMembership2 =
+      AccessPolicyMembership(memberEmails = Set(defaultUserInfo.email), actions = Set(ResourceAction("run")), roles = Set(resourceType.ownerRoleName))
+
+    val barResourceId = ResourceId("bar")
+    val bananaPolicyName = AccessPolicyName("banana")
+    val createResourceRequest2 = CreateResourceRequest(
+      barResourceId,
+      Map(bananaPolicyName -> bananaPolicyMembership),
+      Set.empty
+    )
+
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest2) ~> samRoutes.route ~> check {
+      response.toString() equals "Hello"
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resources/v2/${resourceType.name}/$barResourceId/action/$doStuffResourceAction") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(true)
+    }
+
+  }
+
   /*
     TODO: Write tests for emails only, member policies only, both emails and member policies
     TODO: Add new type to replace policy identifiers param
@@ -185,9 +245,9 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     )
 
     val mockAccessPolicyDAO = MockAccessPolicyDaoBuilder().withExistingPolicy(ownerPolicy).withExistingResource(resource).build
-    // val mockDirectoryDAO = MockDirectoryDaoBuilder().withEnabledUser(ownerUser).build
-    val mockDirectoryDAO = new MockDirectoryDAO()
-    mockDirectoryDAO.createUser(ownerUser, samRequestContext)
+    val mockDirectoryDAO = MockDirectoryDaoBuilder().withEnabledUser(ownerUser).build
+    //val mockDirectoryDAO = new MockDirectoryDAO()
+    //mockDirectoryDAO.createUser(ownerUser, samRequestContext)
     val mockGoogleDirectoryDAO = MockGoogleDirectoryDaoBuilder().build
     val samRoutes = TestSamRoutes(
       resourceTypes = Map(resourceType.name -> resourceType),
