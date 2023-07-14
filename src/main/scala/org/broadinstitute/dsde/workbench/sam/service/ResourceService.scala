@@ -216,7 +216,7 @@ class ResourceService(
     parentOpt match {
       case None =>
         // make sure there is an owner policy if there is no parent
-        policies.exists { policy => // if email isn't provided, use the triple here
+        policies.exists { policy =>
           policy.roles.contains(resourceType.ownerRoleName) && policy.emailsToSubjects.nonEmpty
         } match {
           case true => None
@@ -742,7 +742,7 @@ class ResourceService(
       samRequestContext
     )
 
-  // Need to group both member emails and policy emails together, this function mainly serves to simplify the complex structure of owner emails
+  // Need to group both member emails and policy emails together, this function mainly serves to simplify the complex structure of policy emails
   private def collateMemberAndPolicyEmails(memberEmails: Set[WorkbenchEmail], policyEmails: Option[Set[IO[Option[WorkbenchEmail]]]]): IO[Set[WorkbenchEmail]] =
     policyEmails
       .map { policyEmails =>
