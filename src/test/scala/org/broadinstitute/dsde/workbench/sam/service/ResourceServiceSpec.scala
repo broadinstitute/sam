@@ -470,6 +470,41 @@ class ResourceServiceSpec
     }
   }
 
+  it should "create resource with custom policies, without policy emails" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(
+      ResourceTypeName(UUID.randomUUID().toString),
+      Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)),
+      Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+      ownerRoleName
+    )
+    val resourceName = ResourceId("resource")
+
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyName = AccessPolicyName("foo")
+
+    val resource = runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
+
+    val policies: Seq[AccessPolicyResponseEntry] = service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+    assertResult(LazyList(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
+      policies.map(_.copy(email = WorkbenchEmail("")))
+    }
+
+    val resourceName2 = ResourceId("resource2")
+    val policyIdentifiers: Set[PolicyIdentifiers] = policies.map(p => PolicyIdentifiers(p.policyName, None, resourceType.name, resource.resourceId)).toSet
+    val policyMembership2 = AccessPolicyMembership(Set.empty, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 = runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+    val resource2MemberPolicy = resource2.accessPolicies.head.members.head.asInstanceOf[FullyQualifiedPolicyId]
+
+    resource2MemberPolicy.resource.resourceId shouldEqual resource.resourceId
+
+  }
+
   it should "support valid resource ids" in {
     assume(databaseEnabled, databaseEnabledClue)
 
