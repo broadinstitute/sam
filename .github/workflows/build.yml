@@ -19,7 +19,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:9.6
+        image: postgres:15.2
         env:
           POSTGRES_USER: sam-test
           POSTGRES_PASSWORD: sam-test
