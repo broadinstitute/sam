@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext, groupByFirstInPair}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -1104,7 +1105,12 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           val memberGroups = memberGroupsByPolicy(policyInfo.name).map(_.name).toSet[WorkbenchSubject]
           val memberUsers = memberUsersByPolicy(policyInfo.name).map(_.id).toSet[WorkbenchSubject]
           val memberPolicies = memberPoliciesByPolicy(policyInfo.name)
-            .map(p => FullyQualifiedPolicyId(FullyQualifiedResourceId(p.resourceTypeName, p.resourceId), p.policyName))
+            .map(p =>
+              FullyQualifiedPolicyId(
+                FullyQualifiedResourceId(p.policyIdentifiers.resourceTypeName, p.policyIdentifiers.resourceId),
+                p.policyIdentifiers.policyName
+              )
+            )
             .toSet[WorkbenchSubject]
 
           val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name)
@@ -1204,7 +1210,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     )
   }
 
-  override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
+  override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembershipResponse]] =
     listPoliciesMemberships(policyId.resource, Option(policyId.accessPolicyName), samRequestContext).map(_.headOption.map(_.membership))
 
   override def listAccessPolicyMemberships(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithMembership]] =
@@ -1228,7 +1234,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
           AccessPolicyWithMembership(
             policyInfo.name,
-            AccessPolicyMembership(
+            AccessPolicyMembershipResponse(
               memberPolicies.map(_.policyEmail) ++ memberUsers ++ memberGroups,
               policyActions,
               policyRoles,

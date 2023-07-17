@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.AppendedClues
 import org.scalatest.matchers.should.Matchers
@@ -79,7 +80,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have read_policies permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
     val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.readPolicies, ResourceActionPattern("can_compute", "", false)),
@@ -104,7 +105,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have testActionAccess::can_compute permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
     val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.testActionAccess, SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)),
@@ -134,7 +135,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return false if user doesn't have permission or doesn't exist" in {
     // Create a user called userWithEmail but doesn't have can_compute on the resource.
     val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role has read_policies
     val resourceType = ResourceType(
@@ -168,7 +169,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return 403 if caller doesn't have permission" in {
     // Create a user called userWithEmail and have can_compute on the resource.
     val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role only have alert_policies
     val resourceType = ResourceType(
@@ -410,7 +411,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
   }
 
   "GET /api/resource/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -425,14 +426,14 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     Get(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[AccessPolicyMembership] shouldEqual members
+      responseAs[AccessPolicyMembershipResponse] shouldEqual members
     }
   }
 
   private def responsePayloadClue(str: String): String = s" -> Here is the response payload: $str"
 
   private def createUserResourcePolicy(
-      members: AccessPolicyMembership,
+      members: AccessPolicyMembershipResponse,
       resourceType: ResourceType,
       samRoutes: TestSamRoutes,
       resourceId: ResourceId,
@@ -456,7 +457,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
     }
 
   it should "200 on existing policy of a resource with read_policy" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set.empty, Set.empty)
     val policyName = AccessPolicyName("bar")
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -471,12 +472,12 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     Get(s"/api/resource/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[AccessPolicyMembership] shouldEqual members
+      responseAs[AccessPolicyMembershipResponse] shouldEqual members
     }
   }
 
   it should "404 on non existing policy of a resource" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -495,7 +496,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
   }
 
   it should "403 on existing policy of a resource without read policies" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies),
@@ -528,7 +529,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -550,13 +551,13 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
-    val members2 = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
+    val members2 = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members2) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -578,7 +579,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -607,7 +608,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
     val fakeActions = Set(ResourceAction("fake_action1"), ResourceAction("other_fake_action"))
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), fakeActions, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), fakeActions, Set.empty)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       fakeActions foreach { action => responseAs[String] should include(action.value) }
@@ -632,7 +633,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
     val fakeRoles = Set(ResourceRoleName("fakerole"), ResourceRoleName("otherfakerole"))
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), fakeRoles)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), fakeRoles)
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       fakeRoles foreach { role => responseAs[String] should include(role.value) }
@@ -657,7 +658,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
     val badEmail = WorkbenchEmail("null@bar.baz")
-    val nonExistingMembers = AccessPolicyMembership(Set(badEmail), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
+    val nonExistingMembers = AccessPolicyMembershipResponse(Set(badEmail), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
 
     Put(s"/api/resource/${resourceType.name}/foo/policies/canCompute", nonExistingMembers) ~> samRoutes.route ~> check {
       responseAs[String] shouldNot include(defaultTestUser.email.value)
@@ -675,7 +676,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
       ResourceRoleName("owner")
     )
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("me@me.me")), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(WorkbenchEmail("me@me.me")), Set(ResourceAction("can_compute")), Set.empty)
 
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
@@ -688,7 +689,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
   it should "404 when creating a policy on a resource type that doesnt exist" in {
     val samRoutes = TestSamRoutes(Map.empty)
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     // Create a resource of a type that doesn't exist
     Put(s"/api/resource/fakeresourcetype/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
@@ -714,7 +715,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
       maybeDirectoryDAO = Some(directoryDAO)
     )
     policyDao.createResource(Resource(ResourceTypeName("rt"), ResourceId("foo"), Set.empty), samRequestContext).unsafeRunSync()
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     // Create a resource
     Post(s"/api/resource/${resourceType.name}/foo") ~> samRoutes.route ~> check {

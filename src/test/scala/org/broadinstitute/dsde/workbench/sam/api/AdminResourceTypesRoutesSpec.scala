@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, Mo
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
@@ -41,7 +42,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     ResourceRoleName("owner")
   )
 
-  val defaultAccessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
+  val defaultAccessPolicyMembership = AccessPolicyMembershipResponse(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
   val defaultAccessPolicyMembershipRequest = AccessPolicyMembershipRequest(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
   val defaultAdminPolicyName = AccessPolicyName("admin")
   val defaultAdminResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))

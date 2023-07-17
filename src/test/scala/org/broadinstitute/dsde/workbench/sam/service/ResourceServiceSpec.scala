@@ -16,6 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.Mockito._
@@ -461,7 +462,7 @@ class ResourceServiceSpec
     service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
     val policyMembershipRequest = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
-    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyMembership = AccessPolicyMembershipResponse(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
     val policyName = AccessPolicyName("foo")
 
     runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembershipRequest), Set.empty, None, dummyUser.id, samRequestContext))
@@ -496,8 +497,8 @@ class ResourceServiceSpec
 
     // creating resource for a policy with users member emails, and policy emails
     val resourceName2 = ResourceId("resource2")
-    val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
-      policies1.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource1.resourceId)).toSet
+    val policyIdentifiers: Set[PolicyIdentifiers] =
+      policies1.map(p => PolicyIdentifiers(p.policyName, resourceType.name, resource1.resourceId)).toSet
     val policyMembership2 =
       AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
     val policyName2 = AccessPolicyName("foo2")
@@ -590,8 +591,8 @@ class ResourceServiceSpec
 
     // creating resource for a policy with users policy emails and policy identifiers
     val resourceName3 = ResourceId("resource3")
-    val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
-      policies.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource.resourceId)).toSet
+    val policyIdentifiers: Set[PolicyIdentifiers] =
+      policies.map(p => PolicyIdentifiers(p.policyName, resourceType.name, resource.resourceId)).toSet
     val policyEmails = policies2.map(p => p.email).toSet
     val policyMembership3 =
       AccessPolicyMembershipRequest(policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
@@ -643,8 +644,8 @@ class ResourceServiceSpec
 
     // creating resource for a policy with users member emails, policy emails, and policy identifiers
     val resourceName3 = ResourceId("resource3")
-    val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
-      policies.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource.resourceId)).toSet
+    val policyIdentifiers: Set[PolicyIdentifiers] =
+      policies.map(p => PolicyIdentifiers(p.policyName, resourceType.name, resource.resourceId)).toSet
     val policyEmails = policies2.map(p => p.email).toSet
     val policyMembership3 =
       AccessPolicyMembershipRequest(Set(dummyUser.email) ++ policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
@@ -971,7 +972,7 @@ class ResourceServiceSpec
     val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
     val expectedPolicy = AccessPolicyResponseEntry(
       AccessPolicyName(ownerRole.roleName.value),
-      AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRole.roleName), Option(Set.empty)),
+      AccessPolicyMembershipResponse(Set(dummyUser.email), Set.empty, Set(ownerRole.roleName), Option(Set.empty)),
       forcedEmail
     )
 
@@ -990,7 +991,7 @@ class ResourceServiceSpec
     val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
     val expectedPolicy = AccessPolicyResponseEntry(
       AccessPolicyName(ownerRole.roleName.value),
-      AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRole.roleName), Option(Set.empty)),
+      AccessPolicyMembershipResponse(Set(dummyUser.email), Set.empty, Set(ownerRole.roleName), Option(Set.empty)),
       forcedEmail
     )
 
@@ -1103,8 +1104,8 @@ class ResourceServiceSpec
       runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
     val policies1: Seq[AccessPolicyResponseEntry] =
       service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
-    val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
-      policies1.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource1.resourceId)).toSet
+    val policyIdentifiers: Set[PolicyIdentifiers] =
+      policies1.map(p => PolicyIdentifiers(p.policyName, resourceType.name, resource1.resourceId)).toSet
 
     // creating resource for a policy with users member emails, and policy emails
     val resourceName2 = ResourceId("resource2")
@@ -1198,7 +1199,7 @@ class ResourceServiceSpec
     val memberPolicy = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testMemberR")), AccessPolicyName("testB"))
     val memberPolicyIdSet =
       Set(
-        PolicyIdentifiersRequestBody(memberPolicy.accessPolicyName, memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId)
+        PolicyIdentifiers(memberPolicy.accessPolicyName, memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId)
       )
     runAndWait(
       resourceService.overwritePolicy(

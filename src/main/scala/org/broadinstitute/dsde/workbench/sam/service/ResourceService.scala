@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse}
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
 import java.util.UUID
@@ -40,7 +41,7 @@ class ResourceService(
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
       descendantPermissions: Set[AccessPolicyDescendantPermissions],
-      memberPolicies: Option[Set[PolicyIdentifiersRequestBody]] = Option.empty
+      memberPolicies: Option[Set[PolicyIdentifiers]] = Option.empty
   )
 
   def getResourceTypes(): IO[Map[ResourceTypeName, ResourceType]] =
@@ -703,7 +704,7 @@ class ResourceService(
   def loadPolicy(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
     accessPolicyDAO.loadPolicy(policyId, samRequestContext)
 
-  def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
+  def loadResourcePolicy(policyIdentity: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembershipResponse]] =
     accessPolicyDAO.loadPolicyMembership(policyIdentity, samRequestContext)
 
   private def makeValidatablePolicies(
@@ -728,32 +729,36 @@ class ResourceService(
   private def getPolicyEmailsFromAccessPolicyMembership(
       accessPolicyMembership: AccessPolicyMembershipRequest,
       samRequestContext: SamRequestContext
-  ): Option[Set[IO[Option[WorkbenchEmail]]]] =
-    accessPolicyMembership.memberPolicies.map { memberPolicies =>
-      memberPolicies.map { memberPolicy =>
+  ): Option[IO[Set[WorkbenchEmail]]] = {
+    val maybePolicyEmails = accessPolicyMembership.memberPolicies.map { memberPolicy =>
+      memberPolicy.map { memberPolicy =>
         val ownerPolicy = loadPolicyByPolicyIdentifiers(memberPolicy, samRequestContext)
         ownerPolicy.map(p => p.map(_.email))
       }
     }
+    // this mainly serves to simplify the complex structure of policy emails
+    maybePolicyEmails.map { policyEmails =>
+      val listIOPolicyEmails = policyEmails.toList
+      val ioListPolicyEmails = listIOPolicyEmails.sequence
+      val ioSetPolicyEmails = for {
+        listPolicyEmails <- ioListPolicyEmails
+      } yield listPolicyEmails.flatten.toSet
+      ioSetPolicyEmails
+    }
+  }
 
-  private def loadPolicyByPolicyIdentifiers(policyIdentifiers: PolicyIdentifiersRequestBody, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
+  private def loadPolicyByPolicyIdentifiers(policyIdentifiers: PolicyIdentifiers, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
     accessPolicyDAO.loadPolicy(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(policyIdentifiers.resourceTypeName, policyIdentifiers.resourceId), policyIdentifiers.policyName),
       samRequestContext
     )
 
-  // Need to group both member emails and policy emails together, this function mainly serves to simplify the complex structure of policy emails
-  private def collateMemberAndPolicyEmails(memberEmails: Set[WorkbenchEmail], policyEmails: Option[Set[IO[Option[WorkbenchEmail]]]]): IO[Set[WorkbenchEmail]] =
-    policyEmails
-      .map { policyEmails =>
-        val listIOPolicyEmails = policyEmails.toList
-        val ioListPolicyEmails = listIOPolicyEmails.sequence
-        val ioSetPolicyEmails = for {
-          listPolicyEmails <- ioListPolicyEmails
-        } yield listPolicyEmails.flatten.toSet
+  private def collateMemberAndPolicyEmails(memberEmails: Set[WorkbenchEmail], maybePolicyEmails: Option[IO[Set[WorkbenchEmail]]]): IO[Set[WorkbenchEmail]] =
+    maybePolicyEmails
+      .map { ioPolicyEmails =>
         for {
-          setPolicyEmails <- ioSetPolicyEmails
-        } yield setPolicyEmails ++ memberEmails
+          policyEmails <- ioPolicyEmails
+        } yield memberEmails ++ policyEmails
       }
       .getOrElse(IO(memberEmails))
 

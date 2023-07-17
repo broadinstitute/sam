@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.data.NonEmptyList
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipResponse
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, _}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -36,7 +37,7 @@ trait AccessPolicyDAO {
 
   def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]]
 
-  def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]]
+  def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembershipResponse]]
 
   def listAccessPolicyMemberships(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithMembership]]
 

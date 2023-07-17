@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFlatSpec, TestSupport}
 import org.scalatest._
 import org.scalatest.matchers.should.Matchers
@@ -69,7 +70,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
     constrainableReaderRoleName
   )
   private[service] val constrainablePolicyMembership =
-    AccessPolicyMembership(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
+    AccessPolicyMembershipResponse(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
 
   private[service] val constrainablePolicyMembershipRequest =
     AccessPolicyMembershipRequest(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
