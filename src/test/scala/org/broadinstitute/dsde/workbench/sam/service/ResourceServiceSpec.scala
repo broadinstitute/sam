@@ -494,7 +494,7 @@ class ResourceServiceSpec
     val policies1: Seq[AccessPolicyResponseEntry] =
       service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
 
-    // creating resource with a policy which users member emails, and policy emails
+    // creating resource for a policy with users member emails, and policy emails
     val resourceName2 = ResourceId("resource2")
     val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
       policies1.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource1.resourceId)).toSet
@@ -537,7 +537,7 @@ class ResourceServiceSpec
     val policies1: Seq[AccessPolicyResponseEntry] =
       service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
 
-    // creating resource with a policy which users member emails, and policy emails
+    // creating resource for a policy with users member emails, and policy emails
     val resourceName2 = ResourceId("resource2")
     val policyEmails = policies1.map(p => p.email).toSet
     val policyMembership2 =
@@ -588,7 +588,7 @@ class ResourceServiceSpec
     val policies2: Seq[AccessPolicyResponseEntry] =
       service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName2), samRequestContext).unsafeRunSync()
 
-    // creating resource with a policy which users policy emails and policy identifiers
+    // creating resource for a policy with users policy emails and policy identifiers
     val resourceName3 = ResourceId("resource3")
     val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
       policies.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource.resourceId)).toSet
@@ -641,7 +641,7 @@ class ResourceServiceSpec
     val policies2: Seq[AccessPolicyResponseEntry] =
       service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName2), samRequestContext).unsafeRunSync()
 
-    // creating resource with a policy which users member emails, policy emails, and policy identifiers
+    // creating resource for a policy with users member emails, policy emails, and policy identifiers
     val resourceName3 = ResourceId("resource3")
     val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
       policies.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource.resourceId)).toSet
@@ -1090,37 +1090,6 @@ class ResourceServiceSpec
     assert(policies.contains(newPolicy))
   }
 
-  /*
-  // creating policy to refer to by policy identifiers
-  val resourceName1 = ResourceId("resource1")
-  val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
-  val policyName1 = AccessPolicyName("foo1")
-  val resource1 =
-    runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
-  val policies1: Seq[AccessPolicyResponseEntry] =
-    service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
-
-  // creating resource with a policy which users member emails, and policy emails
-  val resourceName2 = ResourceId("resource2")
-  val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
-    policies1.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource1.resourceId)).toSet
-  val policyMembership2 =
-    AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
-  val policyName2 = AccessPolicyName("foo2")
-  // Act
-  val resource2 =
-    runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
-
-  // Assert
-  val resource3Members = resource2.accessPolicies.head.members
-  resource3Members.size shouldEqual 2
-  val resource2PolicyIds = resource2.accessPolicies.head.members.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId])
-  val resource1PolicyId = resource2PolicyIds.filter(_.resource.resourceId == resource1.resourceId).head
-  resource1PolicyId.accessPolicyName shouldEqual policyName1
-  val resource2UserId = resource2.accessPolicies.head.members.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
-  resource2UserId shouldEqual dummyUser.id
-   */
-
   it should "should add a memberPolicy as a member when specified through policy identifiers" in {
     assume(databaseEnabled, databaseEnabledClue)
     // create policy1 and policy 2, update policy 1 by putting policy 2 as a member
@@ -1137,7 +1106,7 @@ class ResourceServiceSpec
     val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
       policies1.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource1.resourceId)).toSet
 
-    // creating resource with a policy which users member emails, and policy emails
+    // creating resource for a policy with users member emails, and policy emails
     val resourceName2 = ResourceId("resource2")
     val policyMembership2 =
       AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
@@ -1176,7 +1145,7 @@ class ResourceServiceSpec
     val policies1: Seq[AccessPolicyResponseEntry] =
       service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
 
-    // creating resource with a policy which users member emails
+    // creating resource for a policy with users member emails
     val resourceName2 = ResourceId("resource2")
     val policyMembership2 =
       AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
