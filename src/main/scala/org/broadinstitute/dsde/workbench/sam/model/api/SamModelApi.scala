@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.model.api
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
-import spray.json.{DefaultJsonProtocol, DeserializationException, JsArray, JsString, JsValue, RootJsonFormat, deserializationError}
+import spray.json.{DefaultJsonProtocol, JsArray, JsString, JsValue, RootJsonFormat, deserializationError}
 
 // AccessPolicyMembership.memberPolicies is logically read-only; at some point in the future it could be lazy-loaded
 // (via extra queries) based on the contents of memberEmails.
