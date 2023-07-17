@@ -1543,7 +1543,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupId), ManagedGroupService.memberPolicyName, inBothSubGroup.id, samRequestContext))
 
     val accessPolicyMap = Map(
-      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(Set(superAdminOwner.email), Set.empty, Set(constrainableRole.roleName), None)
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(
+        Set(superAdminOwner.email),
+        Set.empty,
+        Set(constrainableRole.roleName),
+        None
+      )
     )
     val resource = runAndWait(
       constrainableService.createResource(
@@ -1734,7 +1739,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
 
     val accessPolicyMap = Map(
-      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None)
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(
+        Set(dummyUserInfo.email),
+        Set.empty,
+        Set(constrainableRole.roleName),
+        None
+      )
     )
     val resource = runAndWait(
       constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext)
@@ -1771,7 +1781,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
 
     val accessPolicyMap = Map(
-      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None)
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(
+        Set(dummyUserInfo.email),
+        Set.empty,
+        Set(constrainableRole.roleName),
+        None
+      )
     )
     val resource = runAndWait(
       constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext)
@@ -1808,7 +1823,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
 
     val accessPolicyMap = Map(
-      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None)
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(
+        Set(dummyUserInfo.email),
+        Set.empty,
+        Set(constrainableRole.roleName),
+        None
+      )
     )
     val resource = runAndWait(
       constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext)
@@ -1845,7 +1865,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     dirDAO.createUser(dummyUserInfo, samRequestContext).unsafeRunSync()
 
     val accessPolicyMap = Map(
-      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(Set(dummyUserInfo.email), Set.empty, Set(constrainableRole.roleName), None)
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(
+        Set(dummyUserInfo.email),
+        Set.empty,
+        Set(constrainableRole.roleName),
+        None
+      )
     )
     val resource = runAndWait(
       constrainableService.createResource(constrainableResourceType, ResourceId("rid"), accessPolicyMap, Set.empty, None, dummyUserInfo.id, samRequestContext)

@@ -38,10 +38,17 @@ class ManagedGroupService(
   ): IO[Resource] = openTelemetry.time("api.v1.managedGroup.create.time", API_TIMING_DURATION_BUCKET) {
     def adminRole = managedGroupType.ownerRoleName
 
-    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembershipRequest(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), None, None)
+    val memberPolicy =
+      ManagedGroupService.memberPolicyName -> AccessPolicyMembershipRequest(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), None, None)
     val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembershipRequest(Set(samUser.email), Set.empty, Set(adminRole), None, None)
     val adminNotificationPolicy =
-      ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembershipRequest(Set.empty, Set.empty, Set(ManagedGroupService.adminNotifierRoleName), None, None)
+      ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembershipRequest(
+        Set.empty,
+        Set.empty,
+        Set(ManagedGroupService.adminNotifierRoleName),
+        None,
+        None
+      )
 
     validateGroupName(groupId.value)
     for {

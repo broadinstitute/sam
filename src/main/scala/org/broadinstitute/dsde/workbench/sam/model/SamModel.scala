@@ -52,9 +52,9 @@ object SamJsonSupport {
 
   implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
 
-  implicit val PolicyInfoFormat = jsonFormat4(PolicyInfoResponseBody.apply)
+  implicit val PolicyInfoResponseBodyFormat = jsonFormat4(PolicyInfoResponseBody.apply)
 
-  implicit val PolicyIdentifiersFormat = jsonFormat3(PolicyIdentifiersRequestBody.apply)
+  implicit val PolicyIdentifiersRequestBodyFormat = jsonFormat3(PolicyIdentifiersRequestBody.apply)
 
   implicit val AccessPolicyMembershipFormat = jsonFormat5(AccessPolicyMembership.apply)
 
@@ -300,7 +300,7 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     roles: Set[ResourceRoleName],
     descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
     memberPolicies: Option[Set[PolicyIdentifiersRequestBody]] = Option(Set.empty)
-){
+) {
   def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
 }
 

@@ -113,7 +113,8 @@ class ResourceServiceSpec
     Set(ResourceRole(constrainableReaderRoleName, constrainableResourceTypeActions)),
     constrainableReaderRoleName
   )
-  private val constrainablePolicyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
+  private val constrainablePolicyMembership =
+    AccessPolicyMembershipRequest(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
 
   private val managedGroupResourceType =
     realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
@@ -1089,6 +1090,117 @@ class ResourceServiceSpec
     assert(policies.contains(newPolicy))
   }
 
+  /*
+  // creating policy to refer to by policy identifiers
+  val resourceName1 = ResourceId("resource1")
+  val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+  val policyName1 = AccessPolicyName("foo1")
+  val resource1 =
+    runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
+  val policies1: Seq[AccessPolicyResponseEntry] =
+    service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
+
+  // creating resource with a policy which users member emails, and policy emails
+  val resourceName2 = ResourceId("resource2")
+  val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
+    policies1.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource1.resourceId)).toSet
+  val policyMembership2 =
+    AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+  val policyName2 = AccessPolicyName("foo2")
+  // Act
+  val resource2 =
+    runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+
+  // Assert
+  val resource3Members = resource2.accessPolicies.head.members
+  resource3Members.size shouldEqual 2
+  val resource2PolicyIds = resource2.accessPolicies.head.members.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId])
+  val resource1PolicyId = resource2PolicyIds.filter(_.resource.resourceId == resource1.resourceId).head
+  resource1PolicyId.accessPolicyName shouldEqual policyName1
+  val resource2UserId = resource2.accessPolicies.head.members.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
+  resource2UserId shouldEqual dummyUser.id
+   */
+
+  it should "should add a memberPolicy as a member when specified through policy identifiers" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // create policy1 and policy 2, update policy 1 by putting policy 2 as a member
+    val resourceType = service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy identifiers
+    val resourceName1 = ResourceId("resource1")
+    val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName1 = AccessPolicyName("foo1")
+    val resource1 =
+      runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies1: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
+    val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
+      policies1.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource1.resourceId)).toSet
+
+    // creating resource with a policy which users member emails, and policy emails
+    val resourceName2 = ResourceId("resource2")
+    val policyMembership2 =
+      AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 =
+      runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+
+    val resourceId = FullyQualifiedResourceId(resourceTypeName = resourceType.name, resourceId = resourceName2)
+    val updatedPolicyMembershipRequest =
+      AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+
+    // Act (updating policy2)
+    val updatedPolicy =
+      runAndWait(service.overwritePolicy(resourceType, policyName2, resourceId, updatedPolicyMembershipRequest, samRequestContext))
+
+    // Assert
+    val updatedPolicyMembers = updatedPolicy.members
+    updatedPolicyMembers.size shouldEqual 2
+    val updatedPolicyMembersPolicyIds = updatedPolicyMembers.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId]).head
+    updatedPolicyMembersPolicyIds.accessPolicyName shouldEqual policyName1
+    val updatedPolicyMembersUserIds = updatedPolicyMembers.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
+    updatedPolicyMembersUserIds shouldEqual dummyUser.id
+  }
+
+  it should "should add a memberPolicy as a member when specified through policy email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // create policy1 and policy 2, update policy 1 by putting policy 2 as a member
+    val resourceType = service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy identifiers
+    val resourceName1 = ResourceId("resource1")
+    val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName1 = AccessPolicyName("foo1")
+    val resource1 =
+      runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies1: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
+
+    // creating resource with a policy which users member emails
+    val resourceName2 = ResourceId("resource2")
+    val policyMembership2 =
+      AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 =
+      runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+
+    val resourceId = FullyQualifiedResourceId(resourceTypeName = resourceType.name, resourceId = resourceName2)
+    val updatedPolicyMembershipRequest =
+      AccessPolicyMembershipRequest(Set(dummyUser.email, policies1.head.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+
+    // Act (updating policy2)
+    val updatedPolicy =
+      runAndWait(service.overwritePolicy(resourceType, policyName2, resourceId, updatedPolicyMembershipRequest, samRequestContext))
+
+    // Assert
+    val updatedPolicyMembers = updatedPolicy.members
+    updatedPolicyMembers.size shouldEqual 2
+    val updatedPolicyMembersPolicyIds = updatedPolicyMembers.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId]).head
+    updatedPolicyMembersPolicyIds.accessPolicyName shouldEqual policyName1
+    val updatedPolicyMembersUserIds = updatedPolicyMembers.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
+    updatedPolicyMembersUserIds shouldEqual dummyUser.id
+  }
+
   it should "call CloudExtensions.onGroupUpdate when members are added via memberPolicy list" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
@@ -1389,7 +1501,9 @@ class ResourceServiceSpec
 
     val actions = Set(ResourceAction("foo-bang-bar"))
     val newPolicy =
-      runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembershipRequest(Set.empty, actions, Set.empty, None), samRequestContext))
+      runAndWait(
+        service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembershipRequest(Set.empty, actions, Set.empty, None), samRequestContext)
+      )
 
     assertResult(actions) {
       newPolicy.actions

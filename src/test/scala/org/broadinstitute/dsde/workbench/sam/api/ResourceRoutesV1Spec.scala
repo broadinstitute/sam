@@ -1490,7 +1490,9 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val resourceId = ResourceId("foo")
     val policiesMap =
-      Map(AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
+      Map(
+        AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner")))
+      )
     runAndWait(
       samRoutes.resourceService
         .createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.id, samRequestContext)
