@@ -32,14 +32,8 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   mockedDirectoryDAO.listUserDirectMemberships(any[WorkbenchUserId], any[SamRequestContext]) returns IO(LazyList.empty)
   mockedDirectoryDAO.setGoogleSubjectId(any[WorkbenchUserId], any[GoogleSubjectId], any[SamRequestContext]) returns IO.unit
   mockedDirectoryDAO.setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext]) returns IO.unit
-  mockedDirectoryDAO.addGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
   mockedDirectoryDAO.removeGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
   mockedDirectoryDAO.deleteUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
-  mockedDirectoryDAO.createGroup(any[BasicWorkbenchGroup], any[Option[String]], any[SamRequestContext]) answers (
-    (g: BasicWorkbenchGroup, _: Option[String], _: SamRequestContext) => IO(g)
-  )
-  mockedDirectoryDAO.acceptTermsOfService(any[WorkbenchUserId], any[String], any[SamRequestContext]) returns IO(true)
-  mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(true)
 
   def withHealthyDatabase: MockDirectoryDaoBuilder = {
     mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(true)
@@ -128,7 +122,7 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
     }
 
     if (samUser.googleSubjectId.nonEmpty) {
-      mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.id))
+      // mockedDirectoryDAO.loadSubjectFromGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.id))
       mockedDirectoryDAO.loadUserByGoogleSubjectId(eqTo(samUser.googleSubjectId.get), any[SamRequestContext]) returns IO(Option(samUser.copy(enabled = true)))
     }
 

@@ -52,7 +52,9 @@ object SamJsonSupport {
 
   implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
 
-  implicit val PolicyIdentifiersFormat = jsonFormat4(PolicyIdentifiers.apply)
+  implicit val PolicyInfoFormat = jsonFormat4(PolicyInfoResponseBody.apply)
+
+  implicit val PolicyIdentifiersFormat = jsonFormat3(PolicyIdentifiersRequestBody.apply)
 
   implicit val AccessPolicyMembershipFormat = jsonFormat5(AccessPolicyMembership.apply)
 
@@ -73,6 +75,8 @@ object SamJsonSupport {
   implicit val ManagedGroupAccessInstructionsFormat = ValueObjectFormat(ManagedGroupAccessInstructions.apply)
 
   implicit val GroupSyncResponseFormat = jsonFormat2(GroupSyncResponse.apply)
+
+  implicit val AccessPolicyMembershipRequestFormat = jsonFormat5(AccessPolicyMembershipRequest.apply)
 
   implicit val CreateResourceRequestFormat = jsonFormat5(CreateResourceRequest.apply)
 
@@ -240,16 +244,23 @@ object RolesAndActions {
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
-@Lenses final case class PolicyIdentifiers(
+@Lenses final case class PolicyInfoResponseBody(
     policyName: AccessPolicyName,
-    policyEmail: Option[WorkbenchEmail] = None,
+    policyEmail: WorkbenchEmail,
     resourceTypeName: ResourceTypeName,
     resourceId: ResourceId
 )
+
+@Lenses final case class PolicyIdentifiersRequestBody(
+    policyName: AccessPolicyName,
+    resourceTypeName: ResourceTypeName,
+    resourceId: ResourceId
+)
+
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
     resourceId: ResourceId,
-    policies: Map[AccessPolicyName, AccessPolicyMembership],
+    policies: Map[AccessPolicyName, AccessPolicyMembershipRequest],
     authDomain: Set[WorkbenchGroupName],
     returnResource: Option[Boolean] = Some(false),
     parent: Option[FullyQualifiedResourceId] = None
@@ -278,10 +289,21 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     actions: Set[ResourceAction],
     roles: Set[ResourceRoleName],
     descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
-    memberPolicies: Option[Set[PolicyIdentifiers]] = Option(Set.empty)
+    memberPolicies: Option[Set[PolicyInfoResponseBody]] = Option(Set.empty)
 ) {
   def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
 }
+
+@Lenses final case class AccessPolicyMembershipRequest(
+    memberEmails: Set[WorkbenchEmail],
+    actions: Set[ResourceAction],
+    roles: Set[ResourceRoleName],
+    descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
+    memberPolicies: Option[Set[PolicyIdentifiersRequestBody]] = Option(Set.empty)
+){
+  def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
+}
+
 // AccessPolicyWithMembership is practically the same as AccessPolicyResponseEntry but the latter is used in api responses
 // and the former is used at the DAO level so it seems better to keep them separate
 @Lenses final case class AccessPolicyWithMembership(policyName: AccessPolicyName, membership: AccessPolicyMembership, email: WorkbenchEmail)

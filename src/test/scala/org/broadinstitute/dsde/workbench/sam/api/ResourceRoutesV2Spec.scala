@@ -105,7 +105,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -123,7 +123,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set.empty)),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set.empty)),
       Set.empty
     )
     Post(s"/api/resources/v2/${SamResourceTypes.resourceTypeAdminName}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -142,7 +142,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(true)
     )
@@ -172,7 +172,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false)
     )
@@ -192,7 +192,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createParentResourceRequest = CreateResourceRequest(
       ResourceId("parent"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false)
     )
@@ -202,7 +202,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false),
       Some(FullyQualifiedResourceId(resourceType.name, createParentResourceRequest.resourceId))
@@ -223,7 +223,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createParentResourceRequest = CreateResourceRequest(
       ResourceId("parent"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false)
     )
@@ -233,7 +233,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false),
       Some(FullyQualifiedResourceId(resourceType.name, createParentResourceRequest.resourceId))
@@ -254,7 +254,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createParentResourceRequest = CreateResourceRequest(
       ResourceId("parent"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false)
     )
@@ -264,7 +264,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false),
       Some(FullyQualifiedResourceId(resourceType.name, createParentResourceRequest.resourceId))
@@ -285,7 +285,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false),
       Some(FullyQualifiedResourceId(resourceType.name, ResourceId("parent")))
@@ -312,7 +312,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -337,7 +337,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -381,7 +381,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -408,7 +408,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -451,7 +451,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap =
-      Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.email, secondUser.email), Set.empty, Set(ResourceRoleName("owner"))))
+      Map(AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email, secondUser.email), Set.empty, Set(ResourceRoleName("owner"))))
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
 
     // Verify that user does actually have access to the resource that they created
@@ -509,7 +509,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val managedGroupEmail = runAndWait(samRoutes.managedGroupService.loadManagedGroup(managedGroupId, samRequestContext)).get
 
     val resourceId = ResourceId("foo")
-    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(managedGroupEmail), Set.empty, Set(ResourceRoleName("owner"))))
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(managedGroupEmail), Set.empty, Set(ResourceRoleName("owner"))))
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
 
     Delete(s"/api/resources/v2/${resourceType.name}/${resourceId.value}/leave") ~> samRoutes.route ~> check {
@@ -564,8 +564,8 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.email, secondOwner.email), Set.empty, Set(ResourceRoleName("owner"))),
-      AccessPolicyName("ap-public") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("view")), Set.empty)
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email, secondOwner.email), Set.empty, Set(ResourceRoleName("owner"))),
+      AccessPolicyName("ap-public") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("view")), Set.empty)
     )
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
 
@@ -603,7 +603,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     val resourceId = ResourceId("foo")
-    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set(ResourceRoleName("owner"))))
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(ResourceRoleName("owner"))))
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
 
     runAndWait(
@@ -671,7 +671,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     runAndWait(samRoutes.userService.createUser(secondUser, samRequestContext))
 
     val resourceId = ResourceId("foo")
-    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(secondUser.email), Set.empty, Set(ResourceRoleName("owner"))))
+    val policiesMap = Map(AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(secondUser.email), Set.empty, Set(ResourceRoleName("owner"))))
     runAndWait(samRoutes.resourceService.createResource(resourceType, resourceId, policiesMap, Set.empty, None, defaultUserInfo.id, samRequestContext))
 
     // Verify that user does actually have access to the resource that they created
@@ -1514,7 +1514,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))
@@ -1544,7 +1544,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))
@@ -1574,7 +1574,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap =
-      Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
+      Map(AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
     runAndWait(
       samRoutes.resourceService
         .createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.id, samRequestContext)
@@ -1601,7 +1601,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))
@@ -1637,7 +1637,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))
@@ -2361,7 +2361,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
   "PUT /api/resources/v2/{resourceType}/{resourceId}/policies/{policyName}" should "201 on a new policy being created for a resource" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("can_compute")), Set.empty, None)
+    val members = AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("can_compute")), Set.empty, None)
     val policy = AccessPolicy(
       FullyQualifiedPolicyId(resource, policyName),
       Set(defaultUserInfo.id),
@@ -2386,7 +2386,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
   it should "201 on a policy being updated" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("can_compute")), Set.empty, None)
+    val members = AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("can_compute")), Set.empty, None)
     val policy = AccessPolicy(
       FullyQualifiedPolicyId(resource, policyName),
       Set(defaultUserInfo.id),
@@ -2408,7 +2408,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
 
     // update existing policy
-    val members2 = AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("can_compute"), ResourceAction("new_action")), Set.empty, None)
+    val members2 = AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("can_compute"), ResourceAction("new_action")), Set.empty, None)
     val policy2 = AccessPolicy(
       FullyQualifiedPolicyId(resource, policyName),
       Set(defaultUserInfo.id),
@@ -2429,7 +2429,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
   it should "400 when creating an invalid policy" in {
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("resource"))
     val policyName = AccessPolicyName("policy")
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("can_compute")), Set.empty, None)
+    val members = AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("can_compute")), Set.empty, None)
 
     val samRoutes = createSamRoutes()
     mockPermissionsForResource(samRoutes, resource, actionsOnResource = Set(SamResourceActions.alterPolicies))

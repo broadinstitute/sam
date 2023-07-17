@@ -458,7 +458,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     val projectName = "my-project"
     val createResourceRequest = CreateResourceRequest(
       ResourceId(projectName),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(samUser.email), Set(SamResourceActions.createPet), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(samUser.email), Set(SamResourceActions.createPet), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> routes.route ~> check {

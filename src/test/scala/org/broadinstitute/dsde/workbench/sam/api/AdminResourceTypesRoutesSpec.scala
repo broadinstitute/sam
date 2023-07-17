@@ -42,6 +42,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
   )
 
   val defaultAccessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
+  val defaultAccessPolicyMembershipRequest = AccessPolicyMembershipRequest(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
   val defaultAdminPolicyName = AccessPolicyName("admin")
   val defaultAdminResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))
   val defaultAccessPolicyResponseEntry =
@@ -129,7 +130,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
         mockitoEq(resourceTypeAdmin),
         mockitoEq(defaultAdminPolicyName),
         mockitoEq(defaultAdminResourceId),
-        mockitoEq(defaultAccessPolicyMembership),
+        mockitoEq(defaultAccessPolicyMembershipRequest),
         any[SamRequestContext]
       )
     ).thenReturn(IO(null))

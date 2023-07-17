@@ -390,7 +390,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     put {
       requireAction(policyId.resource, SamResourceActions.alterPolicies, samUser.id, samRequestContext) {
-        entity(as[AccessPolicyMembership]) { membershipUpdate =>
+        entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
           complete(
             resourceService
               .overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext)

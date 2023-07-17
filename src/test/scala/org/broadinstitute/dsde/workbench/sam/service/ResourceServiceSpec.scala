@@ -113,7 +113,7 @@ class ResourceServiceSpec
     Set(ResourceRole(constrainableReaderRoleName, constrainableResourceTypeActions)),
     constrainableReaderRoleName
   )
-  private val constrainablePolicyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
+  private val constrainablePolicyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
 
   private val managedGroupResourceType =
     realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
@@ -269,7 +269,7 @@ class ResourceServiceSpec
     val managedGroupResource = managedGroupService.createManagedGroup(ResourceId("ad"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
 
     val ownerRoleName = constrainableReaderRoleName
-    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(constrainableViewAction), Set(ownerRoleName), None)
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(constrainableViewAction), Set(ownerRoleName), None)
     val policyName = AccessPolicyName("foo")
 
     val testResource = runAndWait(
@@ -367,7 +367,7 @@ class ResourceServiceSpec
         defaultResourceType,
         AccessPolicyName("new_policy"),
         resource.fullyQualifiedId,
-        AccessPolicyMembership(Set(group.email), Set(nonOwnerAction), Set.empty, None),
+        AccessPolicyMembershipRequest(Set(group.email), Set(nonOwnerAction), Set.empty, None),
         samRequestContext
       )
     )
@@ -459,10 +459,11 @@ class ResourceServiceSpec
 
     service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
+    val policyMembershipRequest = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
     val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
     val policyName = AccessPolicyName("foo")
 
-    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
+    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembershipRequest), Set.empty, None, dummyUser.id, samRequestContext))
 
     val policies = service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
     assertResult(LazyList(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
@@ -485,7 +486,7 @@ class ResourceServiceSpec
 
     // creating policy to refer to by policy identifiers
     val resourceName1 = ResourceId("resource1")
-    val policyMembership1 = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
     val policyName1 = AccessPolicyName("foo1")
     val resource1 =
       runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
@@ -494,9 +495,10 @@ class ResourceServiceSpec
 
     // creating resource with a policy which users member emails, and policy emails
     val resourceName2 = ResourceId("resource2")
-    val policyIdentifiers: Set[PolicyIdentifiers] = policies1.map(p => PolicyIdentifiers(p.policyName, None, resourceType.name, resource1.resourceId)).toSet
+    val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
+      policies1.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource1.resourceId)).toSet
     val policyMembership2 =
-      AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+      AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
     val policyName2 = AccessPolicyName("foo2")
     // Act
     val resource2 =
@@ -527,7 +529,7 @@ class ResourceServiceSpec
 
     // creating policy to refer to by policy email
     val resourceName1 = ResourceId("resource1")
-    val policyMembership1 = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
     val policyName1 = AccessPolicyName("foo1")
     val resource1 =
       runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
@@ -538,7 +540,7 @@ class ResourceServiceSpec
     val resourceName2 = ResourceId("resource2")
     val policyEmails = policies1.map(p => p.email).toSet
     val policyMembership2 =
-      AccessPolicyMembership(Set(dummyUser.email) ++ policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+      AccessPolicyMembershipRequest(Set(dummyUser.email) ++ policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, None)
     val policyName2 = AccessPolicyName("foo2")
     // Act
     val resource2 =
@@ -569,7 +571,7 @@ class ResourceServiceSpec
     service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
     // creating policy and to refer to by policy identifiers
-    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
     val policyName = AccessPolicyName("foo")
     val resource =
       runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
@@ -578,7 +580,7 @@ class ResourceServiceSpec
 
     // creating policy to refer to by policy email
     val resourceName2 = ResourceId("resource2")
-    val policyMembership2 = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyMembership2 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
     val policyName2 = AccessPolicyName("foo2")
     val resource2 =
       runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
@@ -587,10 +589,11 @@ class ResourceServiceSpec
 
     // creating resource with a policy which users policy emails and policy identifiers
     val resourceName3 = ResourceId("resource3")
-    val policyIdentifiers: Set[PolicyIdentifiers] = policies.map(p => PolicyIdentifiers(p.policyName, None, resourceType.name, resource.resourceId)).toSet
+    val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
+      policies.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource.resourceId)).toSet
     val policyEmails = policies2.map(p => p.email).toSet
     val policyMembership3 =
-      AccessPolicyMembership(policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+      AccessPolicyMembershipRequest(policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
     val policyName3 = AccessPolicyName("foo3")
     // Act
     val resource3 =
@@ -621,7 +624,7 @@ class ResourceServiceSpec
     service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
     // creating policy and to refer to by policy identifiers
-    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
     val policyName = AccessPolicyName("foo")
     val resource =
       runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
@@ -630,7 +633,7 @@ class ResourceServiceSpec
 
     // creating policy to refer to by policy email
     val resourceName2 = ResourceId("resource2")
-    val policyMembership2 = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyMembership2 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
     val policyName2 = AccessPolicyName("foo2")
     val resource2 =
       runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
@@ -639,10 +642,11 @@ class ResourceServiceSpec
 
     // creating resource with a policy which users member emails, policy emails, and policy identifiers
     val resourceName3 = ResourceId("resource3")
-    val policyIdentifiers: Set[PolicyIdentifiers] = policies.map(p => PolicyIdentifiers(p.policyName, None, resourceType.name, resource.resourceId)).toSet
+    val policyIdentifiers: Set[PolicyIdentifiersRequestBody] =
+      policies.map(p => PolicyIdentifiersRequestBody(p.policyName, resourceType.name, resource.resourceId)).toSet
     val policyEmails = policies2.map(p => p.email).toSet
     val policyMembership3 =
-      AccessPolicyMembership(Set(dummyUser.email) ++ policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+      AccessPolicyMembershipRequest(Set(dummyUser.email) ++ policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
     val policyName3 = AccessPolicyName("foo3")
     // Act
     val resource3 =
@@ -719,7 +723,7 @@ class ResourceServiceSpec
         service.createResource(
           resourceType,
           resourceName,
-          Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName), None)),
+          Map(AccessPolicyName("foo") -> AccessPolicyMembershipRequest(Set.empty, Set.empty, Set(ownerRoleName), None)),
           Set.empty,
           None,
           dummyUser.id,
@@ -735,7 +739,7 @@ class ResourceServiceSpec
         service.createResource(
           resourceType,
           resourceName,
-          Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set.empty, None)),
+          Map(AccessPolicyName("foo") -> AccessPolicyMembershipRequest(Set(dummyUser.email), Set.empty, Set.empty, None)),
           Set.empty,
           None,
           dummyUser.id,
@@ -892,7 +896,7 @@ class ResourceServiceSpec
     val managedGroupName = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUser, samRequestContext = samRequestContext))
 
-    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None)
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None)
     val policyName = AccessPolicyName("foo")
 
     val authDomain = Set(WorkbenchGroupName(managedGroupName))
@@ -1024,14 +1028,14 @@ class ResourceServiceSpec
     val ownerPolicy = actualPolicies.head
 
     val expectedMemberPolicies = sidePolicies.map { p =>
-      PolicyIdentifiers(p.policyName, Option(p.email), sideResource.resourceTypeName, sideResource.resourceId)
+      PolicyInfoResponseBody(p.policyName, p.email, sideResource.resourceTypeName, sideResource.resourceId)
     }
 
     ownerPolicy.policy.memberPolicies.value shouldBe expectedMemberPolicies.toSet
 
     // all memberPolicies emails should also be in the memberEmails array
     expectedMemberPolicies.foreach { p =>
-      ownerPolicy.policy.memberEmails should contain(p.policyEmail.get)
+      ownerPolicy.policy.memberEmails should contain(p.policyEmail)
     }
   }
 
@@ -1074,7 +1078,7 @@ class ResourceServiceSpec
         defaultResourceType,
         newPolicy.id.accessPolicyName,
         newPolicy.id.resource,
-        AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
         samRequestContext
       )
     )
@@ -1113,14 +1117,14 @@ class ResourceServiceSpec
     val memberPolicy = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testMemberR")), AccessPolicyName("testB"))
     val memberPolicyIdSet =
       Set(
-        PolicyIdentifiers(memberPolicy.accessPolicyName, Option(WorkbenchEmail("")), memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId)
+        PolicyIdentifiersRequestBody(memberPolicy.accessPolicyName, memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId)
       )
     runAndWait(
       resourceService.overwritePolicy(
         defaultResourceType,
         policyId.accessPolicyName,
         policyId.resource,
-        AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None, Some(memberPolicyIdSet)),
+        AccessPolicyMembershipRequest(Set.empty, Set.empty, Set.empty, None, Some(memberPolicyIdSet)),
         samRequestContext
       )
     )
@@ -1160,7 +1164,7 @@ class ResourceServiceSpec
         defaultResourceType,
         policyId.accessPolicyName,
         policyId.resource,
-        AccessPolicyMembership(Set.empty, Set.empty, Set.empty),
+        AccessPolicyMembershipRequest(Set.empty, Set.empty, Set.empty),
         samRequestContext
       )
     )
@@ -1194,7 +1198,7 @@ class ResourceServiceSpec
         defaultResourceType,
         policyId.accessPolicyName,
         policyId.resource,
-        AccessPolicyMembership(Set.empty, Set.empty, Set.empty),
+        AccessPolicyMembershipRequest(Set.empty, Set.empty, Set.empty),
         samRequestContext
       )
     )
@@ -1229,7 +1233,7 @@ class ResourceServiceSpec
         resourceTypeAdmin,
         newPolicy.id.accessPolicyName,
         newPolicy.id.resource,
-        AccessPolicyMembership(Set(newAdminUser.email), Set(ResourceAction("non_owner_action")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set(newAdminUser.email), Set(ResourceAction("non_owner_action")), Set.empty, None),
         samRequestContext
       )
     )
@@ -1266,7 +1270,7 @@ class ResourceServiceSpec
           resourceTypeAdmin,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set(WorkbenchEmail("not_an_admin@gmail.com")), Set(ResourceAction("non_owner_action")), Set.empty, None),
+          AccessPolicyMembershipRequest(Set(WorkbenchEmail("not_an_admin@gmail.com")), Set(ResourceAction("non_owner_action")), Set.empty, None),
           samRequestContext
         )
       )
@@ -1299,7 +1303,7 @@ class ResourceServiceSpec
         defaultResourceType,
         newPolicy.id.accessPolicyName,
         newPolicy.id.resource,
-        AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
         samRequestContext
       )
     )
@@ -1385,7 +1389,7 @@ class ResourceServiceSpec
 
     val actions = Set(ResourceAction("foo-bang-bar"))
     val newPolicy =
-      runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, actions, Set.empty, None), samRequestContext))
+      runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembershipRequest(Set.empty, actions, Set.empty, None), samRequestContext))
 
     assertResult(actions) {
       newPolicy.actions
@@ -1421,7 +1425,7 @@ class ResourceServiceSpec
           defaultResourceType,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty, None),
+          AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty, None),
           samRequestContext
         )
       )
@@ -1454,7 +1458,7 @@ class ResourceServiceSpec
           rt,
           AccessPolicyName("foo"),
           resource,
-          AccessPolicyMembership(Set.empty, Set(ResourceAction("foo--bar")), Set.empty, None),
+          AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("foo--bar")), Set.empty, None),
           samRequestContext
         )
       )
@@ -1488,7 +1492,7 @@ class ResourceServiceSpec
           defaultResourceType,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE")), None),
+          AccessPolicyMembershipRequest(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE")), None),
           samRequestContext
         )
       )
@@ -1526,7 +1530,7 @@ class ResourceServiceSpec
           defaultResourceType,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set(WorkbenchEmail("null@null.com")), Set.empty, Set.empty, None),
+          AccessPolicyMembershipRequest(Set(WorkbenchEmail("null@null.com")), Set.empty, Set.empty, None),
           samRequestContext
         )
       )
@@ -1564,7 +1568,7 @@ class ResourceServiceSpec
           defaultResourceType,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
+          AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
           samRequestContext
         )
       )
@@ -2788,7 +2792,7 @@ class ResourceServiceSpec
         defaultResourceType,
         genAccessPolicyName.sample.get,
         resource.fullyQualifiedId,
-        AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRoleName)),
+        AccessPolicyMembershipRequest(Set(dummyUser.email), Set.empty, Set(ownerRoleName)),
         samRequestContext
       ),
       List(AccessAdded)

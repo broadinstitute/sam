@@ -40,7 +40,7 @@ class ResourceService(
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
       descendantPermissions: Set[AccessPolicyDescendantPermissions],
-      memberPolicies: Option[Set[PolicyIdentifiers]] = Option.empty
+      memberPolicies: Option[Set[PolicyIdentifiersRequestBody]] = Option.empty
   )
 
   def getResourceTypes(): IO[Map[ResourceTypeName, ResourceType]] =
@@ -98,8 +98,8 @@ class ResourceService(
     val ownerRole = resourceType.roles
       .find(_.roleName == resourceType.ownerRoleName)
       .getOrElse(throw new WorkbenchException(s"owner role ${resourceType.ownerRoleName} does not exist in $resourceType"))
-    val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembership] = Map(
-      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembership(Set(samUser.email), Set.empty, Set(ownerRole.roleName), None, None)
+    val defaultPolicies: Map[AccessPolicyName, AccessPolicyMembershipRequest] = Map(
+      AccessPolicyName(ownerRole.roleName.value) -> AccessPolicyMembershipRequest(Set(samUser.email), Set.empty, Set(ownerRole.roleName), None, None)
     )
     createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, samUser.id, samRequestContext)
   }
@@ -117,7 +117,7 @@ class ResourceService(
   def createResource(
       resourceType: ResourceType,
       resourceId: ResourceId,
-      policiesMap: Map[AccessPolicyName, AccessPolicyMembership],
+      policiesMap: Map[AccessPolicyName, AccessPolicyMembershipRequest],
       authDomain: Set[WorkbenchGroupName],
       parentOpt: Option[FullyQualifiedResourceId],
       userId: WorkbenchUserId,
@@ -371,7 +371,7 @@ class ResourceService(
       resourceType: ResourceType,
       policyName: AccessPolicyName,
       resource: FullyQualifiedResourceId,
-      policyMembership: AccessPolicyMembership,
+      policyMembership: AccessPolicyMembershipRequest,
       samRequestContext: SamRequestContext
   ): IO[AccessPolicy] =
     openTelemetry.time("api.v1.resource.overwritePolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
@@ -392,13 +392,13 @@ class ResourceService(
       resourceType: ResourceType,
       policyName: AccessPolicyName,
       resource: FullyQualifiedResourceId,
-      policyMembership: AccessPolicyMembership,
+      policyMembership: AccessPolicyMembershipRequest,
       samRequestContext: SamRequestContext
   ): IO[AccessPolicy] =
     failUnlessAllAdminEmailDomainsAllowed(policyMembership) *>
       overwritePolicy(resourceType, policyName, resource, policyMembership, samRequestContext)
 
-  def failUnlessAllAdminEmailDomainsAllowed(membership: AccessPolicyMembership): IO[Unit] =
+  def failUnlessAllAdminEmailDomainsAllowed(membership: AccessPolicyMembershipRequest): IO[Unit] =
     NonEmptyList
       .fromList(membership.memberEmails.toList.filterNot { email =>
         allowedAdminEmailDomains contains email.value.split("@").last
@@ -707,18 +707,18 @@ class ResourceService(
     accessPolicyDAO.loadPolicyMembership(policyIdentity, samRequestContext)
 
   private def makeValidatablePolicies(
-      policies: Map[AccessPolicyName, AccessPolicyMembership],
+      policies: Map[AccessPolicyName, AccessPolicyMembershipRequest],
       samRequestContext: SamRequestContext
   ): IO[Set[ValidatableAccessPolicy]] =
     policies.toList
-      .traverse { case (accessPolicyName, accessPolicyMembership) =>
-        val maybeOwnerPolicyEmails = getPolicyEmailsFromAccessPolicyMembership(accessPolicyMembership, samRequestContext)
-        val allEmails = collateMemberAndPolicyEmails(accessPolicyMembership.memberEmails, maybeOwnerPolicyEmails)
+      .traverse { case (accessPolicyName, accessPolicyMembershipRequest) =>
+        val maybeOwnerPolicyEmails = getPolicyEmailsFromAccessPolicyMembership(accessPolicyMembershipRequest, samRequestContext)
+        val allEmails = collateMemberAndPolicyEmails(accessPolicyMembershipRequest.memberEmails, maybeOwnerPolicyEmails)
         for {
           newMemberEmails <- allEmails
           validatablePolicy <- makeValidatablePolicy(
             accessPolicyName,
-            accessPolicyMembership.copy(memberEmails = newMemberEmails),
+            accessPolicyMembershipRequest.copy(memberEmails = newMemberEmails),
             samRequestContext
           )
         } yield validatablePolicy
@@ -726,7 +726,7 @@ class ResourceService(
       .map(_.toSet)
 
   private def getPolicyEmailsFromAccessPolicyMembership(
-      accessPolicyMembership: AccessPolicyMembership,
+      accessPolicyMembership: AccessPolicyMembershipRequest,
       samRequestContext: SamRequestContext
   ): Option[Set[IO[Option[WorkbenchEmail]]]] =
     accessPolicyMembership.memberPolicies.map { memberPolicies =>
@@ -736,7 +736,7 @@ class ResourceService(
       }
     }
 
-  private def loadPolicyByPolicyIdentifiers(policyIdentifiers: PolicyIdentifiers, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
+  private def loadPolicyByPolicyIdentifiers(policyIdentifiers: PolicyIdentifiersRequestBody, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
     accessPolicyDAO.loadPolicy(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(policyIdentifiers.resourceTypeName, policyIdentifiers.resourceId), policyIdentifiers.policyName),
       samRequestContext
@@ -759,7 +759,7 @@ class ResourceService(
 
   private def makeValidatablePolicy(
       accessPolicyName: AccessPolicyName,
-      accessPolicyMembership: AccessPolicyMembership,
+      accessPolicyMembership: AccessPolicyMembershipRequest,
       samRequestContext: SamRequestContext
   ): IO[ValidatableAccessPolicy] =
     mapEmailsToSubjects(accessPolicyMembership.memberEmails, samRequestContext).map { emailsToSubjects =>

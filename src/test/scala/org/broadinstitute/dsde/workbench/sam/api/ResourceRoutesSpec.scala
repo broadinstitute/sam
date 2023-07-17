@@ -211,7 +211,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -229,7 +229,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set.empty)),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set.empty)),
       Set.empty
     )
     Post(s"/api/resource/${SamResourceTypes.resourceTypeAdminName}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -254,7 +254,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -279,7 +279,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -321,7 +321,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -348,7 +348,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resource/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {

@@ -830,9 +830,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       .map(rs =>
         (
           rs.get[AccessPolicyName](p.resultName.name),
-          PolicyIdentifiers(
+          PolicyInfoResponseBody(
             rs.get[AccessPolicyName](mp.resultName.name),
-            Option(rs.get[WorkbenchEmail](mpg.resultName.email)),
+            rs.get[WorkbenchEmail](mpg.resultName.email),
             rs.get[ResourceTypeName](mprt.resultName.name),
             rs.get[ResourceId](mpr.resultName.name)
           )
@@ -1140,7 +1140,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           Map[PolicyInfo, Iterable[(RoleResult, ActionResult)]],
           Map[AccessPolicyName, Iterable[GroupRecord]],
           Map[AccessPolicyName, Iterable[UserRecord]],
-          Map[AccessPolicyName, Iterable[PolicyIdentifiers]]
+          Map[AccessPolicyName, Iterable[PolicyInfoResponseBody]]
       ) => LazyList[T]
   ): IO[LazyList[T]] =
     readOnlyTransaction("listPoliciesWithMembers", samRequestContext) { implicit session =>
@@ -1229,7 +1229,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           AccessPolicyWithMembership(
             policyInfo.name,
             AccessPolicyMembership(
-              memberPolicies.flatMap(_.policyEmail) ++ memberUsers ++ memberGroups,
+              memberPolicies.map(_.policyEmail) ++ memberUsers ++ memberGroups,
               policyActions,
               policyRoles,
               Option(policyDescendantPermissions),

@@ -405,7 +405,7 @@ paths:
         content:
           'application/json':
             schema:
-              $ref: '#/components/schemas/AccessPolicyMembershipV2'
+              $ref: '#/components/schemas/AccessPolicyMembershipRequest'
         required: true
       responses:
         201:
@@ -1867,7 +1867,7 @@ paths:
         content:
           'application/json':
             schema:
-              $ref: '#/components/schemas/AccessPolicyMembershipV2'
+              $ref: '#/components/schemas/AccessPolicyMembershipRequest'
         required: true
       responses:
         201:
@@ -2975,7 +2975,35 @@ components:
         memberPolicies:
           type: array
           items:
-            $ref: '#/components/schemas/PolicyIdentifiers'
+            $ref: '#/components/schemas/PolicyInfoResponseBody'
+        actions:
+          type: array
+          items:
+            type: string
+        roles:
+          type: array
+          items:
+            type: string
+        descendantPermissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessPolicyDescendantPermissions'
+      description: ""
+    AccessPolicyMembershipRequest:
+      required:
+        - actions
+        - memberEmails
+        - roles
+      type: object
+      properties:
+        memberEmails:
+          type: array
+          items:
+            type: string
+        memberPolicies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyIdentifiersRequestBody'
         actions:
           type: array
           items:
@@ -3082,7 +3110,7 @@ components:
           type: object
           description: map of initial policies to create, key is policy name
           additionalProperties:
-            $ref: '#/components/schemas/AccessPolicyMembershipV2'
+            $ref: '#/components/schemas/AccessPolicyMembershipRequest'
         authDomain:
           type: array
           items:
@@ -3173,9 +3201,26 @@ components:
           description: The email address associated with the group
       description: specification of a managed group with an access policy and the
         email associated with the managed group
-    PolicyIdentifiers:
+    PolicyIdentifiersRequestBody:
       required:
         - policyName
+        - resourceTypeName
+        - resourceId
+      type: object
+      properties:
+        policyName:
+          type: string
+          description: The name of the policy
+        resourceTypeName:
+          type: string
+          description: The type of the resource
+        resourceId:
+          type: string
+          description: The id of the resource
+    PolicyInfoResponseBody:
+      required:
+        - policyName
+        - policyEmail
         - resourceTypeName
         - resourceId
       type: object

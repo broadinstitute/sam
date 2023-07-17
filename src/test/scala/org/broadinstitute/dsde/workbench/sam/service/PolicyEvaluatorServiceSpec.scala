@@ -71,6 +71,9 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
   private[service] val constrainablePolicyMembership =
     AccessPolicyMembership(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
 
+  private[service] val constrainablePolicyMembershipRequest =
+    AccessPolicyMembershipRequest(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
+
   private[service] val managedGroupResourceType =
     configResourceTypes.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
@@ -488,28 +491,28 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
         defaultResourceType,
         AccessPolicyName("in-it"),
         resource1,
-        AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("alter_policies")), Set.empty),
+        AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("alter_policies")), Set.empty),
         samRequestContext
       )
       _ <- service.overwritePolicy(
         defaultResourceType,
         AccessPolicyName("not-in-it"),
         resource1,
-        AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty),
+        AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty),
         samRequestContext
       )
       _ <- service.overwritePolicy(
         otherResourceType,
         AccessPolicyName("in-it"),
         resource3,
-        AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("alter_policies")), Set.empty),
+        AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("alter_policies")), Set.empty),
         samRequestContext
       )
       _ <- service.overwritePolicy(
         otherResourceType,
         AccessPolicyName("not-in-it"),
         resource3,
-        AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty),
+        AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty),
         samRequestContext
       )
       r <- service.policyEvaluatorService.listUserResources(defaultResourceType.name, dummyUser.id, samRequestContext)
@@ -555,7 +558,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
       _ <- constrainableService.createResource(
         constrainableResourceType,
         resource.resourceId,
-        Map(viewPolicyName -> constrainablePolicyMembership),
+        Map(viewPolicyName -> constrainablePolicyMembershipRequest),
         resource.authDomain,
         None,
         dummyUser.id,
@@ -598,7 +601,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
       _ <- constrainableService.createResource(
         constrainableResourceType,
         resource.resourceId,
-        Map(viewPolicyName -> constrainablePolicyMembership),
+        Map(viewPolicyName -> constrainablePolicyMembershipRequest),
         resource.authDomain,
         None,
         dummyUser.id,
@@ -641,7 +644,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
       _ <- constrainableService.createResource(
         constrainableResourceType,
         resource.resourceId,
-        Map(viewPolicyName -> constrainablePolicyMembership),
+        Map(viewPolicyName -> constrainablePolicyMembershipRequest),
         resource.authDomain,
         None,
         dummyUser.id,
@@ -691,28 +694,28 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec with Retr
         defaultResourceType,
         AccessPolicyName("in-it"),
         resource1,
-        AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("alter_policies")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("alter_policies")), Set.empty, None),
         samRequestContext
       )
       _ <- service.overwritePolicy(
         defaultResourceType,
         AccessPolicyName("not-in-it"),
         resource1,
-        AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, None),
         samRequestContext
       )
       _ <- service.overwritePolicy(
         otherResourceType,
         AccessPolicyName("in-it"),
         resource3,
-        AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("alter_policies")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("alter_policies")), Set.empty, None),
         samRequestContext
       )
       _ <- service.overwritePolicy(
         otherResourceType,
         AccessPolicyName("not-in-it"),
         resource3,
-        AccessPolicyMembership(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("alter_policies")), Set.empty, None),
         samRequestContext
       )
       r <- service.policyEvaluatorService.listUserAccessPolicies(defaultResourceType.name, dummyUser.id, samRequestContext)
@@ -746,7 +749,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec with Retr
       _ <- constrainableService.createResource(
         constrainableResourceType,
         resource.resourceId,
-        Map(viewPolicyName -> constrainablePolicyMembership),
+        Map(viewPolicyName -> constrainablePolicyMembershipRequest),
         resource.authDomain,
         None,
         dummyUser.id,
@@ -781,7 +784,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec with Retr
       _ <- constrainableService.createResource(
         constrainableResourceType,
         resource.resourceId,
-        Map(viewPolicyName -> constrainablePolicyMembership),
+        Map(viewPolicyName -> constrainablePolicyMembershipRequest),
         resource.authDomain,
         None,
         dummyUser.id,
@@ -815,7 +818,7 @@ class DeprecatedPolicyEvaluatorSpec extends PolicyEvaluatorServiceSpec with Retr
       _ <- constrainableService.createResource(
         constrainableResourceType,
         resource.resourceId,
-        Map(viewPolicyName -> constrainablePolicyMembership),
+        Map(viewPolicyName -> constrainablePolicyMembershipRequest),
         resource.authDomain,
         None,
         dummyUser.id,

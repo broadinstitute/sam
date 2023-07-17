@@ -2530,7 +2530,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
             reader.actions,
             reader.roles,
             Option(reader.descendantPermissions),
-            Option(Set(PolicyIdentifiers(owner.id.accessPolicyName, Option(owner.email), owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
+            Option(Set(PolicyInfoResponseBody(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
           ),
           reader.email
         )
@@ -2581,7 +2581,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           reader.actions,
           reader.roles,
           Option(reader.descendantPermissions),
-          Option(Set(PolicyIdentifiers(owner.id.accessPolicyName, Option(owner.email), owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
+          Option(Set(PolicyInfoResponseBody(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
         )
 
         dao.loadPolicyMembership(reader.id, samRequestContext).unsafeRunSync() shouldBe Option(readerPolicyMembership)

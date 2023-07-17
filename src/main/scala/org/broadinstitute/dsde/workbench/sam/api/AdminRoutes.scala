@@ -178,7 +178,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
               val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
               pathEndOrSingleSlash {
                 put {
-                  entity(as[AccessPolicyMembership]) { membershipUpdate =>
+                  entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
                     withResourceType(resourceTypeAdminName) { resourceTypeAdmin =>
                       complete {
                         resourceService
