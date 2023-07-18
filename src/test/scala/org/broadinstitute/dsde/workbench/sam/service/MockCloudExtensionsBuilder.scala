@@ -7,7 +7,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
-import org.mockito.ArgumentMatchersSugar.{any, argThat, eqTo}
+import org.mockito.ArgumentMatchersSugar.{any, argThat}
 import org.mockito.{IdiomaticMockito, Strictness}
 
 import scala.collection.mutable
@@ -40,20 +40,13 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
     this
   }
 
-  def withAdminUser(samUser: SamUser): MockCloudExtensionsBuilder = withAdminUser(samUser.email)
-  def withAdminUser(adminUserEmail: WorkbenchEmail): MockCloudExtensionsBuilder = {
-    mockedCloudExtensions.isWorkbenchAdmin(eqTo(adminUserEmail)) returns Future.successful(true)
+  def withAdminUser(): MockCloudExtensionsBuilder = {
+    mockedCloudExtensions.isWorkbenchAdmin(any[WorkbenchEmail]) returns Future.successful(true)
     this
   }
   // testing cases where nonAdmin is attempting to use admin routes
-  def withNonAdminUser(samUser: SamUser): MockCloudExtensionsBuilder = withNonAdminUser(samUser.email)
-  def withNonAdminUser(adminUserEmail: WorkbenchEmail): MockCloudExtensionsBuilder = {
-    mockedCloudExtensions.isWorkbenchAdmin(eqTo(adminUserEmail)) returns Future.successful(false)
-    this
-  }
-
-  def withAdminUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
-    samUsers.foreach(u => withAdminUser(u))
+  def withNonAdminUser(): MockCloudExtensionsBuilder = {
+    mockedCloudExtensions.isWorkbenchAdmin(any[WorkbenchEmail]) returns Future.successful(false)
     this
   }
 

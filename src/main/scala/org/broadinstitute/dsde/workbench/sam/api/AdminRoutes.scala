@@ -31,6 +31,10 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
         adminUserRoutes(user, requestContext) ~
           adminResourcesRoutes(user, requestContext) ~
           adminResourceTypesRoutes(user, requestContext)
+      } ~ pathPrefix("v2") {
+        asWorkbenchAdmin(user) {
+          adminUserRoutesV2(user, requestContext)
+        }
       }
     }
 
@@ -114,6 +118,21 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                 }
               }
           }
+      }
+    }
+
+  private def adminUserRoutesV2(user: SamUser, samRequestContext: SamRequestContext): server.Route =
+    pathPrefix("user") {
+      pathPrefix(Segment) { userId =>
+        pathEnd {
+          get {
+            complete {
+              userService
+                .getUser(WorkbenchUserId(userId), samRequestContext = samRequestContext)
+                .map(user => (if (user.isDefined) OK else NotFound) -> user)
+            }
+          }
+        }
       }
     }
 

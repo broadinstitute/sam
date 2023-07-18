@@ -24,8 +24,12 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
   mockUserService.updateUserCrud(any[WorkbenchUserId], any[AdminUpdateUserRequest], any[SamRequestContext]) returns {
     IO(None)
   }
+  mockUserService.getUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
+    IO(None)
+  }
 
   private def makeUser(samUser: SamUser): Unit = {
+    mockUserService.getUser(eqTo(samUser.id), any[SamRequestContext]) answers ((_: WorkbenchUserId) => IO(Option(samUser)))
     mockUserService.deleteUser(eqTo(samUser.id), any[SamRequestContext]) returns IO(())
     mockUserService.updateUserCrud(eqTo(samUser.id), any[AdminUpdateUserRequest], any[SamRequestContext]) answers (
       (_: WorkbenchUserId, r: AdminUpdateUserRequest) => IO(Option(samUser.copy(email = r.email.get)))

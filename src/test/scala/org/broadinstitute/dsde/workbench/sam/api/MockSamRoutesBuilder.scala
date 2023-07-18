@@ -44,14 +44,13 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     this
   }
 
-  def withAdminUser(samUser: SamUser): MockSamRoutesBuilder = {
-    adminUser = Option(samUser)
-    cloudExtensionsBuilder.withAdminUser(samUser)
+  def withAdminUser(): MockSamRoutesBuilder = {
+    cloudExtensionsBuilder.withAdminUser()
     this
   }
 
-  def withNonAdminUser(samUser: SamUser): MockSamRoutesBuilder = {
-    cloudExtensionsBuilder.withNonAdminUser(samUser)
+  def withNonAdminUser(): MockSamRoutesBuilder = {
+    cloudExtensionsBuilder.withNonAdminUser()
     this
   }
 
@@ -63,8 +62,8 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   // Can only have 1 active user when making a request.  If the adminUser is set, that takes precedence, otherwise try
   // to get the enabledUser.
   private def getActiveUser: SamUser =
-    adminUser
-      .orElse(enabledUser.orElse(disabledUser))
+    enabledUser
+      .orElse(disabledUser)
       .getOrElse(throw new Exception("Try building MockSamRoutes .withAdminUser(), .withEnabledUser(), withDisabledUser() first"))
 
   // TODO: This is not great.  We need to do a little state management to set and look up users and admin users.  This

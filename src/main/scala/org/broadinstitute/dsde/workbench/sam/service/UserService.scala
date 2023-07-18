@@ -115,6 +115,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case None => IO(user)
     }
 
+  def getUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    openTelemetry.time("api.v2.user.getUser.time", API_TIMING_DURATION_BUCKET) {
+      directoryDAO.loadUser(userId, samRequestContext)
+    }
+
   def updateUserCrud(userId: WorkbenchUserId, request: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     openTelemetry.time("api.v1.user.updateUserCrud.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
