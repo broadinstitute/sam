@@ -475,7 +475,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
     }
 
-    "setResourceAuthDomain" - {
+    "addResourceAuthDomain" - {
       "ZeroToOneGroups" in {
         assume(databaseEnabled, databaseEnabledClue)
 
@@ -488,7 +488,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set.empty)
         dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
 
-        dao.setResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, Set(authDomainGroupName1), samRequestContext).unsafeRunSync()
+        dao.addResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, Set(authDomainGroupName1), samRequestContext).unsafeRunSync()
 
         dao.loadResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
           case Constrained(authDomain) => authDomain.toList should contain theSameElementsAs Set(authDomainGroupName1)
@@ -512,7 +512,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
 
         dao
-          .setResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, Set(authDomainGroupName1, authDomainGroupName2), samRequestContext)
+          .addResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, Set(authDomainGroupName1, authDomainGroupName2), samRequestContext)
           .unsafeRunSync()
 
         dao.loadResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
@@ -537,7 +537,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
 
         dao
-          .setResourceAuthDomain(
+          .addResourceAuthDomain(
             resourceWithoutAuthDomain.fullyQualifiedId,
             Set(authDomainGroupName1, authDomainGroupName2, authDomainGroupName1),
             samRequestContext

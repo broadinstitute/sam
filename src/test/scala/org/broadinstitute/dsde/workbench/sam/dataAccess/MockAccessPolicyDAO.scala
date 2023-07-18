@@ -80,7 +80,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
       }
     }
 
-  override def setResourceAuthDomain(
+  override def addResourceAuthDomain(
       resource: FullyQualifiedResourceId,
       authDomains: Set[WorkbenchGroupName],
       samRequestContext: SamRequestContext
