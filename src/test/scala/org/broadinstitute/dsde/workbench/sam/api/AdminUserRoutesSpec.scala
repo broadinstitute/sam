@@ -354,4 +354,30 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       status shouldEqual StatusCodes.Forbidden
     }
   }
+
+  it should "not allow access even if a user object does not exist (as an admin)" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/admin/v2/user/$badUserId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "not find a user user object if it does not exist (as an admin)" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/admin/v2/user/$badUserId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
 }
