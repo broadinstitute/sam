@@ -728,13 +728,19 @@ class ResourceService(
   ): IO[Set[ValidatableAccessPolicy]] =
     policies.toList
       .traverse { case (accessPolicyName, accessPolicyMembershipRequest) =>
-        val maybeOwnerPolicyEmails = getPolicyEmailsFromAccessPolicyMembership(accessPolicyMembershipRequest, samRequestContext)
-        val allEmails = collateMemberAndPolicyEmails(accessPolicyMembershipRequest.memberEmails, maybeOwnerPolicyEmails)
+        // grouping member emails and policy emails together
+        val allEmails = getPolicyEmailsFromAccessPolicyMembership(accessPolicyMembershipRequest, samRequestContext)
+          .map { ioPolicyEmails =>
+            for {
+              policyEmails <- ioPolicyEmails
+            } yield accessPolicyMembershipRequest.memberEmails ++ policyEmails
+          }
+          .getOrElse(IO(accessPolicyMembershipRequest.memberEmails))
         for {
-          newMemberEmails <- allEmails
+          memberEmails <- allEmails
           validatablePolicy <- makeValidatablePolicy(
             accessPolicyName,
-            accessPolicyMembershipRequest.copy(memberEmails = newMemberEmails),
+            accessPolicyMembershipRequest.copy(memberEmails = memberEmails),
             samRequestContext
           )
         } yield validatablePolicy
@@ -767,15 +773,6 @@ class ResourceService(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(policyIdentifiers.resourceTypeName, policyIdentifiers.resourceId), policyIdentifiers.policyName),
       samRequestContext
     )
-
-  private def collateMemberAndPolicyEmails(memberEmails: Set[WorkbenchEmail], maybePolicyEmails: Option[IO[Set[WorkbenchEmail]]]): IO[Set[WorkbenchEmail]] =
-    maybePolicyEmails
-      .map { ioPolicyEmails =>
-        for {
-          policyEmails <- ioPolicyEmails
-        } yield memberEmails ++ policyEmails
-      }
-      .getOrElse(IO(memberEmails))
 
   private def makeValidatablePolicy(
       accessPolicyName: AccessPolicyName,
