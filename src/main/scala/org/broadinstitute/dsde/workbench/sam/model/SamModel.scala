@@ -100,6 +100,7 @@ object SamResourceActions {
   val setAccessInstructions = ResourceAction("set_access_instructions")
   val setPublic = ResourceAction("set_public")
   val readAuthDomain = ResourceAction("read_auth_domain")
+  val updateAuthDomain = ResourceAction("update_auth_domain")
   val testAnyActionAccess = ResourceAction("test_any_action_access")
   val getParent = ResourceAction("get_parent")
   val setParent = ResourceAction("set_parent")
