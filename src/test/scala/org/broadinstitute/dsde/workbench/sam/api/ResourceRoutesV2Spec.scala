@@ -1681,7 +1681,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction, SamResourceActions.updateAuthDomain),
         Set(ResourceRoleName("owner"))
@@ -1716,7 +1716,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))
