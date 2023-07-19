@@ -1707,6 +1707,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+    patch:
+      tags:
+        - Resources
+      summary: Update the groups in the Auth Domain for a resource
+      operationId: patchAuthDomainV2
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: array
+              items:
+                type: string
+      responses:
+        204:
+          description: Successfully updated domains
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/resources/v2/{resourceTypeName}/{resourceId}/allUsers:
     get:
       tags:
