@@ -28,7 +28,7 @@ class GetUserSpec extends UserServiceTestTraits {
         assert(response.nonEmpty, "Getting a user who exists should return a user object object")
         assert(
           response.get equals userWithBothIds,
-          "Getting a user with who exists should return the corresponding user."
+          "Getting a user who exists should return the corresponding user."
         )
       }
     }
