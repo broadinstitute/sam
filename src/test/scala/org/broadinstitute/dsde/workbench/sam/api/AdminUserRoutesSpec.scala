@@ -95,7 +95,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  it should "not find a user if the user does not exist and the requesting user is an admin" in {
+  it should "not find a user when trying to update a user if the user does not exist and the requesting user is an admin" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withAdminUser()
@@ -209,7 +209,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  it should "not find a user if the user does not exist and the requesting user is an admin" in {
+  it should "not find a user when trying to disable a user if the user does not exist and the requesting user is an admin" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withAdminUser()
@@ -252,7 +252,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  it should "not find a user if the user does not exist and the requesting user is an admin" in {
+  it should "not find a user when trying to enable a user if the user does not exist and the requesting user is an admin" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withAdminUser()
@@ -368,7 +368,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  it should "not find a user if it does not exist and the requesting user is an admin" in {
+  it should "not find a user when trying to get a user if it does not exist and the requesting user is an admin" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
