@@ -53,9 +53,9 @@ object SamApiJsonProtocol extends DefaultJsonProtocol {
 
     def read(value: JsValue): PolicyInfoResponseBody =
       value.asJsObject.getFields("policyName", "policyEmail", "resourceTypeName", "resourceId") match {
-      case Seq(JsString(policyName), JsString(policyEmail), JsString(resourceTypeName), JsString(resourceId)) =>
-        PolicyInfoResponseBody(AccessPolicyName(policyName), WorkbenchEmail(policyEmail), ResourceTypeName(resourceTypeName), ResourceId(resourceId))
-      case _ => deserializationError("PolicyInfoResponseBody expected; Could not deserialize JSON")
-    }
+        case Seq(JsString(policyName), JsString(policyEmail), JsString(resourceTypeName), JsString(resourceId)) =>
+          PolicyInfoResponseBody(AccessPolicyName(policyName), WorkbenchEmail(policyEmail), ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+        case _ => deserializationError("PolicyInfoResponseBody expected; Could not deserialize JSON")
+      }
   }
 }
