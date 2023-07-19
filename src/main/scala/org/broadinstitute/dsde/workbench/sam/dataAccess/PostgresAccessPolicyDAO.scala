@@ -516,7 +516,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
     val authDomainColumn = AuthDomainTable.column
     val insertAuthDomainQuery =
-      samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues}"
+      samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues} on conflict do nothing"
 
     insertAuthDomainQuery.update().apply()
   }
@@ -587,6 +587,19 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
             NotConstrained // case 2
           }
         case Some(nel) => Constrained(nel.map(WorkbenchGroupName)) // case 3
+      }
+    }
+
+  override def addResourceAuthDomain(
+      resource: FullyQualifiedResourceId,
+      authDomains: Set[WorkbenchGroupName],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    serializableWriteTransaction("addResourceAuthDomain", samRequestContext) { implicit session =>
+      val resourcePK = loadResourcePK(resource)
+      val authDomainPks = queryForGroupPKs(authDomains.map(identity))
+      if (authDomainPks.nonEmpty) {
+        insertAuthDomainsForResource(resourcePK, authDomainPks)
       }
     }
 

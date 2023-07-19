@@ -119,6 +119,7 @@ object TestSamRoutes {
 
     val use = ResourceActionPattern("use", "", true)
     val readAuthDomain = ResourceActionPattern("read_auth_domain", "", true)
+    val updateAuthDomain = ResourceActionPattern("update_auth_domain", "", true)
 
     val testActionAccess = ResourceActionPattern("test_action_access::.+", "", false)
   }

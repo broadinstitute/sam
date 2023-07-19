@@ -22,6 +22,12 @@ trait AccessPolicyDAO {
 
   def loadResourceAuthDomain(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LoadResourceAuthDomainResult]
 
+  def addResourceAuthDomain(
+      resource: FullyQualifiedResourceId,
+      authDomains: Set[WorkbenchGroupName],
+      samRequestContext: SamRequestContext
+  ): IO[Unit]
+
   def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
       groupId: WorkbenchGroupIdentity,
       samRequestContext: SamRequestContext
