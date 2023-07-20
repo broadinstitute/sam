@@ -728,19 +728,18 @@ class ResourceService(
   ): IO[Set[ValidatableAccessPolicy]] =
     policies.toList
       .traverse { case (accessPolicyName, accessPolicyMembershipRequest) =>
-        // grouping member emails and policy emails together
-        val allEmails = getPolicyEmailsFromAccessPolicyMembership(accessPolicyMembershipRequest, samRequestContext)
-          .map { ioPolicyEmails =>
-            for {
-              policyEmails <- ioPolicyEmails
-            } yield accessPolicyMembershipRequest.memberEmails ++ policyEmails
-          }
-          .getOrElse(IO(accessPolicyMembershipRequest.memberEmails))
         for {
-          memberEmails <- allEmails
+          // grouping member emails and policy emails together
+          allEmails <- getPolicyEmailsFromAccessPolicyMembership(accessPolicyMembershipRequest, samRequestContext)
+            .map { ioPolicyEmails =>
+              for {
+                policyEmails <- ioPolicyEmails
+              } yield accessPolicyMembershipRequest.memberEmails ++ policyEmails
+            }
+            .getOrElse(IO(accessPolicyMembershipRequest.memberEmails))
           validatablePolicy <- makeValidatablePolicy(
             accessPolicyName,
-            accessPolicyMembershipRequest.copy(memberEmails = memberEmails),
+            accessPolicyMembershipRequest.copy(memberEmails = allEmails),
             samRequestContext
           )
         } yield validatablePolicy
