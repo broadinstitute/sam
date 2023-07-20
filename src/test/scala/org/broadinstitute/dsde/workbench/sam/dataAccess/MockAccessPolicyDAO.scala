@@ -7,6 +7,7 @@ import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.collection.concurrent.TrieMap
@@ -29,7 +30,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     this(Map.empty[ResourceTypeName, ResourceType], directoryDAO)
 
   val resources = new TrieMap[FullyQualifiedResourceId, Resource]()
-  val policies = directoryDAO.groups
+  val policies: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = directoryDAO.groups
 
   override def upsertResourceTypes(resourceTypesToInit: Set[ResourceType], samRequestContext: SamRequestContext): IO[Set[ResourceTypeName]] =
     for {
@@ -321,7 +322,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     groupNames.traverse(directoryDAO.loadGroup(_, samRequestContext)).map(_.flatMap(_.map(_.email)))
   }
 
-  private def loadDirectMemberPolicyIdentifiers(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[PolicyIdentifiers]] = {
+  private def loadDirectMemberPolicyIdentifiers(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[LazyList[PolicyInfoResponseBody]] = {
     val policyIds = policies
       .find(_._1 == policy)
       .toList
@@ -332,10 +333,10 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
 
     policyIds
       .traverse(loadPolicy(_, samRequestContext))
-      .map(_.flatMap(_.map(p => PolicyIdentifiers(p.id.accessPolicyName, p.email, p.id.resource.resourceTypeName, p.id.resource.resourceId))))
+      .map(_.flatMap(_.map(p => PolicyInfoResponseBody(p.id.accessPolicyName, p.email, p.id.resource.resourceTypeName, p.id.resource.resourceId))))
   }
 
-  override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
+  override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembershipResponse]] =
     listAccessPolicyMemberships(policyId.resource, samRequestContext).map { policyMemberships =>
       policyMemberships.find(_.policyName == policyId.accessPolicyName).map(_.membership)
     }
@@ -349,7 +350,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
           subPolicies <- loadDirectMemberPolicyIdentifiers(policy.id, samRequestContext)
         } yield AccessPolicyWithMembership(
           policy.id.accessPolicyName,
-          AccessPolicyMembership(
+          AccessPolicyMembershipResponse(
             users.toSet ++ groups ++ subPolicies.map(_.policyEmail),
             policy.actions,
             policy.roles,

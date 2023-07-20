@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, Mo
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.AppendedClues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -45,7 +46,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have read_policies permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
     val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.readPolicies, ResourceActionPattern("can_compute", "", false)),
@@ -70,7 +71,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "200 if caller have testActionAccess::can_compute permission" in {
     // Create a user called userWithEmail and has can_compute on the resource.
     val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(userWithEmail.email), Set(ResourceAction("can_compute")), Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.testActionAccess, SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)),
@@ -100,7 +101,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return false if user doesn't have permission or doesn't exist" in {
     // Create a user called userWithEmail but doesn't have can_compute on the resource.
     val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role has read_policies
     val resourceType = ResourceType(
@@ -134,7 +135,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
   "GET /api/resource/{resourceType}/{resourceId}/action/{action}/userEmail/{userEmail}" should "return 403 if caller doesn't have permission" in {
     // Create a user called userWithEmail and have can_compute on the resource.
     val userWithEmail = Generator.genWorkbenchUserGoogle.sample.get
-    val members = AccessPolicyMembership(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(userWithEmail.email), Set(ResourceAction("read_policies")), Set.empty)
 
     // The owner role only have alert_policies
     val resourceType = ResourceType(
@@ -177,7 +178,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resources/v1/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -195,7 +196,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set.empty)),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set.empty)),
       Set.empty
     )
     Post(s"/api/resources/v1/${SamResourceTypes.resourceTypeAdminName}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -214,7 +215,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(true)
     )
@@ -244,7 +245,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty,
       Some(false)
     )
@@ -270,7 +271,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resources/v1/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -295,7 +296,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resources/v1/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -339,7 +340,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resources/v1/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -366,7 +367,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val createResourceRequest = CreateResourceRequest(
       ResourceId("foo"),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
       authDomain
     )
     Post(s"/api/resources/v1/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
@@ -461,7 +462,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
   }
 
   "GET /api/resources/v1/{resourceType}/{resourceId}/policies/{policyName}" should "200 on existing policy of a resource with read_policies" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -476,14 +477,14 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[AccessPolicyMembership] shouldEqual members
+      responseAs[AccessPolicyMembershipResponse] shouldEqual members
     }
   }
 
   private def responsePayloadClue(str: String): String = s" -> Here is the response payload: $str"
 
   private def createUserResourcePolicy(
-      members: AccessPolicyMembership,
+      members: AccessPolicyMembershipResponse,
       resourceType: ResourceType,
       samRoutes: TestSamRoutes,
       resourceId: ResourceId,
@@ -507,7 +508,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
     }
 
   it should "200 on existing policy of a resource with read_policy" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set.empty, Set.empty)
     val policyName = AccessPolicyName("bar")
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -522,12 +523,12 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     Get(s"/api/resources/v1/${resourceType.name}/${resourceId.value}/policies/${policyName.value}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[AccessPolicyMembership] shouldEqual members
+      responseAs[AccessPolicyMembershipResponse] shouldEqual members
     }
   }
 
   it should "404 on non existing policy of a resource" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies, SamResourceActionPatterns.readPolicies),
@@ -546,7 +547,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
   }
 
   it should "403 on existing policy of a resource without read policies" in {
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set.empty, Set.empty)
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
       Set(SamResourceActionPatterns.alterPolicies),
@@ -579,7 +580,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -601,13 +602,13 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
 
-    val members2 = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
+    val members2 = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members2) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -629,7 +630,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), Set.empty)
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -658,7 +659,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
     val fakeActions = Set(ResourceAction("fake_action1"), ResourceAction("other_fake_action"))
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), fakeActions, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), fakeActions, Set.empty)
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       fakeActions foreach { action => responseAs[String] should include(action.value) }
@@ -683,7 +684,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
     val fakeRoles = Set(ResourceRoleName("fakerole"), ResourceRoleName("otherfakerole"))
-    val members = AccessPolicyMembership(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), fakeRoles)
+    val members = AccessPolicyMembershipResponse(Set(defaultTestUser.email), Set(ResourceAction("can_compute")), fakeRoles)
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
       fakeRoles foreach { role => responseAs[String] should include(role.value) }
@@ -708,7 +709,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
     runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
 
     val badEmail = WorkbenchEmail("null@bar.baz")
-    val nonExistingMembers = AccessPolicyMembership(Set(badEmail), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
+    val nonExistingMembers = AccessPolicyMembershipResponse(Set(badEmail), Set(ResourceAction("can_compute")), Set(ResourceRoleName("owner")))
 
     Put(s"/api/resources/v1/${resourceType.name}/foo/policies/canCompute", nonExistingMembers) ~> samRoutes.route ~> check {
       responseAs[String] shouldNot include(defaultTestUser.email.value)
@@ -726,7 +727,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
       ResourceRoleName("owner")
     )
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("me@me.me")), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(WorkbenchEmail("me@me.me")), Set(ResourceAction("can_compute")), Set.empty)
 
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NoContent
@@ -739,7 +740,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
   it should "404 when creating a policy on a resource type that doesnt exist" in {
     val samRoutes = TestSamRoutes(Map.empty)
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     // Create a resource of a type that doesn't exist
     Put(s"/api/resources/v1/fakeresourcetype/foo/policies/canCompute", members) ~> samRoutes.route ~> check {
@@ -766,7 +767,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
       policyAccessDAO = Some(policyDao),
       maybeDirectoryDAO = Some(directoryDAO)
     )
-    val members = AccessPolicyMembership(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
+    val members = AccessPolicyMembershipResponse(Set(WorkbenchEmail("foo@bar.baz")), Set(ResourceAction("can_compute")), Set.empty)
 
     // Create a resource
     Post(s"/api/resources/v1/${resourceType.name}/foo") ~> samRoutes.route ~> check {
@@ -987,7 +988,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val resourceId = ResourceId("foo")
     val policyName = AccessPolicyName("bar")
-    val members = AccessPolicyMembership(Set.empty, Set.empty, Set.empty)
+    val members = AccessPolicyMembershipResponse(Set.empty, Set.empty, Set.empty)
     createUserResourcePolicy(members, resourceType, samRoutes, resourceId, policyName)
     samRoutes.resourceService
       .setPublic(model.FullyQualifiedPolicyId(model.FullyQualifiedResourceId(resourceType.name, resourceId), policyName), true, samRequestContext)
@@ -1430,7 +1431,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))
@@ -1460,7 +1461,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))
@@ -1490,7 +1491,9 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val resourceId = ResourceId("foo")
     val policiesMap =
-      Map(AccessPolicyName("ap") -> AccessPolicyMembership(Set(defaultUserInfo.email), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner"))))
+      Map(
+        AccessPolicyName("ap") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ManagedGroupService.useAction), Set(ResourceRoleName("owner")))
+      )
     runAndWait(
       samRoutes.resourceService
         .createResource(resourceType, resourceId, policiesMap, Set(WorkbenchGroupName(authDomain)), None, defaultUserInfo.id, samRequestContext)
@@ -1517,7 +1520,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))
@@ -1553,7 +1556,7 @@ class ResourceRoutesV1Spec extends AnyFlatSpec with Matchers with ScalatestRoute
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
-      AccessPolicyName("ap") -> AccessPolicyMembership(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
         Set(defaultUserInfo.email),
         Set(SamResourceActions.readAuthDomain, ManagedGroupService.useAction),
         Set(ResourceRoleName("owner"))

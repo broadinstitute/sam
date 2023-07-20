@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers.{eq => mockitoEq}
@@ -317,7 +318,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
 
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
@@ -333,7 +334,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   it should "404 when user does not exist" in {
     val (defaultUserInfo, samRoutes, _) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
@@ -458,7 +459,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     val projectName = "my-project"
     val createResourceRequest = CreateResourceRequest(
       ResourceId(projectName),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(samUser.email), Set(SamResourceActions.createPet), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(samUser.email), Set(SamResourceActions.createPet), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> routes.route ~> check {

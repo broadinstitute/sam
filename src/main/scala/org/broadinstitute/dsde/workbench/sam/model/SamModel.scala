@@ -3,6 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.model
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse}
+import org.broadinstitute.dsde.workbench.sam.model.api.SamApiJsonProtocol.PolicyInfoResponseBodyJsonFormat
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
@@ -50,11 +52,11 @@ object SamJsonSupport {
 
   implicit val FullyQualifiedResourceIdFormat = jsonFormat2(FullyQualifiedResourceId.apply)
 
-  implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
+  implicit val AccessPolicyDescendantPermissionsFormat: RootJsonFormat[AccessPolicyDescendantPermissions] = jsonFormat3(AccessPolicyDescendantPermissions.apply)
 
-  implicit val PolicyIdentifiersFormat = jsonFormat4(PolicyIdentifiers.apply)
+  implicit val PolicyIdentifiersFormat = jsonFormat3(PolicyIdentifiers.apply)
 
-  implicit val AccessPolicyMembershipFormat = jsonFormat5(AccessPolicyMembership.apply)
+  implicit val AccessPolicyMembershipResponseFormat = jsonFormat5(AccessPolicyMembershipResponse.apply)
 
   implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
 
@@ -73,6 +75,8 @@ object SamJsonSupport {
   implicit val ManagedGroupAccessInstructionsFormat = ValueObjectFormat(ManagedGroupAccessInstructions.apply)
 
   implicit val GroupSyncResponseFormat = jsonFormat2(GroupSyncResponse.apply)
+
+  implicit val AccessPolicyMembershipRequestFormat = jsonFormat5(AccessPolicyMembershipRequest.apply)
 
   implicit val CreateResourceRequestFormat = jsonFormat5(CreateResourceRequest.apply)
 
@@ -221,7 +225,7 @@ object RolesAndActions {
   def fromRoles(roles: Set[ResourceRoleName]) = RolesAndActions(roles, Set.empty)
   def fromActions(actions: Set[ResourceAction]) = RolesAndActions(Set.empty, actions)
   def fromPolicy(accessPolicy: AccessPolicy) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
-  def fromPolicyMembership(accessPolicy: AccessPolicyMembership) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
+  def fromPolicyMembership(accessPolicy: AccessPolicyMembershipResponse) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
 }
 @Lenses final case class UserPolicyResponse(
     resourceId: ResourceId,
@@ -241,16 +245,17 @@ object RolesAndActions {
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
-@Lenses final case class PolicyIdentifiers(
+
+@Lenses case class PolicyIdentifiers(
     policyName: AccessPolicyName,
-    policyEmail: WorkbenchEmail,
     resourceTypeName: ResourceTypeName,
     resourceId: ResourceId
 )
+
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
     resourceId: ResourceId,
-    policies: Map[AccessPolicyName, AccessPolicyMembership],
+    policies: Map[AccessPolicyName, AccessPolicyMembershipRequest],
     authDomain: Set[WorkbenchGroupName],
     returnResource: Option[Boolean] = Some(false),
     parent: Option[FullyQualifiedResourceId] = None
@@ -272,21 +277,11 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
 ) extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
-// AccessPolicyMembership.memberPolicies is logically read-only; at some point in the future it could be lazy-loaded
-// (via extra queries) based on the contents of memberEmails.
-@Lenses final case class AccessPolicyMembership(
-    memberEmails: Set[WorkbenchEmail],
-    actions: Set[ResourceAction],
-    roles: Set[ResourceRoleName],
-    descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
-    memberPolicies: Option[Set[PolicyIdentifiers]] = Option(Set.empty)
-) {
-  def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
-}
+
 // AccessPolicyWithMembership is practically the same as AccessPolicyResponseEntry but the latter is used in api responses
 // and the former is used at the DAO level so it seems better to keep them separate
-@Lenses final case class AccessPolicyWithMembership(policyName: AccessPolicyName, membership: AccessPolicyMembership, email: WorkbenchEmail)
-@Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
+@Lenses final case class AccessPolicyWithMembership(policyName: AccessPolicyName, membership: AccessPolicyMembershipResponse, email: WorkbenchEmail)
+@Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembershipResponse, email: WorkbenchEmail)
 
 // Access Policy with no membership info to improve efficiency for calls that care about only the roles and actions of a policy, not the membership
 @Lenses final case class AccessPolicyWithoutMembers(
