@@ -19,10 +19,9 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionW
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.api.SamRoutes._
+import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.service._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -35,7 +34,6 @@ abstract class SamRoutes(
     val statusService: StatusService,
     val managedGroupService: ManagedGroupService,
     val termsOfServiceConfig: TermsOfServiceConfig,
-    val directoryDAO: DirectoryDAO,
     val policyEvaluatorService: PolicyEvaluatorService,
     val tosService: TosService,
     val liquibaseConfig: LiquibaseConfig,

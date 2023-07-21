@@ -2,6 +2,8 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.sam.Generator.{genBasicWorkbenchGroup, genWorkbenchUserBoth}
+import org.broadinstitute.dsde.workbench.sam.matchers.BeEnabledInMatcher.beEnabledIn
+import org.broadinstitute.dsde.workbench.sam.matchers.BeForUserMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.DoNotDiscover

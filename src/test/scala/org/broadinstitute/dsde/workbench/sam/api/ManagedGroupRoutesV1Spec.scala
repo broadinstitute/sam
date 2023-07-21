@@ -68,7 +68,6 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
       samRoutes.statusService,
       samRoutes.managedGroupService,
       samUser,
-      samRoutes.directoryDAO,
       tosService = samRoutes.tosService
     )
   }
@@ -91,7 +90,6 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
       defaultRoutes.statusService,
       defaultRoutes.managedGroupService,
       theDude,
-      defaultRoutes.directoryDAO,
       tosService = defaultRoutes.tosService
     )
     body(dudesRoutes)
@@ -115,7 +113,6 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
       samRoutes.statusService,
       samRoutes.managedGroupService,
       newGuy,
-      samRoutes.directoryDAO,
       tosService = samRoutes.tosService
     )
 
@@ -149,7 +146,6 @@ class ManagedGroupRoutesV1Spec extends AnyFlatSpec with ScalaFutures with Matche
       samRoutes.statusService,
       samRoutes.managedGroupService,
       newGuy,
-      samRoutes.mockDirectoryDao,
       tosService = samRoutes.tosService
     )
 

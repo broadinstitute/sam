@@ -7,7 +7,9 @@ import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
+import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
@@ -111,6 +113,28 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(registeredUser) =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered")))
       case None => IO(user)
+    }
+
+  def updateUserCrud(userId: WorkbenchUserId, request: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    openTelemetry.time("api.v1.user.updateUserCrud.time", API_TIMING_DURATION_BUCKET) {
+      directoryDAO.loadUser(userId, samRequestContext).flatMap {
+        case Some(user) =>
+          // validate all fields to be updated
+          var errorReports = Seq[ErrorReport]()
+          request.email.foreach(email => errorReports = errorReports ++ validateEmail(email, blockedEmailDomains))
+          if (errorReports.nonEmpty) {
+            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
+          } else { // apply all updates
+            var updatedUser = user
+            request.email.foreach { email =>
+              directoryDAO.updateUserEmail(userId, email, samRequestContext)
+              updatedUser = user.copy(email = email)
+            }
+            IO(Some(updatedUser))
+          }
+        case None => IO(None)
+      }
+
     }
 
   // In most cases when this is called we will have a scenario where 1 or more Cloud Ids are set.  For any Cloud Ids
@@ -248,8 +272,25 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       } yield createdUser
     }
 
+  def getUserFromGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.loadUserByGoogleSubjectId(userId, samRequestContext)
+
+  def getUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.loadUserByAzureB2CId(userId, samRequestContext)
+
+  def getUserFromPetServiceAccount(petSA: ServiceAccountSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.getUserFromPetServiceAccount(petSA, samRequestContext)
+
+  def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.getUserFromPetManagedIdentity(petManagedIdentityObjectId, samRequestContext)
+
+  def getSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
+    directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext)
+
+  def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
+    directoryDAO.setUserAzureB2CId(userId, b2cId, samRequestContext)
 
   // Get User Status v1
   // This endpoint/method should probably be deprecated.

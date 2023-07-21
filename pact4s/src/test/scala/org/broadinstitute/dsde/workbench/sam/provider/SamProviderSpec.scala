@@ -9,20 +9,23 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.Generator.{genResourceType, genWorkspaceResourceType}
 import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
+import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
 import org.broadinstitute.dsde.workbench.util.health.{StatusCheckResponse, SubsystemStatus, Subsystems}
 import org.http4s.headers.Authorization
 import org.http4s.{AuthScheme, Credentials}
+import org.mockito.Mockito.lenient
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import pact4s.provider.Authentication.BasicAuth
-import pact4s.provider.ProviderRequestFilter.{NoOpFilter, SetHeaders}
+import pact4s.provider.ProviderRequestFilter.{AddHeaders, NoOpFilter, SetHeaders}
 import pact4s.provider.StateManagement.StateManagementFunction
 import pact4s.provider._
 import pact4s.scalatest.PactVerifier
@@ -35,6 +38,12 @@ object States {
   val SamOK = "Sam is ok"
   val SamNotOK = "Sam is not ok"
   val UserExists = "user exists"
+  val HasResourceDeletePermission = "user has delete permission"
+  val HasResourceWritePermission = "user has write permission"
+  val DoesNotHaveResourceDeletePermission = "user does not have delete permission"
+  val DoesNotHaveResourceWritePermission = "user does not have write permission"
+  val UserStatusInfoRequestWithAccessToken = "user status info request with access token"
+  val UserStatusInfoRequestWithoutAccessToken = "user status info request without access token"
 }
 
 class SamProviderSpec
@@ -50,6 +59,10 @@ class SamProviderSpec
   val defaultSamUser: SamUser = Generator.genWorkbenchUserBoth.sample.get.copy(enabled = true)
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(defaultSamUser.id), WorkbenchEmail("all_users@fake.com"))
 
+  // Generate some random Sam resource types.
+  // These resource types are injected into ResourceService and PolicyEvaluatorService
+  val samResourceTypes = Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get)
+
   // Minimally viable Sam service and states for consumer verification
   val userService: UserService = TestUserServiceBuilder()
     .withAllUsersGroup(allUsersGroup)
@@ -64,14 +77,17 @@ class SamProviderSpec
   val accessPolicyDAO: AccessPolicyDAO = StatefulMockAccessPolicyDaoBuilder()
     .withRandomAccessPolicy(SamResourceTypes.workspaceName, Set(defaultSamUser.id))
     .build
-  val policyEvaluatorService: PolicyEvaluatorService = TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO).build
+  val policyEvaluatorService: PolicyEvaluatorService =
+    TestPolicyEvaluatorServiceBuilder(directoryDAO, accessPolicyDAO)
+      .withResourceTypes(samResourceTypes)
+      .build
 
   // Resource service and states for consumer verification
   // Here we are injecting a random resource type as well as a workspace resource type.
   // We can also inject all possible Sam resource types by taking a look at genResourceTypeName if needed.
   val resourceService: ResourceService =
     TestResourceServiceBuilder(policyEvaluatorService, accessPolicyDAO, directoryDAO, cloudExtensions)
-      .withResourceTypes(Set(genResourceType.sample.get, genWorkspaceResourceType.sample.get))
+      .withResourceTypes(samResourceTypes)
       .build
 
   // The following services are mocked for now
@@ -113,6 +129,17 @@ class SamProviderSpec
     })
   } yield ()
 
+  private def mockResourceActionPermission(action: ResourceAction, hasPermission: Boolean): IO[Unit] = for {
+    _ <- IO(
+      lenient()
+        .doReturn {
+          IO.pure(hasPermission)
+        }
+        .when(policyEvaluatorService)
+        .hasPermission(any[FullyQualifiedResourceId], eqTo(action), any[WorkbenchUserId], any[SamRequestContext])
+    )
+  } yield ()
+
   private val providerStatesHandler: StateManagementFunction = StateManagementFunction {
     case ProviderState(States.UserExists, _) =>
       logger.debug(States.UserExists)
@@ -120,6 +147,18 @@ class SamProviderSpec
       mockCriticalSubsystemsStatus(true).unsafeRunSync()
     case ProviderState(States.SamNotOK, _) =>
       mockCriticalSubsystemsStatus(false).unsafeRunSync()
+    case ProviderState(States.HasResourceDeletePermission, _) =>
+      mockResourceActionPermission(SamResourceActions.delete, hasPermission = true).unsafeRunSync()
+    case ProviderState(States.HasResourceWritePermission, _) =>
+      mockResourceActionPermission(SamResourceActions.write, hasPermission = true).unsafeRunSync()
+    case ProviderState(States.DoesNotHaveResourceDeletePermission, _) =>
+      mockResourceActionPermission(SamResourceActions.delete, hasPermission = false).unsafeRunSync()
+    case ProviderState(States.DoesNotHaveResourceWritePermission, _) =>
+      mockResourceActionPermission(SamResourceActions.write, hasPermission = false).unsafeRunSync()
+    case ProviderState(States.UserStatusInfoRequestWithAccessToken, _) =>
+      logger.debug(s"you may stub provider behaviors here for the state: ${States.UserStatusInfoRequestWithAccessToken}")
+    case ProviderState(States.UserStatusInfoRequestWithoutAccessToken, _) =>
+      logger.debug(s"you may stub provider behaviors here for the state: ${States.UserStatusInfoRequestWithoutAccessToken}")
     case _ =>
       logger.debug("other state")
   }
@@ -191,9 +230,14 @@ class SamProviderSpec
   def requestFilter: ProviderRequest => ProviderRequestFilter = customFilter
 
   // Convenient method to reset provider states
-  private def reInitializeStates(): Unit = mockCriticalSubsystemsStatus(true).unsafeRunSync()
+  private def reInitializeStates(): Unit = {
+    mockCriticalSubsystemsStatus(true).unsafeRunSync()
+    mockResourceActionPermission(SamResourceActions.write, hasPermission = true).unsafeRunSync()
+    mockResourceActionPermission(SamResourceActions.delete, hasPermission = true).unsafeRunSync()
+  }
 
-  private def customFilter(req: ProviderRequest): ProviderRequestFilter =
+  private def customFilter(req: ProviderRequest): ProviderRequestFilter = {
+    logger.debug("Sam route requested: " + req.uri.getPath)
     req.getFirstHeader("Authorization") match {
       case Some((_, value)) =>
         parseAuth(value)
@@ -201,6 +245,7 @@ class SamProviderSpec
         logger.debug("no auth header found")
         NoOpFilter
     }
+  }
 
   private def parseAuth(auth: String): ProviderRequestFilter =
     Authorization
@@ -219,7 +264,10 @@ class SamProviderSpec
               // e.g. proxy token that impersonates a super user
               proxyToken = "su" + token
           }
+          // Use this to include any special headers that the application
+          // will need to process the HTTP request.
           SetHeaders("Authorization" -> s"Bearer $proxyToken")
+          AddHeaders(StandardSamUserDirectives.accessTokenHeader -> s"$proxyToken")
         case _ =>
           logger.debug("do other AuthScheme")
           NoOpFilter
@@ -237,7 +285,7 @@ class SamProviderSpec
       .withPendingPactsEnabled(ProviderTags(gitSha))
   ).withHost("localhost")
     .withPort(8080)
-    // .withRequestFiltering(requestFilter)
+    .withRequestFiltering(requestFilter)
     // More sophisticated state management can be done here.
     // It's recommended to have predefined states, e.g.
     // TestUserServiceBuilder, StatefulMockAccessPolicyDaoBuilder,

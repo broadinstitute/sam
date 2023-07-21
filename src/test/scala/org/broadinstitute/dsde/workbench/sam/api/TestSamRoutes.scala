@@ -6,13 +6,14 @@ import akka.http.scaladsl.server.Directives.reject
 import akka.stream.Materializer
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, _}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -31,7 +32,6 @@ class TestSamRoutes(
     statusService: StatusService,
     managedGroupService: ManagedGroupService,
     val user: SamUser,
-    directoryDAO: DirectoryDAO,
     val cloudExtensions: CloudExtensions = NoExtensions,
     override val newSamUser: Option[SamUser] = None,
     tosService: TosService,
@@ -47,7 +47,6 @@ class TestSamRoutes(
       statusService,
       managedGroupService,
       TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"),
-      directoryDAO,
       policyEvaluatorService,
       tosService,
       LiquibaseConfig("", false),
@@ -58,7 +57,6 @@ class TestSamRoutes(
     with ExtensionRoutes
     with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
-  def mockDirectoryDao: DirectoryDAO = directoryDAO
   def createUserAndAcceptTos(samUser: SamUser, samRequestContext: SamRequestContext): Unit = {
     TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
     TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
@@ -88,7 +86,6 @@ class TestSamTosEnabledRoutes(
       statusService,
       managedGroupService,
       TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"),
-      directoryDAO,
       policyEvaluatorService,
       tosService,
       LiquibaseConfig("", false),
@@ -122,6 +119,7 @@ object TestSamRoutes {
 
     val use = ResourceActionPattern("use", "", true)
     val readAuthDomain = ResourceActionPattern("read_auth_domain", "", true)
+    val updateAuthDomain = ResourceActionPattern("update_auth_domain", "", true)
 
     val testActionAccess = ResourceActionPattern("test_action_access::.+", "", false)
   }
@@ -153,7 +151,8 @@ object TestSamRoutes {
       resourceTypes: Map[ResourceTypeName, ResourceType],
       user: SamUser = defaultUserInfo,
       policyAccessDAO: Option[AccessPolicyDAO] = None,
-      maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
+      maybeDirectoryDAO: Option[DirectoryDAO] = None,
+      maybeGoogleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None,
@@ -162,9 +161,13 @@ object TestSamRoutes {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
+    val googleDirectoryDAO = maybeGoogleDirectoryDAO.getOrElse(new MockGoogleDirectoryDAO())
     val directoryDAO = maybeDirectoryDAO.getOrElse(new MockDirectoryDAO())
-    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], directoryDAO))
+    val policyDAO =
+      directoryDAO match {
+        case mock: MockDirectoryDAO => new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], mock)
+        case _ => policyAccessDAO.getOrElse(throw new RuntimeException("policy access dao does not exist but you are trying to access it"))
+      }
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)
@@ -202,7 +205,6 @@ object TestSamRoutes {
       mockStatusService,
       mockManagedGroupService,
       userToTestWith,
-      directoryDAO,
       tosService = mockTosService,
       cloudExtensions = cloudXtns,
       azureService = Some(azureService)

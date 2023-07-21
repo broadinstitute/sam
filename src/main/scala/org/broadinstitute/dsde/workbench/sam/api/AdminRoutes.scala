@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -56,6 +57,15 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                     userService
                       .getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext)
                       .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                  }
+                } ~
+                patch {
+                  entity(as[AdminUpdateUserRequest]) { request =>
+                    complete {
+                      userService
+                        .updateUserCrud(WorkbenchUserId(userId), request, samRequestContext)
+                        .map(user => (if (user.isDefined) OK else NotFound) -> user)
+                    }
                   }
                 }
             } ~
@@ -182,7 +192,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
               val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
               pathEndOrSingleSlash {
                 put {
-                  entity(as[AccessPolicyMembership]) { membershipUpdate =>
+                  entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
                     withResourceType(resourceTypeAdminName) { resourceTypeAdmin =>
                       complete {
                         resourceService

@@ -77,7 +77,6 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
       samRoutes.statusService,
       samRoutes.managedGroupService,
       samUser,
-      samRoutes.mockDirectoryDao,
       tosService = samRoutes.tosService
     )
   }
@@ -100,7 +99,6 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
       defaultRoutes.statusService,
       defaultRoutes.managedGroupService,
       theDude,
-      defaultRoutes.mockDirectoryDao,
       tosService = defaultRoutes.tosService
     )
 
@@ -125,7 +123,6 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
       samRoutes.statusService,
       samRoutes.managedGroupService,
       newGuy,
-      samRoutes.mockDirectoryDao,
       tosService = samRoutes.tosService
     )
 
@@ -159,7 +156,6 @@ class ManagedGroupRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRou
       samRoutes.statusService,
       samRoutes.managedGroupService,
       newGuy,
-      samRoutes.mockDirectoryDao,
       tosService = samRoutes.tosService
     )
 
