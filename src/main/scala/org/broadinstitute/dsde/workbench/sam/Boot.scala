@@ -54,9 +54,10 @@ object Boot extends IOApp with LazyLogging {
     initSentry()
     // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
-    livenessServerStartup()
 
     val appConfig = AppConfig.load
+
+    livenessServerStartup(appConfig)
 
     val appDependencies = createAppDependencies(appConfig)
 
@@ -79,10 +80,14 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private def livenessServerStartup()(implicit actorSystem: ActorSystem): Unit = {
+  private def livenessServerStartup(appConfig: AppConfig)(implicit actorSystem: ActorSystem): Unit = {
     val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
+    val postgresDirectoryDAO = for {
+      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, appConfig.samDatabaseConfig.samWrite)
+      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, appConfig.samDatabaseConfig.samRead)
+    } yield new PostgresDirectoryDAO(writeDbRef, readDbRef)
 
-    val livenessRoutes = new LivenessRoutes
+    val livenessRoutes = new LivenessRoutes(postgresDirectoryDAO)
 
     loggerIO
       .info("Liveness server has been created, starting...")
