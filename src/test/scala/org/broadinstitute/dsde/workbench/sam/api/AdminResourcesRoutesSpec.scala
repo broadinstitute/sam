@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalactic.anyvals.NonEmptyList
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,7 +34,7 @@ class AdminResourcesRoutesSpec extends AnyFlatSpec with Matchers with TestSuppor
 
   val defaultResourceId = ResourceId("foo")
 
-  val defaultAccessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
+  val defaultAccessPolicyMembership = AccessPolicyMembershipResponse(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
   val defaultAdminPolicyName = AccessPolicyName("admin")
   val defaultAdminResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))
   val defaultAccessPolicyResponseEntry =

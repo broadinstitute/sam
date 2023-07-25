@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -148,7 +149,8 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                   } ~
                   pathPrefix("authDomain") {
                     pathEndOrSingleSlash {
-                      getResourceAuthDomain(resource, samUser, samRequestContext)
+                      getResourceAuthDomain(resource, samUser, samRequestContext) ~
+                        patchResourceAuthDomain(resource, samUser, samRequestContext)
                     }
                   } ~
                   pathPrefix("roles") {
@@ -363,6 +365,17 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     }
 
+  def patchResourceAuthDomain(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+    patch {
+      requireAction(resource, SamResourceActions.updateAuthDomain, samUser.id, samRequestContext) {
+        entity(as[Set[WorkbenchGroupName]]) { authDomains =>
+          complete(resourceService.addResourceAuthDomain(resource, authDomains, samUser.id, samRequestContext).map { response =>
+            StatusCodes.OK -> response
+          })
+        }
+      }
+    }
+
   def getResourcePolicies(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
       requireAction(resource, SamResourceActions.readPolicies, samUser.id, samRequestContext) {
@@ -390,7 +403,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     put {
       requireAction(policyId.resource, SamResourceActions.alterPolicies, samUser.id, samRequestContext) {
-        entity(as[AccessPolicyMembership]) { membershipUpdate =>
+        entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
           complete(
             resourceService
               .overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext)

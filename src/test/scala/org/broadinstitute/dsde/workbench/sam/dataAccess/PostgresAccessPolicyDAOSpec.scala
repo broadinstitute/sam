@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.postgresql.util.PSQLException
 import org.scalatest.BeforeAndAfterEach
 
@@ -471,6 +472,85 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.loadResourceAuthDomain(resourceWithAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
           case Constrained(authDomain) => authDomain.toList should contain theSameElementsAs Set(authDomainGroupName1, authDomainGroupName2)
           case wrong => fail(s"result was $wrong, not Constrained")
+        }
+      }
+    }
+
+    "addResourceAuthDomain" - {
+      "ZeroToOneGroups" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
+        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
+
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set.empty)
+        dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
+
+        dao.addResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, Set(authDomainGroupName1), samRequestContext).unsafeRunSync()
+
+        dao.loadResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
+          case Constrained(authDomain) => authDomain.toList should contain theSameElementsAs Set(authDomainGroupName1)
+          case wrong => fail(s"result was $wrong, not Constrained");
+        }
+      }
+
+      "AddAdditionalGroup" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
+        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
+        val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
+        val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail("authDomain2@foo.com"))
+
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1))
+        dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
+
+        dao
+          .addResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, Set(authDomainGroupName1, authDomainGroupName2), samRequestContext)
+          .unsafeRunSync()
+
+        dao.loadResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
+          case Constrained(authDomain) => authDomain.toList should contain theSameElementsAs Set(authDomainGroupName1, authDomainGroupName2)
+          case wrong => fail(s"result was $wrong, not Constrained");
+        }
+      }
+
+      "AddDuplicateGroup" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName1 = WorkbenchGroupName("authDomain1")
+        val authDomainGroup1 = BasicWorkbenchGroup(authDomainGroupName1, Set(), WorkbenchEmail("authDomain1@foo.com"))
+        val authDomainGroupName2 = WorkbenchGroupName("authDomain2")
+        val authDomainGroup2 = BasicWorkbenchGroup(authDomainGroupName2, Set(), WorkbenchEmail("authDomain2@foo.com"))
+
+        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("authDomainResource"), Set(authDomainGroupName1))
+        dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
+
+        dao
+          .addResourceAuthDomain(
+            resourceWithoutAuthDomain.fullyQualifiedId,
+            Set(authDomainGroupName1, authDomainGroupName2, authDomainGroupName1),
+            samRequestContext
+          )
+          .unsafeRunSync()
+
+        dao.loadResourceAuthDomain(resourceWithoutAuthDomain.fullyQualifiedId, samRequestContext).unsafeRunSync() match {
+          case Constrained(authDomain) =>
+            val authDomainList = authDomain.toList
+            authDomainList should contain theSameElementsAs Set(authDomainGroupName1, authDomainGroupName2)
+            authDomainList.size should equal(2)
+          case wrong => fail(s"result was $wrong, not Constrained");
         }
       }
     }
@@ -2514,7 +2594,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         val ownerPolicyWithMembership = AccessPolicyWithMembership(
           owner.id.accessPolicyName,
-          AccessPolicyMembership(
+          AccessPolicyMembershipResponse(
             Set(defaultUser.email, defaultGroup.email),
             owner.actions,
             owner.roles,
@@ -2525,12 +2605,12 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         )
         val readerPolicyWithMembership = AccessPolicyWithMembership(
           reader.id.accessPolicyName,
-          AccessPolicyMembership(
+          AccessPolicyMembershipResponse(
             Set(owner.email, defaultUser.email),
             reader.actions,
             reader.roles,
             Option(reader.descendantPermissions),
-            Option(Set(PolicyIdentifiers(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
+            Option(Set(PolicyInfoResponseBody(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
           ),
           reader.email
         )
@@ -2575,13 +2655,19 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createPolicy(reader, samRequestContext).unsafeRunSync()
 
         val ownerPolicyMembership =
-          AccessPolicyMembership(Set(defaultUser.email, defaultGroup.email), owner.actions, owner.roles, Option(owner.descendantPermissions), Option(Set.empty))
-        val readerPolicyMembership = AccessPolicyMembership(
+          AccessPolicyMembershipResponse(
+            Set(defaultUser.email, defaultGroup.email),
+            owner.actions,
+            owner.roles,
+            Option(owner.descendantPermissions),
+            Option(Set.empty)
+          )
+        val readerPolicyMembership = AccessPolicyMembershipResponse(
           Set(owner.email, defaultUser.email),
           reader.actions,
           reader.roles,
           Option(reader.descendantPermissions),
-          Option(Set(PolicyIdentifiers(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
+          Option(Set(PolicyInfoResponseBody(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
         )
 
         dao.loadPolicyMembership(reader.id, samRequestContext).unsafeRunSync() shouldBe Option(readerPolicyMembership)

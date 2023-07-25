@@ -11,7 +11,8 @@ import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.azure.MockCrlService.mockSamSpendProfileResource
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicyMembership, SamResourceTypes, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.{SamResourceTypes, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -286,7 +287,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
     // Create azure policy on cloud-extension resource
     if (createAzurePolicy) {
-      val cloudExtensionMembers = AccessPolicyMembership(Set(samRoutes.user.email), Set(AzureExtensions.getPetManagedIdentityAction), Set.empty, None)
+      val cloudExtensionMembers = AccessPolicyMembershipResponse(Set(samRoutes.user.email), Set(AzureExtensions.getPetManagedIdentityAction), Set.empty, None)
       Put(
         s"/api/resources/v2/${CloudExtensions.resourceTypeName.value}/${AzureExtensions.resourceId.value}/policies/azure",
         cloudExtensionMembers
