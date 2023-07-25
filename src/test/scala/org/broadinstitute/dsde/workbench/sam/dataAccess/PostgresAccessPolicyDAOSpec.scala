@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.postgresql.util.PSQLException
 import org.scalatest.BeforeAndAfterEach
 
@@ -2593,7 +2594,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         val ownerPolicyWithMembership = AccessPolicyWithMembership(
           owner.id.accessPolicyName,
-          AccessPolicyMembership(
+          AccessPolicyMembershipResponse(
             Set(defaultUser.email, defaultGroup.email),
             owner.actions,
             owner.roles,
@@ -2604,12 +2605,12 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         )
         val readerPolicyWithMembership = AccessPolicyWithMembership(
           reader.id.accessPolicyName,
-          AccessPolicyMembership(
+          AccessPolicyMembershipResponse(
             Set(owner.email, defaultUser.email),
             reader.actions,
             reader.roles,
             Option(reader.descendantPermissions),
-            Option(Set(PolicyIdentifiers(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
+            Option(Set(PolicyInfoResponseBody(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
           ),
           reader.email
         )
@@ -2654,13 +2655,19 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createPolicy(reader, samRequestContext).unsafeRunSync()
 
         val ownerPolicyMembership =
-          AccessPolicyMembership(Set(defaultUser.email, defaultGroup.email), owner.actions, owner.roles, Option(owner.descendantPermissions), Option(Set.empty))
-        val readerPolicyMembership = AccessPolicyMembership(
+          AccessPolicyMembershipResponse(
+            Set(defaultUser.email, defaultGroup.email),
+            owner.actions,
+            owner.roles,
+            Option(owner.descendantPermissions),
+            Option(Set.empty)
+          )
+        val readerPolicyMembership = AccessPolicyMembershipResponse(
           Set(owner.email, defaultUser.email),
           reader.actions,
           reader.roles,
           Option(reader.descendantPermissions),
-          Option(Set(PolicyIdentifiers(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
+          Option(Set(PolicyInfoResponseBody(owner.id.accessPolicyName, owner.email, owner.id.resource.resourceTypeName, owner.id.resource.resourceId)))
         )
 
         dao.loadPolicyMembership(reader.id, samRequestContext).unsafeRunSync() shouldBe Option(readerPolicyMembership)

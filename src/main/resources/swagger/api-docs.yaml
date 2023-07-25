@@ -437,7 +437,7 @@ paths:
         content:
           'application/json':
             schema:
-              $ref: '#/components/schemas/AccessPolicyMembershipV2'
+              $ref: '#/components/schemas/AccessPolicyMembershipRequest'
         required: true
       responses:
         201:
@@ -1164,7 +1164,7 @@ paths:
     post:
       tags:
         - Google
-      summary: Gets a signed URL for the given blob, signed by the Pet Service account of the calling user. 
+      summary: Gets a signed URL for the given blob, signed by the Pet Service account of the calling user.
         The signed URL is active for 1 hour and scoped to the permissions of the signing Pet Service Account.
         Sam will provide a signed URL for any object path, even if that object does not exist.
       operationId: getSignedUrlForBlob
@@ -1934,7 +1934,7 @@ paths:
         content:
           'application/json':
             schema:
-              $ref: '#/components/schemas/AccessPolicyMembershipV2'
+              $ref: '#/components/schemas/AccessPolicyMembershipRequest'
         required: true
       responses:
         201:
@@ -2926,7 +2926,7 @@ paths:
       operationId: getUserTermsOfServiceStatus
       responses:
         200:
-          description: terms of service status is enabled, boolean value denotes users acceptance of the latest 
+          description: terms of service status is enabled, boolean value denotes users acceptance of the latest
             terms of service version.
           content:
             application/json:
@@ -3029,6 +3029,34 @@ components:
             type: string
       description: ""
     AccessPolicyMembershipV2:
+      required:
+        - actions
+        - memberEmails
+        - roles
+      type: object
+      properties:
+        memberEmails:
+          type: array
+          items:
+            type: string
+        memberPolicies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyInfoResponseBody'
+        actions:
+          type: array
+          items:
+            type: string
+        roles:
+          type: array
+          items:
+            type: string
+        descendantPermissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessPolicyDescendantPermissions'
+      description: ""
+    AccessPolicyMembershipRequest:
       required:
         - actions
         - memberEmails
@@ -3149,7 +3177,7 @@ components:
           type: object
           description: map of initial policies to create, key is policy name
           additionalProperties:
-            $ref: '#/components/schemas/AccessPolicyMembershipV2'
+            $ref: '#/components/schemas/AccessPolicyMembershipRequest'
         authDomain:
           type: array
           items:
@@ -3241,6 +3269,22 @@ components:
       description: specification of a managed group with an access policy and the
         email associated with the managed group
     PolicyIdentifiers:
+      required:
+        - policyName
+        - resourceTypeName
+        - resourceId
+      type: object
+      properties:
+        policyName:
+          type: string
+          description: The name of the policy
+        resourceTypeName:
+          type: string
+          description: The type of the resource
+        resourceId:
+          type: string
+          description: The id of the resource
+    PolicyInfoResponseBody:
       required:
         - policyName
         - policyEmail
@@ -3556,7 +3600,7 @@ components:
           description: true if terms of service is enforced in Sam
         isGracePeriodEnabled:
           type: boolean
-          description: true if there is currently a grace period enabled, 
+          description: true if there is currently a grace period enabled,
             letting users use the system without accepting the terms of service
         currentVersion:
           type: string
@@ -3579,7 +3623,7 @@ components:
           description: has the user accepted the latest terms of service?
         permitsSystemUsage:
           type: boolean
-          description: based on the user's currently accepted terms of service version and when the terms of service were last changed, 
+          description: based on the user's currently accepted terms of service version and when the terms of service were last changed,
             should the user still be permitted to use the system?
     ManagedResourceGroupCoordinates:
       required:

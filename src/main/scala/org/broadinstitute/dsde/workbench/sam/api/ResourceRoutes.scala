@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -402,7 +403,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     put {
       requireAction(policyId.resource, SamResourceActions.alterPolicies, samUser.id, samRequestContext) {
-        entity(as[AccessPolicyMembership]) { membershipUpdate =>
+        entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
           complete(
             resourceService
               .overwritePolicy(resourceType, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext)

@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -197,7 +198,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
               val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
               pathEndOrSingleSlash {
                 put {
-                  entity(as[AccessPolicyMembership]) { membershipUpdate =>
+                  entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
                     withResourceType(resourceTypeAdminName) { resourceTypeAdmin =>
                       complete {
                         resourceService

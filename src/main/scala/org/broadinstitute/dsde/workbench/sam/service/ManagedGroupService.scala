@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
@@ -38,10 +39,17 @@ class ManagedGroupService(
   ): IO[Resource] = openTelemetry.time("api.v1.managedGroup.create.time", API_TIMING_DURATION_BUCKET) {
     def adminRole = managedGroupType.ownerRoleName
 
-    val memberPolicy = ManagedGroupService.memberPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), None, None)
-    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembership(Set(samUser.email), Set.empty, Set(adminRole), None, None)
+    val memberPolicy =
+      ManagedGroupService.memberPolicyName -> AccessPolicyMembershipRequest(Set.empty, Set.empty, Set(ManagedGroupService.memberRoleName), None, None)
+    val adminPolicy = ManagedGroupService.adminPolicyName -> AccessPolicyMembershipRequest(Set(samUser.email), Set.empty, Set(adminRole), None, None)
     val adminNotificationPolicy =
-      ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembership(Set.empty, Set.empty, Set(ManagedGroupService.adminNotifierRoleName), None, None)
+      ManagedGroupService.adminNotifierPolicyName -> AccessPolicyMembershipRequest(
+        Set.empty,
+        Set.empty,
+        Set(ManagedGroupService.adminNotifierRoleName),
+        None,
+        None
+      )
 
     validateGroupName(groupId.value)
     for {
