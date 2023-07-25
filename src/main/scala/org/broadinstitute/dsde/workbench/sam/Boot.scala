@@ -57,7 +57,7 @@ object Boot extends IOApp with LazyLogging {
 
     val appConfig = AppConfig.load
 
-    livenessServerStartup(appConfig)
+    val liveness = livenessServerStartup(appConfig)
 
     val appDependencies = createAppDependencies(appConfig)
 
@@ -76,11 +76,12 @@ object Boot extends IOApp with LazyLogging {
         }
         _ <- IO.fromFuture(IO(binding.whenTerminated))
         _ <- IO(system.terminate())
+        _ <- liveness.map(_.unbind())
       } yield ()
     }
   }
 
-  private def livenessServerStartup(appConfig: AppConfig)(implicit actorSystem: ActorSystem): Unit = {
+  private def livenessServerStartup(appConfig: AppConfig)(implicit actorSystem: ActorSystem): IO[Http.ServerBinding] = {
     val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
     val postgresDirectoryDAO = for {
       writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, appConfig.samDatabaseConfig.samWrite)
@@ -91,16 +92,19 @@ object Boot extends IOApp with LazyLogging {
 
     loggerIO
       .info("Liveness server has been created, starting...")
-      .unsafeToFuture()(cats.effect.unsafe.IORuntime.global) >> Http()
-      .newServerAt("0.0.0.0", 9000)
-      .bindFlow(livenessRoutes.route)
-      .onError { case t: Throwable =>
-        loggerIO
-          .error(t)("FATAL - failure starting liveness http server")
-          .unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
-      }
-
-    loggerIO.info("Liveness server has been started").unsafeRunSync()(cats.effect.unsafe.IORuntime.global)
+      .unsafeRunSync()(cats.effect.unsafe.IORuntime.global)
+    IO.fromFuture(
+      IO(
+        Http()
+          .newServerAt("0.0.0.0", 9000)
+          .bindFlow(livenessRoutes.route)
+          .onError { case t: Throwable =>
+            loggerIO
+              .error(t)("FATAL - failure starting liveness http server")
+              .unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
+          }
+      )
+    )
   }
 
   private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
