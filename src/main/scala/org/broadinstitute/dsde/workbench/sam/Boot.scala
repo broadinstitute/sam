@@ -6,6 +6,7 @@ import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
+import io.prometheus.client.CollectorRegistry
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{
@@ -44,24 +45,31 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
-  def run(args: List[String]): IO[ExitCode] =
-    (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
-      logger.error("sam failed to start, trying again in 5s", t)
-      IO.sleep(5 seconds) *> run(args)
-    }
 
-  private def startup(): IO[Unit] = {
+  def run(args: List[String]): IO[ExitCode] = {
+    // Init sentry always should be the first thing we do
     initSentry()
-    // we need an ActorSystem to host our application in
     implicit val system = ActorSystem("sam")
 
-    val appConfig = AppConfig.load
+    (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
+      logger.error("sam failed to start, trying again in 5s", t)
 
-    val liveness = livenessServerStartup(appConfig)
+      // Shutdown all akka http connection pools/servers so we can re-bind to the ports
+      Http().shutdownAllConnectionPools() *> system.terminate()
+      // Clean up prometheus registry so it will be fresh on reboot
+      CollectorRegistry.defaultRegistry.clear()
+
+      IO.sleep(5 seconds) *> run(args)
+    }
+  }
+
+  private def startup()(implicit system: ActorSystem): IO[Unit] = {
+    val appConfig = AppConfig.load
 
     val appDependencies = createAppDependencies(appConfig)
 
     appDependencies.use { dependencies => // this is where the resource is used
+      livenessServerStartup(dependencies.directoryDAO)
       for {
         _ <- dependencies.samApplication.resourceService.initResourceTypes().onError { case t: Throwable =>
           IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
@@ -76,35 +84,25 @@ object Boot extends IOApp with LazyLogging {
         }
         _ <- IO.fromFuture(IO(binding.whenTerminated))
         _ <- IO(system.terminate())
-        _ <- liveness.map(_.unbind())
       } yield ()
     }
   }
 
-  private def livenessServerStartup(appConfig: AppConfig)(implicit actorSystem: ActorSystem): IO[Http.ServerBinding] = {
+  private def livenessServerStartup(directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem): Unit = {
     val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
-    val postgresDirectoryDAO = for {
-      writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, appConfig.samDatabaseConfig.samWrite)
-      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, appConfig.samDatabaseConfig.samRead)
-    } yield new PostgresDirectoryDAO(writeDbRef, readDbRef)
-
-    val livenessRoutes = new LivenessRoutes(postgresDirectoryDAO)
+    val livenessRoutes = new LivenessRoutes(directoryDAO)
 
     loggerIO
       .info("Liveness server has been created, starting...")
-      .unsafeRunSync()(cats.effect.unsafe.IORuntime.global)
-    IO.fromFuture(
-      IO(
-        Http()
-          .newServerAt("0.0.0.0", 9000)
-          .bindFlow(livenessRoutes.route)
-          .onError { case t: Throwable =>
-            loggerIO
-              .error(t)("FATAL - failure starting liveness http server")
-              .unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
-          }
-      )
-    )
+      .unsafeToFuture()(cats.effect.unsafe.IORuntime.global) >> Http()
+      .newServerAt("0.0.0.0", 9000)
+      .bindFlow(livenessRoutes.route)
+      .onError { case t: Throwable =>
+        loggerIO
+          .error(t)("FATAL - failure starting liveness http server")
+          .unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
+      } >>
+      loggerIO.info("Liveness server has been started").unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
   }
 
   private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =

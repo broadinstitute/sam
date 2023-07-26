@@ -2,21 +2,20 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.model.StatusCodes.OK
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.dataAccess.PostgresDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.lenient
-import org.mockito.MockitoSugar.mock
+import org.mockito.MockitoSugar.{mock, verify}
 import org.scalatest.concurrent.Eventually.eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class LivenessRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport {
   val mockPostgres = mock[PostgresDirectoryDAO]
-  val mockPostgresResource = Resource.make[IO, PostgresDirectoryDAO](IO.pure(mockPostgres))(_ => IO.unit)
-  val livenessRoutes = new LivenessRoutes(mockPostgresResource)
+  val livenessRoutes = new LivenessRoutes(mockPostgres)
 
   lenient()
     .when(mockPostgres.checkStatus(any[SamRequestContext]))
@@ -26,6 +25,7 @@ class LivenessRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTe
     eventually {
       Get("/liveness") ~> livenessRoutes.route ~> check {
         status shouldEqual OK
+        verify(mockPostgres).checkStatus(any[SamRequestContext])
       }
     }
   }
