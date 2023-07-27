@@ -3715,15 +3715,6 @@ components:
           type: string
           description: User's email address
           format: email
-        azureB2CId:
-          type: string
-          description: User's Azure B2C Id
-        enabled:
-          type: boolean
-          description: Whether or not the user is enabled
-        acceptedTosVersion:
-          type: string
-          description: The version of terms of service the user accepted
       description: specification of a UpdateUserRequest
   securitySchemes:
     googleoauth:
