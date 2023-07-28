@@ -456,27 +456,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
              )""".stripMargin
   }
 
-  override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] =
-    serializableWriteTransaction("updateUserEmail", samRequestContext) { implicit session =>
-      val u = UserTable.column
-      val results =
-        samsql"""update ${UserTable.table}
-                   set (${u.email}, ${u.updatedAt}) =
-                   ($email,
-                     ${Instant.now()}
-                   )
-                   where ${u.id} = $userId"""
-          .update()
-          .apply()
-
-      if (results != 1) {
-        throw new WorkbenchException(
-          s"Cannot update email for user ${userId} because user does not exist"
-        )
-      } else {
-        ()
-      }
-    }
+  override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteUser", samRequestContext) { implicit session =>
