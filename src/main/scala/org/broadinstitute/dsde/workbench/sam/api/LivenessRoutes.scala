@@ -1,21 +1,24 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.model.StatusCodes.{OK, ServiceUnavailable}
 import akka.http.scaladsl.server
-import akka.http.scaladsl.model.StatusCodes
-import cats.effect.IO
 import akka.http.scaladsl.server.Directives._
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 
-class LivenessRoutes {
-
+class LivenessRoutes(directoryDAO: DirectoryDAO) extends SamRequestContextDirectives {
   val route: server.Route =
-    pathPrefix("liveness") {
-      pathEndOrSingleSlash {
-        get {
-          complete {
-            IO(StatusCodes.OK)
+    withSamRequestContext { samRequestContext =>
+      pathPrefix("liveness") {
+        pathEndOrSingleSlash {
+          get {
+            complete {
+              directoryDAO.checkStatus(samRequestContext).map {
+                case true => OK
+                case false => ServiceUnavailable
+              }
+            }
           }
         }
       }
     }
-
 }
