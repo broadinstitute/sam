@@ -3715,6 +3715,9 @@ components:
           type: string
           description: User's email address
           format: email
+        enabled:
+          type: boolean
+          description: Whether or not the user is enabled
       description: specification of a UpdateUserRequest
   securitySchemes:
     googleoauth:

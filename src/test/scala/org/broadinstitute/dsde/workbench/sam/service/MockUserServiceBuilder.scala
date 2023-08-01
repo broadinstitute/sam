@@ -5,7 +5,8 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource //not ideal but need to use error report
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
-import org.broadinstitute.dsde.workbench.sam.model.{AdminUpdateUserRequest, SamUser, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{SamUser, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.api.AdminUpdateUserRequest
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
