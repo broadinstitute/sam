@@ -3,7 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 import akka.http.scaladsl.model.StatusCodes
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
-import org.broadinstitute.dsde.workbench.sam.model.{AdminUpdateUserRequest, BasicWorkbenchGroup}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.api.AdminUpdateUserRequest
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TestUserServiceBuilder}
 
 import scala.concurrent.ExecutionContextExecutor
@@ -24,7 +25,7 @@ class UpdateUserSpec extends UserServiceTestTraits {
             .withEnabledUser(userWithBothIds)
             .build
           val email = "goodemail@gmail.com"
-          val request = AdminUpdateUserRequest(None, Some(WorkbenchEmail(email)), None, None, None)
+          val request = AdminUpdateUserRequest(None, Some(WorkbenchEmail(email)), None)
           // Act
           val response = runAndWait(userService.updateUserCrud(userWithBothIds.id, request, samRequestContext))
 
@@ -45,7 +46,7 @@ class UpdateUserSpec extends UserServiceTestTraits {
             .withEnabledUser(userWithBothIds)
             .build
           val email = "bademail.com"
-          val request = AdminUpdateUserRequest(None, Some(WorkbenchEmail(email)), None, None, None)
+          val request = AdminUpdateUserRequest(None, Some(WorkbenchEmail(email)), None)
 
           // Act
           val error = intercept[WorkbenchExceptionWithErrorReport] {
@@ -69,7 +70,7 @@ class UpdateUserSpec extends UserServiceTestTraits {
         val userService = TestUserServiceBuilder()
           .withAllUsersGroup(allUsersGroup)
           .build
-        val request = AdminUpdateUserRequest(None, Some(WorkbenchEmail("goodemail@gmail.com")), None, None, None)
+        val request = AdminUpdateUserRequest(None, Some(WorkbenchEmail("goodemail@gmail.com")), None)
         // Act
         val response = runAndWait(userService.updateUserCrud(userWithBothIds.id, request, samRequestContext))
 

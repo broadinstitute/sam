@@ -56,10 +56,42 @@ paths:
         content:
           'application/json':
             schema:
-              $ref: '#/components/schemas/User'
+              $ref: '#/components/schemas/UpdateUserRequest'
       responses:
         200:
           description: User was updated successfully
+        403:
+          description: You do not have admin privileges
+          content: { }
+        404:
+          description: User not found
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v2/user/{userId}:
+    get:
+      tags:
+        - Admin
+      summary: Retrieves a user record, by user id
+      operationId: adminGetUser
+      parameters:
+        - name: userId
+          in: path
+          description: User ID of the user to be retrieved
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: User was retrieved successfully
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/User'
         403:
           description: You do not have admin privileges
           content: { }
@@ -3633,14 +3665,60 @@ components:
           example: my-managed-resource-group
       description: specifies a request for a pet managed identity
     User:
-      required:
-        - email
       type: object
+      required:
+        - id
+        - email
+        - enabled
+        - createdAt
+        - updatedAt
       properties:
+        id:
+          type: string
+          description: User's Id
+        googleSubjectId:
+          type: string
+          description: User's Google subject Id
         email:
           type: string
           description: User's email address
+          format: email
+        azureB2CId:
+          type: string
+          description: User's Azure B2C Id
+        enabled:
+          type: boolean
+          description: Whether or not the user is enabled
+        acceptedTosVersion:
+          type: string
+          description: The version of terms of service the user accepted
+        createdAt:
+          type: string
+          format: date-time
+          description: User's time of creation
+        registeredAt:
+          type: string
+          format: date-time
+          description: User's time of registration
+        updatedAt:
+          type: string
+          format: date-time
+          description: User's time of last update
       description: specification of a User
+    UpdateUserRequest:
+      type: object
+      properties:
+        googleSubjectId:
+          type: string
+          description: User's Google subject Id
+        email:
+          type: string
+          description: User's email address
+          format: email
+        enabled:
+          type: boolean
+          description: Whether or not the user is enabled
+      description: specification of a UpdateUserRequest
   securitySchemes:
     googleoauth:
       type: oauth2

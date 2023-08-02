@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.model
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, AdminUpdateUserRequest}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamApiJsonProtocol.PolicyInfoResponseBodyJsonFormat
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
@@ -62,7 +62,7 @@ object SamJsonSupport {
 
   implicit val UserPolicyResponseFormat = jsonFormat5(UserPolicyResponse.apply)
 
-  implicit val UserUpdateRequestFormat = jsonFormat5(AdminUpdateUserRequest.apply)
+  implicit val UserUpdateRequestFormat = jsonFormat3(AdminUpdateUserRequest.apply)
 
   implicit val RolesAndActionsFormat = jsonFormat2(RolesAndActions.apply)
 
@@ -308,14 +308,6 @@ object BasicWorkbenchGroup {
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
 @Lenses final case class SignedUrlRequest(bucketName: String, blobName: String, duration: Option[Long] = None, requesterPays: Option[Boolean] = Option(true))
-
-@Lenses final case class AdminUpdateUserRequest(
-    googleSubjectId: Option[GoogleSubjectId],
-    email: Option[WorkbenchEmail],
-    azureB2CId: Option[AzureB2CId],
-    enabled: Option[Boolean],
-    acceptedTosVersion: Option[String]
-)
 
 object SamUser {
   def apply(

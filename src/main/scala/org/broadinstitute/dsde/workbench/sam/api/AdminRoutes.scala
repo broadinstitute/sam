@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AdminUpdateUserRequest}
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -32,6 +32,10 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
         adminUserRoutes(user, requestContext) ~
           adminResourcesRoutes(user, requestContext) ~
           adminResourceTypesRoutes(user, requestContext)
+      } ~ pathPrefix("v2") {
+        asWorkbenchAdmin(user) {
+          adminUserRoutesV2(user, requestContext)
+        }
       }
     }
 
@@ -115,6 +119,21 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                 }
               }
           }
+      }
+    }
+
+  private def adminUserRoutesV2(user: SamUser, samRequestContext: SamRequestContext): server.Route =
+    pathPrefix("user") {
+      pathPrefix(Segment) { userId =>
+        pathEnd {
+          get {
+            complete {
+              userService
+                .getUser(WorkbenchUserId(userId), samRequestContext = samRequestContext)
+                .map(user => (if (user.isDefined) OK else NotFound) -> user)
+            }
+          }
+        }
       }
     }
 

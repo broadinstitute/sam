@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AdminUpdateUserRequest
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
@@ -113,6 +114,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case Some(registeredUser) =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${registeredUser.email} is already registered")))
       case None => IO(user)
+    }
+
+  def getUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    openTelemetry.time("api.v2.user.getUser.time", API_TIMING_DURATION_BUCKET) {
+      directoryDAO.loadUser(userId, samRequestContext)
     }
 
   def updateUserCrud(userId: WorkbenchUserId, request: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
