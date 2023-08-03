@@ -392,6 +392,23 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         .map(UserTable.unmarshalUserRecord)
     }
 
+  override def loadUsersByQuery(
+      userId: Option[WorkbenchUserId],
+      googleSubjectId: Option[GoogleSubjectId],
+      azureB2CId: Option[AzureB2CId],
+      samRequestContext: SamRequestContext
+  ): IO[List[SamUser]] =
+    readOnlyTransaction("loadUsersByQuery", samRequestContext) { implicit session =>
+      val userTable = UserTable.syntax
+      val loadUserQuery =
+        samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} = $userId OR ${userTable.googleSubjectId} = $googleSubjectId OR ${userTable.azureB2cId} = $azureB2CId"
+      loadUserQuery
+        .map(UserTable(userTable))
+        .list()
+        .apply()
+        .map(UserTable.unmarshalUserRecord)
+    }
+
   override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     readOnlyTransaction("loadUserByGoogleSubjectId", samRequestContext) { implicit session =>
       val userTable = UserTable.syntax

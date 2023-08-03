@@ -121,6 +121,16 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       directoryDAO.loadUser(userId, samRequestContext)
     }
 
+  def getUsersByQuery(
+      userId: Option[WorkbenchUserId],
+      googleSubjectId: Option[GoogleSubjectId],
+      azureB2CId: Option[AzureB2CId],
+      samRequestContext: SamRequestContext
+  ): IO[List[SamUser]] =
+    openTelemetry.time("api.v2.user.getUser.time", API_TIMING_DURATION_BUCKET) {
+      directoryDAO.loadUsersByQuery(userId, googleSubjectId, azureB2CId, samRequestContext)
+    }
+
   def updateUserCrud(userId: WorkbenchUserId, request: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     openTelemetry.time("api.v1.user.updateUserCrud.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUser(userId, samRequestContext).flatMap {

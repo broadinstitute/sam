@@ -124,6 +124,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStatus'
+  /api/admin/v2/users:
+    get:
+      tags:
+        - Admin
+      summary: gets the users which match the any of the query params
+      operationId: adminGetUserByQuery
+      parameters:
+        - name: id
+          in: query
+          description: User Id ato find users by
+          schema:
+            type: string
+        - name: googleSubjectId
+          in: query
+          description: GoogleSubjectId to find users by
+          schema:
+            type: string
+        - name: azureB2CId
+          in: query
+          description: AzureB2CId to find users by
+          schema:
+            type: string
+      responses:
+        200:
+          description: list of matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                   $ref: '#/components/schemas/User'
   /api/admin/v1/user/{userId}/disable:
     put:
       tags:

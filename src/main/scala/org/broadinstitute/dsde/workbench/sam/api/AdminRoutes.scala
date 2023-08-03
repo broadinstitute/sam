@@ -135,7 +135,19 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           }
         }
       }
-    }
+    } ~
+      pathPrefix("users") {
+        get {
+          parameters("id".optional, "googleSubjectId".optional, "azureB2CId".optional) { (id, googleSubjectId, azureB2CId) =>
+            complete {
+              userService
+                .getUsersByQuery(id.map(WorkbenchUserId), googleSubjectId.map(GoogleSubjectId), azureB2CId.map(AzureB2CId), samRequestContext)
+                .map(users => (if (users.isEmpty) OK else NotFound) -> users)
+            }
+          }
+        }
+
+      }
 
   def adminResourcesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("resources" / Segment / Segment / "policies") { case (resourceTypeName, resourceId) =>

@@ -39,6 +39,12 @@ trait DirectoryDAO {
 
   def createUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser]
   def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
+  def loadUsersByQuery(
+      userId: Option[WorkbenchUserId],
+      googleSubjectId: Option[GoogleSubjectId],
+      azureB2CId: Option[AzureB2CId],
+      samRequestContext: SamRequestContext
+  ): IO[List[SamUser]]
   def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
   def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
   def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit]
