@@ -37,7 +37,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def asAdminServiceUser: Directive0 = requireOidcHeaders.flatMap { oidcHeaders =>
     Directives.mapInnerRoute { r =>
       if (!adminConfig.serviceAccountAdmins.contains(oidcHeaders.email)) {
-        Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "Email is not a service admin account")))
+        reject(AuthorizationFailedRejection)
       } else {
         logger.info(s"Handling request for service admin account: ${oidcHeaders.email}")
         r

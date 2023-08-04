@@ -108,8 +108,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       googleSubjectId: Option[GoogleSubjectId],
       azureB2CId: Option[AzureB2CId],
       samRequestContext: SamRequestContext
-  ): IO[List[SamUser]] =
-    IO(users.values.toList)
+  ): IO[Set[SamUser]] =
+    IO(users.values.toSet)
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO {
     // TODO add validation for email

@@ -126,7 +126,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       googleSubjectId: Option[GoogleSubjectId],
       azureB2CId: Option[AzureB2CId],
       samRequestContext: SamRequestContext
-  ): IO[List[SamUser]] =
+  ): IO[Set[SamUser]] =
     openTelemetry.time("api.v2.user.getUsersByQuery.time", API_TIMING_DURATION_BUCKET) {
       directoryDAO.loadUsersByQuery(userId, googleSubjectId, azureB2CId, samRequestContext)
     }

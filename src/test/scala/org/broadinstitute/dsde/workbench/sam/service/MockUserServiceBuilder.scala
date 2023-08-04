@@ -2,8 +2,8 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.google.errorReportSource //not ideal but need to use error report
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.google.errorReportSource
+import org.broadinstitute.dsde.workbench.model.{AzureB2CId, ErrorReport, GoogleSubjectId, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
 import org.broadinstitute.dsde.workbench.sam.model.{SamUser, UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.model.api.AdminUpdateUserRequest
@@ -28,6 +28,9 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
   mockUserService.getUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
     IO(None)
   }
+  mockUserService.getUsersByQuery(any[Option[WorkbenchUserId]], any[Option[GoogleSubjectId]], any[Option[AzureB2CId]], any[SamRequestContext]) returns {
+    IO(Set.empty)
+  }
 
   private def makeUser(samUser: SamUser): Unit = {
     mockUserService.getUser(eqTo(samUser.id), any[SamRequestContext]) answers ((_: WorkbenchUserId) => IO(Option(samUser)))
@@ -40,6 +43,15 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     }
     mockUserService.disableUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
       IO(None)
+    }
+    mockUserService.getUsersByQuery(eqTo(Option(samUser.id)), any[Option[GoogleSubjectId]], any[Option[AzureB2CId]], any[SamRequestContext]) returns {
+      IO(Set(samUser))
+    }
+    mockUserService.getUsersByQuery(any[Option[WorkbenchUserId]], eqTo(samUser.googleSubjectId), any[Option[AzureB2CId]], any[SamRequestContext]) returns {
+      IO(Set(samUser))
+    }
+    mockUserService.getUsersByQuery(any[Option[WorkbenchUserId]], any[Option[GoogleSubjectId]], eqTo(samUser.azureB2CId), any[SamRequestContext]) returns {
+      IO(Set(samUser))
     }
   }
 

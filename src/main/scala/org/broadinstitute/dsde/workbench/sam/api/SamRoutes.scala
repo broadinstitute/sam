@@ -66,18 +66,18 @@ abstract class SamRoutes(
         withSamRequestContext { samRequestContext =>
           pathPrefix("register")(userRoutes(samRequestContext)) ~
             pathPrefix("api") {
-              withActiveUser(samRequestContext) { samUser =>
-                val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-                resourceRoutes(samUser, samRequestContextWithUser) ~
-                  adminRoutes(samUser, samRequestContextWithUser) ~
-                  extensionRoutes(samUser, samRequestContextWithUser) ~
-                  groupRoutes(samUser, samRequestContextWithUser) ~
-                  apiUserRoutes(samUser, samRequestContextWithUser) ~
-                  azureRoutes(samUser, samRequestContextWithUser)
-              } ~
-                // these routes are for machine to machine authorized requests
-                // the whitelisted service admin account email is in the header of the request
-                serviceAdminRoutes(samRequestContext)
+              // these routes are for machine to machine authorized requests
+              // the whitelisted service admin account email is in the header of the request
+              serviceAdminRoutes(samRequestContext) ~
+                withActiveUser(samRequestContext) { samUser =>
+                  val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+                  resourceRoutes(samUser, samRequestContextWithUser) ~
+                    adminRoutes(samUser, samRequestContextWithUser) ~
+                    extensionRoutes(samUser, samRequestContextWithUser) ~
+                    groupRoutes(samUser, samRequestContextWithUser) ~
+                    apiUserRoutes(samUser, samRequestContextWithUser) ~
+                    azureRoutes(samUser, samRequestContextWithUser)
+                }
             }
         }
       }

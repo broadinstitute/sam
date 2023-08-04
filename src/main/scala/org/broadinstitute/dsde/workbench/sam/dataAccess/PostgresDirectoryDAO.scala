@@ -397,7 +397,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       googleSubjectId: Option[GoogleSubjectId],
       azureB2CId: Option[AzureB2CId],
       samRequestContext: SamRequestContext
-  ): IO[List[SamUser]] =
+  ): IO[Set[SamUser]] =
     readOnlyTransaction("loadUsersByQuery", samRequestContext) { implicit session =>
       val userTable = UserTable.syntax
       val loadUserQuery =
@@ -407,6 +407,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         .list()
         .apply()
         .map(UserTable.unmarshalUserRecord)
+        .toSet
     }
 
   override def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
