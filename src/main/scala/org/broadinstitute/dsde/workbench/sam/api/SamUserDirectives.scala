@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.RejectionHandlers.termsOfServiceRejectionHandler
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAcceptance}
@@ -20,6 +21,7 @@ trait SamUserDirectives {
   val cloudExtensions: CloudExtensions
   val tosService: TosService
   val termsOfServiceConfig: TermsOfServiceConfig
+  val adminConfig: AdminConfig
 
   /** Extracts authentication information from headers, looks up user in database, returns user only if the user is enabled and has accepted latest terms of
     * service. Throws 401 exception if user has not accepted latest terms of service or is disabled. Throws 403 exception if user does not exist (not 404
@@ -28,6 +30,9 @@ trait SamUserDirectives {
     * @return
     */
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser]
+
+  // TODO: write explanation
+  def asAdminServiceUser: Directive0
 
   /** Extracts authentication information from headers, looks up user in database, returns user regardless of enabled or terms of service status. Specifically
     * named to be clear that inactive users are permitted. Throws 403 exception if user does not exist (not 404 because that would mean the requested URL does

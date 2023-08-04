@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.service.{TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import scala.util.matching.Regex
 
@@ -31,6 +31,17 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     }.tmap { samUser =>
       logger.info(s"Handling request for active Sam User: $samUser")
       samUser
+    }
+  }
+
+  def asAdminServiceUser: Directive0 = requireOidcHeaders.flatMap { oidcHeaders =>
+    Directives.mapInnerRoute { r =>
+      if (!adminConfig.serviceAccountAdmins.contains(oidcHeaders.email)) {
+        Directives.failWith(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, "Email is not a service admin account")))
+      } else {
+        logger.info(s"Handling request for service admin account: ${oidcHeaders.email}")
+        r
+      }
     }
   }
 

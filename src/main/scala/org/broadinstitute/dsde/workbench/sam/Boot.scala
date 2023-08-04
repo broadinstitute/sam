@@ -65,7 +65,10 @@ object Boot extends IOApp with LazyLogging {
 
   private def startup()(implicit system: ActorSystem): IO[Unit] = {
     val appConfig = AppConfig.load
-
+    println(appConfig.adminConfig.serviceAccountAdmins)
+    println(appConfig.adminConfig.serviceAccountAdmins.size)
+    sys.exit(0)
+    /*
     val appDependencies = createAppDependencies(appConfig)
 
     appDependencies.use { dependencies => // this is where the resource is used
@@ -86,6 +89,8 @@ object Boot extends IOApp with LazyLogging {
         _ <- IO(system.terminate())
       } yield ()
     }
+
+     */
   }
 
   private def livenessServerStartup(directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem): Unit = {

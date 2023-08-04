@@ -52,7 +52,8 @@ abstract class SamRoutes(
     with ExtensionRoutes
     with ManagedGroupRoutes
     with AdminRoutes
-    with AzureRoutes {
+    with AzureRoutes
+    with ServiceAdminRoutes {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
@@ -63,7 +64,6 @@ abstract class SamRoutes(
         withSamRequestContext { samRequestContext =>
           pathPrefix("register")(userRoutes(samRequestContext)) ~
             pathPrefix("api") {
-              // IMPORTANT - all routes under /api must have an active user
               withActiveUser(samRequestContext) { samUser =>
                 val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
                 resourceRoutes(samUser, samRequestContextWithUser) ~
@@ -72,7 +72,10 @@ abstract class SamRoutes(
                   groupRoutes(samUser, samRequestContextWithUser) ~
                   apiUserRoutes(samUser, samRequestContextWithUser) ~
                   azureRoutes(samUser, samRequestContextWithUser)
-              }
+              } ~
+                // these routes are for machine to machine authorized requests
+                // the whitelisted service admin account email is in the header of the request
+                serviceAdminRoutes(samRequestContext)
             }
         }
       }
