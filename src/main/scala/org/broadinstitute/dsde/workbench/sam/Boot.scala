@@ -431,5 +431,5 @@ final case class AppDependencies(
     cloudExtensionsInitializer: CloudExtensionsInitializer,
     directoryDAO: DirectoryDAO,
     accessPolicyDAO: AccessPolicyDAO,
-    policyEvaluatorService: PolicyEvaluatorService,
+    policyEvaluatorService: PolicyEvaluatorService
 )

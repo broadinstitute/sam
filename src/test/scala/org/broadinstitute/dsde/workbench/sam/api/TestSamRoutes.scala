@@ -54,7 +54,7 @@ class TestSamRoutes(
       tosService,
       LiquibaseConfig("", false),
       FakeOpenIDConnectConfiguration,
-  AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains= Set.empty, serviceAccountAdmins = Set.empty),
+      AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty),
       azureService
     )
     with MockSamUserDirectives
@@ -96,7 +96,7 @@ class TestSamTosEnabledRoutes(
       tosService,
       LiquibaseConfig("", false),
       FakeOpenIDConnectConfiguration,
-  AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains= Set.empty, serviceAccountAdmins = Set.empty),
+      AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty),
       azureService
     )
     with MockSamUserDirectives

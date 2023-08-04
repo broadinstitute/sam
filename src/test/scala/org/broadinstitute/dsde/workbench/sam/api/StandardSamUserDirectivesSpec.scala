@@ -31,7 +31,8 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       override val termsOfServiceConfig: TermsOfServiceConfig = null
       override val userService: UserService = new MockUserService(directoryDAO = dirDAO)
       override val tosService: TosService = new TosService(dirDAO, tosConfig)
-      override val adminConfig: AppConfig.AdminConfig = AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains= Set.empty, serviceAccountAdmins = Set.empty)
+      override val adminConfig: AppConfig.AdminConfig =
+        AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty)
     }
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {
