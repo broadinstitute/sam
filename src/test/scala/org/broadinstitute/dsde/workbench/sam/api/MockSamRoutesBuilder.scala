@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.server.Directives.{onSuccess, reject}
-import akka.http.scaladsl.server.{Directive1, Route}
+import akka.http.scaladsl.server.{Directive, Directive0, Directive1, Route}
 import akka.stream.Materializer
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroup
@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -85,6 +86,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       mockTosService,
       null,
       null,
+      null,
       None
     ) {
       override val cloudExtensions: CloudExtensions = mockCloudExtensions
@@ -104,6 +106,8 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       }
 
       override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route = reject
+
+      override def asAdminServiceUser: Directive0 = Directive.Empty
     }
   }
 }

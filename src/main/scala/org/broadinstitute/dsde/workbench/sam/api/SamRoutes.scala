@@ -21,6 +21,7 @@ import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.service._
 
@@ -38,6 +39,7 @@ abstract class SamRoutes(
     val tosService: TosService,
     val liquibaseConfig: LiquibaseConfig,
     val oidcConfig: OpenIDConnectConfiguration,
+    val adminConfig: AdminConfig,
     val azureService: Option[AzureService]
 )(implicit
     val system: ActorSystem,

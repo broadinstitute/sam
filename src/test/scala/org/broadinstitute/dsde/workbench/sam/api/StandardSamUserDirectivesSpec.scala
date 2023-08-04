@@ -12,7 +12,8 @@ import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAcc
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
-import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockUserService, TosService, UserService}
@@ -30,6 +31,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       override val termsOfServiceConfig: TermsOfServiceConfig = null
       override val userService: UserService = new MockUserService(directoryDAO = dirDAO)
       override val tosService: TosService = new TosService(dirDAO, tosConfig)
+      override val adminConfig: AppConfig.AdminConfig = AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains= Set.empty, serviceAccountAdmins = Set.empty)
     }
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {

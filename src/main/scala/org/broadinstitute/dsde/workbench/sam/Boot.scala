@@ -65,10 +65,6 @@ object Boot extends IOApp with LazyLogging {
 
   private def startup()(implicit system: ActorSystem): IO[Unit] = {
     val appConfig = AppConfig.load
-    println(appConfig.adminConfig.serviceAccountAdmins)
-    println(appConfig.adminConfig.serviceAccountAdmins.size)
-    sys.exit(0)
-    /*
     val appDependencies = createAppDependencies(appConfig)
 
     appDependencies.use { dependencies => // this is where the resource is used
@@ -89,8 +85,6 @@ object Boot extends IOApp with LazyLogging {
         _ <- IO(system.terminate())
       } yield ()
     }
-
-     */
   }
 
   private def livenessServerStartup(directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem): Unit = {
@@ -404,6 +398,7 @@ object Boot extends IOApp with LazyLogging {
           tosService,
           config.liquibaseConfig,
           oauth2Config,
+          config.adminConfig,
           azureService
         ) with StandardSamUserDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
@@ -422,6 +417,7 @@ object Boot extends IOApp with LazyLogging {
           tosService,
           config.liquibaseConfig,
           oauth2Config,
+          config.adminConfig,
           azureService
         ) with StandardSamUserDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
@@ -435,5 +431,5 @@ final case class AppDependencies(
     cloudExtensionsInitializer: CloudExtensionsInitializer,
     directoryDAO: DirectoryDAO,
     accessPolicyDAO: AccessPolicyDAO,
-    policyEvaluatorService: PolicyEvaluatorService
+    policyEvaluatorService: PolicyEvaluatorService,
 )
