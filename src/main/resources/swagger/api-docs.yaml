@@ -129,11 +129,11 @@ paths:
       tags:
         - Admin
       summary: gets the users which match the any of the query params
-      operationId: adminGetUserByQuery
+      operationId: adminGetUsersByQuery
       parameters:
         - name: id
           in: query
-          description: User Id ato find users by
+          description: User Id to find users by
           schema:
             type: string
         - name: googleSubjectId
@@ -146,6 +146,13 @@ paths:
           description: AzureB2CId to find users by
           schema:
             type: string
+        - name: limit
+          in: query
+          description: Maximum number of results returned (max 1000)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
       responses:
         200:
           description: list of matching users

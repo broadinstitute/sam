@@ -40,10 +40,16 @@ trait ServiceAdminRoutes extends SecurityDirectives with SamRequestContextDirect
   def serviceAdminUserRoutes(samRequestContext: SamRequestContext): server.Route =
     pathPrefix("users") {
       get {
-        parameters("id".optional, "googleSubjectId".optional, "azureB2CId".optional) { (id, googleSubjectId, azureB2CId) =>
+        parameters("id".optional, "googleSubjectId".optional, "azureB2CId".optional, "limit".as[Int].optional) { (id, googleSubjectId, azureB2CId, limit) =>
           complete {
             userService
-              .getUsersByQuery(id.map(WorkbenchUserId), googleSubjectId.map(GoogleSubjectId), azureB2CId.map(AzureB2CId), samRequestContext)
+              .getUsersByQuery(
+                id.map(WorkbenchUserId),
+                googleSubjectId.map(GoogleSubjectId),
+                azureB2CId.map(AzureB2CId),
+                limit,
+                samRequestContext
+              )
               .map(users => (if (users.nonEmpty) OK else NotFound) -> users)
           }
         }

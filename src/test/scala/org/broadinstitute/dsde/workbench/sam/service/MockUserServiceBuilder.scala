@@ -28,7 +28,13 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
   mockUserService.getUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
     IO(None)
   }
-  mockUserService.getUsersByQuery(any[Option[WorkbenchUserId]], any[Option[GoogleSubjectId]], any[Option[AzureB2CId]], any[SamRequestContext]) returns {
+  mockUserService.getUsersByQuery(
+    any[Option[WorkbenchUserId]],
+    any[Option[GoogleSubjectId]],
+    any[Option[AzureB2CId]],
+    any[Option[Int]],
+    any[SamRequestContext]
+  ) returns {
     IO(Set.empty)
   }
 
@@ -44,13 +50,31 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     mockUserService.disableUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
       IO(None)
     }
-    mockUserService.getUsersByQuery(eqTo(Option(samUser.id)), any[Option[GoogleSubjectId]], any[Option[AzureB2CId]], any[SamRequestContext]) returns {
+    mockUserService.getUsersByQuery(
+      eqTo(Option(samUser.id)),
+      any[Option[GoogleSubjectId]],
+      any[Option[AzureB2CId]],
+      any[Option[Int]],
+      any[SamRequestContext]
+    ) returns {
       IO(Set(samUser))
     }
-    mockUserService.getUsersByQuery(any[Option[WorkbenchUserId]], eqTo(samUser.googleSubjectId), any[Option[AzureB2CId]], any[SamRequestContext]) returns {
+    mockUserService.getUsersByQuery(
+      any[Option[WorkbenchUserId]],
+      eqTo(samUser.googleSubjectId),
+      any[Option[AzureB2CId]],
+      any[Option[Int]],
+      any[SamRequestContext]
+    ) returns {
       IO(Set(samUser))
     }
-    mockUserService.getUsersByQuery(any[Option[WorkbenchUserId]], any[Option[GoogleSubjectId]], eqTo(samUser.azureB2CId), any[SamRequestContext]) returns {
+    mockUserService.getUsersByQuery(
+      any[Option[WorkbenchUserId]],
+      any[Option[GoogleSubjectId]],
+      eqTo(samUser.azureB2CId),
+      any[Option[Int]],
+      any[SamRequestContext]
+    ) returns {
       IO(Set(samUser))
     }
   }

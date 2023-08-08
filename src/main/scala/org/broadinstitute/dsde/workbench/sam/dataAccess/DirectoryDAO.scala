@@ -43,6 +43,7 @@ trait DirectoryDAO {
       userId: Option[WorkbenchUserId],
       googleSubjectId: Option[GoogleSubjectId],
       azureB2CId: Option[AzureB2CId],
+      limit: Int,
       samRequestContext: SamRequestContext
   ): IO[Set[SamUser]]
   def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]]

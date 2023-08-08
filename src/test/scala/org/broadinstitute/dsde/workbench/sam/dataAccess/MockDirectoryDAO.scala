@@ -107,6 +107,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       userId: Option[WorkbenchUserId],
       googleSubjectId: Option[GoogleSubjectId],
       azureB2CId: Option[AzureB2CId],
+      limit: Int,
       samRequestContext: SamRequestContext
   ): IO[Set[SamUser]] =
     IO(users.values.toSet)
