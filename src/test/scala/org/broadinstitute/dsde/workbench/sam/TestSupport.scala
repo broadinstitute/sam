@@ -28,7 +28,6 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.scalatest.Tag
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
@@ -291,5 +290,3 @@ final case class SamDependencies(
     adminConfig: AdminConfig,
     azureService: AzureService
 )
-
-object ConnectedTest extends Tag("connected test")

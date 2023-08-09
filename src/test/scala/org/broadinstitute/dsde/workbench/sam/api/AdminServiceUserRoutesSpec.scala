@@ -36,7 +36,7 @@ class AdminServiceUserRoutesSpec extends AnyFlatSpec with Matchers with Scalates
     }
   }
 
-  it should "forbid non service admin users from " in {
+  it should "forbid non service admin users from accessing user records" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser)

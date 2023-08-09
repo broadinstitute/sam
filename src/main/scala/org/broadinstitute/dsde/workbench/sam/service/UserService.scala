@@ -129,7 +129,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       samRequestContext: SamRequestContext
   ): IO[Set[SamUser]] =
     openTelemetry.time("api.v2.user.getUsersByQuery.time", API_TIMING_DURATION_BUCKET) {
-      val maxResults = limit.getOrElse(1000).max(1)
+      val defaultLimit = 10
+      val maximumLimit = 1000
+      val maxResults = limit.getOrElse(defaultLimit).min(maximumLimit).max(1)
       directoryDAO.loadUsersByQuery(userId, googleSubjectId, azureB2CId, maxResults, samRequestContext)
     }
 
