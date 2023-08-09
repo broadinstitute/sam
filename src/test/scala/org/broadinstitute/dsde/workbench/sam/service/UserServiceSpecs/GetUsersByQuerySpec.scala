@@ -13,18 +13,6 @@ class GetUsersByQuerySpec extends UserServiceTestTraits {
 
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
-  /*TODO: Write tests for the following:
-   *get users without any params -> should return a list of all users up to a max 1000
-   *get users with valid limit param -> should return a list of users up to limit
-   *get users with limit param exceeding max -> should return a list of users up to 1000 (max)
-   *get users with limit param below min -> should return a list of users up to 1 (min)
-          get users by only userId with an existing corresponding user -> should return 1 corresponding user with that userId
-          get users by only googleSubjectId with an existing corresponding user -> should return 1 corresponding user with that googleSubjectId
-          get users by only azureB2CId with an existing corresponding user -> should return 1 corresponding user with that azureB2CId
-          get users by userId, googleSubjectId, and azureB2CID that are all the same with an existing corresponding user -> should return 1 corresponding user with those fields
-          get users by userId, googleSubjectId, and azureB2CID that are all unique with existing corresponding users -> should return 3 corresponding users with each matching field
-   */
-
   describe("When getting") {
     describe("existing user records") {
       describe("without any parameters") {

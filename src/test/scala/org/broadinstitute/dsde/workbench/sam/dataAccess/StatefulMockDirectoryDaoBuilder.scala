@@ -142,7 +142,7 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
         samUsers
           .filter(user =>
             (maybeUserId.isEmpty && maybeGoogleSubjectId.isEmpty && maybeAzureB2CId.isEmpty) ||
-            maybeUserId.exists(id => user.id.eq(id)) ||
+              maybeUserId.exists(id => user.id.eq(id)) ||
               ((maybeGoogleSubjectId, user.googleSubjectId) match {
                 case (Some(googleSubjectId), Some(userGoogleSubjectId)) if googleSubjectId == userGoogleSubjectId => true
                 case _ => false
