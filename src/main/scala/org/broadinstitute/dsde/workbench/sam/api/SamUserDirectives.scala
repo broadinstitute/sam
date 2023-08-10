@@ -31,9 +31,6 @@ trait SamUserDirectives {
     */
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
-  // TODO: write explanation
-  def asAdminServiceUser: Directive0
-
   /** Extracts authentication information from headers, looks up user in database, returns user regardless of enabled or terms of service status. Specifically
     * named to be clear that inactive users are permitted. Throws 403 exception if user does not exist (not 404 because that would mean the requested URL does
     * not exist).
@@ -51,6 +48,8 @@ trait SamUserDirectives {
         else r
       }
     }
+
+  def asAdminServiceUser: Directive0
 
   def withTermsOfServiceAcceptance: Directive0 =
     Directives.mapInnerRoute { r =>

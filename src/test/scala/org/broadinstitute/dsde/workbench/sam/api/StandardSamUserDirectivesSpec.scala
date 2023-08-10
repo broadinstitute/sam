@@ -4,7 +4,7 @@ package api
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.{OAuth2BearerToken, RawHeader}
 import akka.http.scaladsl.server.Directives.{complete, handleExceptions}
-import akka.http.scaladsl.server.MissingHeaderRejection
+import akka.http.scaladsl.server.{MissingHeaderRejection, Route}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
@@ -24,6 +24,12 @@ import org.mockito.scalatest.MockitoSugar
 import scala.concurrent.ExecutionContext
 
 class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTesting with ScalatestRouteTest with ScalaFutures with MockitoSugar with TestSupport {
+
+  private val testAdminConfig = AdminConfig(
+    superAdminsGroup = WorkbenchEmail(""),
+    allowedEmailDomains = Set.empty,
+    serviceAccountAdmins = Set(WorkbenchEmail("service-admin@dev.test.firecloud.org"))
+  )
   def directives(dirDAO: DirectoryDAO = new MockDirectoryDAO(), tosConfig: TermsOfServiceConfig = TestSupport.tosConfig): StandardSamUserDirectives =
     new StandardSamUserDirectives {
       override implicit val executionContext: ExecutionContext = null
@@ -31,8 +37,8 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       override val termsOfServiceConfig: TermsOfServiceConfig = null
       override val userService: UserService = new MockUserService(directoryDAO = dirDAO)
       override val tosService: TosService = new TosService(dirDAO, tosConfig)
-      override val adminConfig: AppConfig.AdminConfig =
-        AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty)
+      override val adminConfig: AppConfig.AdminConfig = testAdminConfig
+
     }
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {
@@ -270,6 +276,39 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     Get("/") ~> handleExceptions(myExceptionHandler)(directives().withNewUser(samRequestContext)(x => complete(x.toString))) ~> check {
       rejection shouldBe MissingHeaderRejection(accessTokenHeader)
     }
+  }
+
+  "withAdminServiceUser" should "accept request with oidc headers if admin service email matches config" in forAll(
+    genExternalId,
+    genOAuth2BearerToken,
+    minSuccessful(20)
+  ) { (externalId, accessToken) =>
+    val adminServiceEmail = testAdminConfig.serviceAccountAdmins.head
+    val services = directives()
+    val headers = createRequiredHeaders(externalId, adminServiceEmail, accessToken)
+    Get("/").withHeaders(headers) ~>
+      Route.seal(
+        services.asAdminServiceUser(complete(StatusCodes.OK))
+      ) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+  }
+
+  it should "reject a request with oidc headers if admin service email does not match config" in forAll(
+    genExternalId,
+    genNonPetEmail,
+    genOAuth2BearerToken,
+    minSuccessful(20)
+  ) { (externalId, email, accessToken) =>
+    val adminServiceEmail = email
+    val services = directives()
+    val headers = createRequiredHeaders(externalId, adminServiceEmail, accessToken)
+    Get("/").withHeaders(headers) ~>
+      Route.seal(
+        services.asAdminServiceUser(complete(StatusCodes.OK))
+      ) ~> check {
+        status shouldBe StatusCodes.Forbidden
+      }
   }
 
   "SADomain regex" should "match email addresses that end in 'gserviceaccount.com'" in {
