@@ -50,7 +50,7 @@ class GoogleGroupSyncMessageReceiverSpec extends AnyFlatSpecLike with Matchers w
 
   it should "nack on completion with errors" in {
     when(synchronizer.synchronizeGroupMembers(ArgumentMatchers.eq(testGroup), ArgumentMatchers.eq(Set.empty), any[SamRequestContext]))
-      .thenReturn(IO.pure(Map(WorkbenchEmail(s"${testGroup.value}@foo.com") -> Seq(SyncReportItem("added", "member email", Option(ErrorReport("failure")))))))
+      .thenReturn(IO.pure(Map(WorkbenchEmail(s"${testGroup.value}@foo.com") -> Seq(SyncReportItem("added", "member email", testGroup.value, Option(ErrorReport("failure")))))))
     receiver.receiveMessage(PubsubMessage.newBuilder().setData(ByteString.copyFromUtf8(testGroup.toJson.compactPrint)).build(), consumer)
     verify(consumer).nack()
 

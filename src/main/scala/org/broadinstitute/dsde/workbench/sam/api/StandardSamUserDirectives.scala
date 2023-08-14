@@ -29,7 +29,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     onSuccess {
       getActiveSamUser(oidcHeaders, userService, tosService, samRequestContext).unsafeToFuture()
     }.tmap { samUser =>
-      logger.info(s"Handling request for active Sam User: $samUser")
+      logger.debug(s"Handling request for active Sam User: $samUser")
       samUser
     }
   }
@@ -38,7 +38,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     onSuccess {
       getSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
     }.tmap { samUser =>
-      logger.info(s"Handling request for (in)active Sam User: $samUser")
+      logger.debug(s"Handling request for (in)active Sam User: $samUser")
       samUser
     }
   }
@@ -63,7 +63,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId)))
       .as(OIDCHeaders)
       .map { oidcHeaders =>
-        logger.info(s"Auth Headers: $oidcHeaders")
+        logger.debug(s"Auth Headers: $oidcHeaders")
         oidcHeaders
       }
 

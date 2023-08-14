@@ -58,7 +58,7 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
     */
   private def syncComplete(report: Map[WorkbenchEmail, Seq[SyncReportItem]], consumer: AckReplyConsumer): Unit = {
     val errorReports = report.values.flatten.collect {
-      case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
+      case SyncReportItem(_, _, _, errorReports) if errorReports.nonEmpty => errorReports
     }.flatten
 
     import DefaultJsonProtocol._
