@@ -69,7 +69,12 @@ class GoogleGroupSynchronizer(
 
   private def removeMemberFromGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(removeEmail: String) =
     traceIOWithContext("removeMemberFromGoogleGroup", samRequestContext) { _ =>
-      SyncReportItem.fromIO("removed", removeEmail, group.id.toString, IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)))))
+      SyncReportItem.fromIO(
+        "removed",
+        removeEmail,
+        group.id.toString,
+        IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail))))
+      )
     }
 
   private def addMemberToGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(addEmail: String) =

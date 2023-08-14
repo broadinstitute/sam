@@ -23,6 +23,11 @@ object SamGoogleModelJsonSupport {
 final case class SyncReportItem(operation: String, email: String, workbenchGroupIdentity: String, errorReport: Option[ErrorReport])
 
 object SyncReportItem {
-  def fromIO[T](operation: String, email: String, workbenchGroupIdentity: String,  result: IO[T])(implicit errorReportSource: ErrorReportSource): IO[SyncReportItem] =
-    result.redeem(t => SyncReportItem(operation, email, workbenchGroupIdentity, Option(ErrorReport(t))), _ => SyncReportItem(operation, email, workbenchGroupIdentity, None))
+  def fromIO[T](operation: String, email: String, workbenchGroupIdentity: String, result: IO[T])(implicit
+      errorReportSource: ErrorReportSource
+  ): IO[SyncReportItem] =
+    result.redeem(
+      t => SyncReportItem(operation, email, workbenchGroupIdentity, Option(ErrorReport(t))),
+      _ => SyncReportItem(operation, email, workbenchGroupIdentity, None)
+    )
 }
