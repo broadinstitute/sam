@@ -22,7 +22,7 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
   override def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit =
     traceIO("GoogleGroupSyncMessageReceiver-PubSubMessage", SamRequestContext()) { samRequestContext =>
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
-      logger.info(s"received sync message: $groupId")
+      logger.debug(s"received sync message: $groupId")
       samRequestContext.parentSpan.foreach(
         _.putAttribute("groupId", AttributeValue.stringAttributeValue(groupId.toString))
       )
