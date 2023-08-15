@@ -63,7 +63,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId)))
       .as(OIDCHeaders)
       .map { oidcHeaders =>
-        logger.debug(s"Auth Headers: $oidcHeaders")
+        logger.info(s"Auth Headers: $oidcHeaders")
         oidcHeaders
       }
 
