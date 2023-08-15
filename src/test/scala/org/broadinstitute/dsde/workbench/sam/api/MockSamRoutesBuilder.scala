@@ -40,6 +40,13 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     this
   }
 
+  def withEnabledUsers(samUsers: Iterable[SamUser]): MockSamRoutesBuilder = {
+    enabledUser = Option(samUsers.head)
+    userServiceBuilder.withEnabledUsers(samUsers)
+    cloudExtensionsBuilder.withEnabledUsers(samUsers)
+    this
+  }
+
   def withDisabledUser(samUser: SamUser): MockSamRoutesBuilder = {
     disabledUser = Option(samUser)
     userServiceBuilder.withDisabledUser(samUser)

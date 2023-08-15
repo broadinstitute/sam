@@ -14,15 +14,13 @@ import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol.immSetFormat
 
 class AdminServiceUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
-  val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
+  val defaultUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
   val defaultUserId: WorkbenchUserId = defaultUser.id
   val defaultUserEmail: WorkbenchEmail = defaultUser.email
   val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  private val badUserId = WorkbenchUserId(s"-$defaultUserId")
-  private val newUserEmail = WorkbenchEmail(s"XXX${defaultUserEmail}XXX")
 
-  "GET /admin/v2/users" should "get the matching user records when provided with matching query parameters" in {
+  "GET /admin/v2/users" should "get the matching user records when provided with matching userId when called as a service admin" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminServiceUser() // enabled "admin" user who is making the http request
@@ -33,6 +31,85 @@ class AdminServiceUserRoutesSpec extends AnyFlatSpec with Matchers with Scalates
     Get(s"/api/admin/v2/users?id=${defaultUserId}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[Set[SamUser]] shouldEqual Set(defaultUser)
+    }
+  }
+
+  it should "get the matching user records when provided with matching googleSubjectId when called as a service admin" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminServiceUser() // enabled "admin" user who is making the http request
+      .withEnabledUser(defaultUser)
+      .build
+
+    // Act and Assert
+    Get(s"/api/admin/v2/users?googleSubjectId=${defaultUser.googleSubjectId.get.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[SamUser]] shouldEqual Set(defaultUser)
+    }
+  }
+
+  it should "get the matching user records when provided with matching azureB2CId when called as a service admin" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminServiceUser() // enabled "admin" user who is making the http request
+      .withEnabledUser(defaultUser)
+      .build
+
+    // Act and Assert
+    Get(s"/api/admin/v2/users?azureB2CId=${defaultUser.azureB2CId.get.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[SamUser]] shouldEqual Set(defaultUser)
+    }
+  }
+
+  it should "get the matching user records when provided with matching unique userId, googleSubjectId, and azureB2CId when called as a service admin" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminServiceUser() // enabled "admin" user who is making the http request
+      .withEnabledUser(defaultUser)
+      .build
+
+    // Act and Assert
+    Get(
+      s"/api/admin/v2/users?id=${defaultUser.id}&googleSubjectId=${defaultUser.googleSubjectId.get.value}&azureB2CId=${defaultUser.azureB2CId.get.value}"
+    ) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[SamUser]] shouldEqual Set(defaultUser)
+    }
+  }
+
+  it should "get the matching user records when provided with matching the same userId, googleSubjectId, and azureB2CId when called as a service admin" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminServiceUser() // enabled "admin" user who is making the http request
+      .withEnabledUser(defaultUser)
+      .build
+
+    // Act and Assert
+    Get(s"/api/admin/v2/users?id=${defaultUser.id}&googleSubjectId=${defaultUser.id}&azureB2CId=${defaultUser.id}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[SamUser]] shouldEqual Set(defaultUser)
+    }
+  }
+
+  it should "get the matching user records when provided with matching a different userId, googleSubjectId, and azureB2CId corresponding to different users when called as a service admin" in {
+    // Arrange
+    val samUser = Generator.genBroadInstituteUser.sample.get
+    val googleUser = Generator.genWorkbenchUserGoogle.sample.get
+    val azureUser = Generator.genWorkbenchUserAzure.sample.get
+    val users = List(samUser, googleUser, azureUser)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminServiceUser() // enabled "admin" user who is making the http request
+      .withEnabledUsers(users)
+      .build
+
+    // Act and Assert
+    Get(
+      s"/api/admin/v2/users?id=${samUser.id}&googleSubjectId=${googleUser.googleSubjectId.get}&azureB2CId=${azureUser.azureB2CId.get}"
+    ) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[SamUser]].size shouldEqual 3
+      responseAs[Set[SamUser]] shouldEqual users.toSet
     }
   }
 
@@ -47,4 +124,5 @@ class AdminServiceUserRoutesSpec extends AnyFlatSpec with Matchers with Scalates
       status shouldEqual StatusCodes.Forbidden
     }
   }
+
 }
