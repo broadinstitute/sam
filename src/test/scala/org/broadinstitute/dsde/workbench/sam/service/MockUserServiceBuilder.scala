@@ -128,7 +128,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
                 case _ => false
               })
           )
-          // .take(limit.getOrElse(samUsers.size))
+          .take(limit.getOrElse(samUsers.size))
           .toSet
       )
     )
