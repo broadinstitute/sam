@@ -180,7 +180,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
 
   private def registerInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     openTelemetry.time("api.v1.user.registerInvitedUser.time", API_TIMING_DURATION_BUCKET) {
-      val userToRegister = invitedUser.copy(id = invitedUserId)
+      val userToRegister = invitedUser.copy(id = invitedUserId, registeredAt = Option(Instant.now()))
       for {
         _ <- updateUser(userToRegister, samRequestContext)
         groups <- directoryDAO.listUserDirectMemberships(userToRegister.id, samRequestContext)

@@ -356,6 +356,25 @@ class OldUserServiceSpec
     }
   }
 
+  it should "record the date that the user registered if they were previously invited" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val user = genWorkbenchUserGoogle.sample.get
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Act
+    val createdAt = Instant.now()
+    service.inviteUser(user.email, samRequestContext).unsafeRunSync()
+
+    val userStatus = service.createUser(user, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeUser = dirDAO.loadUser(userStatus.userInfo.userSubjectId, samRequestContext).unsafeRunSync()
+    inside(maybeUser.value) { persistedUser =>
+      persistedUser.registeredAt.value should beAround(createdAt)
+    }
+  }
+
   /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
     */
   "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in {
