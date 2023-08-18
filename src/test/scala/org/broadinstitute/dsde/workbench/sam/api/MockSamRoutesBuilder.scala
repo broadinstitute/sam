@@ -2,14 +2,15 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.server.Directives.{onSuccess, reject}
-import akka.http.scaladsl.server.{Directive1, Route}
+import akka.http.scaladsl.server._
 import akka.stream.Materializer
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.WorkbenchGroup
+import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, WorkbenchGroup}
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -18,6 +19,7 @@ import scala.concurrent.Future
 class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetrics[IO]) {
 
   private val cloudExtensionsBuilder: MockCloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup)
+  cloudExtensionsBuilder.withNonAdminUser()
   private val userServiceBuilder: MockUserServiceBuilder = MockUserServiceBuilder()
 
   // Needing to keep track of the enabled user is kind of gross.  But this is a single user that exists in the DB.  This
@@ -27,6 +29,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   private var enabledUser: Option[SamUser] = None
   private var disabledUser: Option[SamUser] = None
   private var adminUser: Option[SamUser] = None
+  private var asServiceAdminUser = false
 
   // TODO: *sniff sniff* I can't help but notice we're coordinating state between the userService and the
   //  cloudExtensions.  Same for other methods too.
@@ -37,6 +40,13 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     this
   }
 
+  def withEnabledUsers(samUsers: Iterable[SamUser]): MockSamRoutesBuilder = {
+    enabledUser = Option(samUsers.head)
+    userServiceBuilder.withEnabledUsers(samUsers)
+    cloudExtensionsBuilder.withEnabledUsers(samUsers)
+    this
+  }
+
   def withDisabledUser(samUser: SamUser): MockSamRoutesBuilder = {
     disabledUser = Option(samUser)
     userServiceBuilder.withDisabledUser(samUser)
@@ -44,12 +54,17 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     this
   }
 
-  def withAdminUser(): MockSamRoutesBuilder = {
+  def callAsAdminUser(): MockSamRoutesBuilder = {
     cloudExtensionsBuilder.withAdminUser()
     this
   }
 
-  def withNonAdminUser(): MockSamRoutesBuilder = {
+  def callAsAdminServiceUser(): MockSamRoutesBuilder = {
+    asServiceAdminUser = true
+    this
+  }
+
+  def callAsNonAdminUser(): MockSamRoutesBuilder = {
     cloudExtensionsBuilder.withNonAdminUser()
     this
   }
@@ -85,6 +100,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       mockTosService,
       null,
       null,
+      null,
       None
     ) {
       override val cloudExtensions: CloudExtensions = mockCloudExtensions
@@ -104,6 +120,9 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       }
 
       override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route = reject
+      implicit val errorReportSource: ErrorReportSource = ErrorReportSource("test")
+      override def asAdminServiceUser: Directive0 = if (asServiceAdminUser) Directive.Empty
+      else reject(AuthorizationFailedRejection)
     }
   }
 }

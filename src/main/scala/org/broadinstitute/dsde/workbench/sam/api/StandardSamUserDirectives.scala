@@ -14,8 +14,8 @@ import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.model.SamUser
-import org.broadinstitute.dsde.workbench.sam.service.{TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
+import org.broadinstitute.dsde.workbench.sam.service.{TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
@@ -31,6 +31,17 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     }.tmap { samUser =>
       logger.info(s"Handling request for active Sam User: $samUser")
       samUser
+    }
+  }
+
+  def asAdminServiceUser: Directive0 = requireOidcHeaders.flatMap { oidcHeaders =>
+    Directives.mapInnerRoute { r =>
+      if (!adminConfig.serviceAccountAdmins.contains(oidcHeaders.email)) {
+        reject(AuthorizationFailedRejection)
+      } else {
+        logger.info(s"Handling request for service admin account: ${oidcHeaders.email}")
+        r
+      }
     }
   }
 

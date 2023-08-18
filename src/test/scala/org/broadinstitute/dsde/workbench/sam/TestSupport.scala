@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
 import cats.effect._
 import cats.effect.unsafe.implicits.global
@@ -27,7 +28,6 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.scalatest.Tag
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
@@ -161,6 +161,7 @@ object TestSupport extends TestSupport {
       policyDAO,
       googleExt,
       FakeOpenIDConnectConfiguration,
+      adminConfig,
       azureService
     )
   }
@@ -181,6 +182,7 @@ object TestSupport extends TestSupport {
     samDependencies.tosService,
     LiquibaseConfig("", false),
     samDependencies.oauth2Config,
+    samDependencies.adminConfig,
     Some(samDependencies.azureService)
   ) with MockSamUserDirectives with GoogleExtensionRoutes {
     override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
@@ -204,6 +206,8 @@ object TestSupport extends TestSupport {
     }
     override val user: SamUser = uInfo
     override val newSamUser: Option[SamUser] = Option(uInfo)
+
+    override def asAdminServiceUser: Directive0 = Directive.Empty
   }
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): SamRoutes =
@@ -283,7 +287,6 @@ final case class SamDependencies(
     policyDao: AccessPolicyDAO,
     cloudExtensions: CloudExtensions,
     oauth2Config: OpenIDConnectConfiguration,
+    adminConfig: AdminConfig,
     azureService: AzureService
 )
-
-object ConnectedTest extends Tag("connected test")
