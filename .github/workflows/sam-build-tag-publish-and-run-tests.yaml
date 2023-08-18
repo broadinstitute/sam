@@ -83,7 +83,7 @@ jobs:
       - id: prepare-outputs
         run: |-
           echo 'log-results=true' >> $GITHUB_OUTPUT
-          if ${{ github.ref_name == 'develop' }}
+          if ${{ github.ref_name == 'develop' }}; then
             echo 'test-context=dev-merge' >> $GITHUB_OUTPUT
           else
             echo 'test-context=pr-test' >> $GITHUB_OUTPUT
