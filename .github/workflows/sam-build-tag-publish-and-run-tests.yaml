@@ -176,7 +176,7 @@ jobs:
         with:
           workflow: .github/workflows/sam-swat-tests.yaml
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/DDO-2930-sam-report-test-results
+          ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}", "log-results": "${{ needs.prepare-configs.outputs.log-results }}", "test-context": "${{ needs.prepare-configs.outputs.test-context }}", "caller_run_id": "${{ github.run_id }}" }'
