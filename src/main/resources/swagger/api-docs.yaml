@@ -162,6 +162,18 @@ paths:
                 type: array
                 items:
                    $ref: '#/components/schemas/User'
+        403:
+          description: You do not have service admin privileges
+          content: { }
+        404:
+          description: No matching users found
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/user/{userId}/disable:
     put:
       tags:
