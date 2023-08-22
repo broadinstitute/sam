@@ -9,4 +9,10 @@ class AppConfigSpec extends AnyFlatSpec with Matchers {
     val appConfig = AppConfig.load
     appConfig.prometheusConfig.endpointPort should be(1)
   }
+
+  it should "correctly read multiple service admin accounts from env variables" in {
+
+    val appConfig = AppConfig.load
+    appConfig.adminConfig.serviceAccountAdmins.size shouldEqual 2
+  }
 }

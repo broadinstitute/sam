@@ -144,12 +144,13 @@ object AppConfig {
     SamDatabaseConfig(config.as[DatabaseConfig]("sam_read"), config.as[DatabaseConfig]("sam_write"), config.as[DatabaseConfig]("sam_background"))
   }
 
-  final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String])
+  final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String], serviceAccountAdmins: Set[WorkbenchEmail])
 
   implicit val adminConfigReader: ValueReader[AdminConfig] = ValueReader.relative { config =>
     AdminConfig(
       superAdminsGroup = WorkbenchEmail(config.getString("superAdminsGroup")),
-      allowedEmailDomains = config.as[Set[String]]("allowedAdminEmailDomains")
+      allowedEmailDomains = config.as[Set[String]]("allowedAdminEmailDomains"),
+      serviceAccountAdmins = config.getString("serviceAccountAdmins").split(",").map(e => WorkbenchEmail(e.trim)).toSet
     )
   }
 

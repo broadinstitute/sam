@@ -3,17 +3,20 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.actor.ActorSystem
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.reject
+import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockDirectoryDAO, _}
+import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -51,6 +54,7 @@ class TestSamRoutes(
       tosService,
       LiquibaseConfig("", false),
       FakeOpenIDConnectConfiguration,
+      AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty),
       azureService
     )
     with MockSamUserDirectives
@@ -61,6 +65,8 @@ class TestSamRoutes(
     TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
     TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
   }
+
+  override def asAdminServiceUser: Directive0 = Directive.Empty
 }
 
 class TestSamTosEnabledRoutes(
@@ -90,6 +96,7 @@ class TestSamTosEnabledRoutes(
       tosService,
       LiquibaseConfig("", false),
       FakeOpenIDConnectConfiguration,
+      AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty),
       azureService
     )
     with MockSamUserDirectives
@@ -97,6 +104,8 @@ class TestSamTosEnabledRoutes(
     with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
+
+  override def asAdminServiceUser: Directive0 = Directive.Empty
 }
 
 object TestSamRoutes {

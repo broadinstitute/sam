@@ -65,7 +65,6 @@ object Boot extends IOApp with LazyLogging {
 
   private def startup()(implicit system: ActorSystem): IO[Unit] = {
     val appConfig = AppConfig.load
-
     val appDependencies = createAppDependencies(appConfig)
 
     appDependencies.use { dependencies => // this is where the resource is used
@@ -399,6 +398,7 @@ object Boot extends IOApp with LazyLogging {
           tosService,
           config.liquibaseConfig,
           oauth2Config,
+          config.adminConfig,
           azureService
         ) with StandardSamUserDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
@@ -417,6 +417,7 @@ object Boot extends IOApp with LazyLogging {
           tosService,
           config.liquibaseConfig,
           oauth2Config,
+          config.adminConfig,
           azureService
         ) with StandardSamUserDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)

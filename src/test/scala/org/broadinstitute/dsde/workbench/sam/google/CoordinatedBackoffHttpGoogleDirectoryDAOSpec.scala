@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 import akka.actor.ActorSystem
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.GoogleUtilities
+import org.broadinstitute.dsde.workbench.sam.Slow
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LastQuotaErrorDAO
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.freespec.AnyFreeSpec
@@ -17,7 +18,7 @@ class CoordinatedBackoffHttpGoogleDirectoryDAOSpec extends AnyFreeSpec with Matc
 
   "CoordinatedBackoffHttpGoogleDirectoryDAO" - {
     "retryExponentially" - {
-      "should not do the op when in backoff mode" in {
+      "should not do the op when in backoff mode" taggedAs Slow in {
         val lastQuotaErrorDAOMock = mock[LastQuotaErrorDAO]
         when(lastQuotaErrorDAOMock.quotaErrorOccurredWithinDuration(any[Duration])).thenReturn(IO.pure(true))
         val googleDao = new CoordinatedBackoffHttpGoogleDirectoryDAO("", null, "", lastQuotaErrorDAOMock)
