@@ -6,6 +6,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
+import org.mockito.IdiomaticMockito.StubbingOps
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
@@ -25,6 +26,11 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     .doReturn(IO(None))
     .when(mockedDirectoryDAO)
     .loadUser(any[WorkbenchUserId], any[SamRequestContext])
+
+  lenient()
+    .doReturn(IO(Set.empty))
+    .when(mockedDirectoryDAO)
+    .loadUsersByQuery(any[Option[WorkbenchUserId]], any[Option[GoogleSubjectId]], any[Option[AzureB2CId]], any[Int], any[SamRequestContext])
 
   lenient()
     .doReturn(IO(None))
@@ -125,6 +131,31 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
   def withExistingUser(samUser: SamUser): StatefulMockDirectoryDaoBuilder = withExistingUsers(Set(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): StatefulMockDirectoryDaoBuilder = {
     samUsers.toSet.foreach(makeUserExist)
+    mockedDirectoryDAO.loadUsersByQuery(
+      any[Option[WorkbenchUserId]],
+      any[Option[GoogleSubjectId]],
+      any[Option[AzureB2CId]],
+      any[Int],
+      any[SamRequestContext]
+    ) answers ((maybeUserId: Option[WorkbenchUserId], maybeGoogleSubjectId: Option[GoogleSubjectId], maybeAzureB2CId: Option[AzureB2CId], limit: Int) =>
+      IO(
+        samUsers
+          .filter(user =>
+            (maybeUserId.isEmpty && maybeGoogleSubjectId.isEmpty && maybeAzureB2CId.isEmpty) ||
+              maybeUserId.contains(user.id) ||
+              ((maybeGoogleSubjectId, user.googleSubjectId) match {
+                case (Some(googleSubjectId), Some(userGoogleSubjectId)) if googleSubjectId == userGoogleSubjectId => true
+                case _ => false
+              }) ||
+              ((maybeAzureB2CId, user.azureB2CId) match {
+                case (Some(azureB2CId), Some(userAzureB2CId)) if azureB2CId == userAzureB2CId => true
+                case _ => false
+              })
+          )
+          .take(limit)
+          .toSet
+      )
+    )
     this
   }
 
