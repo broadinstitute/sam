@@ -74,6 +74,21 @@ jobs:
           echo "$GITHUB_CONTEXT"
           echo 'custom-version-json={\"sam\":{\"appVersion\":\"${{ steps.tag.outputs.tag }}\"}}' >> $GITHUB_OUTPUT
 
+  prepare-configs:
+    runs-on: ubuntu-latest
+    outputs:
+      log-results: ${{ steps.prepare-outputs.outputs.log-results }}
+      test-context: ${{ steps.prepare-outputs.outputs.test-context }}
+    steps:
+      - id: prepare-outputs
+        run: |-
+          echo 'log-results=true' >> $GITHUB_OUTPUT
+          if ${{ github.ref_name == 'develop' }}; then
+            echo 'test-context=dev-merge' >> $GITHUB_OUTPUT
+          else
+            echo 'test-context=pr-test' >> $GITHUB_OUTPUT
+          fi
+
   report-to-sherlock:
     # Report new Sam version to Broad DevOps
     uses: broadinstitute/sherlock/.github/workflows/client-report-app-version.yaml@main
@@ -151,7 +166,7 @@ jobs:
         terra-env: [ dev ] # what versions of apps do we use to emulate types of environments
         testing-env: [ qa ] # what env resources to use, e.g. SA keys
     runs-on: ubuntu-latest
-    needs: [sam-smoke-test-job]
+    needs: [sam-smoke-test-job, prepare-configs]
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -164,7 +179,7 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}" }'
+          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}", "log-results": "${{ needs.prepare-configs.outputs.log-results }}", "test-context": "${{ needs.prepare-configs.outputs.test-context }}", "caller_run_id": "${{ github.run_id }}" }'
 
   rawls-swat-test-job:
     strategy:
