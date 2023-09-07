@@ -167,7 +167,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // updates that are not attempted.  That is OK.  If some updates are run and others are not, that does not mean those
   // that succeeded are invalid.  Similarly, if there are additional updates that failed to run due to the exception
   // that is OK.
-  private def updateUser(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
+  private def updateInvitedUser(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     openTelemetry.time("api.v1.user.updateUser.time", API_TIMING_DURATION_BUCKET) {
       for {
         _ <- user.googleSubjectId
@@ -176,6 +176,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- user.azureB2CId
           .map(directoryDAO.setUserAzureB2CId(user.id, _, samRequestContext))
           .getOrElse(IO.unit)
+        _ <- directoryDAO.setUserRegisteredAt(user.id, Instant.now(), samRequestContext)
       } yield ()
     }
 
@@ -183,7 +184,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     openTelemetry.time("api.v1.user.registerInvitedUser.time", API_TIMING_DURATION_BUCKET) {
       val userToRegister = invitedUser.copy(id = invitedUserId)
       for {
-        _ <- updateUser(userToRegister, samRequestContext)
+        _ <- updateInvitedUser(userToRegister, samRequestContext)
         groups <- directoryDAO.listUserDirectMemberships(userToRegister.id, samRequestContext)
         _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
       } yield userToRegister
@@ -217,72 +218,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
             IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${inviteeEmail} already exists")))
         }
       } yield UserStatusDetails(createdUser.id, createdUser.email)
-    }
-
-  /** First lookup user by either googleSubjectId or azureB2DId, whichever is populated. If the user exists throw a conflict error. If the user does not exist
-    * look them up by email. If the user email exists then this is an invited user, update their googleSubjectId and/or azureB2CId and return the updated user
-    * record. If the email does not exist, this is a new user, create them. It is critical that this method returns the updated/created SamUser record FROM THE
-    * DATABASE and not the SamUser passed in as the first parameter.
-    */
-  protected[service] def registerUser(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
-    openTelemetry.time("api.v1.user.register.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        _ <- validateNewWorkbenchUser(user, samRequestContext)
-        subjectWithEmail <- directoryDAO.loadSubjectFromEmail(user.email, samRequestContext)
-        updated <- subjectWithEmail match {
-          case Some(uid: WorkbenchUserId) =>
-            acceptInvitedUser(user, samRequestContext, uid)
-              .withInfoLogMessage(s"Accepted invited user ${user.email} with uid ${uid.value}")
-
-          case None =>
-            createUserInternal(user, samRequestContext)
-              .withComputedInfoLogMessage(u => s"Created user ${u.email} with uid ${u.id}")
-
-          case Some(_) =>
-            // We don't support inviting a group account or pet service account
-            IO.raiseError[SamUser](
-              new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"$user is not a regular user. Please use a different endpoint"))
-            )
-        }
-      } yield updated
-    }
-
-  private def acceptInvitedUser(user: SamUser, samRequestContext: SamRequestContext, uid: WorkbenchUserId): IO[SamUser] =
-    openTelemetry.time("api.v1.user.acceptInvited.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        groups <- directoryDAO.listUserDirectMemberships(uid, samRequestContext)
-        _ <- user.googleSubjectId.traverse { googleSubjectId =>
-          for {
-            _ <- directoryDAO.setGoogleSubjectId(uid, googleSubjectId, samRequestContext)
-          } yield ()
-        }
-        _ <- user.azureB2CId.traverse { azureB2CId =>
-          directoryDAO.setUserAzureB2CId(uid, azureB2CId, samRequestContext)
-        }
-        _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
-        updatedUser <- directoryDAO.loadUser(uid, samRequestContext)
-      } yield updatedUser.getOrElse(
-        throw new WorkbenchExceptionWithErrorReport(
-          ErrorReport(StatusCodes.InternalServerError, s"$user could not be accepted from invite because user could not be loaded from the db")
-        )
-      )
-    }
-
-  private def validateNewWorkbenchUser(newWorkbenchUser: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.user.validateNewWorkbenchUser.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        existingUser <- newWorkbenchUser match {
-          case SamUser(_, Some(googleSubjectId), _, _, _, _, _, _, _) => directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
-          case SamUser(_, _, _, Some(azureB2CId), _, _, _, _, _) => directoryDAO.loadUserByAzureB2CId(azureB2CId, samRequestContext).map(_.map(_.id))
-          case _ => IO.raiseError(new WorkbenchException("cannot create user when neither google subject id nor azure b2c id exists"))
-        }
-
-        _ <- existingUser match {
-          case Some(_) =>
-            IO.raiseError[SamUser](new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"user ${newWorkbenchUser.email} already exists")))
-          case None => IO.unit
-        }
-      } yield ()
     }
 
   private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
