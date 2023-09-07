@@ -363,15 +363,15 @@ class OldUserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     // Act
-    val createdAt = Instant.now()
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
 
+    val registeredAt = Instant.now()
     val userStatus = service.createUser(user, samRequestContext).unsafeRunSync()
 
     // Assert
     val maybeUser = dirDAO.loadUser(userStatus.userInfo.userSubjectId, samRequestContext).unsafeRunSync()
     inside(maybeUser.value) { persistedUser =>
-      persistedUser.registeredAt.value should beAround(createdAt)
+      persistedUser.registeredAt.value should beAround(registeredAt)
     }
   }
 
