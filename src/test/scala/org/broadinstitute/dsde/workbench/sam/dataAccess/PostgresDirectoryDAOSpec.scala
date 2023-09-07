@@ -1602,6 +1602,17 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
         loadedUser.value.registeredAt.get shouldBe registeredAt
       }
+
+      "refuses to update the registeredAt date for a non-existent user" in {
+        // Arrange
+        val registeredAt = Instant.now()
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = Some(registeredAt))
+
+        // Act + Assert
+        assertThrows[WorkbenchException] {
+          dao.setUserRegisteredAt(user.id, Instant.now().minus(10, ChronoUnit.MINUTES), samRequestContext).unsafeRunSync()
+        }
+      }
     }
   }
 }
