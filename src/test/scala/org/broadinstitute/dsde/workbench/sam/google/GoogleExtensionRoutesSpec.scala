@@ -237,7 +237,13 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     import SamGoogleModelJsonSupport._
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", TestSupport.proxyEmail(user.id).value.toLowerCase, None)))) {
+      assertResult(
+        Map(
+          createdPolicy.email -> Seq(
+            SyncReportItem("added", TestSupport.proxyEmail(user.id).value.toLowerCase, s"${createdPolicy.policyName.value}.foo.${resourceType.name}", None)
+          )
+        )
+      ) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }
