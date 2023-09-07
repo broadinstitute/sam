@@ -179,11 +179,11 @@ class GoogleExtensionSpec(_system: ActorSystem)
       val results = runAndWait(synchronizer.synchronizeGroupMembers(target.id, samRequestContext = samRequestContext))
 
       results.head._1 should equal(target.email)
-      results.head._2 should contain theSameElementsAs (added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
-        removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
+      results.head._2 should contain theSameElementsAs (added.map(e => SyncReportItem("added", e.value.toLowerCase, target.id.toString, None)) ++
+        removed.map(e => SyncReportItem("removed", e.value.toLowerCase, target.id.toString, None)) ++
         Seq(
-          SyncReportItem("added", addErrorProxyEmail.toLowerCase, Option(ErrorReport(addException))),
-          SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))
+          SyncReportItem("added", addErrorProxyEmail.toLowerCase, target.id.toString, Option(ErrorReport(addException))),
+          SyncReportItem("removed", removeError.toLowerCase, target.id.toString, Option(ErrorReport(removeException)))
         ))
 
       added.foreach(email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email.value.toLowerCase)))
@@ -318,11 +318,11 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val results = runAndWait(synchronizer.synchronizeGroupMembers(testPolicy.id, samRequestContext = samRequestContext))
 
     results.head._1 should equal(testPolicy.email)
-    results.head._2 should contain theSameElementsAs (added.map(e => SyncReportItem("added", e.value.toLowerCase, None)) ++
-      removed.map(e => SyncReportItem("removed", e.value.toLowerCase, None)) ++
+    results.head._2 should contain theSameElementsAs (added.map(e => SyncReportItem("added", e.value.toLowerCase, testPolicy.id.toString, None)) ++
+      removed.map(e => SyncReportItem("removed", e.value.toLowerCase, testPolicy.id.toString, None)) ++
       Seq(
-        SyncReportItem("added", addErrorProxyEmail.toLowerCase, Option(ErrorReport(addException))),
-        SyncReportItem("removed", removeError.toLowerCase, Option(ErrorReport(removeException)))
+        SyncReportItem("added", addErrorProxyEmail.toLowerCase, testPolicy.id.toString, Option(ErrorReport(addException))),
+        SyncReportItem("removed", removeError.toLowerCase, testPolicy.id.toString, Option(ErrorReport(removeException)))
       ))
 
     added.foreach(email => verify(mockGoogleDirectoryDAO).addMemberToGroup(testPolicy.email, WorkbenchEmail(email.value.toLowerCase)))
