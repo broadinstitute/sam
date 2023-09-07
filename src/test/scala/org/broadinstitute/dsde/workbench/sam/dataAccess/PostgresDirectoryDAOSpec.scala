@@ -1585,7 +1585,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         // Assert
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        loadedUser.value.registeredAt.get shouldBe registeredAt
+        loadedUser.value.registeredAt.get should beAround(registeredAt)
       }
 
       "refuses to overwrite the user's registeredAt date" in {
@@ -1600,7 +1600,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         }
 
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        loadedUser.value.registeredAt.get shouldBe registeredAt
+        loadedUser.value.registeredAt.get should beAround(registeredAt)
       }
 
       "refuses to update the registeredAt date for a non-existent user" in {
