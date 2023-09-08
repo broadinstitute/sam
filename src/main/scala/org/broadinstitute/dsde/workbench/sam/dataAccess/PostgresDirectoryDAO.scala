@@ -451,10 +451,9 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val u = UserTable.column
       val results =
         samsql"""update ${UserTable.table}
-                 set (${u.azureB2cId}, ${u.updatedAt}, ${u.registeredAt}) =
+                 set (${u.azureB2cId}, ${u.updatedAt}) =
                  ($b2cId,
-                   ${Instant.now()},
-                   ${coalesceUserRegisteredAt(userId)}
+                   ${Instant.now()}
                  )
                  where ${u.id} = $userId and (${u.azureB2cId} is null or ${u.azureB2cId} = $b2cId)"""
           .update()
@@ -468,19 +467,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         ()
       }
     }
-
-  // Finds the specified user and if their googleSubjectId AND azureB2CId are both null, then it will select `now()`,
-  // the postgres function for getting the current datetime.  If either googleSubjectId or azureB2CId is set, it will
-  // return whatever the current value is for `registeredAt`
-  private def coalesceUserRegisteredAt(userId: WorkbenchUserId): SQLSyntax = {
-    val u = UserTable.column
-    samsqls"""(select coalesce(${u.registeredAt}, now())
-              from ${UserTable.table}
-              where ${u.id} = $userId
-                and ${u.googleSubjectId} is null
-                and ${u.azureB2cId} is null
-             )""".stripMargin
-  }
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
@@ -830,10 +816,9 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val u = UserTable.column
       val updateGoogleSubjectIdQuery =
         samsql"""update ${UserTable.table}
-                 set (${u.googleSubjectId}, ${u.updatedAt}, ${u.registeredAt}) =
+                 set (${u.googleSubjectId}, ${u.updatedAt}) =
                  (${googleSubjectId},
-                   ${Instant.now()},
-                   ${coalesceUserRegisteredAt(userId)}
+                   ${Instant.now()}
                  )
                  where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
 
@@ -908,5 +893,28 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
       val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
       userRecordOpt.map(UserTable.unmarshalUserRecord)
+    }
+
+  override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("setUserRegisteredAt", samRequestContext) { implicit session =>
+      val u = UserTable.column
+      val results =
+        samsql"""update ${UserTable.table}
+               set (${u.registeredAt}, ${u.updatedAt}) =
+               (
+                 $registeredAt,
+                 ${Instant.now()}
+               )
+               where ${u.id} = $userId and ${u.registeredAt} is null"""
+          .update()
+          .apply()
+
+      if (results != 1) {
+        throw new WorkbenchException(
+          s"Cannot update registeredAt for user ${userId} because user does not exist or the registeredAt date has already been set for this user"
+        )
+      } else {
+        ()
+      }
     }
 }

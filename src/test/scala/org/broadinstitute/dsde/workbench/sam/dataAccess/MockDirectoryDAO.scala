@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, Pet
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
+import java.time.Instant
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 
@@ -356,4 +357,20 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(None)
+
+  override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =
+    loadUser(userId, samRequestContext).map {
+      case None =>
+        throw new WorkbenchException(
+          s"Cannot update registeredAt for user ${userId} because registeredAt date has already been set for this user"
+        )
+      case Some(user) =>
+        if (user.registeredAt.isEmpty) {
+          users.put(userId, user.copy(registeredAt = Some(registeredAt)))
+        } else {
+          throw new WorkbenchException(
+            s"Cannot update registeredAt for user ${userId} because user does not exist"
+          )
+        }
+    }
 }
