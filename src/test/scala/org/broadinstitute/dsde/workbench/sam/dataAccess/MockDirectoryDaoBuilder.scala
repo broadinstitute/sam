@@ -7,6 +7,8 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.mockito.{IdiomaticMockito, Strictness}
 
+import java.time.Instant
+
 object MockDirectoryDaoBuilder {
   def apply(allUsersGroup: WorkbenchGroup) =
     new MockDirectoryDaoBuilder().withAllUsersGroup(allUsersGroup)
@@ -34,6 +36,7 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   mockedDirectoryDAO.setUserAzureB2CId(any[WorkbenchUserId], any[AzureB2CId], any[SamRequestContext]) returns IO.unit
   mockedDirectoryDAO.removeGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
   mockedDirectoryDAO.deleteUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.setUserRegisteredAt(any[WorkbenchUserId], any[Instant], any[SamRequestContext]) returns IO.unit
 
   def withHealthyDatabase: MockDirectoryDaoBuilder = {
     mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(true)
