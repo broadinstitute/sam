@@ -16,6 +16,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterEach, OptionValues}
 
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.Date
 import scala.concurrent.duration._
 
@@ -1264,41 +1265,6 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         loadedUser.value.updatedAt should beAround(Instant.now())
       }
 
-      "sets the registeredAt datetime if all cloud ids for this user are blank" in {
-        // Arrange
-        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(googleSubjectId = None)
-        dao.createUser(user, samRequestContext).unsafeRunSync()
-        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
-
-        // Act
-        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
-
-        // Assert
-        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        inside(loadedUser.value) { user =>
-          user.registeredAt.value should beAround(Instant.now())
-        }
-      }
-
-      // This scenario really should never exist.  If one of the cloud IDs is set, then the registeredAt date should
-      // also already be set.  If this initial state exists, something probably went wrong.  Useful test though for
-      // making sure the sql is working correctly.
-      "does not set the registeredAt datetime if it is null and the azureB2CId is already set" in {
-        // Arrange
-        val user = Generator.genWorkbenchUserAzure.sample.get.copy(registeredAt = None)
-        dao.createUser(user, samRequestContext).unsafeRunSync()
-        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
-
-        // Act
-        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
-
-        // Assert
-        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        inside(loadedUser.value) { user =>
-          user.registeredAt shouldBe empty
-        }
-      }
-
       // Making an assumption that this is the intended behavior/UX we want?  :shrug:  This is a weird scenario that I
       // cannot imagine we would be in unless something went wrong.  The test is handy though to make sure the sql is
       // working correctly.
@@ -1470,41 +1436,6 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         loadedUser.value.updatedAt should beAround(Instant.now())
       }
 
-      "sets the registeredAt datetime if all cloud ids for this user are blank" in {
-        // Arrange
-        val user = Generator.genWorkbenchUserAzure.sample.get.copy(azureB2CId = None)
-        dao.createUser(user, samRequestContext).unsafeRunSync()
-        val newAzureB2CId = AzureB2CId("newAzureB2cId")
-
-        // Act
-        dao.setUserAzureB2CId(user.id, newAzureB2CId, samRequestContext).unsafeRunSync()
-
-        // Assert
-        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        inside(loadedUser.value) { user =>
-          user.registeredAt.value should beAround(Instant.now())
-        }
-      }
-
-      // This scenario really should never exist.  If one of the cloud IDs is set, then the registeredAt date should
-      // also already be set.  If this initial state exists, something probably went wrong.  Useful test though for
-      // making sure the sql is working correctly.
-      "does not set the registeredAt datetime if it is null and the googleSubjectId is already set" in {
-        // Arrange
-        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = None)
-        dao.createUser(user, samRequestContext).unsafeRunSync()
-        val newAzureB2CId = AzureB2CId("newAzureB2cId")
-
-        // Act
-        dao.setUserAzureB2CId(user.id, newAzureB2CId, samRequestContext).unsafeRunSync()
-
-        // Assert
-        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        inside(loadedUser.value) { user =>
-          user.registeredAt shouldBe empty
-        }
-      }
-
       // Making an assumption that this is the intended behavior/UX we want?  :shrug:  This is a weird scenario that I
       // cannot imagine we would be in unless something went wrong.  The test is handy though to make sure the sql is
       // working correctly.
@@ -1639,6 +1570,48 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         // Assert
         samStatus shouldBe false
+      }
+    }
+
+    "setUserRegisteredAt" - {
+      "sets the user's registeredAt column if its not yet set" in {
+        // Arrange
+        val registeredAt = Instant.now().minus(10, ChronoUnit.MINUTES)
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = None)
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Act
+        dao.setUserRegisteredAt(user.id, registeredAt, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.registeredAt.get should beAround(registeredAt)
+      }
+
+      "refuses to overwrite the user's registeredAt date" in {
+        // Arrange
+        val registeredAt = Instant.now()
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = Some(registeredAt))
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Act + Assert
+        assertThrows[WorkbenchException] {
+          dao.setUserRegisteredAt(user.id, Instant.now().minus(10, ChronoUnit.MINUTES), samRequestContext).unsafeRunSync()
+        }
+
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.registeredAt.get should beAround(registeredAt)
+      }
+
+      "refuses to update the registeredAt date for a non-existent user" in {
+        // Arrange
+        val registeredAt = Instant.now()
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = Some(registeredAt))
+
+        // Act + Assert
+        assertThrows[WorkbenchException] {
+          dao.setUserRegisteredAt(user.id, Instant.now().minus(10, ChronoUnit.MINUTES), samRequestContext).unsafeRunSync()
+        }
       }
     }
   }

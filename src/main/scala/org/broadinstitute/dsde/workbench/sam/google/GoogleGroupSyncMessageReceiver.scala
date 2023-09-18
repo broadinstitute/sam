@@ -22,7 +22,7 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
   override def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit =
     traceIO("GoogleGroupSyncMessageReceiver-PubSubMessage", SamRequestContext()) { samRequestContext =>
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
-      logger.info(s"received sync message: $groupId")
+      logger.debug(s"received sync message: $groupId")
       samRequestContext.parentSpan.foreach(
         _.putAttribute("groupId", AttributeValue.stringAttributeValue(groupId.toString))
       )
@@ -58,7 +58,7 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
     */
   private def syncComplete(report: Map[WorkbenchEmail, Seq[SyncReportItem]], consumer: AckReplyConsumer): Unit = {
     val errorReports = report.values.flatten.collect {
-      case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
+      case SyncReportItem(_, _, _, errorReports) if errorReports.nonEmpty => errorReports
     }.flatten
 
     import DefaultJsonProtocol._

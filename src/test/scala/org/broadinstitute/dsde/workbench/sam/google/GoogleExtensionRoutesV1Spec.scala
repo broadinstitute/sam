@@ -117,7 +117,13 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     Post(s"/api/google/v1/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val proxyEmail = WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsDomain}")
-      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", proxyEmail.value.toLowerCase, None)))) {
+      assertResult(
+        Map(
+          createdPolicy.email -> Seq(
+            SyncReportItem("added", proxyEmail.value.toLowerCase, s"${createdPolicy.policyName.value}.foo.${resourceType.name.value}", None)
+          )
+        )
+      ) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }

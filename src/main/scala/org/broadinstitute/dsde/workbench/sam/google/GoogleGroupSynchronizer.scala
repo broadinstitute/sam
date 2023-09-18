@@ -69,12 +69,17 @@ class GoogleGroupSynchronizer(
 
   private def removeMemberFromGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(removeEmail: String) =
     traceIOWithContext("removeMemberFromGoogleGroup", samRequestContext) { _ =>
-      SyncReportItem.fromIO("removed", removeEmail, IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)))))
+      SyncReportItem.fromIO(
+        "removed",
+        removeEmail,
+        group.id.toString,
+        IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail))))
+      )
     }
 
   private def addMemberToGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(addEmail: String) =
     traceIOWithContext("addMemberToGoogleGroup", samRequestContext) { _ =>
-      SyncReportItem.fromIO("added", addEmail, IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)))))
+      SyncReportItem.fromIO("added", addEmail, group.id.toString, IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)))))
     }
 
   /** convert each subject to an email address
