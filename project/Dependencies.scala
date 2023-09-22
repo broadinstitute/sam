@@ -3,7 +3,7 @@ import sbt._
 object Dependencies {
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.9"
-  val jacksonV = "2.12.6.1"
+  val jacksonV = "2.15.2"
   val scalaLoggingV = "3.9.2"
   val scalaTestV = "3.2.12"
   val scalaCheckV = "1.14.3"
@@ -105,7 +105,7 @@ object Dependencies {
   val googleStorageLocal: ModuleID =
     "com.google.cloud" % "google-cloud-nio" % "0.126.10" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
-  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.8.0"
+  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
   val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.2"
   val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "1.33"
