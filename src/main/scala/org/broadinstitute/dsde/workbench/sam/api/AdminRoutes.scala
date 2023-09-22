@@ -138,46 +138,59 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
     }
 
   def adminResourcesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("resources" / Segment / Segment / "policies") { case (resourceTypeName, resourceId) =>
-      withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
-        val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
-        pathEndOrSingleSlash {
-          get {
-            requireAdminResourceAction(adminReadPolicies, resourceType, user, samRequestContext) {
-              complete {
-                resourceService
-                  .listResourcePolicies(resource, samRequestContext)
-                  .map(response => OK -> response.toSet)
-              }
+    pathPrefix("resources" / Segment / Segment) { case (resourceTypeName, resourceId) =>
+      pathEndOrSingleSlash {
+        asWorkbenchAdmin(user) {
+          delete {
+            complete {
+              resourceService
+                .deleteResource(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), samRequestContext)
+                .map(_ => NoContent)
             }
           }
-        } ~
-          pathPrefix(Segment / "memberEmails" / Segment) { case (policyName, userEmail) =>
-            val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+        }
+      } ~
+        pathPrefix("policies") {
+          withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+            val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
             pathEndOrSingleSlash {
-              withSubject(WorkbenchEmail(userEmail), samRequestContext) { subject =>
-                put {
-                  requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
-                    complete {
-                      resourceService
-                        .addSubjectToPolicy(policyId, subject, samRequestContext)
-                        .as(NoContent)
-                    }
+              get {
+                requireAdminResourceAction(adminReadPolicies, resourceType, user, samRequestContext) {
+                  complete {
+                    resourceService
+                      .listResourcePolicies(resource, samRequestContext)
+                      .map(response => OK -> response.toSet)
                   }
-                } ~
-                  delete {
-                    requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
-                      complete {
-                        resourceService
-                          .removeSubjectFromPolicy(policyId, subject, samRequestContext)
-                          .as(NoContent)
-                      }
-                    }
-                  }
+                }
               }
-            }
+            } ~
+              pathPrefix(Segment / "memberEmails" / Segment) { case (policyName, userEmail) =>
+                val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+                pathEndOrSingleSlash {
+                  withSubject(WorkbenchEmail(userEmail), samRequestContext) { subject =>
+                    put {
+                      requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
+                        complete {
+                          resourceService
+                            .addSubjectToPolicy(policyId, subject, samRequestContext)
+                            .as(NoContent)
+                        }
+                      }
+                    } ~
+                      delete {
+                        requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
+                          complete {
+                            resourceService
+                              .removeSubjectFromPolicy(policyId, subject, samRequestContext)
+                              .as(NoContent)
+                          }
+                        }
+                      }
+                  }
+                }
+              }
           }
-      }
+        }
     }
 
   def adminResourceTypesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
