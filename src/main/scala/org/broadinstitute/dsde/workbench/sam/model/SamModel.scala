@@ -85,6 +85,8 @@ object SamJsonSupport {
   implicit val CreateResourceResponseFormat = jsonFormat4(CreateResourceResponse.apply)
 
   implicit val SignedUrlRequestFormat = jsonFormat4(SignedUrlRequest.apply)
+
+  implicit val RequesterPaysSignedUrlRequestFormat = jsonFormat4(RequesterPaysSignedUrlRequest.apply)
 }
 
 object RootPrimitiveJsonSupport {
@@ -308,6 +310,12 @@ object BasicWorkbenchGroup {
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
 @Lenses final case class SignedUrlRequest(bucketName: String, blobName: String, duration: Option[Long] = None, requesterPays: Option[Boolean] = Option(true))
+@Lenses final case class RequesterPaysSignedUrlRequest(
+    bucketName: String,
+    blobName: String,
+    duration: Option[Long] = None,
+    requesterPaysProject: Option[String] = None
+)
 
 object SamUser {
   def apply(

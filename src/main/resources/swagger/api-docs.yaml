@@ -1029,6 +1029,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v1/user/signedUrlForBlob:
+    post:
+      tags:
+        - Google
+      summary: Gets a signed URL for the given blob, signed by the arbitrary Pet Service account of the calling user.
+        The signed URL is active for 1 hour and scoped to the permissions of the signing Pet Service Account.
+        An optional requesterPaysProject can be provided to specify which Google Project is billed.
+        Sam will provide a signed URL for any object path, even if that object does not exist.
+      operationId: getRequesterPaysSignedUrlForBlob
+      requestBody:
+        description: bucketName and blobName of the object to get a signed URL for
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/RequesterPaysSignedUrlRequest'
+        required: true
+      responses:
+        200:
+          description: signed URL for the blob, signed by the user's arbitrary Pet Service Account key
+          content:
+            application/json:
+              schema:
+                type: string
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/user/petServiceAccount/{project}:
     get:
       tags:
@@ -3191,6 +3220,26 @@ components:
           type: boolean
           description: Use the pet service account project as the user project in the request.
           default: true
+    RequesterPaysSignedUrlRequest:
+      type: object
+      required:
+        - bucketName
+        - blobName
+      properties:
+        bucketName:
+          type: string
+          description: bucket of the blob
+        blobName:
+          type: string
+          description: path to the blob in the bucket
+        duration:
+          type: number
+          description: Optional validity duration of the link in minutes. Defaults to 1 hour.
+          default: 60
+        requesterPaysProject:
+          type: string
+          description: Optional Google Project to use for billing.
+          default: undefined
     CreateResourceRequest:
       required:
         - policies

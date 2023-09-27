@@ -293,4 +293,33 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
       status shouldEqual StatusCodes.NotFound
     }
   }
+  "POST /api/google/v1/user/signedUrlForBlob" should "200 with a signed url" in {
+    val (user, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = RequesterPaysSignedUrlRequest("my-bucket", "my-folder/my-object.txt", requesterPaysProject = Some(projectName))
+    val urlEncodedEmail = URLEncoder.encode(user.email.value, StandardCharsets.UTF_8)
+
+    Post(s"/api/google/v1/user/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should include("my-bucket/my-folder/my-object.txt")
+      responseAs[String] should include(s"userProject=$projectName")
+      responseAs[String] should include(s"requestedBy=$urlEncodedEmail")
+    }
+  }
+
+  it should "set a duration for a signed url" in {
+    val (_, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = RequesterPaysSignedUrlRequest("my-bucket", "my-folder/my-object.txt", Some(2))
+
+    Post(s"/api/google/v1/user/petServiceAccount/$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should include("X-Goog-Expires=120")
+    }
+  }
+
+  it should "skip requester pays if no project provided" in {
+    val (_, samRoutes, _) = setupSignedUrlTest()
+    val blob = RequesterPaysSignedUrlRequest("my-bucket", "my-folder/my-object.txt", requesterPaysProject = None)
+
+    Post(s"/api/google/v1/user/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should not include "userProject"
+    }
+  }
 }
