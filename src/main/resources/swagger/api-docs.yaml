@@ -3239,7 +3239,6 @@ components:
         requesterPaysProject:
           type: string
           description: Optional Google Project to use for billing.
-          default: undefined
     CreateResourceRequest:
       required:
         - policies
