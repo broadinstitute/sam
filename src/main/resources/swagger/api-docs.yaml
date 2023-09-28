@@ -1033,13 +1033,13 @@ paths:
     post:
       tags:
         - Google
-      summary: Gets a signed URL for the given blob, signed by the arbitrary Pet Service account of the calling user.
-        The signed URL is active for 1 hour and scoped to the permissions of the signing Pet Service Account.
+      summary: Gets a signed URL for the given blob.
+        The signed URL is active for 1 hour and scoped to the permissions of the user.
         An optional requesterPaysProject can be provided to specify which Google Project is billed.
         Sam will provide a signed URL for any object path, even if that object does not exist.
       operationId: getRequesterPaysSignedUrlForBlob
       requestBody:
-        description: bucketName and blobName of the object to get a signed URL for
+        description: GsPath of to get a signed URL for
         content:
           'application/json':
             schema:
@@ -3223,8 +3223,7 @@ components:
     RequesterPaysSignedUrlRequest:
       type: object
       required:
-        - bucketName
-        - blobName
+        - gsPath
       properties:
         gsPath:
           type: string
