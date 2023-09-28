@@ -201,8 +201,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   googleExtensions
                     .getRequesterPaysSignedUrl(
                       samUser,
-                      GcsBucketName(request.bucketName),
-                      GcsBlobName(request.blobName),
+                      request.gsPath,
                       request.duration,
                       request.requesterPaysProject.map(GoogleProject),
                       samRequestContext

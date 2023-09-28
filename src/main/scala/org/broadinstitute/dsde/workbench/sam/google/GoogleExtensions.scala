@@ -9,6 +9,7 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.cloud.storage.BlobId
 import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
@@ -646,19 +647,32 @@ class GoogleExtensions(
     )
   }
 
+  private def fromGsPath(gsPath: String) = {
+    val pattern = "gs://.*/.*".r
+    if (!pattern.matches(gsPath)) {
+      throw new IllegalArgumentException(s"$gsPath is not a valid gsutil URI (i.e. \"gs://bucket/blob\")")
+    }
+    val blobNameStartIndex = gsPath.indexOf('/', 5)
+    val bucketName = gsPath.substring(5, blobNameStartIndex)
+    val blobName = gsPath.substring(blobNameStartIndex + 1)
+    BlobId.of(bucketName, blobName)
+  }
+
   def getRequesterPaysSignedUrl(
       samUser: SamUser,
-      bucket: GcsBucketName,
-      name: GcsBlobName,
+      gsPath: String,
       duration: Option[Long],
       requesterPaysProject: Option[GoogleProject],
       samRequestContext: SamRequestContext
   ): IO[URL] = {
     val urlParamsMap: Map[String, String] = requesterPaysProject.map(p => Map(userProjectQueryParam -> p.value)).getOrElse(Map.empty)
+    val blobId = fromGsPath(gsPath)
+    val bucket = GcsBucketName(blobId.getBucket)
+    val objectName = GcsBlobName(blobId.getName)
     for {
       petKey <- IO.fromFuture(IO(getArbitraryPetServiceAccountKey(samUser, samRequestContext)))
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
-      url <- getSignedUrl(samUser, bucket, name, duration, urlParamsMap, serviceAccountCredentials)
+      url <- getSignedUrl(samUser, bucket, objectName, duration, urlParamsMap, serviceAccountCredentials)
     } yield url
   }
 

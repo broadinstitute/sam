@@ -3226,12 +3226,9 @@ components:
         - bucketName
         - blobName
       properties:
-        bucketName:
+        gsPath:
           type: string
-          description: bucket of the blob
-        blobName:
-          type: string
-          description: path to the blob in the bucket
+          description: GS Path to the blob
         duration:
           type: number
           description: Optional validity duration of the link in minutes. Defaults to 1 hour.

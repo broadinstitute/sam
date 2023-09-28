@@ -56,6 +56,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
     val googleProject = genGoogleProject.sample.get
     val gcsBucket = genGcsBucketName.sample.get
     val gcsBlob = genGcsBlobName.sample.get
+    val gsPath = s"gs://${gcsBucket.value}/${gcsBlob.value}"
     val petServiceAccount = genPetServiceAccount.sample.get
     val petServiceAccountKey = RealKeyMockGoogleIamDAO.generateNewRealKey(petServiceAccount.serviceAccount.email)._2
     val expectedUrl = new URL("https", "localhost", 80, s"${gcsBucket.value}/${gcsBlob.value}")
@@ -173,8 +174,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         runAndWait(
           googleExtensions.getRequesterPaysSignedUrl(
             newGoogleUser,
-            gcsBucket,
-            gcsBlob,
+            gsPath,
             None,
             requesterPaysProject = Some(requesterPaysGoogleProject),
             samRequestContext
@@ -192,7 +192,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         )
       }
       "does not include a requester pays user project if none is provided" in {
-        runAndWait(googleExtensions.getRequesterPaysSignedUrl(newGoogleUser, gcsBucket, gcsBlob, None, requesterPaysProject = None, samRequestContext))
+        runAndWait(googleExtensions.getRequesterPaysSignedUrl(newGoogleUser, gsPath, None, requesterPaysProject = None, samRequestContext))
         verify(mockGoogleStorageService).getSignedBlobUrl(
           eqTo(gcsBucket),
           eqTo(gcsBlob),
