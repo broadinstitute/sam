@@ -194,14 +194,33 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
             }
         } ~
         pathPrefix("user") {
-          path("proxyGroup" / Segment) { targetUserEmail =>
-            complete {
-              googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail), samRequestContext).map {
-                case Some(proxyEmail) => StatusCodes.OK -> Option(proxyEmail)
-                case _ => StatusCodes.NotFound -> None
+          pathPrefix("signedUrlForBlob") {
+            post {
+              entity(as[RequesterPaysSignedUrlRequest]) { request =>
+                complete {
+                  googleExtensions
+                    .getRequesterPaysSignedUrl(
+                      samUser,
+                      request.gsPath,
+                      request.duration,
+                      request.requesterPaysProject.map(GoogleProject),
+                      samRequestContext
+                    )
+                    .map { signedUrl =>
+                      StatusCodes.OK -> JsString(signedUrl.toString)
+                    }
+                }
               }
             }
-          }
+          } ~
+            path("proxyGroup" / Segment) { targetUserEmail =>
+              complete {
+                googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail), samRequestContext).map {
+                  case Some(proxyEmail) => StatusCodes.OK -> Option(proxyEmail)
+                  case _ => StatusCodes.NotFound -> None
+                }
+              }
+            }
         } ~
         pathPrefix("resource") {
           path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>

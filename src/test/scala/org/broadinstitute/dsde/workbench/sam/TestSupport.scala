@@ -10,7 +10,7 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.mock._
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
@@ -87,7 +87,8 @@ object TestSupport extends TestSupport {
       googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
       policyAccessDAO: Option[AccessPolicyDAO] = None,
       policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-      resourceServiceOpt: Option[ResourceService] = None
+      resourceServiceOpt: Option[ResourceService] = None,
+      googProjectDAO: Option[GoogleProjectDAO] = None
   )(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
@@ -98,7 +99,7 @@ object TestSupport extends TestSupport {
     val googleDisableUsersPubSubDAO = new MockGooglePubSubDAO()
     val googleKeyCachePubSubDAO = new MockGooglePubSubDAO()
     val googleStorageDAO = new MockGoogleStorageDAO()
-    val googleProjectDAO = new MockGoogleProjectDAO()
+    val googleProjectDAO = googProjectDAO.getOrElse(new MockGoogleProjectDAO())
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
     val cloudKeyCache = new GoogleKeyCache(
       distributedLock,
