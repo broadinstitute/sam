@@ -127,8 +127,8 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
   private[service] def savePolicyMembers(policy: AccessPolicy) =
     policy.members.toList.traverse {
       case u: WorkbenchUserId =>
-        dirDAO.createUser(SamUser(u, None, WorkbenchEmail(u.value + "@foo.bar"), None, false, None), samRequestContext).recoverWith {
-          case _: WorkbenchException => IO.pure(SamUser(u, None, WorkbenchEmail(u.value + "@foo.bar"), None, false, None))
+        dirDAO.createUser(SamUser(u, None, WorkbenchEmail(u.value + "@foo.bar"), None, false), samRequestContext).recoverWith { case _: WorkbenchException =>
+          IO.pure(SamUser(u, None, WorkbenchEmail(u.value + "@foo.bar"), None, false))
         }
       case g: WorkbenchGroupName =>
         managedGroupService.createManagedGroup(ResourceId(g.value), dummyUser, samRequestContext = samRequestContext).recoverWith {

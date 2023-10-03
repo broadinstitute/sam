@@ -447,7 +447,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     )
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true, None)
+    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true)
     runAndWait(samRoutes.userService.createUser(secondUser, samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -560,7 +560,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     // create a second owner so our test user can leave the owner policy without orphaning the resource
-    val secondOwner = SamUser(WorkbenchUserId("1111112"), Some(GoogleSubjectId("1111112")), WorkbenchEmail("seconduser@gmail.com"), None, true, None)
+    val secondOwner = SamUser(WorkbenchUserId("1111112"), Some(GoogleSubjectId("1111112")), WorkbenchEmail("seconduser@gmail.com"), None, true)
     runAndWait(samRoutes.userService.createUser(secondOwner, samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -668,7 +668,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     )
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true, None)
+    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true)
     runAndWait(samRoutes.userService.createUser(secondUser, samRequestContext))
 
     val resourceId = ResourceId("foo")

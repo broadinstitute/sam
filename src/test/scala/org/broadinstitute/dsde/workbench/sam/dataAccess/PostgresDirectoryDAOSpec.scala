@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 import org.broadinstitute.dsde.workbench.sam.azure._
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
+import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFreeSpec, TestSupport}
@@ -423,7 +424,6 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
           user.email should equal(expectedUser.email)
           user.azureB2CId should equal(expectedUser.azureB2CId)
           user.enabled should equal(expectedUser.enabled)
-          user.acceptedTosVersion should equal(expectedUser.acceptedTosVersion)
           user.registeredAt should equal(expectedUser.registeredAt)
         }
       }
@@ -503,7 +503,6 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
           user.email should equal(expectedUser.email)
           user.azureB2CId should equal(expectedUser.azureB2CId)
           user.enabled should equal(expectedUser.enabled)
-          user.acceptedTosVersion should equal(expectedUser.acceptedTosVersion)
           user.createdAt should equal(expectedUser.createdAt)
           user.registeredAt should equal(expectedUser.registeredAt)
           user.updatedAt should equal(expectedUser.updatedAt)
@@ -1485,6 +1484,13 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       "accept the terms of service for a new user" in {
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+
+        // Assert
+        val userTos = dao.getUserTos(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync()
+        userTos should not be empty
+        userTos.get.createdAt should beAround(Instant.now())
+        userTos.get.action shouldBe TosTable.ACCEPT
+        userTos.get.version shouldBe tosConfig.version
       }
 
       "accept the terms of service for a user who has already accepted a previous version of the terms of service" in {
@@ -1493,50 +1499,53 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, "0", samRequestContext).unsafeRunSync() shouldBe true
         dao.acceptTermsOfService(defaultUser.id, "2", samRequestContext).unsafeRunSync() shouldBe true
-      }
-
-      "sets the updatedAt datetime to the current datetime" in {
-        // Arrange
-        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
-          updatedAt = Instant.parse("2010-10-10T10:10:10Z")
-        )
-        dao.createUser(user, samRequestContext).unsafeRunSync()
-
-        // Act
-        dao.acceptTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
 
         // Assert
-        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        loadedUser.value.updatedAt should beAround(Instant.now())
+        val userTos = dao.getUserTos(defaultUser.id, "2", samRequestContext).unsafeRunSync()
+        userTos should not be empty
+        userTos.get.createdAt should beAround(Instant.now())
+        userTos.get.action shouldBe TosTable.ACCEPT
+        userTos.get.version shouldBe "2"
       }
     }
 
     "rejectTermsOfService" - {
-      "reject the terms of service for an existing user" in {
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
-        dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
-      }
-
-      "cannot reject the terms of service for a user who has not accepted terms of service previously" in {
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
-      }
-
-      "sets the updatedAt datetime to the current datetime" in {
-        // Arrange
-        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
-          updatedAt = Instant.parse("2010-10-10T10:10:10Z"),
-          acceptedTosVersion = Option(tosConfig.version)
-        )
+      "reject the terms of service for an new user" in {
+        val user = Generator.genWorkbenchUserGoogle.sample.get
         dao.createUser(user, samRequestContext).unsafeRunSync()
-
-        // Act
-        dao.rejectTermsOfService(user.id, samRequestContext).unsafeRunSync()
+        dao.rejectTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
 
         // Assert
-        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        loadedUser.value.updatedAt should beAround(Instant.now())
+        val userTos = dao.getUserTos(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
+        userTos should not be empty
+        userTos.get.createdAt should beAround(Instant.now())
+        userTos.get.action shouldBe TosTable.REJECT
+        userTos.get.version shouldBe tosConfig.version
+      }
+
+      "reject the terms of service for an existing user" in {
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        dao.acceptTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+        dao.rejectTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+
+        // Assert
+        val userTos = dao.getUserTos(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
+        userTos should not be empty
+        userTos.get.createdAt should beAround(Instant.now())
+        userTos.get.action shouldBe TosTable.REJECT
+        userTos.get.version shouldBe tosConfig.version
+      }
+    }
+
+    "load terms of service" - {
+      "returns none if no record" in {
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val userTos = dao.getUserTos(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
+        userTos should be(None)
       }
     }
 

@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{samRequestContext, tosConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
@@ -206,14 +206,13 @@ object TestSamRoutes {
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
     val azureService = new AzureService(crlService.getOrElse(MockCrlService(Option(user))), directoryDAO, new MockAzureManagedResourceGroupDAO)
-    val userToTestWith = if (acceptTermsOfService) user.copy(acceptedTosVersion = Some(tosConfig.version)) else user
     new TestSamRoutes(
       mockResourceService,
       policyEvaluatorService,
       mockUserService,
       mockStatusService,
       mockManagedGroupService,
-      userToTestWith,
+      user,
       tosService = mockTosService,
       cloudExtensions = cloudXtns,
       azureService = Some(azureService)

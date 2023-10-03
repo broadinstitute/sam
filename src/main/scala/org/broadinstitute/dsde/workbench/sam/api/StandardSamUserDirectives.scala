@@ -61,7 +61,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     val googleSubjectId = (oidcHeaders.externalId.left.toOption ++ oidcHeaders.googleSubjectIdFromAzure).headOption
     val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
 
-    SamUser(genWorkbenchUserId(System.currentTimeMillis()), googleSubjectId, oidcHeaders.email, azureB2CId, false, None)
+    SamUser(genWorkbenchUserId(System.currentTimeMillis()), googleSubjectId, oidcHeaders.email, azureB2CId, false)
   }
 
   /** Utility function that knows how to convert all the various headers into OIDCHeaders
@@ -122,7 +122,7 @@ object StandardSamUserDirectives {
   def getActiveSamUser(oidcHeaders: OIDCHeaders, userService: UserService, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
       user <- getSamUser(oidcHeaders, userService, samRequestContext)
-      tosComplianceDetails <- tosService.getTosComplianceStatus(user)
+      tosComplianceDetails <- tosService.getTosComplianceStatus(user, samRequestContext)
     } yield {
       if (!tosComplianceDetails.permitsSystemUsage) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User must accept the latest terms of service."))

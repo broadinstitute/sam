@@ -10,25 +10,25 @@
       <column name="sam_user_id" type="VARCHAR">
         <constraints primaryKey="true" foreignKeyName="FK_TOS_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
       </column>
-      <column name="terms_of_service_version" type="VARCHAR(40)">
+      <column name="version" type="VARCHAR(40)">
         <constraints primaryKey="true"/>
       </column>
       <column name="action" type="VARCHAR">
         <constraints primaryKey="true"/>
       </column>
-      <column name="updated_at" type="timestamptz"/>
+      <column name="created_at" type="timestamptz"/>
     </createTable>
 
     <sql stripComments="true">
       INSERT INTO sam_user_terms_of_service
       (sam_user_id,
-       terms_of_service_version,
+       version,
        action,
-       updated_at)
+       created_at)
       SELECT su.id                    as sam_user_id,
-             su.accepted_tos_version  as terms_of_service_version,
+             su.accepted_tos_version  as version,
              'ACCEPT'                 as action,
-       '1970-01-01 00:00:00-00' as updated_at
+       '1970-01-01 00:00:00-00' as created_at
       FROM sam_user su
       WHERE su.accepted_tos_version is not null;
     </sql>

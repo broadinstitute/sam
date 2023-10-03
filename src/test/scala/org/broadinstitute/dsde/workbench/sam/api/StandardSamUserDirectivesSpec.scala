@@ -141,7 +141,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(externalId, email, accessToken)
     val user = TestSupport.newUserWithAcceptedTos(
       services,
-      SamUser(userId, externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None),
+      SamUser(userId, externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true),
       samRequestContext
     )
     Get("/").withHeaders(headers) ~>
@@ -255,7 +255,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
           services.withNewUser(samRequestContext)(user => complete(user.copy(id = WorkbenchUserId("")).toString))
         } ~> check {
           status shouldBe StatusCodes.OK
-          responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption, false, None).toString
+          responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption, false).toString
         }
   }
 
@@ -268,7 +268,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
           services.withNewUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))
         } ~> check {
           status shouldBe StatusCodes.OK
-          responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId), false, None).toString
+          responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId), false).toString
         }
   }
 

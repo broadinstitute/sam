@@ -10,7 +10,8 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
+import org.broadinstitute.dsde.workbench.sam.model.{SamUser, SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
 
 import scala.concurrent.ExecutionContext
 import java.io.{FileNotFoundException, IOException}
@@ -27,32 +28,41 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
 
   def rejectTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao
-      .rejectTermsOfService(userId, samRequestContext)
+      .rejectTermsOfService(userId, tosConfig.version, samRequestContext)
       .withInfoLogMessage(s"$userId has rejected version ${tosConfig.version} of the Terms of Service")
 
   @Deprecated
-  def getTosDetails(samUser: SamUser): IO[TermsOfServiceDetails] =
-    IO.pure(TermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, samUser.acceptedTosVersion))
+  def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceDetails] =
+    directoryDao.getUserTos(samUser.id, tosConfig.version, samRequestContext).map { tos =>
+      TermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
+    }
 
-  def getTosComplianceStatus(samUser: SamUser): IO[TermsOfServiceComplianceStatus] = {
-    val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(samUser)
-    val permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser)
-    IO.pure(TermsOfServiceComplianceStatus(samUser.id, userHasAcceptedLatestVersion, permitsSystemUsage))
-  }
+  def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] =
+    directoryDao.getUserTos(samUser.id, tosConfig.version, samRequestContext).map { tos =>
+      val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(tos)
+      val permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser, tos)
+      TermsOfServiceComplianceStatus(samUser.id, userHasAcceptedLatestVersion, permitsSystemUsage)
+    }
 
   /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS, or is a service account
     */
-  private def tosAcceptancePermitsSystemUsage(user: SamUser): Boolean = {
-    val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(user)
-    val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && user.acceptedTosVersion.isDefined
+  private def tosAcceptancePermitsSystemUsage(user: SamUser, userTos: Option[SamUserTos]): Boolean = {
     val userIsServiceAccount = StandardSamUserDirectives.SAdomain.matches(user.email.value) // Service Account users do not need to accept ToS
-    val tosDisabled = !tosConfig.isTosEnabled
+    val userIsPermitted = userTos.exists { tos =>
+      val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(Option(tos))
+      val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && tos.action == TosTable.ACCEPT
+      val tosDisabled = !tosConfig.isTosEnabled
 
-    userHasAcceptedLatestVersion || userCanUseSystemUnderGracePeriod || userIsServiceAccount || tosDisabled
+      userHasAcceptedLatestVersion || userCanUseSystemUnderGracePeriod || tosDisabled
+
+    }
+    userIsPermitted || userIsServiceAccount
   }
 
-  private def userHasAcceptedLatestTosVersion(samUser: SamUser): Boolean =
-    samUser.acceptedTosVersion.contains(tosConfig.version)
+  private def userHasAcceptedLatestTosVersion(userTos: Option[SamUserTos]): Boolean =
+    userTos.exists { tos =>
+      tos.version.contains(tosConfig.version) && tos.action == TosTable.ACCEPT
+    }
 
   /** Get the terms of service text and send it to the caller
     * @return
