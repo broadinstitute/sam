@@ -33,12 +33,12 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
 
   @Deprecated
   def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceDetails] =
-    directoryDao.getUserTos(samUser.id, tosConfig.version, samRequestContext).map { tos =>
+    directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>
       TermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
 
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] =
-    directoryDao.getUserTos(samUser.id, tosConfig.version, samRequestContext).map { tos =>
+    directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>
       val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(tos)
       val permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser, tos)
       TermsOfServiceComplianceStatus(samUser.id, userHasAcceptedLatestVersion, permitsSystemUsage)

@@ -1486,7 +1486,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
 
         // Assert
-        val userTos = dao.getUserTos(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync()
+        val userTos = dao.getUserTos(defaultUser.id, samRequestContext).unsafeRunSync()
         userTos should not be empty
         userTos.get.createdAt should beAround(Instant.now())
         userTos.get.action shouldBe TosTable.ACCEPT
@@ -1501,7 +1501,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.acceptTermsOfService(defaultUser.id, "2", samRequestContext).unsafeRunSync() shouldBe true
 
         // Assert
-        val userTos = dao.getUserTos(defaultUser.id, "2", samRequestContext).unsafeRunSync()
+        val userTos = dao.getUserTos(defaultUser.id, samRequestContext).unsafeRunSync()
         userTos should not be empty
         userTos.get.createdAt should beAround(Instant.now())
         userTos.get.action shouldBe TosTable.ACCEPT
@@ -1516,7 +1516,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.rejectTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
 
         // Assert
-        val userTos = dao.getUserTos(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
+        val userTos = dao.getUserTos(user.id, samRequestContext).unsafeRunSync()
         userTos should not be empty
         userTos.get.createdAt should beAround(Instant.now())
         userTos.get.action shouldBe TosTable.REJECT
@@ -1530,7 +1530,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.rejectTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
 
         // Assert
-        val userTos = dao.getUserTos(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
+        val userTos = dao.getUserTos(user.id, samRequestContext).unsafeRunSync()
         userTos should not be empty
         userTos.get.createdAt should beAround(Instant.now())
         userTos.get.action shouldBe TosTable.REJECT
@@ -1544,7 +1544,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.createUser(user, samRequestContext).unsafeRunSync()
 
         // Assert
-        val userTos = dao.getUserTos(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
+        val userTos = dao.getUserTos(user.id, samRequestContext).unsafeRunSync()
         userTos should be(None)
       }
     }

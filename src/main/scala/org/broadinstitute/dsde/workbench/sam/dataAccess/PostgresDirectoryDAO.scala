@@ -647,7 +647,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
-  override def getUserTos(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
     readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
@@ -655,7 +655,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val loadUserTosQuery =
         samsql"""select ${tosTable.resultAll}
               from ${TosTable as tosTable}
-              where ${column.samUserId} = ${userId} and ${column.version} = ${tosVersion}
+              where ${column.samUserId} = ${userId}
               order by ${column.createdAt} desc
               limit 1"""
 
