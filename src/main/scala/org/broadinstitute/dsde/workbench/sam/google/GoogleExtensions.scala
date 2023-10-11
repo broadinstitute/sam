@@ -140,8 +140,7 @@ class GoogleExtensions(
                 Option(googleSubjectId),
                 googleServicesConfig.serviceAccountClientEmail,
                 None,
-                false,
-                None
+                false
               )
               samApplication.userService.createUser(newUser, samRequestContext).map(_ => newUser)
           }
@@ -424,7 +423,7 @@ class GoogleExtensions(
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) =>
-          getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), project, samRequestContext).map(Option(_))
+          getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), project, samRequestContext).map(Option(_))
         case _ => IO.pure(None)
       }
     } yield key
@@ -445,7 +444,7 @@ class GoogleExtensions(
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) =>
-          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), samRequestContext))).map(Option(_))
+          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), samRequestContext))).map(Option(_))
         case _ => IO.none
       }
     } yield key

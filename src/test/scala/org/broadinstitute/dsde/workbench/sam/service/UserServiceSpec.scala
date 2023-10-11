@@ -112,7 +112,7 @@ class OldUserServiceMockSpec
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
-    when(mockTosService.getTosComplianceStatus(any[SamUser]))
+    when(mockTosService.getTosComplianceStatus(any[SamUser], any[SamRequestContext]))
       .thenAnswer((i: InvocationOnMock) => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, true, true)))
 
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
@@ -143,7 +143,8 @@ class OldUserServiceMockSpec
   }
 
   it should "return UserStatusDiagnostics.tosAccepted as false if user's TOS status is false" in {
-    when(mockTosService.getTosComplianceStatus(enabledUser)).thenReturn(IO.pure(TermsOfServiceComplianceStatus(enabledUser.id, false, false)))
+    when(mockTosService.getTosComplianceStatus(enabledUser, samRequestContext))
+      .thenReturn(IO.pure(TermsOfServiceComplianceStatus(enabledUser.id, false, false)))
     val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).unsafeRunSync()
     status.value.tosAccepted shouldBe false
   }
@@ -506,7 +507,7 @@ class OldUserServiceSpec
     // Lookup the invited user and their ID
     val invitedUserId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
     val invitedUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
-    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false, None)
+    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false)
 
     // Give them a fake GoogleSubjectId and a new WorkbenchUserId and use that to register them.
     // The real code in org/broadinstitute/dsde/workbench/sam/api/UserRoutes.scala calls
@@ -514,7 +515,7 @@ class OldUserServiceSpec
     // WorkbenchUserId for the SamUser on the request.
     val googleSubjectId = Option(GoogleSubjectId("123456789"))
     val newRegisteringUserId = WorkbenchUserId("11111111111111111")
-    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false, None)
+    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false)
     val registeredUser = service.createUser(registeringUser, samRequestContext).unsafeRunSync()
     registeredUser.userInfo.userSubjectId should {
       equal(invitedUser.id) and
@@ -548,14 +549,14 @@ class OldUserServiceSpec
 
     val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
     userInPostgres.value should {
-      equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None))
+      equal(SamUser(invitedUserId, None, inviteeEmail, None, false))
     }
 
     val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true, None)
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true)
   }
 
   it should "update azureB2CId for this user" in {
@@ -566,13 +567,13 @@ class OldUserServiceSpec
     val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
 
     val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    userInPostgres.value should equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None))
+    userInPostgres.value should equal(SamUser(invitedUserId, None, inviteeEmail, None, false))
 
     val registeringUser = genWorkbenchUserAzure.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, None, inviteeEmail, registeringUser.azureB2CId, true, None)
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, None, inviteeEmail, registeringUser.azureB2CId, true)
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {

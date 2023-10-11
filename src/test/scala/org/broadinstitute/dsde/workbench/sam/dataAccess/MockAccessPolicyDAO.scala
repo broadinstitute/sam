@@ -214,7 +214,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
       policy.members
     }
     members.flatten.collect { case u: WorkbenchUserId =>
-      SamUser(u, Some(GoogleSubjectId(u.value)), WorkbenchEmail("dummy"), None, false, None)
+      SamUser(u, Some(GoogleSubjectId(u.value)), WorkbenchEmail("dummy"), None, false)
     }.toSet
   }
 

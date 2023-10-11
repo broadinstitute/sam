@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+  <changeSet logicalFilePath="dummy" author="tgarwood" id="add_tos_audit_table">
+    <createTable tableName="SAM_USER_TERMS_OF_SERVICE">
+      <column name="sam_user_id" type="VARCHAR">
+        <constraints primaryKey="true" foreignKeyName="FK_TOS_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
+      </column>
+      <column name="version" type="VARCHAR(40)">
+        <constraints primaryKey="true"/>
+      </column>
+      <column name="action" type="VARCHAR">
+        <constraints primaryKey="true"/>
+      </column>
+      <column name="created_at" type="timestamptz"/>
+    </createTable>
+
+    <sql stripComments="true">
+      INSERT INTO sam_user_terms_of_service
+      (sam_user_id,
+       version,
+       action,
+       created_at)
+      SELECT su.id                    as sam_user_id,
+             su.accepted_tos_version  as version,
+             'ACCEPT'                 as action,
+       '1970-01-01 00:00:00-00' as created_at
+      FROM sam_user su
+      WHERE su.accepted_tos_version is not null;
+    </sql>
+
+      <dropColumn tableName="sam_user">
+      <column name="accepted_tos_version"/>
+    </dropColumn>
+  </changeSet>
+</databaseChangeLog>

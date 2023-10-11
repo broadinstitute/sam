@@ -144,8 +144,8 @@ class MockUserService(
   def acceptTermsOfServiceDAO(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDAO.acceptTermsOfService(userId, tosVersion, samRequestContext)
 
-  def rejectTermsOfServiceDAO(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
-    directoryDAO.rejectTermsOfService(userId, samRequestContext)
+  def rejectTermsOfServiceDAO(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
+    directoryDAO.rejectTermsOfService(userId, tosVersion, samRequestContext)
 
   def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] =
     directoryDAO.createPetManagedIdentity(petManagedIdentity, samRequestContext)
