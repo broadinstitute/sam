@@ -213,7 +213,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains)
         existingSubject <- directoryDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext)
         createdUser <- existingSubject match {
-          case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false, None), samRequestContext)
+          case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false), samRequestContext)
           case Some(_) =>
             IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${inviteeEmail} already exists")))
         }
@@ -273,7 +273,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
               allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case _: NameNotFoundException =>
                 false
               }
-              tosComplianceStatus <- tosService.getTosComplianceStatus(user)
+              tosComplianceStatus <- tosService.getTosComplianceStatus(user, samRequestContext)
               adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
             } yield {
               // We are removing references to LDAP but this will require an API version change here, so we are leaving
@@ -316,7 +316,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   // Mixing up the endpoint to return user info AND status information is only causing problems and confusion
   def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] =
     for {
-      tosAcceptanceDetails <- tosService.getTosComplianceStatus(user)
+      tosAcceptanceDetails <- tosService.getTosComplianceStatus(user, samRequestContext)
     } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.permitsSystemUsage && user.enabled, user.enabled)
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusDiagnostics]] =
@@ -324,7 +324,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
           // pulled out of for comprehension to allow concurrent execution
-          val tosAcceptanceStatus = tosService.getTosComplianceStatus(user)
+          val tosAcceptanceStatus = tosService.getTosComplianceStatus(user, samRequestContext)
           val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext)
           val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
             directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case e: NameNotFoundException => false }

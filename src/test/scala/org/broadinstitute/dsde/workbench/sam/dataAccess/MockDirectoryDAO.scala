@@ -8,7 +8,8 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUser, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -20,6 +21,7 @@ import scala.collection.mutable
 class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap(), passStatusCheck: Boolean = true) extends DirectoryDAO {
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
+  private val userTos: mutable.Map[WorkbenchUserId, SamUserTos] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
 
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
@@ -324,24 +326,25 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     loadUser(userId, samRequestContext).map {
       case None => false
       case Some(user) =>
-        if (user.acceptedTosVersion.contains(tosVersion)) {
-          false
-        } else {
-          users.put(userId, user.copy(acceptedTosVersion = Option(tosVersion)))
-          true
-        }
+        users.put(userId, user)
+        userTos.put(userId, SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
+        true
     }
 
-  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
+  override def rejectTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
     loadUser(userId, samRequestContext).map {
       case None => false
       case Some(user) =>
-        if (user.acceptedTosVersion.isEmpty) {
-          false
-        } else {
-          users.put(userId, user.copy(acceptedTosVersion = None))
-          true
-        }
+        users.put(userId, user)
+        userTos.put(userId, SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
+        true
+    }
+
+  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    loadUser(userId, samRequestContext).map {
+      case None => None
+      case Some(_) =>
+        userTos.get(userId)
     }
 
   override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {
