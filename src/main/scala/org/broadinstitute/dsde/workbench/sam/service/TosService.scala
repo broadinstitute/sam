@@ -31,8 +31,8 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
   private val termsOfServiceUri = s"${tosConfig.baseUrl}/${tosConfig.version}/termsOfService.md"
   private val privacyPolicyUri = s"${tosConfig.baseUrl}/${tosConfig.version}/privacyPolicy.md"
 
-  val termsOfServiceText = RemoteDocument(termsOfServiceUri)
-  val privacyPolicyText = RemoteDocument(privacyPolicyUri)
+  val termsOfServiceText = TermsOfServiceDocument(termsOfServiceUri)
+  val privacyPolicyText = TermsOfServiceDocument(privacyPolicyUri)
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao
@@ -78,11 +78,11 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
     }
 }
 
-trait RemoteDocument {
+trait TermsOfServiceDocument {
   def apply(uri: String)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String
 }
 
-object RemoteDocument extends RemoteDocument with LazyLogging {
+object TermsOfServiceDocument extends TermsOfServiceDocument with LazyLogging {
   override def apply(uri: String)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String =
     if (uri.startsWith("classpath")) {
       getTextFromResource(uri)
@@ -90,7 +90,13 @@ object RemoteDocument extends RemoteDocument with LazyLogging {
       getTextFromWeb(uri)
     }
 
-  def getTextFromWeb(uri: String)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String = {
+  /** Get the contents of an HTTP resource.
+    * @param uri
+    *   HTTP(s) URI of a resource
+    * @return
+    *   The text of the document at the provided uri.
+    */
+  private def getTextFromWeb(uri: String)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String = {
     val future = for {
       response <- Http().singleRequest(Get(uri))
       text <- Unmarshal(response).to[String]
@@ -99,11 +105,17 @@ object RemoteDocument extends RemoteDocument with LazyLogging {
     Await.result(future.withInfoLogMessage(s"Retrieved Terms of Service doc from $uri"), Duration.apply(10, TimeUnit.SECONDS))
   }
 
-  def getTextFromResource(resourceUri: Uri): String = {
+  /** Get the contents of a resource on the classpath. Used for BEE Environments
+    * @param resourceUri
+    *   classpath resource uri
+    * @return
+    *   The text of a document in the classpath
+    */
+  private def getTextFromResource(resourceUri: String): String = {
     val fileStream =
       try {
         logger.debug(s"Reading $resourceUri")
-        Source.fromResource(resourceUri.path.toString())
+        Source.fromResource(resourceUri)
       } catch {
         case e: FileNotFoundException =>
           logger.error(s"$resourceUri file not found", e)
