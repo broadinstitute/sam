@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.client.RequestBuilding.Get
-import akka.http.scaladsl.model.{StatusCodes, Uri}
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
