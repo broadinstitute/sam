@@ -35,7 +35,7 @@ import org.scalatest.freespec.AnyFreeSpecLike
 
 import java.net.URL
 import java.util.concurrent.TimeUnit
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, Future}
 
 class NewGoogleExtensionsSpec(_system: ActorSystem)
     extends TestKit(_system)
@@ -51,11 +51,12 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
 
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
-  "GoogleExtensions.getSignedUrl" - {
+  "GoogleExtensions: Signed URLs" - {
     val newGoogleUser = genWorkbenchUserGoogle.sample.get
     val googleProject = genGoogleProject.sample.get
     val gcsBucket = genGcsBucketName.sample.get
     val gcsBlob = genGcsBlobName.sample.get
+    val gsPath = s"gs://${gcsBucket.value}/${gcsBlob.value}"
     val petServiceAccount = genPetServiceAccount.sample.get
     val petServiceAccountKey = RealKeyMockGoogleIamDAO.generateNewRealKey(petServiceAccount.serviceAccount.email)._2
     val expectedUrl = new URL("https", "localhost", 80, s"${gcsBucket.value}/${gcsBlob.value}")
@@ -109,55 +110,100 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         any[TimeUnit],
         any[Map[String, String]]
       )
+    "getSignedUrl" - {
+      "generates a signed URL for a GCS Object" in {
+        val signedUrl =
+          runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, requesterPays = true, samRequestContext))
 
-    "generates a signed URL for a GCS Object" in {
-      val signedUrl =
-        runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, requesterPays = true, samRequestContext))
+        signedUrl should be(expectedUrl)
 
-      signedUrl should be(expectedUrl)
+        verify(googleExtensions).createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
 
-      verify(googleExtensions).createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
+        verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
 
-      verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
+        verify(mockGoogleStorageService).getSignedBlobUrl(
+          eqTo(gcsBucket),
+          eqTo(gcsBlob),
+          argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
+          any[Option[TraceId]],
+          any[RetryConfig],
+          eqTo(60L),
+          eqTo(TimeUnit.MINUTES),
+          eqTo(Map("userProject" -> googleProject.value, "requestedBy" -> newGoogleUser.email.value))
+        )
+      }
 
-      verify(mockGoogleStorageService).getSignedBlobUrl(
-        eqTo(gcsBucket),
-        eqTo(gcsBlob),
-        argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
-        any[Option[TraceId]],
-        any[RetryConfig],
-        eqTo(60L),
-        eqTo(TimeUnit.MINUTES),
-        eqTo(Map("userProject" -> googleProject.value, "requestedBy" -> newGoogleUser.email.value))
-      )
+      "customizes link duration" in {
+        runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, Some(5L), requesterPays = true, samRequestContext))
+        verify(mockGoogleStorageService).getSignedBlobUrl(
+          eqTo(gcsBucket),
+          eqTo(gcsBlob),
+          argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
+          any[Option[TraceId]],
+          any[RetryConfig],
+          eqTo(5L),
+          eqTo(TimeUnit.MINUTES),
+          eqTo(Map("userProject" -> googleProject.value, "requestedBy" -> newGoogleUser.email.value))
+        )
+      }
+
+      "does not include requester pays user project if told to skip it" in {
+        runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, requesterPays = false, samRequestContext))
+        verify(mockGoogleStorageService).getSignedBlobUrl(
+          eqTo(gcsBucket),
+          eqTo(gcsBlob),
+          argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
+          any[Option[TraceId]],
+          any[RetryConfig],
+          eqTo(60L),
+          eqTo(TimeUnit.MINUTES),
+          eqTo(Map("requestedBy" -> newGoogleUser.email.value))
+        )
+      }
     }
+    "getRequesterPaysSignedUrl" - {
+      val requesterPaysGoogleProject = genGoogleProject.sample.get
+      val arbitraryPetServiceAccount = genPetServiceAccount.sample.get
+      val arbitraryPetServiceAccountKey = RealKeyMockGoogleIamDAO.generateNewRealKey(arbitraryPetServiceAccount.serviceAccount.email)._2
 
-    "customizes link duration" in {
-      runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, Some(5L), requesterPays = true, samRequestContext))
-      verify(mockGoogleStorageService).getSignedBlobUrl(
-        eqTo(gcsBucket),
-        eqTo(gcsBlob),
-        argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
-        any[Option[TraceId]],
-        any[RetryConfig],
-        eqTo(5L),
-        eqTo(TimeUnit.MINUTES),
-        eqTo(Map("userProject" -> googleProject.value, "requestedBy" -> newGoogleUser.email.value))
-      )
-    }
+      doReturn(Future.successful(arbitraryPetServiceAccountKey))
+        .when(googleExtensions)
+        .getArbitraryPetServiceAccountKey(eqTo(newGoogleUser), any[SamRequestContext])
 
-    "does not include requester pays user project if told to skip it" in {
-      runAndWait(googleExtensions.getSignedUrl(newGoogleUser, googleProject, gcsBucket, gcsBlob, None, requesterPays = false, samRequestContext))
-      verify(mockGoogleStorageService).getSignedBlobUrl(
-        eqTo(gcsBucket),
-        eqTo(gcsBlob),
-        argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(petServiceAccount.serviceAccount.email.value)),
-        any[Option[TraceId]],
-        any[RetryConfig],
-        eqTo(60L),
-        eqTo(TimeUnit.MINUTES),
-        eqTo(Map("requestedBy" -> newGoogleUser.email.value))
-      )
+      "includes the requester pays user project if provided" in {
+        runAndWait(
+          googleExtensions.getRequesterPaysSignedUrl(
+            newGoogleUser,
+            gsPath,
+            None,
+            requesterPaysProject = Some(requesterPaysGoogleProject),
+            samRequestContext
+          )
+        )
+        verify(mockGoogleStorageService).getSignedBlobUrl(
+          eqTo(gcsBucket),
+          eqTo(gcsBlob),
+          argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(arbitraryPetServiceAccount.serviceAccount.email.value)),
+          any[Option[TraceId]],
+          any[RetryConfig],
+          eqTo(60L),
+          eqTo(TimeUnit.MINUTES),
+          eqTo(Map("requestedBy" -> newGoogleUser.email.value, "userProject" -> requesterPaysGoogleProject.value))
+        )
+      }
+      "does not include a requester pays user project if none is provided" in {
+        runAndWait(googleExtensions.getRequesterPaysSignedUrl(newGoogleUser, gsPath, None, requesterPaysProject = None, samRequestContext))
+        verify(mockGoogleStorageService).getSignedBlobUrl(
+          eqTo(gcsBucket),
+          eqTo(gcsBlob),
+          argThat((creds: ServiceAccountCredentials) => creds.getClientEmail.equals(arbitraryPetServiceAccount.serviceAccount.email.value)),
+          any[Option[TraceId]],
+          any[RetryConfig],
+          eqTo(60L),
+          eqTo(TimeUnit.MINUTES),
+          eqTo(Map("requestedBy" -> newGoogleUser.email.value))
+        )
+      }
     }
   }
 }

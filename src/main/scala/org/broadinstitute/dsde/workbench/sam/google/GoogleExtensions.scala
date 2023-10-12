@@ -9,6 +9,7 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.cloud.storage.BlobId
 import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
@@ -84,6 +85,7 @@ class GoogleExtensions(
 
   private val userProjectQueryParam = "userProject"
   private val requestedByQueryParam = "requestedBy"
+  private val defaultSignedUrlDuration = 60L
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
@@ -138,8 +140,7 @@ class GoogleExtensions(
                 Option(googleSubjectId),
                 googleServicesConfig.serviceAccountClientEmail,
                 None,
-                false,
-                None
+                false
               )
               samApplication.userService.createUser(newUser, samRequestContext).map(_ => newUser)
           }
@@ -422,7 +423,7 @@ class GoogleExtensions(
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) =>
-          getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), project, samRequestContext).map(Option(_))
+          getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), project, samRequestContext).map(Option(_))
         case _ => IO.pure(None)
       }
     } yield key
@@ -443,7 +444,7 @@ class GoogleExtensions(
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) =>
-          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), samRequestContext))).map(Option(_))
+          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), samRequestContext))).map(Option(_))
         case _ => IO.none
       }
     } yield key
@@ -645,6 +646,35 @@ class GoogleExtensions(
     )
   }
 
+  private def fromGsPath(gsPath: String) = {
+    val pattern = "gs://.*/.*".r
+    if (!pattern.matches(gsPath)) {
+      throw new IllegalArgumentException(s"$gsPath is not a valid gsutil URI (i.e. \"gs://bucket/blob\")")
+    }
+    val blobNameStartIndex = gsPath.indexOf('/', 5)
+    val bucketName = gsPath.substring(5, blobNameStartIndex)
+    val blobName = gsPath.substring(blobNameStartIndex + 1)
+    BlobId.of(bucketName, blobName)
+  }
+
+  def getRequesterPaysSignedUrl(
+      samUser: SamUser,
+      gsPath: String,
+      duration: Option[Long],
+      requesterPaysProject: Option[GoogleProject],
+      samRequestContext: SamRequestContext
+  ): IO[URL] = {
+    val urlParamsMap: Map[String, String] = requesterPaysProject.map(p => Map(userProjectQueryParam -> p.value)).getOrElse(Map.empty)
+    val blobId = fromGsPath(gsPath)
+    val bucket = GcsBucketName(blobId.getBucket)
+    val objectName = GcsBlobName(blobId.getName)
+    for {
+      petKey <- IO.fromFuture(IO(getArbitraryPetServiceAccountKey(samUser, samRequestContext)))
+      serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
+      url <- getSignedUrl(samUser, bucket, objectName, duration, urlParamsMap, serviceAccountCredentials)
+    } yield url
+  }
+
   def getSignedUrl(
       samUser: SamUser,
       project: GoogleProject,
@@ -659,20 +689,31 @@ class GoogleExtensions(
       petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
       petKey <- googleKeyCache.getKey(petServiceAccount)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
-      timeInMinutes = duration.getOrElse(60L)
-      queryParams = urlParamsMap + (requestedByQueryParam -> samUser.email.value)
-      url <- googleStorageService
-        .getSignedBlobUrl(
-          bucket,
-          name,
-          serviceAccountCredentials,
-          expirationTime = timeInMinutes,
-          expirationTimeUnit = TimeUnit.MINUTES,
-          queryParams = queryParams
-        )
-        .compile
-        .lastOrError
+      url <- getSignedUrl(samUser, bucket, name, duration, urlParamsMap, serviceAccountCredentials)
     } yield url
+  }
+
+  private def getSignedUrl(
+      samUser: SamUser,
+      bucket: GcsBucketName,
+      name: GcsBlobName,
+      duration: Option[Long],
+      urlParams: Map[String, String],
+      credentials: ServiceAccountCredentials
+  ): IO[URL] = {
+    val timeInMinutes = duration.getOrElse(defaultSignedUrlDuration)
+    val queryParams = urlParams + (requestedByQueryParam -> samUser.email.value)
+    googleStorageService
+      .getSignedBlobUrl(
+        bucket,
+        name,
+        credentials,
+        expirationTime = timeInMinutes,
+        expirationTimeUnit = TimeUnit.MINUTES,
+        queryParams = queryParams
+      )
+      .compile
+      .lastOrError
   }
 
   override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)

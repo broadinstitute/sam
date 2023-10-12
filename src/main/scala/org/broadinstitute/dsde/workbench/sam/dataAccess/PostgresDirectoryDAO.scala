@@ -353,7 +353,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                   ${userColumn.googleSubjectId},
                   ${userColumn.enabled},
                   ${userColumn.azureB2cId},
-                  ${userColumn.acceptedTosVersion},
                   ${userColumn.createdAt},
                   ${userColumn.registeredAt},
                   ${userColumn.updatedAt})
@@ -363,7 +362,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                   ${newUser.googleSubjectId},
                   ${newUser.enabled},
                   ${newUser.azureB2CId},
-                  ${newUser.acceptedTosVersion},
                   ${newUser.createdAt},
                   ${newUser.registeredAt},
                   ${newUser.updatedAt})"""
@@ -631,25 +629,38 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       }
     }
 
-  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
+  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] = {
+    val tosTable = TosTable.syntax
+    val tosColumns = TosTable.column
     serializableWriteTransaction("acceptTermsOfService", samRequestContext) { implicit session =>
-      val u = UserTable.column
-      samsql"""update ${UserTable.table}
-               set (${u.acceptedTosVersion}, ${u.updatedAt}) =
-               (${tosVersion}, ${Instant.now()})
-               where ${u.id} = ${userId}
-                and (${u.acceptedTosVersion} is null
-                or ${u.acceptedTosVersion} != ${tosVersion})""".update().apply() > 0
+      samsql"""insert into ${TosTable as tosTable} (${tosColumns.samUserId}, ${tosColumns.version}, ${tosColumns.action}, ${tosColumns.createdAt})
+               values ($userId, $tosVersion, ${TosTable.ACCEPT}, ${Instant.now()})""".update().apply() > 0
     }
+  }
 
-  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
+  override def rejectTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] = {
+    val tosTable = TosTable.syntax
+    val tosColumns = TosTable.column
     serializableWriteTransaction("rejectTermsOfService", samRequestContext) { implicit session =>
-      val u = UserTable.column
-      samsql"""update ${UserTable.table}
-               set (${u.acceptedTosVersion}, ${u.updatedAt}) =
-               (null, ${Instant.now()})
-               where ${u.id} = ${userId}
-                and ${u.acceptedTosVersion} is not null""".update().apply() > 0
+      samsql"""insert into ${TosTable as tosTable} (${tosColumns.samUserId}, ${tosColumns.version}, ${tosColumns.action}, ${tosColumns.createdAt})
+         values ($userId, $tosVersion, ${TosTable.REJECT}, ${Instant.now()})""".update().apply() > 0
+    }
+  }
+
+  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
+      val tosTable = TosTable.syntax
+      val column = TosTable.column
+
+      val loadUserTosQuery =
+        samsql"""select ${tosTable.resultAll}
+              from ${TosTable as tosTable}
+              where ${column.samUserId} = ${userId}
+              order by ${column.createdAt} desc
+              limit 1"""
+
+      val userTosRecordOpt: Option[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).first().apply()
+      userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =

@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.model
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, AdminUpdateUserRequest}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamApiJsonProtocol.PolicyInfoResponseBodyJsonFormat
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, AdminUpdateUserRequest}
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
@@ -28,7 +28,7 @@ object SamJsonSupport {
 
   implicit val ResourceTypeFormat = jsonFormat6(ResourceType.apply)
 
-  implicit val SamUserFormat = jsonFormat9(SamUser.apply)
+  implicit val SamUserFormat = jsonFormat8(SamUser.apply)
 
   implicit val UserStatusDetailsFormat = jsonFormat2(UserStatusDetails.apply)
 
@@ -85,6 +85,8 @@ object SamJsonSupport {
   implicit val CreateResourceResponseFormat = jsonFormat4(CreateResourceResponse.apply)
 
   implicit val SignedUrlRequestFormat = jsonFormat4(SignedUrlRequest.apply)
+
+  implicit val RequesterPaysSignedUrlRequestFormat = jsonFormat3(RequesterPaysSignedUrlRequest.apply)
 }
 
 object RootPrimitiveJsonSupport {
@@ -308,6 +310,11 @@ object BasicWorkbenchGroup {
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
 @Lenses final case class SignedUrlRequest(bucketName: String, blobName: String, duration: Option[Long] = None, requesterPays: Option[Boolean] = Option(true))
+@Lenses final case class RequesterPaysSignedUrlRequest(
+    gsPath: String,
+    duration: Option[Long] = None,
+    requesterPaysProject: Option[String] = None
+)
 
 object SamUser {
   def apply(
@@ -315,10 +322,9 @@ object SamUser {
       googleSubjectId: Option[GoogleSubjectId],
       email: WorkbenchEmail,
       azureB2CId: Option[AzureB2CId],
-      enabled: Boolean,
-      acceptedTosVersion: Option[String]
+      enabled: Boolean
   ): SamUser =
-    SamUser(id, googleSubjectId, email, azureB2CId, enabled, acceptedTosVersion, Instant.EPOCH, None, Instant.EPOCH)
+    SamUser(id, googleSubjectId, email, azureB2CId, enabled, Instant.EPOCH, None, Instant.EPOCH)
 }
 
 final case class SamUser(
@@ -327,7 +333,6 @@ final case class SamUser(
     email: WorkbenchEmail,
     azureB2CId: Option[AzureB2CId],
     enabled: Boolean,
-    acceptedTosVersion: Option[String],
     createdAt: Instant,
     registeredAt: Option[Instant],
     updatedAt: Instant
@@ -340,8 +345,17 @@ final case class SamUser(
       this.googleSubjectId == user.googleSubjectId &&
       this.email == user.email &&
       this.azureB2CId == user.azureB2CId &&
-      this.enabled == user.enabled &&
-      this.acceptedTosVersion == user.acceptedTosVersion
+      this.enabled == user.enabled
+    case _ => false
+  }
+}
+
+final case class SamUserTos(id: WorkbenchUserId, version: String, action: String, createdAt: Instant) {
+  override def equals(other: Any): Boolean = other match {
+    case userTos: SamUserTos =>
+      this.id == userTos.id &&
+      this.version == userTos.version &&
+      this.action == userTos.action
     case _ => false
   }
 }

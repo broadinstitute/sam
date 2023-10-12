@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+  <changeSet logicalFilePath="dummy"  author="garwood" id="add_tos_audit_table_created_at_pk">
+    <dropPrimaryKey  tableName= "SAM_USER_TERMS_OF_SERVICE" constraintName="sam_user_terms_of_service_pkey"/>
+    <addPrimaryKey tableName="SAM_USER_TERMS_OF_SERVICE" columnNames="sam_user_id,version,action,created_at" constraintName="sam_user_terms_of_service_pkey"/>
+
+    <createIndex indexName="sam_user_id_tos_idx" tableName="SAM_USER_TERMS_OF_SERVICE">
+      <column name="sam_user_id"/>
+    </createIndex>
+  </changeSet>
+</databaseChangeLog>

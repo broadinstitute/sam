@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceComplianceStatus}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
@@ -32,7 +33,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     lenient()
       .doAnswer((i: InvocationOnMock) => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, isAccepted, isAccepted)))
       .when(tosService)
-      .getTosComplianceStatus(any[SamUser])
+      .getTosComplianceStatus(any[SamUser], any[SamRequestContext])
 
   private def setAcceptedStateForUserTo(samUser: SamUser, isAccepted: Boolean) = {
     val matchesUser = new ArgumentMatcher[SamUser] {
@@ -42,7 +43,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     lenient()
       .doReturn(IO.pure(TermsOfServiceComplianceStatus(samUser.id, isAccepted, isAccepted)))
       .when(tosService)
-      .getTosComplianceStatus(ArgumentMatchers.argThat(matchesUser))
+      .getTosComplianceStatus(ArgumentMatchers.argThat(matchesUser), any[SamRequestContext])
   }
 
   def build: TosService = tosService
