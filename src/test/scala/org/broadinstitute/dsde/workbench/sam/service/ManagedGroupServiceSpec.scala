@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._

@@ -64,7 +64,7 @@ abstract class SamRoutes(
       termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
-          pathPrefix("register")(userRoutes(samRequestContext)) ~
+          pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
             pathPrefix("api") {
               // these routes are for machine to machine authorized requests
               // the whitelisted service admin account email is in the header of the request

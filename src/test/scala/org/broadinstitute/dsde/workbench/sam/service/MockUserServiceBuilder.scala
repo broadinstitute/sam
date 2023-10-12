@@ -5,8 +5,8 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
-import org.broadinstitute.dsde.workbench.sam.model.api.AdminUpdateUserRequest
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.mockito.{IdiomaticMockito, Strictness}

@@ -41,7 +41,7 @@ final case class AccessChangeEvent(eventType: AccessChangeEventType, resource: F
 object SamAuditModelJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-  import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+  import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 
   implicit object InetAddressFormat extends RootJsonFormat[InetAddress] {
     def write(ip: InetAddress) = JsString(ip.getHostAddress)

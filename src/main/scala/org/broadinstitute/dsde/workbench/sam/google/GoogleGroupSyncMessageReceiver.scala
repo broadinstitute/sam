@@ -78,7 +78,7 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
   private[google] def parseMessage(message: PubsubMessage): WorkbenchGroupIdentity = {
     val messageJson = message.getData.toStringUtf8.parseJson
     (Try {
-      import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.FullyQualifiedPolicyIdFormat
+      import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport.FullyQualifiedPolicyIdFormat
       messageJson.convertTo[FullyQualifiedPolicyId]
     } recover { case _: DeserializationException =>
       import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat

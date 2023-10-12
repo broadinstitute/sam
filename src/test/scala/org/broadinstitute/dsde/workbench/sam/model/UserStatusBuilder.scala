@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.model
 
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+
 import scala.collection.mutable
 
 case class UserStatusBuilder(user: SamUser) {

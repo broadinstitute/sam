@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.matchers
 
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.scalatest.matchers.{MatchResult, Matcher}
 
 import scala.collection.mutable.ListBuffer

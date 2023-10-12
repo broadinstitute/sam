@@ -4,7 +4,8 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant

@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.data.NonEmptyList
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipResponse
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipResponse, SamUser}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, _}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 

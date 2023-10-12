@@ -7,7 +7,7 @@ import akka.stream.Materializer
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, WorkbenchGroup}
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 

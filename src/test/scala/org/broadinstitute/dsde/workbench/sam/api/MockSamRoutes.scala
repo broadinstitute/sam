@@ -62,7 +62,7 @@ abstract class MockSamRoutes(
       termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
-          pathPrefix("register")(userRoutes(samRequestContext)) ~
+          pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
             pathPrefix("api") {
               // IMPORTANT - all routes under /api must have an active user
               withActiveUser(samRequestContext) { samUser =>

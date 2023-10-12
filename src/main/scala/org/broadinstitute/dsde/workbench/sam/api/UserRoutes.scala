@@ -7,8 +7,8 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsBoolean
@@ -33,7 +33,7 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
     })
   }
 
-  def userRoutes(samRequestContext: SamRequestContext): server.Route =
+  def oldUserRoutes(samRequestContext: SamRequestContext): server.Route =
     pathPrefix("user") {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {

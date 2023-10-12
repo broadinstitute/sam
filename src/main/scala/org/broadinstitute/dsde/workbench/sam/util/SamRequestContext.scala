@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.util
 
 import io.opencensus.trace.Span
 import org.broadinstitute.dsde.workbench.sam.audit.AuditInfo
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 
 import java.net.InetAddress
 
