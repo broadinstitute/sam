@@ -26,4 +26,5 @@
     <include file="changesets/20230203_last_quota_error.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20230328_add_date_columns_to_user.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20230929_add_tos_audit_table.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20231011_add_tos_audit_table_created_at_pk.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
