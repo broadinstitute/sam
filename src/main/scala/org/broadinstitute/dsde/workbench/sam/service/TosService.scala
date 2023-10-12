@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.client.RequestBuilding.Get
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
@@ -79,12 +79,12 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
 }
 
 trait TermsOfServiceDocument {
-  def apply(uri: String)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String
+  def apply(uri: Uri)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String
 }
 
 object TermsOfServiceDocument extends TermsOfServiceDocument with LazyLogging {
-  override def apply(uri: String)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String =
-    if (uri.startsWith("classpath")) {
+  override def apply(uri: Uri)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String =
+    if (uri.scheme.equalsIgnoreCase("classpath")) {
       getTextFromResource(uri)
     } else {
       getTextFromWeb(uri)
@@ -96,7 +96,7 @@ object TermsOfServiceDocument extends TermsOfServiceDocument with LazyLogging {
     * @return
     *   The text of the document at the provided uri.
     */
-  private def getTextFromWeb(uri: String)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String = {
+  private def getTextFromWeb(uri: Uri)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String = {
     val future = for {
       response <- Http().singleRequest(Get(uri))
       text <- Unmarshal(response).to[String]
@@ -111,11 +111,11 @@ object TermsOfServiceDocument extends TermsOfServiceDocument with LazyLogging {
     * @return
     *   The text of a document in the classpath
     */
-  private def getTextFromResource(resourceUri: String): String = {
+  private def getTextFromResource(resourceUri: Uri): String = {
     val fileStream =
       try {
         logger.debug(s"Reading $resourceUri")
-        Source.fromResource(resourceUri)
+        Source.fromResource(resourceUri.path.toString())
       } catch {
         case e: FileNotFoundException =>
           logger.error(s"$resourceUri file not found", e)
