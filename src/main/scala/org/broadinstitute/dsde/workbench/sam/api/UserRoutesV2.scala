@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /** Created by tlangs on 10/12/2023.
   */
-trait UserRoutesV3 extends SamUserDirectives with SamRequestContextDirectives {
+trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
   val userService: UserService
 
   /** Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where a user is not found. In most routes that is appropriate
@@ -29,7 +29,7 @@ trait UserRoutesV3 extends SamUserDirectives with SamRequestContextDirectives {
     })
   }
 
-  def userRoutesV3(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+  def userRoutesV2(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("users") {
       pathPrefix("v2") {
         pathPrefix("self") {

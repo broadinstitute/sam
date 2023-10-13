@@ -17,7 +17,7 @@ import org.mockito.scalatest.MockitoSugar
 
 /** Created by dvoet on 6/7/17.
   */
-class UserRoutesSpec extends UserRoutesSpecHelper {
+class OldUserRoutesSpec extends OldUserRoutesSpecHelper {
   "POST /register/user" should "create user" in withDefaultRoutes { samRoutes =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -42,7 +42,7 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   }
 }
 
-trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
+trait OldUserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
   val defaultUserId = defaultUser.id
   val defaultUserEmail = defaultUser.email

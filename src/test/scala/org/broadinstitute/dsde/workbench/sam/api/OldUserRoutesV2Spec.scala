@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusServic
 
 /** Created by mtalbott on 8/8/18.
   */
-class UserRoutesV2Spec extends UserRoutesSpecHelper {
+class OldUserRoutesV2Spec extends OldUserRoutesSpecHelper {
   def withSARoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val directoryDAO = new MockDirectoryDAO()
 

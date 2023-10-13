@@ -48,7 +48,7 @@ abstract class SamRoutes(
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging
     with ResourceRoutes
-    with UserRoutes
+    with OldUserRoutes
     with StatusRoutes
     with TermsOfServiceRoutes
     with ExtensionRoutes
@@ -56,7 +56,8 @@ abstract class SamRoutes(
     with AdminRoutes
     with AzureRoutes
     with ServiceAdminRoutes
-    with UserRoutesV3 {
+    with UserRoutesV1
+    with UserRoutesV2 {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
@@ -76,9 +77,9 @@ abstract class SamRoutes(
                     adminRoutes(samUser, samRequestContextWithUser) ~
                     extensionRoutes(samUser, samRequestContextWithUser) ~
                     groupRoutes(samUser, samRequestContextWithUser) ~
-                    apiUserRoutes(samUser, samRequestContextWithUser) ~
                     azureRoutes(samUser, samRequestContextWithUser) ~
-                    userRoutesV3(samUser, samRequestContextWithUser)
+                    userRoutesV1(samUser, samRequestContextWithUser) ~
+                    userRoutesV2(samUser, samRequestContextWithUser)
                 }
             }
         }
