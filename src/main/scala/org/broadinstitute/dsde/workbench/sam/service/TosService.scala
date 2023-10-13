@@ -21,6 +21,7 @@ import java.io.{FileNotFoundException, IOException}
 import scala.concurrent.{Await, ExecutionContext}
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
+import java.time.Instant
 import scala.io.Source
 
 class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceConfig)(
@@ -60,13 +61,15 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
   /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS, or is a service account
     */
   private def tosAcceptancePermitsSystemUsage(user: SamUser, userTos: Option[SamUserTos]): Boolean = {
+    val now = Instant.now()
     val userIsServiceAccount = StandardSamUserDirectives.SAdomain.matches(user.email.value) // Service Account users do not need to accept ToS
     val userIsPermitted = userTos.exists { tos =>
       val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(Option(tos))
       val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && tos.action == TosTable.ACCEPT
       val tosDisabled = !tosConfig.isTosEnabled
+      val userInsideOfRollingAcceptanceWindow = tosConfig.rollingAcceptanceWindowExpiration.isAfter(now)
 
-      userHasAcceptedLatestVersion || userCanUseSystemUnderGracePeriod || tosDisabled
+      userHasAcceptedLatestVersion || userInsideOfRollingAcceptanceWindow || userCanUseSystemUnderGracePeriod || tosDisabled
 
     }
     userIsPermitted || userIsServiceAccount

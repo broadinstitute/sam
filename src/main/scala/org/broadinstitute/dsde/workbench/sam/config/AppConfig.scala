@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig.googleS
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DistributedLockConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 
+import java.time.Instant
 import scala.concurrent.duration.Duration
 
 /** Created by dvoet on 7/18/17.
@@ -119,7 +120,9 @@ object AppConfig {
       config.getAs[Boolean]("isTosEnabled").getOrElse(true),
       config.getBoolean("isGracePeriodEnabled"),
       config.getString("version"),
-      config.getString("baseUrl")
+      config.getString("baseUrl"),
+      // Must be a valid UTC datetime string in ISO 8601 format ex: 2007-12-03T10:15:30.00Z
+      Instant.parse(config.getString("rollingAcceptanceWindowExpirationDatetime"))
     )
   }
 
