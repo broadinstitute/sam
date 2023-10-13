@@ -15,7 +15,7 @@ trait TermsOfServiceRoutes {
       path("text") {
         pathEndOrSingleSlash {
           get {
-            complete(tosService.getTosText)
+            complete(tosService.termsOfServiceText)
           }
         }
       }
@@ -24,7 +24,7 @@ trait TermsOfServiceRoutes {
         path("text") {
           pathEndOrSingleSlash {
             get {
-              complete(tosService.getPrivacyText)
+              complete(tosService.privacyPolicyText)
             }
           }
         }
