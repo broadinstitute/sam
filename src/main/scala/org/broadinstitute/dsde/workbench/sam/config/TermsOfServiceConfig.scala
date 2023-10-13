@@ -10,13 +10,18 @@ import java.time.Instant
   * @param baseUrl
   *   The url to the Terra Terms of Service. Used for validation and will be displayed to user in error messages
   * @param rollingAcceptanceWindowExpiration
-  *  The expiration time for the rolling acceptance window. If the user has not accepted the new ToS by this time,
-  *  they will be denied access to the system. Must be a valid UTC datetime string in ISO 8601 format
-  *  example: 2007-12-03T10:15:30.00Z
+  *   The expiration time for the rolling acceptance window. If the user has not accepted the new ToS by this time, they will be denied access to the system.
+  *   Must be a valid UTC datetime string in ISO 8601 format example: 2007-12-03T10:15:30.00Z
   *
-  *  @param rollingAcceptanceWindowPreviousTosVersion
-  *  The previous version of the ToS that the user must have accepted in order to be granted access to the system under
-  *  the rolling window.
+  * @param rollingAcceptanceWindowPreviousTosVersion
+  *   The previous version of the ToS that the user must have accepted in order to be granted access to the system under the rolling window.
   */
 
-case class TermsOfServiceConfig(isTosEnabled: Boolean, isGracePeriodEnabled: Boolean, version: String, baseUrl: String, rollingAcceptanceWindowExpiration: Instant, rollingAcceptanceWindowPreviousTosVersion: String)
+case class TermsOfServiceConfig(
+    isTosEnabled: Boolean,
+    isGracePeriodEnabled: Boolean,
+    version: String,
+    baseUrl: String,
+    rollingAcceptanceWindowExpiration: Instant,
+    rollingAcceptanceWindowPreviousTosVersion: String
+)

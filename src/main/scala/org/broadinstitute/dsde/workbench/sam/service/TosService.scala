@@ -47,13 +47,13 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
 
   @Deprecated
   def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceDetails] =
-    directoryDao.getLatestUserTos(samUser.id, samRequestContext).map { tos =>
+    directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>
       TermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
 
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
-    latestUserTos <-  directoryDao.getLatestUserTos(samUser.id, samRequestContext)
-    previousUserTos <-  directoryDao.getUserTos(samUser.id, tosConfig.rollingAcceptanceWindowPreviousTosVersion, samRequestContext)
+    latestUserTos <- directoryDao.getUserTos(samUser.id, samRequestContext)
+    previousUserTos <- directoryDao.getUserTos(samUser.id, tosConfig.rollingAcceptanceWindowPreviousTosVersion, samRequestContext)
     userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(latestUserTos)
     permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser, latestUserTos, previousUserTos)
   } yield TermsOfServiceComplianceStatus(samUser.id, userHasAcceptedLatestVersion, permitsSystemUsage)
@@ -63,7 +63,14 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
   private def tosAcceptancePermitsSystemUsage(user: SamUser, userTos: Option[SamUserTos], previousUserTos: Option[SamUserTos]): Boolean = {
     val now = Instant.now()
     val userIsServiceAccount = StandardSamUserDirectives.SAdomain.matches(user.email.value) // Service Account users do not need to accept ToS
-    val userIsPermitted = userTos.exists { tos =>
+
+    if (userIsServiceAccount) {
+      return true
+    }
+    if (userHasRejectedLatestTosVersion(userTos)) {
+      return false
+    }
+    userTos.exists { tos =>
       val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(Option(tos))
       val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && tos.action == TosTable.ACCEPT
       val tosDisabled = !tosConfig.isTosEnabled
@@ -74,12 +81,16 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       userHasAcceptedLatestVersion || userInsideOfRollingAcceptanceWindow || userCanUseSystemUnderGracePeriod || tosDisabled
 
     }
-    userIsPermitted || userIsServiceAccount
   }
 
   private def userHasAcceptedLatestTosVersion(userTos: Option[SamUserTos]): Boolean =
     userTos.exists { tos =>
       tos.version.contains(tosConfig.version) && tos.action == TosTable.ACCEPT
+    }
+
+  private def userHasRejectedLatestTosVersion(userTos: Option[SamUserTos]): Boolean =
+    userTos.exists { tos =>
+      tos.version.contains(tosConfig.version) && tos.action == TosTable.REJECT
     }
 
   private def userHasAcceptedPreviousTosVersion(previousUserTos: Option[SamUserTos]): Boolean =

@@ -647,8 +647,9 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
-  override def getLatestUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
-    readOnlyTransaction("getLatestUserTos", samRequestContext) { implicit session =>
+  // When no tosVersion is specified, return the latest TosRecord for the user
+  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
 

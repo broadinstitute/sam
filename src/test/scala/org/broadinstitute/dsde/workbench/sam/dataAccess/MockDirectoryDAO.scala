@@ -340,7 +340,14 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
         true
     }
 
-  override def getLatestUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    loadUser(userId, samRequestContext).map {
+      case None => None
+      case Some(_) =>
+        userTos.get(userId)
+    }
+
+  override def getUserTos(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
     loadUser(userId, samRequestContext).map {
       case None => None
       case Some(_) =>

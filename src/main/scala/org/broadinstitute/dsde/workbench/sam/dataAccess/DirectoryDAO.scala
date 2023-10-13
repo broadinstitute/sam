@@ -75,9 +75,8 @@ trait DirectoryDAO {
 
   def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean]
   def rejectTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean]
-  def getLatestUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]]
+  def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]]
   def getUserTos(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Option[SamUserTos]]
-
   def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity]
   def loadPetManagedIdentity(petManagedIdentityId: PetManagedIdentityId, samRequestContext: SamRequestContext): IO[Option[PetManagedIdentity]]
   def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
