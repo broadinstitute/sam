@@ -2793,6 +2793,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self:
+    get:
+      tags:
+        - Users
+      summary: gets the user
+      operationId: getSamUserSelf
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUser'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/{sam_user_id}:
+    get:
+      tags:
+        - Users
+      summary: gets a user
+      description: Gets a SamUser by their id. This endpoint is scoped to the permissions of the caller.
+        A normal user can call the endpoint with their own id, but trying to get another user will result in a 404.
+        Admin permissions grant the caller the ability to get any id.
+      operationId: getSamUserById
+      parameters:
+        - name: sam_user_id
+          in: path
+          description: the id of the sam user to get
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUser'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /register/user/v1:
     get:
       tags:
@@ -3786,6 +3834,44 @@ components:
         acceptedTosVersion:
           type: string
           description: The version of terms of service the user accepted
+        createdAt:
+          type: string
+          format: date-time
+          description: User's time of creation
+        registeredAt:
+          type: string
+          format: date-time
+          description: User's time of registration
+        updatedAt:
+          type: string
+          format: date-time
+          description: User's time of last update
+      description: specification of a User
+    SamUser:
+      type: object
+      required:
+        - id
+        - email
+        - enabled
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: User's Id
+        googleSubjectId:
+          type: string
+          description: User's Google subject Id
+        email:
+          type: string
+          description: User's email address
+          format: email
+        azureB2CId:
+          type: string
+          description: User's Azure B2C Id
+        enabled:
+          type: boolean
+          description: Whether or not the user is enabled
         createdAt:
           type: string
           format: date-time

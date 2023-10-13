@@ -55,7 +55,8 @@ abstract class SamRoutes(
     with ManagedGroupRoutes
     with AdminRoutes
     with AzureRoutes
-    with ServiceAdminRoutes {
+    with ServiceAdminRoutes
+    with UserRoutesV3 {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
@@ -76,7 +77,8 @@ abstract class SamRoutes(
                     extensionRoutes(samUser, samRequestContextWithUser) ~
                     groupRoutes(samUser, samRequestContextWithUser) ~
                     apiUserRoutes(samUser, samRequestContextWithUser) ~
-                    azureRoutes(samUser, samRequestContextWithUser)
+                    azureRoutes(samUser, samRequestContextWithUser) ~
+                    userRoutesV3(samUser, samRequestContextWithUser)
                 }
             }
         }
