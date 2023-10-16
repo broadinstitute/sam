@@ -5,10 +5,11 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.StatusCodes.{NotFound, OK}
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
+import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserResponse}
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -34,33 +35,46 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
       pathPrefix("v2") {
         pathPrefix("self") {
           pathEndOrSingleSlash {
-            get {
-              complete {
-                StatusCodes.OK -> samUser
-              }
-            }
+            getSamUserResponse(samUser, samRequestContext)
           }
         } ~
           pathPrefix(Segment) { samUserId =>
             pathEndOrSingleSlash {
-              val workbenchUserId = WorkbenchUserId(samUserId)
-              if (workbenchUserId.equals(samUser.id)) {
-                get {
-                  complete {
-                    StatusCodes.OK -> samUser
-                  }
-                }
+              if (samUser.id.value.equals(samUserId)) {
+                getSamUserResponse(samUser, samRequestContext)
               } else {
-                (changeForbiddenToNotFound & asWorkbenchAdmin(samUser)) {
-                  get {
-                    complete {
-                      userService.getUser(WorkbenchUserId(samUserId), samRequestContext).map(user => (if (user.isDefined) OK else NotFound) -> user)
-                    }
-                  }
-                }
+                getAdminSamUserResponse(samUser, WorkbenchUserId(samUserId), samRequestContext)
+
               }
             }
           }
       }
     }
+
+  private def getAdminSamUserResponse(callingSamUser: SamUser, samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): Route =
+    (changeForbiddenToNotFound & asWorkbenchAdmin(callingSamUser)) {
+      get {
+        complete {
+          for {
+            user <- userService.getUser(samUserId, samRequestContext)
+            response <- user match {
+              case Some(value) => samUserResponse(value, samRequestContext).map(Some(_))
+              case None => IO(None)
+            }
+          } yield (if (response.isDefined) OK else NotFound) -> response
+        }
+      }
+    }
+
+  private def getSamUserResponse(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+    get {
+      complete {
+        samUserResponse(samUser, samRequestContext).map(response => StatusCodes.OK -> response)
+      }
+    }
+  private def samUserResponse(samUser: SamUser, samRequestContext: SamRequestContext): IO[SamUserResponse] =
+    for {
+      allowed <- userService.userAllowedToUseSystem(samUser, samRequestContext)
+    } yield SamUserResponse(samUser, allowed)
+
 }

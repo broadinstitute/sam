@@ -2805,7 +2805,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SamUser'
+                $ref: '#/components/schemas/SamUserResponse'
         404:
           description: user not found
           content:
@@ -2815,7 +2815,7 @@ paths:
   /api/users/v2/{sam_user_id}:
     get:
       tags:
-        - Users
+        - Admin
       summary: gets a user
       description: Gets a SamUser by their id. This endpoint is scoped to the permissions of the caller.
         A normal user can call the endpoint with their own id, but trying to get another user will result in a 404.
@@ -2834,7 +2834,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SamUser'
+                $ref: '#/components/schemas/SamUserResponse'
         404:
           description: user not found
           content:
@@ -3847,7 +3847,7 @@ components:
           format: date-time
           description: User's time of last update
       description: specification of a User
-    SamUser:
+    SamUserResponse:
       type: object
       required:
         - id
@@ -3869,9 +3869,9 @@ components:
         azureB2CId:
           type: string
           description: User's Azure B2C Id
-        enabled:
+        allowed:
           type: boolean
-          description: Whether or not the user is enabled
+          description: Whether or not the user allowed to use the system
         createdAt:
           type: string
           format: date-time

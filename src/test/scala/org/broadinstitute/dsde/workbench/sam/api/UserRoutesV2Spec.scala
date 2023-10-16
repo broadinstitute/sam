@@ -5,9 +5,9 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.matchers.BeForSamUserResponseMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserResponse}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar
@@ -24,13 +24,14 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
       .callAsNonAdminUser()
       .build
 
     // Act and Assert
     Get(s"/api/users/v2/self") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUser] should be(defaultUser)
+      responseAs[SamUserResponse] should beForUser(defaultUser)
     }
   }
 
@@ -38,21 +39,22 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUsers(Seq(defaultUser, otherUser))
+      .withAllowedUsers(Seq(defaultUser, otherUser))
       .callAsNonAdminUser()
       .build
 
     // Act and Assert
     Get(s"/api/users/v2/${defaultUser.id}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUser] should be(defaultUser)
+      responseAs[SamUserResponse] should beForUser(defaultUser)
     }
   }
 
   it should "fail with Not Found if a regular user is getting another user" in {
     // Arrange
-    val otherUser = Generator.genWorkbenchUserGoogle.sample.get
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUsers(Seq(defaultUser, otherUser))
+      .withAllowedUsers(Seq(defaultUser, otherUser))
       .callAsNonAdminUser()
       .build
 
@@ -68,18 +70,21 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUsers(Seq(defaultUser, otherUser))
+      .withAllowedUser(defaultUser)
       .callAsAdminUser()
       .build
 
     // Act and Assert
     Get(s"/api/users/v2/${defaultUser.id}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUser] should be(defaultUser)
+      responseAs[SamUserResponse] should beForUser(defaultUser)
+      responseAs[SamUserResponse].allowed should be(true)
     }
 
     Get(s"/api/users/v2/${otherUser.id}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUser] should be(otherUser)
+      responseAs[SamUserResponse] should beForUser(otherUser)
+      responseAs[SamUserResponse].allowed should be(false)
     }
   }
 }

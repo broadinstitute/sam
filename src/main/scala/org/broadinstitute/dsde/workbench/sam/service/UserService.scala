@@ -427,6 +427,9 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case UserService.emailRegex() => IO.unit
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }
+
+  def userAllowedToUseSystem(samUser: SamUser, samRequestContext: SamRequestContext): IO[Boolean] =
+    tosService.getTosComplianceStatus(samUser, samRequestContext).map(status => samUser.enabled && status.permitsSystemUsage)
 }
 
 object UserService {

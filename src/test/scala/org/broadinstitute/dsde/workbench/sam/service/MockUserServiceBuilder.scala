@@ -17,6 +17,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
 
   private val enabledUsers: mutable.Set[SamUser] = mutable.Set.empty
   private val disabledUsers: mutable.Set[SamUser] = mutable.Set.empty
+  private val allowedUsers: mutable.Set[SamUser] = mutable.Set.empty
   private var isBadEmail = false
 
   private def existingUsers: mutable.Set[SamUser] =
@@ -33,6 +34,13 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
 
   def withDisabledUsers(samUsers: Iterable[SamUser]): MockUserServiceBuilder = {
     disabledUsers.addAll(samUsers)
+    this
+  }
+
+  def withAllowedUser(samUser: SamUser): MockUserServiceBuilder = withAllowedUsers(Set(samUser))
+
+  def withAllowedUsers(samUsers: Iterable[SamUser]): MockUserServiceBuilder = {
+    allowedUsers.addAll(samUsers)
     this
   }
 
@@ -62,6 +70,8 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     ) returns {
       IO(Set.empty)
     }
+
+    mockUserService.userAllowedToUseSystem(any[SamUser], any[SamRequestContext]) returns IO(false)
   }
 
   private def makeUser(samUser: SamUser, mockUserService: UserService): Unit = {
@@ -151,6 +161,9 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
       IO(Option(UserStatus(UserStatusDetails(samUser.id, samUser.email), enabledMapNoTosAccepted)))
     }
 
+  private def makeUserAppearAllowed(samUser: SamUser, mockUserService: UserService): Unit =
+    mockUserService.userAllowedToUseSystem(eqTo(samUser), any[SamRequestContext]) returns IO(true)
+
   private def handleMalformedEmail(mockUserService: UserService): Unit =
     if (isBadEmail) {
       mockUserService.updateUserCrud(any[WorkbenchUserId], any[AdminUpdateUserRequest], any[SamRequestContext]) returns {
@@ -167,6 +180,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     makeUsers(existingUsers, mockUserService)
     enabledUsers.foreach(u => makeUserAppearEnabled(u, mockUserService))
     disabledUsers.foreach(u => makeUserAppearDisabled(u, mockUserService))
+    allowedUsers.foreach(u => makeUserAppearAllowed(u, mockUserService))
     handleMalformedEmail(mockUserService)
     mockUserService
   }

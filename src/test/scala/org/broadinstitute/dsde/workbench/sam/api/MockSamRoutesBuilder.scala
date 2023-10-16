@@ -54,6 +54,15 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     this
   }
 
+  def withAllowedUser(samUser: SamUser): MockSamRoutesBuilder = {
+    userServiceBuilder.withAllowedUser(samUser)
+    this
+  }
+  def withAllowedUsers(samUsers: Iterable[SamUser]): MockSamRoutesBuilder = {
+    userServiceBuilder.withAllowedUsers(samUsers)
+    this
+  }
+
   def callAsAdminUser(): MockSamRoutesBuilder = {
     cloudExtensionsBuilder.withAdminUser()
     this
