@@ -5,7 +5,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAllowances}
 import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
@@ -71,7 +71,9 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
       IO(Set.empty)
     }
 
-    mockUserService.userAllowedToUseSystem(any[SamUser], any[SamRequestContext]) returns IO(false)
+    mockUserService.getUserAllowances(any[SamUser], any[SamRequestContext]) returns IO(
+      SamUserAllowances(allowed = false, enabledInDatabase = false, termsOfService = false)
+    )
   }
 
   private def makeUser(samUser: SamUser, mockUserService: UserService): Unit = {
@@ -162,7 +164,9 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     }
 
   private def makeUserAppearAllowed(samUser: SamUser, mockUserService: UserService): Unit =
-    mockUserService.userAllowedToUseSystem(eqTo(samUser), any[SamRequestContext]) returns IO(true)
+    mockUserService.getUserAllowances(eqTo(samUser), any[SamRequestContext]) returns IO(
+      SamUserAllowances(allowed = true, enabledInDatabase = true, termsOfService = true)
+    )
 
   private def handleMalformedEmail(mockUserService: UserService): Unit =
     if (isBadEmail) {

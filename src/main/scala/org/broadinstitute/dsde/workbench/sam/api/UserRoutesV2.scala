@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.StatusCodes.{NotFound, OK}
-import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import cats.effect.IO
@@ -30,43 +29,63 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     })
   }
 
-  def userRoutesV2(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+  def userRoutesV2(samUser: SamUser, samRequestContext: SamRequestContext): Route =
     pathPrefix("users") {
       pathPrefix("v2") {
         pathPrefix("self") {
+          // api/users/v2/self
           pathEndOrSingleSlash {
             getSamUserResponse(samUser, samRequestContext)
-          }
-        } ~
-          pathPrefix(Segment) { samUserId =>
-            pathEndOrSingleSlash {
-              if (samUser.id.value.equals(samUserId)) {
-                getSamUserResponse(samUser, samRequestContext)
-              } else {
-                getAdminSamUserResponse(samUser, WorkbenchUserId(samUserId), samRequestContext)
-
+          } ~
+            // api/users/v2/self/allowed
+            pathPrefix("allowed") {
+              pathEndOrSingleSlash {
+                getSamUserAllowances(samUser, samRequestContext)
               }
             }
+        } ~
+          pathPrefix(Segment) { samUserId =>
+            val workbenchUserId = WorkbenchUserId(samUserId)
+            // api/users/v2/{sam_user_id}
+            pathEndOrSingleSlash {
+              regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+            } ~
+              // api/users/v2/{sam_user_id}/allowed
+              pathPrefix("allowed") {
+                pathEndOrSingleSlash {
+                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                }
+              }
           }
       }
     }
 
-  private def getAdminSamUserResponse(callingSamUser: SamUser, samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): Route =
-    (changeForbiddenToNotFound & asWorkbenchAdmin(callingSamUser)) {
-      get {
-        complete {
-          for {
-            user <- userService.getUser(samUserId, samRequestContext)
-            response <- user match {
-              case Some(value) => samUserResponse(value, samRequestContext).map(Some(_))
-              case None => IO(None)
-            }
-          } yield (if (response.isDefined) OK else NotFound) -> response
-        }
+  private def regularUserOrAdmin(callingUser: SamUser, requestedUserId: WorkbenchUserId, samRequestContext: SamRequestContext)(
+      asRegular: (SamUser, SamRequestContext) => Route
+  )(asAdmin: (WorkbenchUserId, SamRequestContext) => Route): Route =
+    if (callingUser.id.equals(requestedUserId)) {
+      asRegular(callingUser, samRequestContext)
+    } else {
+      (changeForbiddenToNotFound & asWorkbenchAdmin(callingUser)) {
+        asAdmin(requestedUserId, samRequestContext)
       }
     }
 
-  private def getSamUserResponse(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+  // Get Sam User
+  private def getAdminSamUserResponse(samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): Route =
+    get {
+      complete {
+        for {
+          user <- userService.getUser(samUserId, samRequestContext)
+          response <- user match {
+            case Some(value) => samUserResponse(value, samRequestContext).map(Some(_))
+            case None => IO(None)
+          }
+        } yield (if (response.isDefined) OK else NotFound) -> response
+      }
+    }
+
+  private def getSamUserResponse(samUser: SamUser, samRequestContext: SamRequestContext): Route =
     get {
       complete {
         samUserResponse(samUser, samRequestContext).map(response => StatusCodes.OK -> response)
@@ -74,7 +93,28 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     }
   private def samUserResponse(samUser: SamUser, samRequestContext: SamRequestContext): IO[SamUserResponse] =
     for {
-      allowed <- userService.userAllowedToUseSystem(samUser, samRequestContext)
-    } yield SamUserResponse(samUser, allowed)
+      allowances <- userService.getUserAllowances(samUser, samRequestContext)
+    } yield SamUserResponse(samUser, allowances.allowed)
+
+  // Get Sam User Allowed
+  private def getSamUserAllowances(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    get {
+      complete {
+        userService.getUserAllowances(samUser, samRequestContext).map(StatusCodes.OK -> _)
+      }
+    }
+
+  private def getAdminSamUserAllowances(samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): Route =
+    get {
+      complete {
+        for {
+          user <- userService.getUser(samUserId, samRequestContext)
+          response <- user match {
+            case Some(value) => userService.getUserAllowances(value, samRequestContext).map(Some(_))
+            case None => IO(None)
+          }
+        } yield (if (response.isDefined) OK else NotFound) -> response
+      }
+    }
 
 }
