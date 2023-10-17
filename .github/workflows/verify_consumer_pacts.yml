@@ -139,12 +139,12 @@ jobs:
           fi
           git fetch
           if [[ ! -z "${{ env.CHECKOUT_BRANCH }}" ]] && [[ ! -z "${{ env.CHECKOUT_SHA }}" ]]; then
-            echo "git checkout ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}"
-            git checkout ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}
+            echo "git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}"
+            git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }} || echo "already in ${{ env.CHECKOUT_BRANCH }}"
             echo "git branch"
             git branch
           else
-            if [[ "${{ github.event_name }}" == "push" ]]; then
+            if [[ "${{ github.event_name }}" == "push" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
               echo "git checkout ${{ env.CURRENT_BRANCH }}"
               git checkout ${{ env.CURRENT_BRANCH }}
             else
