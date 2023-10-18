@@ -139,8 +139,8 @@ jobs:
           fi
           git fetch
           if [[ ! -z "${{ env.CHECKOUT_BRANCH }}" ]] && [[ ! -z "${{ env.CHECKOUT_SHA }}" ]]; then
-            echo "git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}"
-            git checkout -b ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}
+            echo "git checkout ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}"
+            git checkout ${{ env.CHECKOUT_BRANCH }} ${{ env.CHECKOUT_SHA }}
             echo "git branch"
             git branch
           else
