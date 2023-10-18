@@ -51,15 +51,16 @@ trait SamUserDirectives {
 
   def asAdminServiceUser: Directive0
 
+  val oldTermsOfServiceUrl = "app.terra.bio/#terms-of-service"
   def withTermsOfServiceAcceptance: Directive0 =
     Directives.mapInnerRoute { r =>
-      handleRejections(termsOfServiceRejectionHandler(termsOfServiceConfig.url)) {
+      handleRejections(termsOfServiceRejectionHandler(oldTermsOfServiceUrl)) {
         requestEntityPresent {
           entity(as[TermsOfServiceAcceptance]) { tos =>
-            if (tos.value.equalsIgnoreCase(termsOfServiceConfig.url)) r
+            if (tos.value.equalsIgnoreCase(oldTermsOfServiceUrl)) r
             else
               reject(
-                MalformedRequestContentRejection(s"Invalid ToS acceptance", new WorkbenchException(s"ToS URL did not match ${termsOfServiceConfig.url}"))
+                MalformedRequestContentRejection(s"Invalid ToS acceptance", new WorkbenchException(s"ToS URL did not match ${oldTermsOfServiceUrl}"))
               )
           }
         }

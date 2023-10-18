@@ -1,6 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.azure
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import akka.testkit.TestKit
 import com.azure.resourcemanager.managedapplications.models.Plan
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
@@ -10,15 +12,26 @@ import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetail
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator}
 import org.mockito.Mockito.when
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
 import scala.jdk.CollectionConverters._
 
-class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
+class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with ScalaFutures with BeforeAndAfterAll {
   implicit val ec = scala.concurrent.ExecutionContext.global
   implicit val ioRuntime = cats.effect.unsafe.IORuntime.global
+
+  def this() = this(ActorSystem("AzureServiceSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 
   "AzureService" should "create a pet managed identity" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
