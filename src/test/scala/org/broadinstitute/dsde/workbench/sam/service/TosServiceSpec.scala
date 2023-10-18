@@ -154,12 +154,16 @@ class TosServiceSpec(_system: ActorSystem)
         val tosVersion = "2"
         val previousTosVersion = None
         val tosService =
-          new TosService(dirDAO, TestSupport.tosConfig.copy(
-            isTosEnabled = true,
-            isGracePeriodEnabled = false,
-            version = tosVersion,
-            rollingAcceptanceWindowExpiration = rollingAcceptanceWindowExpiration,
-            previousVersion = previousTosVersion))
+          new TosService(
+            dirDAO,
+            TestSupport.tosConfig.copy(
+              isTosEnabled = true,
+              isGracePeriodEnabled = false,
+              version = tosVersion,
+              rollingAcceptanceWindowExpiration = rollingAcceptanceWindowExpiration,
+              previousVersion = previousTosVersion
+            )
+          )
 
         when(dirDAO.getUserTos(defaultUser.id, samRequestContext))
           .thenReturn(IO.pure(None))
@@ -171,7 +175,6 @@ class TosServiceSpec(_system: ActorSystem)
         complianceStatus.permitsSystemUsage shouldBe false
       }
     }
-
 
     // Note there is an assumption that the previous version of the ToS is always 1 version behind the current version
     /** | Case | Grace Period Enabled | Inside Acceptance Window | Accepted Version | Current Version | User accepted latest | Permits system usage |
