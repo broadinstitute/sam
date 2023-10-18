@@ -122,8 +122,8 @@ object AppConfig {
       config.getString("version"),
       config.getString("baseUrl"),
       // Must be a valid UTC datetime string in ISO 8601 format ex: 2007-12-03T10:15:30.00Z
-      Instant.parse(config.getString("rollingAcceptanceWindowExpirationDatetime")),
-      config.getString("rollingAcceptanceWindowPreviousTosVersion")
+      config.as[Option[String]]("rollingAcceptanceWindowExpirationDatetime").map(Instant.parse),
+      config.as[Option[String]]("previousVersion")
     )
   }
 

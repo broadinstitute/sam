@@ -13,7 +13,7 @@ import java.time.Instant
   *   The expiration time for the rolling acceptance window. If the user has not accepted the new ToS by this time, they will be denied access to the system.
   *   Must be a valid UTC datetime string in ISO 8601 format example: 2007-12-03T10:15:30.00Z
   *
-  * @param rollingAcceptanceWindowPreviousTosVersion
+  * @param previousVersion
   *   The previous version of the ToS that the user must have accepted in order to be granted access to the system under the rolling window.
   */
 
@@ -22,6 +22,6 @@ case class TermsOfServiceConfig(
     isGracePeriodEnabled: Boolean,
     version: String,
     baseUrl: String,
-    rollingAcceptanceWindowExpiration: Instant,
-    rollingAcceptanceWindowPreviousTosVersion: String
+    rollingAcceptanceWindowExpiration: Option[Instant],
+    previousVersion: Option[String]
 )

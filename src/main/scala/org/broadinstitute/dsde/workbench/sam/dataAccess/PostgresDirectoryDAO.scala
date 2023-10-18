@@ -664,7 +664,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
 
-  override def getUserTos(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTosVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] = {
+    if (tosVersion.isEmpty) return IO(None)
     readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
@@ -679,6 +680,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userTosRecordOpt: Option[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).first().apply()
       userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
+  }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
     readOnlyTransaction("isEnabled", samRequestContext) { implicit session =>
