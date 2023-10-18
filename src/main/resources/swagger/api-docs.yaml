@@ -3852,7 +3852,7 @@ components:
       required:
         - id
         - email
-        - enabled
+        - allowed
         - createdAt
         - updatedAt
       properties:
