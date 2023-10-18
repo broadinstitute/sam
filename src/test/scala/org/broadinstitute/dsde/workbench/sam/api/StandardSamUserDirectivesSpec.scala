@@ -35,8 +35,8 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       override implicit val executionContext: ExecutionContext = null
       override val cloudExtensions: CloudExtensions = null
       override val termsOfServiceConfig: TermsOfServiceConfig = null
-      override val userService: UserService = new MockUserService(directoryDAO = dirDAO)
       override val tosService: TosService = new TosService(dirDAO, tosConfig)
+      override val userService: UserService = new MockUserService(directoryDAO = dirDAO, tosService = tosService)
       override val adminConfig: AppConfig.AdminConfig = testAdminConfig
 
     }

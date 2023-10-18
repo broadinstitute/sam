@@ -17,6 +17,7 @@ import org.scalatest.matchers.should.Matchers
 class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
   val otherUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
+  val thirdUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
   val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
@@ -99,7 +100,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Act and Assert
     Get(s"/api/users/v2/self/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabledInDatabase = true, termsOfService = true))
+      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
     }
   }
 
@@ -114,7 +115,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Act and Assert
     Get(s"/api/users/v2/${defaultUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabledInDatabase = true, termsOfService = true))
+      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
     }
   }
 
@@ -123,7 +124,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUsers(Seq(defaultUser, otherUser))
       .withAllowedUsers(Seq(defaultUser, otherUser))
-      .callAsNonAdminUser()
+      .callAsNonAdminUser(Some(defaultUser))
       .build
 
     // Act and Assert
@@ -137,20 +138,20 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
   it should "succeed if an admin user is getting another user" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .withEnabledUsers(Seq(defaultUser, otherUser))
-      .withAllowedUser(defaultUser)
-      .callAsAdminUser()
+      .withEnabledUsers(Seq(defaultUser, otherUser, thirdUser))
+      .withAllowedUser(otherUser)
+      .callAsAdminUser(Some(defaultUser))
       .build
 
     // Act and Assert
-    Get(s"/api/users/v2/${defaultUser.id}/allowed") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabledInDatabase = true, termsOfService = true))
-    }
-
     Get(s"/api/users/v2/${otherUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = false, enabledInDatabase = false, termsOfService = false))
+      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
+    }
+
+    Get(s"/api/users/v2/${thirdUser.id}/allowed") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = false, enabled = false, termsOfService = false))
     }
   }
 }

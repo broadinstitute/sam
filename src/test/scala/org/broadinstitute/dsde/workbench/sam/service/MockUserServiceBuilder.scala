@@ -72,7 +72,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     }
 
     mockUserService.getUserAllowances(any[SamUser], any[SamRequestContext]) returns IO(
-      SamUserAllowances(allowed = false, enabledInDatabase = false, termsOfService = false)
+      SamUserAllowances(allowed = false, enabled = false, termsOfService = false)
     )
   }
 
@@ -165,7 +165,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
 
   private def makeUserAppearAllowed(samUser: SamUser, mockUserService: UserService): Unit =
     mockUserService.getUserAllowances(eqTo(samUser), any[SamRequestContext]) returns IO(
-      SamUserAllowances(allowed = true, enabledInDatabase = true, termsOfService = true)
+      SamUserAllowances(allowed = true, enabled = true, termsOfService = true)
     )
 
   private def handleMalformedEmail(mockUserService: UserService): Unit =

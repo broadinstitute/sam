@@ -28,7 +28,7 @@ class AllowedUserSpec extends UserServiceTestTraits {
         val response = runAndWait(userService.getUserAllowances(userWithBothIds, samRequestContext))
 
         // Assert
-        response should be(SamUserAllowances(allowed = true, enabledInDatabase = true, termsOfService = true))
+        response should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
       }
     }
     describe("who has not accepted the Terms of Service") {
@@ -41,7 +41,7 @@ class AllowedUserSpec extends UserServiceTestTraits {
         val response = runAndWait(userService.getUserAllowances(userWithBothIds, samRequestContext))
 
         // Assert
-        response should be(SamUserAllowances(allowed = false, enabledInDatabase = true, termsOfService = false))
+        response should be(SamUserAllowances(allowed = false, enabled = true, termsOfService = false))
       }
     }
   }
@@ -56,7 +56,7 @@ class AllowedUserSpec extends UserServiceTestTraits {
       val response = runAndWait(userService.getUserAllowances(userWithBothIds, samRequestContext))
 
       // Assert
-      response should be(SamUserAllowances(allowed = false, enabledInDatabase = false, termsOfService = false))
+      response should be(SamUserAllowances(allowed = false, enabled = false, termsOfService = false))
     }
     it("should not be able to use the system even if the Terms of Service permits them to") {
       // Arrange
@@ -67,7 +67,7 @@ class AllowedUserSpec extends UserServiceTestTraits {
       val response = runAndWait(userService.getUserAllowances(userWithBothIds, samRequestContext))
 
       // Assert
-      response should be(SamUserAllowances(allowed = false, enabledInDatabase = false, termsOfService = true))
+      response should be(SamUserAllowances(allowed = false, enabled = false, termsOfService = true))
     }
   }
 

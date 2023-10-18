@@ -433,7 +433,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       tosStatus <- tosService.getTosComplianceStatus(samUser, samRequestContext)
     } yield SamUserAllowances(
       allowed = samUser.enabled && tosStatus.permitsSystemUsage,
-      enabledInDatabase = samUser.enabled,
+      enabled = samUser.enabled,
       termsOfService = tosStatus.permitsSystemUsage
     )
 }

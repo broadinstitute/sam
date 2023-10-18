@@ -2812,6 +2812,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/allowed:
+    get:
+      tags:
+        - Users
+      summary: gets the user allowances
+      operationId: getSamUserSelfAllowances
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAllowances'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/users/v2/{sam_user_id}:
     get:
       tags:
@@ -2835,6 +2854,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SamUserResponse'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/{sam_user_id}/allowed:
+    get:
+      tags:
+        - Admin
+      summary: gets a user
+      description: Gets a users allowances by their id. This endpoint is scoped to the permissions of the caller.
+        A normal user can call the endpoint with their own id, but trying to get another user will result in a 404.
+        Admin permissions grant the caller the ability to get any id.
+      operationId: getSamUserAllowancesById
+      parameters:
+        - name: sam_user_id
+          in: path
+          description: the id of the sam user to get
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAllowances'
         404:
           description: user not found
           content:
@@ -3885,6 +3933,15 @@ components:
           format: date-time
           description: User's time of last update
       description: specification of a User
+    SamUserAllowances:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+          description: is the user allowed to use the system
+        details:
+          type: object
+          description: details of the user's allowances
     UpdateUserRequest:
       type: object
       properties:

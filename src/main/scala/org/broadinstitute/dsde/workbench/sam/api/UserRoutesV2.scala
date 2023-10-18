@@ -29,34 +29,40 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     })
   }
 
-  def userRoutesV2(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    pathPrefix("users") {
-      pathPrefix("v2") {
-        pathPrefix("self") {
-          // api/users/v2/self
-          pathEndOrSingleSlash {
-            getSamUserResponse(samUser, samRequestContext)
-          } ~
-            // api/users/v2/self/allowed
-            pathPrefix("allowed") {
-              pathEndOrSingleSlash {
-                getSamUserAllowances(samUser, samRequestContext)
-              }
-            }
-        } ~
-          pathPrefix(Segment) { samUserId =>
-            val workbenchUserId = WorkbenchUserId(samUserId)
-            // api/users/v2/{sam_user_id}
+  // These routes are wrapped in `withUserAllowInactive` because a user should be able to get info about themselves
+  // Routes that need the user to be active should be wrapped in a directive, such as `withActiveUser`, to ensure
+  // that the user is allowed to use the system.
+  def userRoutesV2(samRequestContextWithoutUser: SamRequestContext): Route =
+    withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+      val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+      pathPrefix("users") {
+        pathPrefix("v2") {
+          pathPrefix("self") {
+            // api/users/v2/self
             pathEndOrSingleSlash {
-              regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+              getSamUserResponse(samUser, samRequestContext)
             } ~
-              // api/users/v2/{sam_user_id}/allowed
+              // api/users/v2/self/allowed
               pathPrefix("allowed") {
                 pathEndOrSingleSlash {
-                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                  getSamUserAllowances(samUser, samRequestContext)
                 }
               }
-          }
+          } ~
+            pathPrefix(Segment) { samUserId =>
+              val workbenchUserId = WorkbenchUserId(samUserId)
+              // api/users/v2/{sam_user_id}
+              pathEndOrSingleSlash {
+                regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+              } ~
+                // api/users/v2/{sam_user_id}/allowed
+                pathPrefix("allowed") {
+                  pathEndOrSingleSlash {
+                    regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                  }
+                }
+            }
+        }
       }
     }
 

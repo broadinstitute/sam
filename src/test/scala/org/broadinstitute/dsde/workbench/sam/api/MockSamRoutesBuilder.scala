@@ -30,6 +30,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   private var disabledUser: Option[SamUser] = None
   private var adminUser: Option[SamUser] = None
   private var asServiceAdminUser = false
+  private var callingUser: Option[SamUser] = None
 
   // TODO: *sniff sniff* I can't help but notice we're coordinating state between the userService and the
   //  cloudExtensions.  Same for other methods too.
@@ -63,18 +64,21 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     this
   }
 
-  def callAsAdminUser(): MockSamRoutesBuilder = {
+  def callAsAdminUser(samUser: Option[SamUser] = None): MockSamRoutesBuilder = {
     cloudExtensionsBuilder.withAdminUser()
+    callingUser = samUser
     this
   }
 
-  def callAsAdminServiceUser(): MockSamRoutesBuilder = {
+  def callAsAdminServiceUser(samUser: Option[SamUser] = None): MockSamRoutesBuilder = {
     asServiceAdminUser = true
+    callingUser = samUser
     this
   }
 
-  def callAsNonAdminUser(): MockSamRoutesBuilder = {
+  def callAsNonAdminUser(samUser: Option[SamUser] = None): MockSamRoutesBuilder = {
     cloudExtensionsBuilder.withNonAdminUser()
+    callingUser = samUser
     this
   }
 
@@ -86,7 +90,8 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   // Can only have 1 active user when making a request.  If the adminUser is set, that takes precedence, otherwise try
   // to get the enabledUser.
   private def getActiveUser: SamUser =
-    enabledUser
+    callingUser
+      .orElse(enabledUser)
       .orElse(disabledUser)
       .getOrElse(throw new Exception("Try building MockSamRoutes .withAdminUser(), .withEnabledUser(), withDisabledUser() first"))
 
@@ -119,7 +124,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       }
 
       override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-        Future.successful(disabledUser.getOrElse(throw new Exception("Try building MockSamRoutes .withDisabledUser() first")))
+        Future.successful(getActiveUser)
       }
 
       // We should really not be testing this, the routes should work identically whether the user
