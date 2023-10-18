@@ -1,7 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam
 package service
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import akka.testkit.TestKit
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
@@ -22,7 +24,7 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.Inside.inside
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest._
 
@@ -33,15 +35,25 @@ import scala.concurrent.duration._
 
 // TODO: continue breaking down old UserServiceSpec tests into nested suites
 // See: https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
-class UserServiceSpec extends Suite {
+class UserServiceSpec(_system: ActorSystem) extends TestKit(_system) with Suite with BeforeAndAfterAll {
   override def nestedSuites: IndexedSeq[Suite] =
     IndexedSeq(
       new CreateUserSpec,
       new InviteUserSpec,
       new GetUserStatusSpec,
-      new OldUserServiceSpec,
-      new OldUserServiceMockSpec
+      new OldUserServiceSpec(_system),
+      new OldUserServiceMockSpec(_system)
     )
+
+  def this() = this(ActorSystem("UserServiceSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 }
 
 // This test suite is deprecated.  It is still used and still has valid tests in it, but it should be broken out
@@ -49,8 +61,9 @@ class UserServiceSpec extends Suite {
 // This class does not connect to a real database (hence "mock" in the name (naming is hard, don't judge me)), but its
 // tests should still be broken out to individual Spec files and rewritten
 @DoNotDiscover
-class OldUserServiceMockSpec
-    extends AnyFlatSpec
+class OldUserServiceMockSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
     with Matchers
     with TestSupport
     with MockitoSugar
@@ -59,6 +72,16 @@ class OldUserServiceMockSpec
     with BeforeAndAfterAll
     with ScalaFutures
     with OptionValues {
+
+  def this() = this(ActorSystem("OldUserServiceMockSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -234,8 +257,9 @@ object GenEmail {
 // This class DOES connect to a real database and its tests should be broken out to individual Spec files
 // and rewritten
 @DoNotDiscover
-class OldUserServiceSpec
-    extends AnyFlatSpec
+class OldUserServiceSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
     with Matchers
     with TestSupport
     with MockitoSugar
@@ -245,6 +269,16 @@ class OldUserServiceSpec
     with ScalaFutures
     with OptionValues
     with TimeMatchers {
+
+  def this() = this(ActorSystem("OldUserServiceSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)

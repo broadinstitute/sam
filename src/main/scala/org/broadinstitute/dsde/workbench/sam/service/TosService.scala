@@ -1,9 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam.service
-
-import akka.http.scaladsl.model.StatusCodes
+import akka.actor.ActorSystem
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.client.RequestBuilding.Get
+import akka.http.scaladsl.model.{StatusCodes, Uri}
+import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.FutureWithLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
@@ -14,13 +18,22 @@ import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
 
-import scala.concurrent.ExecutionContext
 import java.io.{FileNotFoundException, IOException}
+import scala.concurrent.{Await, ExecutionContext}
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.Duration
 import scala.io.Source
 
-class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceConfig)(implicit val executionContext: ExecutionContext) extends LazyLogging {
-  val termsOfServiceFile = s"tos/termsOfService-${tosConfig.version}.md"
-  val privacyPolicyFile = s"tos/privacyPolicy-${tosConfig.version}.md"
+class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceConfig)(
+    implicit val executionContext: ExecutionContext,
+    implicit val actorSystem: ActorSystem
+) extends LazyLogging {
+
+  private val termsOfServiceUri = s"${tosConfig.baseUrl}/${tosConfig.version}/termsOfService.md"
+  private val privacyPolicyUri = s"${tosConfig.baseUrl}/${tosConfig.version}/privacyPolicy.md"
+
+  val termsOfServiceText = TermsOfServiceDocument(termsOfServiceUri)
+  val privacyPolicyText = TermsOfServiceDocument(privacyPolicyUri)
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao
@@ -64,34 +77,58 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
     userTos.exists { tos =>
       tos.version.contains(tosConfig.version) && tos.action == TosTable.ACCEPT
     }
+}
 
-  /** Get the terms of service text and send it to the caller
+trait TermsOfServiceDocument {
+  def apply(uri: Uri)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String
+}
+
+object TermsOfServiceDocument extends TermsOfServiceDocument with LazyLogging {
+  override def apply(uri: Uri)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String =
+    if (uri.scheme.equalsIgnoreCase("classpath")) {
+      getTextFromResource(uri)
+    } else {
+      getTextFromWeb(uri)
+    }
+
+  /** Get the contents of an HTTP resource.
+    * @param uri
+    *   HTTP(s) URI of a resource
     * @return
-    *   terms of service text
+    *   The text of the document at the provided uri.
     */
-  def getText(file: String, prettyTitle: String): String = {
+  private def getTextFromWeb(uri: Uri)(implicit actorSystem: ActorSystem, executionContext: ExecutionContext): String = {
+    val future = for {
+      response <- Http().singleRequest(Get(uri))
+      text <- Unmarshal(response).to[String]
+    } yield text
+
+    Await.result(future.withInfoLogMessage(s"Retrieved Terms of Service doc from $uri"), Duration.apply(10, TimeUnit.SECONDS))
+  }
+
+  /** Get the contents of a resource on the classpath. Used for BEE Environments
+    * @param resourceUri
+    *   classpath resource uri
+    * @return
+    *   The text of a document in the classpath
+    */
+  private def getTextFromResource(resourceUri: Uri): String = {
     val fileStream =
       try {
-        logger.debug(s"Reading $prettyTitle")
-        Source.fromResource(file)
+        logger.debug(s"Reading $resourceUri")
+        Source.fromResource(resourceUri.path.toString())
       } catch {
         case e: FileNotFoundException =>
-          logger.error(s"$prettyTitle file not found", e)
+          logger.error(s"$resourceUri file not found", e)
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, e))
         case e: IOException =>
-          logger.error(s"Failed to read $prettyTitle file due to IO exception", e)
+          logger.error(s"Failed to read $resourceUri file due to IO exception", e)
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, e))
       }
-    logger.debug(s"$prettyTitle file found")
+    logger.debug(s"$resourceUri file found")
     try
       fileStream.mkString
     finally
       fileStream.close
   }
-
-  def getPrivacyText: String =
-    getText(privacyPolicyFile, "Privacy Policy")
-
-  def getTosText: String =
-    getText(termsOfServiceFile, "Terms of Service")
 }

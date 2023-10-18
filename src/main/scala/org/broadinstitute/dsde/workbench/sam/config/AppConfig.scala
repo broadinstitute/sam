@@ -119,7 +119,7 @@ object AppConfig {
       config.getAs[Boolean]("isTosEnabled").getOrElse(true),
       config.getBoolean("isGracePeriodEnabled"),
       config.getString("version"),
-      config.getString("url")
+      config.getString("baseUrl")
     )
   }
 

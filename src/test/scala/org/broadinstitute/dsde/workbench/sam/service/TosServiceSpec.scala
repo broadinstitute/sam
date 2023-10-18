@@ -1,5 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import akka.actor.ActorSystem
+import akka.testkit.TestKit
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
@@ -11,23 +13,36 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.Mockito.RETURNS_SMART_NULLS
 import org.mockito.scalatest.MockitoSugar
-import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.freespec.AnyFreeSpecLike
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class TosServiceSpec extends AnyFreeSpec with TestSupport with BeforeAndAfterAll with BeforeAndAfter with PropertyBasedTesting with MockitoSugar {
+class TosServiceSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFreeSpecLike
+    with TestSupport
+    with BeforeAndAfterAll
+    with BeforeAndAfter
+    with PropertyBasedTesting
+    with MockitoSugar {
 
-  lazy val dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
-
-  val defaultUser = Generator.genWorkbenchUserBoth.sample.get
-  val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
+  def this() = this(ActorSystem("TosServiceSpec"))
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     TestSupport.truncateAll
   }
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
+
+  lazy val dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+
+  val defaultUser = Generator.genWorkbenchUserBoth.sample.get
+  val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
 
   before {
     clearDatabase()
@@ -76,6 +91,12 @@ class TosServiceSpec extends AnyFreeSpec with TestSupport with BeforeAndAfterAll
         .thenReturn(IO.pure(Some(SamUserTos(serviceAccountUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
       val complianceStatus = tosService.getTosComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
       complianceStatus.permitsSystemUsage shouldBe true
+    }
+
+    "loads the Terms of Service text when TosService is instantiated" in {
+      val tosService = new TosService(dirDAO, TestSupport.tosConfig.copy(version = "2"))
+      tosService.termsOfServiceText contains "Test Terms of Service"
+      tosService.privacyPolicyText contains "Test Privacy Policy"
     }
 
     val tosVersion = "2"
