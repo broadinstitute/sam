@@ -48,14 +48,16 @@ abstract class SamRoutes(
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging
     with ResourceRoutes
-    with UserRoutes
+    with OldUserRoutes
     with StatusRoutes
     with TermsOfServiceRoutes
     with ExtensionRoutes
     with ManagedGroupRoutes
     with AdminRoutes
     with AzureRoutes
-    with ServiceAdminRoutes {
+    with ServiceAdminRoutes
+    with UserRoutesV1
+    with UserRoutesV2 {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
@@ -64,19 +66,20 @@ abstract class SamRoutes(
       termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
-          pathPrefix("register")(userRoutes(samRequestContext)) ~
+          pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
             pathPrefix("api") {
               // these routes are for machine to machine authorized requests
               // the whitelisted service admin account email is in the header of the request
               serviceAdminRoutes(samRequestContext) ~
+                userRoutesV2(samRequestContext) ~
                 withActiveUser(samRequestContext) { samUser =>
                   val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
                   resourceRoutes(samUser, samRequestContextWithUser) ~
                     adminRoutes(samUser, samRequestContextWithUser) ~
                     extensionRoutes(samUser, samRequestContextWithUser) ~
                     groupRoutes(samUser, samRequestContextWithUser) ~
-                    apiUserRoutes(samUser, samRequestContextWithUser) ~
-                    azureRoutes(samUser, samRequestContextWithUser)
+                    azureRoutes(samUser, samRequestContextWithUser) ~
+                    userRoutesV1(samUser, samRequestContextWithUser)
                 }
             }
         }

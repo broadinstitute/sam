@@ -3,7 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.IdiomaticMockito.StubbingOps

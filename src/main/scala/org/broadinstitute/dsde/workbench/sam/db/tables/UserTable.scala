@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import scalikejdbc._
 
 import java.time.Instant

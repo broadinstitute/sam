@@ -7,8 +7,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsBoolean
@@ -17,7 +16,7 @@ import scala.concurrent.ExecutionContext
 
 /** Created by mbemis on 5/22/17.
   */
-trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
+trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val userService: UserService
 
@@ -33,7 +32,7 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
     })
   }
 
-  def userRoutes(samRequestContext: SamRequestContext): server.Route =
+  def oldUserRoutes(samRequestContext: SamRequestContext): server.Route =
     pathPrefix("user") {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {
@@ -151,33 +150,4 @@ trait UserRoutes extends SamUserDirectives with SamRequestContextDirectives {
         }
       }
     }
-
-  def apiUserRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = pathPrefix("users") {
-    pathPrefix("v1") {
-      get {
-        path(Segment) { email =>
-          pathEnd {
-            complete {
-              userService.getUserIdInfoFromEmail(WorkbenchEmail(email), samRequestContext).map {
-                case Left(_) => StatusCodes.NotFound -> None
-                case Right(None) => StatusCodes.NoContent -> None
-                case Right(Some(userIdInfo)) => StatusCodes.OK -> Some(userIdInfo)
-              }
-            }
-          }
-        }
-      } ~
-        pathPrefix("invite") {
-          post {
-            path(Segment) { inviteeEmail =>
-              complete {
-                userService
-                  .inviteUser(WorkbenchEmail(inviteeEmail.trim), samRequestContext)
-                  .map(userStatus => StatusCodes.Created -> userStatus)
-              }
-            }
-          }
-        }
-    }
-  }
 }

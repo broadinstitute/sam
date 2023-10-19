@@ -15,7 +15,8 @@ import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
 
 import java.io.{FileNotFoundException, IOException}
 import scala.concurrent.{Await, ExecutionContext}

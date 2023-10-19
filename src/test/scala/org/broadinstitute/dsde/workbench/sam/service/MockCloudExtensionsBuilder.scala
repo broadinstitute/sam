@@ -4,7 +4,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
 import org.mockito.ArgumentMatchersSugar.{any, argThat}

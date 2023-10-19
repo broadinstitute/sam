@@ -9,7 +9,7 @@ import com.google.pubsub.v1.PubsubMessage
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.FullyQualifiedPolicyIdFormat
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport.FullyQualifiedPolicyIdFormat
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers

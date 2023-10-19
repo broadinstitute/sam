@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._

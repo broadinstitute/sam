@@ -5,8 +5,8 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
-import org.broadinstitute.dsde.workbench.sam.model.api.AdminUpdateUserRequest
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, UserStatus, UserStatusDetails}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAllowances}
+import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.mockito.{IdiomaticMockito, Strictness}
@@ -17,6 +17,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
 
   private val enabledUsers: mutable.Set[SamUser] = mutable.Set.empty
   private val disabledUsers: mutable.Set[SamUser] = mutable.Set.empty
+  private val allowedUsers: mutable.Set[SamUser] = mutable.Set.empty
   private var isBadEmail = false
 
   private def existingUsers: mutable.Set[SamUser] =
@@ -33,6 +34,13 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
 
   def withDisabledUsers(samUsers: Iterable[SamUser]): MockUserServiceBuilder = {
     disabledUsers.addAll(samUsers)
+    this
+  }
+
+  def withAllowedUser(samUser: SamUser): MockUserServiceBuilder = withAllowedUsers(Set(samUser))
+
+  def withAllowedUsers(samUsers: Iterable[SamUser]): MockUserServiceBuilder = {
+    allowedUsers.addAll(samUsers)
     this
   }
 
@@ -62,6 +70,10 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     ) returns {
       IO(Set.empty)
     }
+
+    mockUserService.getUserAllowances(any[SamUser], any[SamRequestContext]) returns IO(
+      SamUserAllowances(allowed = false, enabled = false, termsOfService = false)
+    )
   }
 
   private def makeUser(samUser: SamUser, mockUserService: UserService): Unit = {
@@ -151,6 +163,11 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
       IO(Option(UserStatus(UserStatusDetails(samUser.id, samUser.email), enabledMapNoTosAccepted)))
     }
 
+  private def makeUserAppearAllowed(samUser: SamUser, mockUserService: UserService): Unit =
+    mockUserService.getUserAllowances(eqTo(samUser), any[SamRequestContext]) returns IO(
+      SamUserAllowances(allowed = true, enabled = true, termsOfService = true)
+    )
+
   private def handleMalformedEmail(mockUserService: UserService): Unit =
     if (isBadEmail) {
       mockUserService.updateUserCrud(any[WorkbenchUserId], any[AdminUpdateUserRequest], any[SamRequestContext]) returns {
@@ -167,6 +184,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     makeUsers(existingUsers, mockUserService)
     enabledUsers.foreach(u => makeUserAppearEnabled(u, mockUserService))
     disabledUsers.foreach(u => makeUserAppearDisabled(u, mockUserService))
+    allowedUsers.foreach(u => makeUserAppearAllowed(u, mockUserService))
     handleMalformedEmail(mockUserService)
     mockUserService
   }
