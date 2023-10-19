@@ -130,6 +130,16 @@ class SamProviderSpec
     })
   } yield ()
 
+  private def mockGetArbitraryPetServiceAccountToken(): IO[Unit] = for {
+    _ <- IO(
+      when {
+        googleExt.getArbitraryPetServiceAccountToken(any[SamUser], any[Set[String]], any[SamRequestContext])
+      } thenReturn {
+        Future.successful("aToken")
+      }
+    )
+  } yield ()
+
   private def mockResourceActionPermission(action: ResourceAction, hasPermission: Boolean): IO[Unit] = for {
     _ <- IO(
       lenient()
@@ -143,7 +153,7 @@ class SamProviderSpec
 
   private val providerStatesHandler: StateManagementFunction = StateManagementFunction {
     case ProviderState(States.UserExists, _) =>
-      logger.debug(States.UserExists)
+      mockGetArbitraryPetServiceAccountToken().unsafeRunSync()
     case ProviderState(States.SamOK, _) =>
       mockCriticalSubsystemsStatus(true).unsafeRunSync()
     case ProviderState(States.SamNotOK, _) =>
