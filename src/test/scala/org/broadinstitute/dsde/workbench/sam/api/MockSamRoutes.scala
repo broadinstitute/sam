@@ -59,6 +59,7 @@ abstract class MockSamRoutes(
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
       oidcConfig.oauth2Routes ~
       statusRoutes ~
+      oldTermsOfServiceRoutes ~
       termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
