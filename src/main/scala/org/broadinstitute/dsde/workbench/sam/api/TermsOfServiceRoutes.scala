@@ -83,7 +83,7 @@ trait TermsOfServiceRoutes {
                     complete(StatusCodes.NotImplemented)
                   }
                 } ~
-                  pathPrefix("history") {
+                  pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
                     pathEndOrSingleSlash {
                       get {
                         complete(StatusCodes.NotImplemented)
