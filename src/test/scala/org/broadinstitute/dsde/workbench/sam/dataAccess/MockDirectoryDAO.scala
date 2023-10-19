@@ -347,6 +347,16 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
         userTos.get(userId)
     }
 
+  override def getUserTosVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    loadUser(userId, samRequestContext).map {
+      case None => None
+      case Some(_) =>
+        tosVersion match {
+          case Some(_) => userTos.get(userId)
+          case None => None
+        }
+    }
+
   override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {
     if (petManagedIdentitiesByUser.keySet.contains(petManagedIdentity.id)) {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet managed identity ${petManagedIdentity.id} already exists")))
