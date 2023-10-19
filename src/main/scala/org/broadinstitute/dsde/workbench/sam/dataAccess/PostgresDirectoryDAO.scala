@@ -964,4 +964,17 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userAttributesRecordOpt: Option[UserAttributesRecord] = loadUserAttributesQuery.map(UserAttributesTable(userAttributesTable)).first().apply()
       userAttributesRecordOpt.map(UserAttributesTable.unmarshalUserAttributesRecord)
     }
+
+  override def setUserAttributes(userAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("setUserAttributes", samRequestContext) { implicit session =>
+      val userAttributesTable = UserAttributesTable.syntax
+      val userAttributesColumns = UserAttributesTable.column
+      samsql"""
+        insert into ${UserAttributesTable as userAttributesTable} (${userAttributesColumns.samUserId}, ${userAttributesColumns.marketingConsent}, ${userAttributesColumns.updatedAt})
+          values (${userAttributes.userId}, ${userAttributes.marketingConsent}, ${Instant.now()})
+        on conflict(${userAttributesColumns.samUserId})
+          do update set ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
+            ${userAttributesColumns.updatedAt} = ${Instant.now()}
+           """.update().apply() > 0
+    }
 }

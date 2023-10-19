@@ -378,4 +378,11 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case Some(_) =>
         userAttributes.get(userId)
     }
+
+  override def setUserAttributes(samUserAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[Unit] =
+    loadUser(samUserAttributes.userId, samRequestContext).map {
+      case None => ()
+      case Some(_) =>
+        userAttributes.update(samUserAttributes.userId, samUserAttributes)
+    }
 }

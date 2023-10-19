@@ -11,7 +11,7 @@
         <constraints primaryKey="true" foreignKeyName="FK_SUA_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
       </column>
       <column name="marketing_consent" type="BOOLEAN">
-        <constraints primaryKey="false"/>
+        <constraints primaryKey="false" nullable="false"/>
       </column>
       <column name="updated_at" type="timestamptz"/>
     </createTable>
@@ -25,7 +25,6 @@
              true              as marketing_consent,
              current_timestamp as updated_at
       FROM sam_user su
-      WHERE su.enabled = true;
     </sql>
 
   </changeSet>

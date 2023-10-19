@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.db.tables
 
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders
-import org.broadinstitute.dsde.workbench.sam.model.SamUserTos
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserAttributes
 import scalikejdbc._
 

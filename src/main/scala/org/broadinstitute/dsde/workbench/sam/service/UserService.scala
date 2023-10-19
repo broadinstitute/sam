@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAllowances}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAllowances, SamUserAttributes, SamUserAttributesRequest}
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
@@ -436,6 +436,21 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       enabled = samUser.enabled,
       termsOfService = tosStatus.permitsSystemUsage
     )
+
+  def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]] =
+    directoryDAO.getUserAttributes(userId, samRequestContext)
+
+  def setUserAttributes(userId: WorkbenchUserId, userAttributesRequest: SamUserAttributesRequest, samRequestContext: SamRequestContext): IO[SamUserAttributes] =
+    for {
+      userAttributesOpt <- getUserAttributes(userId, samRequestContext)
+      updatedAttributes <- userAttributesOpt match {
+        case Some(currentUserAttributes) =>
+          currentUserAttributes.updateFromUserAttributesRequest(userAttributesRequest)
+        case None =>
+          SamUserAttributes.newUserAttributesFromRequest(userId, userAttributesRequest)
+      }
+      _ <- directoryDAO.setUserAttributes(updatedAttributes, samRequestContext)
+    } yield updatedAttributes
 }
 
 object UserService {
