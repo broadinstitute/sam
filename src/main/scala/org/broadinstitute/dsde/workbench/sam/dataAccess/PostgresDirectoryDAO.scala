@@ -956,7 +956,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
       val loadUserAttributesQuery =
         samsql"""
-                 select ${userAttributesTable.result}
+                 select ${userAttributesTable.resultAll}
                  from ${UserAttributesTable as userAttributesTable}
                  where ${column.samUserId} = $userId
         """
