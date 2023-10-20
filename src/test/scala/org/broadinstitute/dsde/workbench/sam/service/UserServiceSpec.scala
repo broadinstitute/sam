@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.matchers.BeSameUserMatcher.beSameUserAs
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito
@@ -123,6 +123,7 @@ class OldUserServiceMockSpec(_system: ActorSystem)
     when(dirDAO.listUserDirectMemberships(defaultUser.id, samRequestContext)).thenReturn(IO(LazyList(allUsersGroup.id)))
     when(dirDAO.setGoogleSubjectId(defaultUser.id, defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(()))
     when(dirDAO.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext)).thenReturn(IO(()))
+    when(dirDAO.setUserAttributes(any[SamUserAttributes], any[SamRequestContext])).thenReturn(IO(()))
 
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))

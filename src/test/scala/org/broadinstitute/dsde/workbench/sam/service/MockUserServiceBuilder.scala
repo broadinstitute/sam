@@ -80,6 +80,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     mockUserService.getUserAllowances(any[SamUser], any[SamRequestContext]) returns IO(
       SamUserAllowances(allowed = false, enabled = false, termsOfService = false)
     )
+    mockUserService.getUserAttributes(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
   }
 
   private def makeUser(samUser: SamUser, mockUserService: UserService): Unit = {
