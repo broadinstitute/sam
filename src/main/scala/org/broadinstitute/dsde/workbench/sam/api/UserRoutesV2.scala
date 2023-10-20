@@ -8,7 +8,7 @@ import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserResponse}
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributesRequest, SamUserResponse}
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -46,6 +46,13 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
               pathPrefix("allowed") {
                 pathEndOrSingleSlash {
                   getSamUserAllowances(samUser, samRequestContext)
+                }
+              } ~
+              // api/user/v2/self/attributes
+              pathPrefix("attributes") {
+                pathEndOrSingleSlash {
+                  getSamUserAttributes(samUser, samRequestContext) ~
+                    patchSamUserAttributes(samUser, samRequestContext)
                 }
               }
           } ~
@@ -123,4 +130,19 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
       }
     }
 
+  private def getSamUserAttributes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    get {
+      complete {
+        userService.getUserAttributes(samUser.id, samRequestContext).map(response => (if (response.isDefined) OK else NotFound) -> response)
+      }
+    }
+
+  private def patchSamUserAttributes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    patch {
+      entity(as[SamUserAttributesRequest]) { userAttributesRequest =>
+        complete {
+          userService.setUserAttributesFromRequest(samUser.id, userAttributesRequest, samRequestContext).map(OK -> _)
+        }
+      }
+    }
 }

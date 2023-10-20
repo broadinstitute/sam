@@ -224,6 +224,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     openTelemetry.time("api.v1.createUserInternal.time", API_TIMING_DURATION_BUCKET) {
       for {
         createdUser <- directoryDAO.createUser(user, samRequestContext)
+        _ <- setUserAttributes(SamUserAttributes(createdUser.id, marketingConsent = true), samRequestContext)
         _ <- cloudExtensions.onUserCreate(createdUser, samRequestContext)
       } yield createdUser
     }
@@ -440,7 +441,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
   def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]] =
     directoryDAO.getUserAttributes(userId, samRequestContext)
 
-  def setUserAttributes(userId: WorkbenchUserId, userAttributesRequest: SamUserAttributesRequest, samRequestContext: SamRequestContext): IO[SamUserAttributes] =
+  def setUserAttributesFromRequest(
+      userId: WorkbenchUserId,
+      userAttributesRequest: SamUserAttributesRequest,
+      samRequestContext: SamRequestContext
+  ): IO[SamUserAttributes] =
     for {
       userAttributesOpt <- getUserAttributes(userId, samRequestContext)
       updatedAttributes <- userAttributesOpt match {
@@ -449,8 +454,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         case None =>
           SamUserAttributes.newUserAttributesFromRequest(userId, userAttributesRequest)
       }
-      _ <- directoryDAO.setUserAttributes(updatedAttributes, samRequestContext)
-    } yield updatedAttributes
+      savedAttributes <- setUserAttributes(updatedAttributes, samRequestContext)
+    } yield savedAttributes
+
+  def setUserAttributes(userAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[SamUserAttributes] =
+    directoryDAO.setUserAttributes(userAttributes, samRequestContext).map(_ => userAttributes)
 }
 
 object UserService {

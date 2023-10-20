@@ -43,7 +43,7 @@ class UserAttributesSpec extends UserServiceTestTraits {
       val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
       val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(true))
       // Act
-      val response = runAndWait(userService.setUserAttributes(user.id, userAttributesRequest, samRequestContext))
+      val response = runAndWait(userService.setUserAttributesFromRequest(user.id, userAttributesRequest, samRequestContext))
 
       // Assert
       val userAttributes = SamUserAttributes(user.id, marketingConsent = true)
@@ -62,7 +62,7 @@ class UserAttributesSpec extends UserServiceTestTraits {
       val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
       val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))
       // Act
-      val response = runAndWait(userService.setUserAttributes(user.id, userAttributesRequest, samRequestContext))
+      val response = runAndWait(userService.setUserAttributesFromRequest(user.id, userAttributesRequest, samRequestContext))
 
       // Assert
       val updatedUserAttributes = userAttributes.copy(marketingConsent = false)
@@ -71,5 +71,32 @@ class UserAttributesSpec extends UserServiceTestTraits {
       verify(directoryDAO).getUserAttributes(eqTo(user.id), any[SamRequestContext])
       verify(directoryDAO).setUserAttributes(eqTo(updatedUserAttributes), any[SamRequestContext])
     }
+
+    it("sets user attributes when a new user is registered") {
+      // Arrange
+      val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+      val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+
+      // Act
+      runAndWait(userService.createUser(user, samRequestContext))
+
+      // Assert
+      val userAttributes = SamUserAttributes(user.id, marketingConsent = true)
+      verify(directoryDAO).setUserAttributes(eqTo(userAttributes), any[SamRequestContext])
+    }
+
+    it("sets user attributes when a new user is invited") {
+      // Arrange
+      val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+      val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+
+      // Act
+      val response = runAndWait(userService.inviteUser(user.email, samRequestContext))
+
+      // Assert
+      val userAttributes = SamUserAttributes(response.userSubjectId, marketingConsent = true)
+      verify(directoryDAO).setUserAttributes(eqTo(userAttributes), any[SamRequestContext])
+    }
+
   }
 }
