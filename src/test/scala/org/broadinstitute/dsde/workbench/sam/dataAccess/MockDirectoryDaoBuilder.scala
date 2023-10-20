@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.mockito.{IdiomaticMockito, Strictness}
@@ -38,6 +38,8 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   mockedDirectoryDAO.removeGroupMember(any[WorkbenchGroupIdentity], any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
   mockedDirectoryDAO.deleteUser(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
   mockedDirectoryDAO.setUserRegisteredAt(any[WorkbenchUserId], any[Instant], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.setUserAttributes(any[SamUserAttributes], any[SamRequestContext]) returns IO.unit
+  mockedDirectoryDAO.getUserAttributes(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
 
   def withHealthyDatabase: MockDirectoryDaoBuilder = {
     mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(true)
@@ -101,6 +103,11 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
       Some(BasicWorkbenchGroup(allUsersGroup))
     )
     mockedDirectoryDAO.addGroupMember(eqTo(allUsersGroup.id), any[WorkbenchSubject], any[SamRequestContext]) returns IO(true)
+    this
+  }
+
+  def withUserAttributes(samUserAttributes: SamUserAttributes): MockDirectoryDaoBuilder = {
+    mockedDirectoryDAO.getUserAttributes(eqTo(samUserAttributes.userId), any[SamRequestContext]) returns IO(Some(samUserAttributes))
     this
   }
 
