@@ -4,7 +4,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUserAttributes, SamUserAttributesRequest}
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUserAttributes, SamUserAttributesRequest, SamUserRegistrationRequest}
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, MockTosServiceBuilder, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
@@ -72,16 +72,29 @@ class UserAttributesSpec extends UserServiceTestTraits {
       verify(directoryDAO).setUserAttributes(eqTo(updatedUserAttributes), any[SamRequestContext])
     }
 
-    it("sets user attributes when a new user is registered") {
+    it("sets user attributes when a new user is registered without a request body") {
       // Arrange
       val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
       val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
+      val userAttributes = SamUserAttributes(user.id, marketingConsent = false)
 
       // Act
       runAndWait(userService.createUser(user, samRequestContext))
 
       // Assert
+      verify(directoryDAO).setUserAttributes(eqTo(userAttributes), any[SamRequestContext])
+    }
+
+    it("sets user attributes when a new user is registered with a request body") {
+      // Arrange
+      val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+      val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
       val userAttributes = SamUserAttributes(user.id, marketingConsent = true)
+
+      // Act
+      runAndWait(userService.createUser(user, Some(SamUserRegistrationRequest(SamUserAttributesRequest(marketingConsent = Some(true)))), samRequestContext))
+
+      // Assert
       verify(directoryDAO).setUserAttributes(eqTo(userAttributes), any[SamRequestContext])
     }
 
@@ -94,7 +107,7 @@ class UserAttributesSpec extends UserServiceTestTraits {
       val response = runAndWait(userService.inviteUser(user.email, samRequestContext))
 
       // Assert
-      val userAttributes = SamUserAttributes(response.userSubjectId, marketingConsent = true)
+      val userAttributes = SamUserAttributes(response.userSubjectId, marketingConsent = false)
       verify(directoryDAO).setUserAttributes(eqTo(userAttributes), any[SamRequestContext])
     }
 

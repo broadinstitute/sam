@@ -7,7 +7,14 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForSamUserResponseMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAllowances, SamUserAttributes, SamUserAttributesRequest, SamUserResponse}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  SamUser,
+  SamUserAllowances,
+  SamUserAttributes,
+  SamUserAttributesRequest,
+  SamUserRegistrationRequest,
+  SamUserResponse
+}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar
@@ -20,6 +27,19 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
   val thirdUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
   val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+
+  "POST /api/users/v2/self/register" should "register a user when the required attributes are provided" in {
+    // Arrange
+    val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsNonAdminUser(Some(defaultUser))
+      .build
+
+    // Act and Assert
+    Post(s"/api/users/v2/self/register", SamUserRegistrationRequest(userAttributesRequest)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+    }
+  }
 
   "GET /api/users/v2/self" should "get the user object of the requesting user" in {
     // Arrange

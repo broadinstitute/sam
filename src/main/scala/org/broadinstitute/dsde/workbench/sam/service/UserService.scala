@@ -12,7 +12,14 @@ import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAllowances, SamUserAttributes, SamUserAttributesRequest}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  AdminUpdateUserRequest,
+  SamUser,
+  SamUserAllowances,
+  SamUserAttributes,
+  SamUserAttributesRequest,
+  SamUserRegistrationRequest
+}
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
@@ -29,19 +36,28 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     val executionContext: ExecutionContext,
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging {
-
   def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
+    createUser(possibleNewUser, None, samRequestContext)
+
+  def createUser(possibleNewUser: SamUser, registrationRequest: Option[SamUserRegistrationRequest], samRequestContext: SamRequestContext): IO[UserStatus] =
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
       if (validationErrors.nonEmpty) {
         return IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors.get)))
       }
+      val registrationRequestErrors = registrationRequest.flatMap(_.validateForNewUser)
+      if (registrationRequestErrors.nonEmpty) {
+        return IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid registration request", registrationRequestErrors.get))
+        )
+      }
 
       for {
         newUser <- assertUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext)
         maybeWorkbenchSubject <- directoryDAO.loadSubjectFromEmail(newUser.email, samRequestContext)
         registeredUser <- attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject, newUser, samRequestContext)
+        _ <- registerNewUserAttributes(registeredUser.id, registrationRequest, samRequestContext)
         registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
       } yield
@@ -59,6 +75,17 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         )
       )
     }
+
+  private def registerNewUserAttributes(
+      userId: WorkbenchUserId,
+      registrationRequest: Option[SamUserRegistrationRequest],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] = {
+    val attributes = registrationRequest
+      .map(_.userAttributes)
+      .getOrElse(SamUserAttributesRequest(marketingConsent = Some(false)))
+    setUserAttributesFromRequest(userId, attributes, samRequestContext).map(_ => ())
+  }
 
   private def attemptToRegisterSubjectAsAUser(
       maybeWorkbenchSubject: Option[WorkbenchSubject],
@@ -217,6 +244,7 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
           case Some(_) =>
             IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${inviteeEmail} already exists")))
         }
+        _ <- setUserAttributes(SamUserAttributes(createdUser.id, marketingConsent = false), samRequestContext)
       } yield UserStatusDetails(createdUser.id, createdUser.email)
     }
 
@@ -224,7 +252,6 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
     openTelemetry.time("api.v1.createUserInternal.time", API_TIMING_DURATION_BUCKET) {
       for {
         createdUser <- directoryDAO.createUser(user, samRequestContext)
-        _ <- setUserAttributes(SamUserAttributes(createdUser.id, marketingConsent = true), samRequestContext)
         _ <- cloudExtensions.onUserCreate(createdUser, samRequestContext)
       } yield createdUser
     }

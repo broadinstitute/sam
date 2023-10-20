@@ -5,10 +5,18 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAllowances, SamUserAttributes, SamUserAttributesRequest}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  AdminUpdateUserRequest,
+  SamUser,
+  SamUserAllowances,
+  SamUserAttributes,
+  SamUserAttributesRequest,
+  SamUserRegistrationRequest
+}
 import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, argThat, eqTo}
+import org.mockito.Mockito.when
 import org.mockito.{IdiomaticMockito, Strictness}
 
 import scala.collection.mutable
@@ -57,6 +65,10 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
   }
 
   private def initializeDefaults(mockUserService: UserService): Unit = {
+    when(mockUserService.createUser(any[SamUser], any[Option[SamUserRegistrationRequest]], any[SamRequestContext])).thenAnswer { args =>
+      val user = args.getArgument[SamUser](0)
+      IO(UserStatus(UserStatusDetails(user), Map.empty))
+    }
     mockUserService.getUserStatusFromEmail(any[WorkbenchEmail], any[SamRequestContext]) returns IO(None)
     mockUserService.getUserStatus(any[WorkbenchUserId], false, any[SamRequestContext]) returns {
       IO(None)

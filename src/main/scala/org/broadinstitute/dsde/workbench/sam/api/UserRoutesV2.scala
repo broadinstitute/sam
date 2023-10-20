@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.StatusCodes.{NotFound, OK}
 import akka.http.scaladsl.server.Directives._
@@ -8,7 +9,7 @@ import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributesRequest, SamUserResponse}
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributesRequest, SamUserRegistrationRequest, SamUserResponse}
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -29,49 +30,59 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     })
   }
 
+  def userRegistrationRoutes(samRequestContextWithoutUser: SamRequestContext): Route =
+    pathPrefix("users" / "v2" / "self" / "register") {
+      withNewUser(samRequestContextWithoutUser) { createUser =>
+        pathEndOrSingleSlash {
+          postUserRegistration(createUser, samRequestContextWithoutUser)
+        }
+      }
+    }
+
   // These routes are wrapped in `withUserAllowInactive` because a user should be able to get info about themselves
   // Routes that need the user to be active should be wrapped in a directive, such as `withActiveUser`, to ensure
   // that the user is allowed to use the system.
   def userRoutesV2(samRequestContextWithoutUser: SamRequestContext): Route =
-    withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
-      val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-      pathPrefix("users") {
-        pathPrefix("v2") {
-          pathPrefix("self") {
-            // api/users/v2/self
-            pathEndOrSingleSlash {
-              getSamUserResponse(samUser, samRequestContext)
-            } ~
-              // api/users/v2/self/allowed
-              pathPrefix("allowed") {
-                pathEndOrSingleSlash {
-                  getSamUserAllowances(samUser, samRequestContext)
-                }
-              } ~
-              // api/user/v2/self/attributes
-              pathPrefix("attributes") {
-                pathEndOrSingleSlash {
-                  getSamUserAttributes(samUser, samRequestContext) ~
-                    patchSamUserAttributes(samUser, samRequestContext)
-                }
-              }
-          } ~
-            pathPrefix(Segment) { samUserId =>
-              val workbenchUserId = WorkbenchUserId(samUserId)
-              // api/users/v2/{sam_user_id}
+    userRegistrationRoutes(samRequestContextWithoutUser) ~
+      withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+        val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+        pathPrefix("users") {
+          pathPrefix("v2") {
+            pathPrefix("self") {
+              // api/users/v2/self
               pathEndOrSingleSlash {
-                regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+                getSamUserResponse(samUser, samRequestContext)
               } ~
-                // api/users/v2/{sam_user_id}/allowed
+                // api/users/v2/self/allowed
                 pathPrefix("allowed") {
                   pathEndOrSingleSlash {
-                    regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                    getSamUserAllowances(samUser, samRequestContext)
+                  }
+                } ~
+                // api/user/v2/self/attributes
+                pathPrefix("attributes") {
+                  pathEndOrSingleSlash {
+                    getSamUserAttributes(samUser, samRequestContext) ~
+                      patchSamUserAttributes(samUser, samRequestContext)
                   }
                 }
-            }
+            } ~
+              pathPrefix(Segment) { samUserId =>
+                val workbenchUserId = WorkbenchUserId(samUserId)
+                // api/users/v2/{sam_user_id}
+                pathEndOrSingleSlash {
+                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+                } ~
+                  // api/users/v2/{sam_user_id}/allowed
+                  pathPrefix("allowed") {
+                    pathEndOrSingleSlash {
+                      regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                    }
+                  }
+              }
+          }
         }
       }
-    }
 
   private def regularUserOrAdmin(callingUser: SamUser, requestedUserId: WorkbenchUserId, samRequestContext: SamRequestContext)(
       asRegular: (SamUser, SamRequestContext) => Route
@@ -145,4 +156,14 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
         }
       }
     }
+
+  private def postUserRegistration(newUser: SamUser, samRequestContext: SamRequestContext): Route =
+    post {
+      entity(as[SamUserRegistrationRequest]) { userRegistrationRequest =>
+        complete {
+          userService.createUser(newUser, Some(userRegistrationRequest), samRequestContext).map(StatusCodes.Created -> _)
+        }
+      }
+    }
+
 }
