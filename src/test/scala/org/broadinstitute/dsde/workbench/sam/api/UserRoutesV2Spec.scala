@@ -32,12 +32,15 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Arrange
     val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser)
+      .withAllowedUser(defaultUser)
       .callAsNonAdminUser(Some(defaultUser))
       .build
 
     // Act and Assert
     Post(s"/api/users/v2/self/register", SamUserRegistrationRequest(userAttributesRequest)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
+      responseAs[SamUserResponse] should beForUser(defaultUser)
     }
   }
 
