@@ -2812,6 +2812,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/register:
+    post:
+      tags:
+        - Users
+      summary: create current user in the system using login credentials
+      operationId: registerUser
+      requestBody:
+        description: The details of the new parent resource
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/SamUserRegistrationRequest'
+      responses:
+        201:
+          description: user successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserResponse'
+        409:
+          description: user already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/users/v2/self/allowed:
     get:
       tags:
@@ -2827,6 +2852,25 @@ paths:
                 $ref: '#/components/schemas/SamUserAllowances'
         404:
           description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/attributes:
+    get:
+      tags:
+        - Users
+      summary: gets the user attributes
+      operationId: getSamUserAttributes
+      responses:
+        200:
+          description: attributes exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAttributes'
+        404:
+          description: attributes/user not found
           content:
             application/json:
               schema:
@@ -3942,6 +3986,17 @@ components:
         details:
           type: object
           description: details of the user's allowances
+    SamUserAttributes:
+      type: object
+      properties:
+        marketingConsent:
+          type: boolean
+          description: does the user consent to receiving marketing communications
+    SamUserRegistrationRequest:
+      type: object
+      properties:
+        userAttributes:
+          $ref: '#/components/schemas/SamUserAttributes'
     UpdateUserRequest:
       type: object
       properties:

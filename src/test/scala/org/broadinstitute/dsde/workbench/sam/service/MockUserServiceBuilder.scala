@@ -5,10 +5,18 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAllowances}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  AdminUpdateUserRequest,
+  SamUser,
+  SamUserAllowances,
+  SamUserAttributes,
+  SamUserAttributesRequest,
+  SamUserRegistrationRequest
+}
 import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.mockito.ArgumentMatchersSugar.{any, eqTo}
+import org.mockito.ArgumentMatchersSugar.{any, argThat, eqTo}
+import org.mockito.Mockito.when
 import org.mockito.{IdiomaticMockito, Strictness}
 
 import scala.collection.mutable
@@ -18,6 +26,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
   private val enabledUsers: mutable.Set[SamUser] = mutable.Set.empty
   private val disabledUsers: mutable.Set[SamUser] = mutable.Set.empty
   private val allowedUsers: mutable.Set[SamUser] = mutable.Set.empty
+  private val userAttributesSet: mutable.Set[(WorkbenchUserId, SamUserAttributes)] = mutable.Set.empty
   private var isBadEmail = false
 
   private def existingUsers: mutable.Set[SamUser] =
@@ -44,6 +53,11 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     this
   }
 
+  def withUserAttributes(samUser: SamUser, userAttributes: SamUserAttributes): MockUserServiceBuilder = {
+    userAttributesSet.add(samUser.id -> userAttributes)
+    this
+  }
+
   // TODO: Need to figure out how to have a matcher accept an update user request with a bad email
   def withBadEmail(): MockUserServiceBuilder = {
     isBadEmail = true
@@ -51,6 +65,10 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
   }
 
   private def initializeDefaults(mockUserService: UserService): Unit = {
+    when(mockUserService.createUser(any[SamUser], any[Option[SamUserRegistrationRequest]], any[SamRequestContext])).thenAnswer { args =>
+      val user = args.getArgument[SamUser](0)
+      IO(UserStatus(UserStatusDetails(user), Map.empty))
+    }
     mockUserService.getUserStatusFromEmail(any[WorkbenchEmail], any[SamRequestContext]) returns IO(None)
     mockUserService.getUserStatus(any[WorkbenchUserId], false, any[SamRequestContext]) returns {
       IO(None)
@@ -74,6 +92,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     mockUserService.getUserAllowances(any[SamUser], any[SamRequestContext]) returns IO(
       SamUserAllowances(allowed = false, enabled = false, termsOfService = false)
     )
+    mockUserService.getUserAttributes(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
   }
 
   private def makeUser(samUser: SamUser, mockUserService: UserService): Unit = {
@@ -168,6 +187,16 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
       SamUserAllowances(allowed = true, enabled = true, termsOfService = true)
     )
 
+  private def makeUserAttributesAppear(userId: WorkbenchUserId, userAttributes: SamUserAttributes, mockUserService: UserService): Unit = {
+    mockUserService.getUserAttributes(eqTo(userId), any[SamRequestContext]) returns IO(Some(userAttributes))
+    mockUserService.setUserAttributes(argThat((attr: SamUserAttributes) => attr.userId.equals(userId)), any[SamRequestContext]) returns IO(userAttributes)
+    mockUserService.setUserAttributesFromRequest(
+      eqTo(userId),
+      SamUserAttributesRequest(Some(userAttributes.marketingConsent)),
+      any[SamRequestContext]
+    ) returns IO(userAttributes)
+  }
+
   private def handleMalformedEmail(mockUserService: UserService): Unit =
     if (isBadEmail) {
       mockUserService.updateUserCrud(any[WorkbenchUserId], any[AdminUpdateUserRequest], any[SamRequestContext]) returns {
@@ -185,6 +214,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     enabledUsers.foreach(u => makeUserAppearEnabled(u, mockUserService))
     disabledUsers.foreach(u => makeUserAppearDisabled(u, mockUserService))
     allowedUsers.foreach(u => makeUserAppearAllowed(u, mockUserService))
+    userAttributesSet.foreach(tup => makeUserAttributesAppear(tup._1, tup._2, mockUserService))
     handleMalformedEmail(mockUserService)
     mockUserService
   }

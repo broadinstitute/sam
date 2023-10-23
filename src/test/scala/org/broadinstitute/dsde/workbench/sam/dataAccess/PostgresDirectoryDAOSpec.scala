@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUserAttributes
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFreeSpec, TestSupport}
 import org.scalatest.Inside.inside
 import org.scalatest.matchers.should.Matchers
@@ -1494,8 +1495,6 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "accept the terms of service for a user who has already accepted a previous version of the terms of service" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, "0", samRequestContext).unsafeRunSync() shouldBe true
         dao.acceptTermsOfService(defaultUser.id, "2", samRequestContext).unsafeRunSync() shouldBe true
@@ -1621,6 +1620,61 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         assertThrows[WorkbenchException] {
           dao.setUserRegisteredAt(user.id, Instant.now().minus(10, ChronoUnit.MINUTES), samRequestContext).unsafeRunSync()
         }
+      }
+    }
+
+    "getUserAttributes" - {
+      "gets the user attributes of an existing user" in {
+        // Arrange
+        val expectedUser = defaultUser.copy(registeredAt = Some(Instant.now()))
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+        val userAttributes = SamUserAttributes(createdUser.id, marketingConsent = true)
+        dao.setUserAttributes(userAttributes, samRequestContext).unsafeRunSync()
+
+        // Act
+        val retrievedAttributes = dao.getUserAttributes(createdUser.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        retrievedAttributes should be(Some(userAttributes))
+      }
+
+      "returns None if no user attributes exist" in {
+        // Arrange
+        val expectedUser = defaultUser.copy(registeredAt = Some(Instant.now()))
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+
+        // Act
+        val retrievedAttributes = dao.getUserAttributes(createdUser.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        retrievedAttributes should be(None)
+      }
+
+      "returns None if the user does not exist" in {
+        // Arrange
+        // Act
+        val retrievedAttributes = dao.getUserAttributes(defaultUser.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        retrievedAttributes should be(None)
+      }
+    }
+
+    "setUserAttributes" - {
+      "upserts new user attributes if user attributes already exist" in {
+        // Arrange
+        val expectedUser = defaultUser.copy(registeredAt = Some(Instant.now()))
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+        val userAttributes = SamUserAttributes(createdUser.id, marketingConsent = true)
+        dao.setUserAttributes(userAttributes, samRequestContext).unsafeRunSync()
+
+        // Act
+        val upsertedAttributes = userAttributes.copy(marketingConsent = false)
+        dao.setUserAttributes(upsertedAttributes, samRequestContext).unsafeRunSync()
+        val retrievedAttributes = dao.getUserAttributes(expectedUser.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        retrievedAttributes should be(Some(upsertedAttributes))
       }
     }
   }

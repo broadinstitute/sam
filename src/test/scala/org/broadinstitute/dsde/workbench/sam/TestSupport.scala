@@ -247,7 +247,9 @@ object TestSupport extends TestSupport {
           UserTable,
           AccessInstructionsTable,
           GroupTable,
-          LastQuotaErrorTable
+          LastQuotaErrorTable,
+          TosTable,
+          UserAttributesTable
         )
 
         tables
