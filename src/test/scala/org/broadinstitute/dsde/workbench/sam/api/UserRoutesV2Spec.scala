@@ -196,6 +196,20 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     }
   }
 
+  it should "return Not Found if the user has no attributes" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/attributes") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
   "PATCH /api/users/v2/self/attributes" should "update the user attributes of the calling user" in {
     // Arrange
     val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))

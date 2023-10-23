@@ -381,7 +381,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def setUserAttributes(samUserAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[Unit] =
     loadUser(samUserAttributes.userId, samRequestContext).map {
-      case None => ()
+      case None => throw new WorkbenchException("No user found")
       case Some(_) =>
         userAttributes.update(samUserAttributes.userId, samUserAttributes)
     }
