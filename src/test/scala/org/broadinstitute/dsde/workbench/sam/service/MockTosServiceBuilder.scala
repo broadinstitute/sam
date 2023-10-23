@@ -1,7 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceComplianceStatus}
+import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceComplianceStatus
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock

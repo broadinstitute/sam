@@ -13,9 +13,9 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import org.broadinstitute.dsde.workbench.sam.service.{TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
@@ -27,7 +27,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getActiveSamUser(oidcHeaders, userService, tosService, samRequestContext).unsafeToFuture()
+      getActiveSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
     }.tmap { samUser =>
       logger.debug(s"Handling request for active Sam User: $samUser")
       samUser
@@ -119,15 +119,15 @@ object StandardSamUserDirectives {
         loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, userService, samRequestContext)
     }
 
-  def getActiveSamUser(oidcHeaders: OIDCHeaders, userService: UserService, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
+  def getActiveSamUser(oidcHeaders: OIDCHeaders, userService: UserService, samRequestContext: SamRequestContext): IO[SamUser] =
     for {
       user <- getSamUser(oidcHeaders, userService, samRequestContext)
-      tosComplianceDetails <- tosService.getTosComplianceStatus(user, samRequestContext)
+      allowances <- userService.getUserAllowances(user, samRequestContext)
     } yield {
-      if (!tosComplianceDetails.permitsSystemUsage) {
+      if (!allowances.getTermsOfServiceCompliance) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User must accept the latest terms of service."))
       }
-      if (!user.enabled) {
+      if (!allowances.getEnabled) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
       }
 

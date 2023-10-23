@@ -4,7 +4,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroup
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, StatefulMockDirectoryDaoBuilder}
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext

@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
@@ -129,6 +130,16 @@ class SamProviderSpec
     })
   } yield ()
 
+  private def mockGetArbitraryPetServiceAccountToken(): IO[Unit] = for {
+    _ <- IO(
+      when {
+        googleExt.getArbitraryPetServiceAccountToken(any[SamUser], any[Set[String]], any[SamRequestContext])
+      } thenReturn {
+        Future.successful("aToken")
+      }
+    )
+  } yield ()
+
   private def mockResourceActionPermission(action: ResourceAction, hasPermission: Boolean): IO[Unit] = for {
     _ <- IO(
       lenient()
@@ -142,7 +153,7 @@ class SamProviderSpec
 
   private val providerStatesHandler: StateManagementFunction = StateManagementFunction {
     case ProviderState(States.UserExists, _) =>
-      logger.debug(States.UserExists)
+      mockGetArbitraryPetServiceAccountToken().unsafeRunSync()
     case ProviderState(States.SamOK, _) =>
       mockCriticalSubsystemsStatus(true).unsafeRunSync()
     case ProviderState(States.SamNotOK, _) =>

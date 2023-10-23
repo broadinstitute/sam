@@ -1,115 +1,157 @@
-package org.broadinstitute.dsde.workbench.sam
-package api
+package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
-import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import akka.http.scaladsl.testkit.ScalatestRouteTest
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail}
+import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.matchers.BeForSamUserResponseMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, StatusService, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAllowances, SamUserResponse}
+import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
+import org.mockito.scalatest.MockitoSugar
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-/** Created by mtalbott on 8/8/18.
-  */
-class UserRoutesV2Spec extends UserRoutesSpecHelper {
-  def withSARoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
-    val directoryDAO = new MockDirectoryDAO()
+class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
+  val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
+  val otherUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
+  val thirdUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
+  val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
-    val samRoutes = new TestSamRoutes(
-      null,
-      null,
-      new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions),
-      null,
-      defaultUser,
-      NoExtensions,
-      tosService = tosService
-    )
-    val SARoutes = new TestSamRoutes(
-      null,
-      null,
-      new UserService(directoryDAO, NoExtensions, Seq.empty, tosService),
-      new StatusService(directoryDAO, NoExtensions),
-      null,
-      petSAUser,
-      NoExtensions,
-      tosService = tosService
-    )
-    testCode(samRoutes, SARoutes)
-  }
+  "GET /api/users/v2/self" should "get the user object of the requesting user" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .callAsNonAdminUser()
+      .build
 
-  "POST /register/user/v2/self" should "create user" in withDefaultRoutes { samRoutes =>
-    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Created
-      val res = responseAs[UserStatus]
-      res.userInfo.userSubjectId.value.length shouldBe 21
-      res.userInfo.userEmail shouldBe defaultUserEmail
-      res.enabled shouldBe TestSupport.enabledMapNoTosAccepted
-    }
-
-    Post("/register/user/v2/self") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Conflict
+    // Act and Assert
+    Get(s"/api/users/v2/self") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserResponse] should beForUser(defaultUser)
     }
   }
 
-  "GET /register/user/v2/self/info" should "get the status of an enabled user" in withDefaultRoutes { samRoutes =>
-    Get("/register/user/v2/self/info") ~> samRoutes.route ~> check {
+  "GET /api/users/v2/{sam_user_id}" should "return the regular user if they're getting themselves" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUsers(Seq(defaultUser, otherUser))
+      .withAllowedUsers(Seq(defaultUser, otherUser))
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/${defaultUser.id}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserResponse] should beForUser(defaultUser)
+    }
+  }
+
+  it should "fail with Not Found if a regular user is getting another user" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUsers(Seq(defaultUser, otherUser))
+      .withAllowedUsers(Seq(defaultUser, otherUser))
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/${otherUser.id}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
-    }
-    val (user, samDep, routes) = createTestUser(tosAccepted = true)
-    Get("/register/user/v2/self/info") ~> routes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      responseAs[UserStatusInfo] shouldEqual UserStatusInfo(user.id.value, user.email.value, true, true)
+      val foo = responseAs[ErrorReport]
+      foo.message contains "You must be an admin"
     }
   }
 
-  "GET /register/user/v2/self/diagnostics" should "get the diagnostic info for an enabled user" in withDefaultRoutes { samRoutes =>
-    val googleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
-    Get("/register/user/v2/self/diagnostics") ~> samRoutes.route ~> check {
+  it should "succeed if an admin user is getting another user" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUsers(Seq(defaultUser, otherUser))
+      .withAllowedUser(defaultUser)
+      .callAsAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/${defaultUser.id}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserResponse] should beForUser(defaultUser)
+      responseAs[SamUserResponse].allowed should be(true)
+    }
+
+    Get(s"/api/users/v2/${otherUser.id}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserResponse] should beForUser(otherUser)
+      responseAs[SamUserResponse].allowed should be(false)
+    }
+  }
+
+  "GET /api/users/v2/self/allowed" should "get the user allowances of the calling user" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/allowed") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
+    }
+  }
+
+  "GET /api/users/v2/{sam_user_id}/allowed" should "return the allowances of a regular user if they're getting themselves" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUsers(Seq(defaultUser, otherUser))
+      .withAllowedUsers(Seq(defaultUser, otherUser))
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/${defaultUser.id}/allowed") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
+    }
+  }
+
+  it should "fail with Not Found if a regular user is getting another user" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUsers(Seq(defaultUser, otherUser))
+      .withAllowedUsers(Seq(defaultUser, otherUser))
+      .callAsNonAdminUser(Some(defaultUser))
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/${otherUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
-    }
-    val (user, samDep, routes) = createTestUser(tosAccepted = true)
-
-    Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      responseAs[UserStatusDiagnostics] shouldEqual UserStatusDiagnostics(true, true, true, true, true)
+      val foo = responseAs[ErrorReport]
+      foo.message contains "You must be an admin"
     }
   }
 
-  it should "get user's diagnostics after accepting the tos" in {
-    val (user, _, routes) = createTestUser(tosAccepted = true)
+  it should "succeed if an admin user is getting another user" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUsers(Seq(defaultUser, otherUser, thirdUser))
+      .withAllowedUser(otherUser)
+      .callAsAdminUser(Some(defaultUser))
+      .build
 
-    Get("/register/user/v2/self/diagnostics") ~> routes.route ~> check {
+    // Act and Assert
+    Get(s"/api/users/v2/${otherUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val res = responseAs[UserStatusDiagnostics]
-      res.tosAccepted shouldBe true
+      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
     }
-  }
 
-  "GET /register/user/v2/self/termsOfServiceDetails" should "get the user's Terms of Service details" in {
-    val (_, _, routes) = createTestUser(tosAccepted = true)
-
-    Get("/register/user/v2/self/termsOfServiceDetails") ~> routes.route ~> check {
+    Get(s"/api/users/v2/${thirdUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val details = responseAs[TermsOfServiceDetails]
-      details.isEnabled should be(true)
-      details.isGracePeriodEnabled should be(TestSupport.tosConfig.isGracePeriodEnabled)
-      details.userAcceptedVersion should not be empty
-      details.currentVersion should be(details.userAcceptedVersion.get)
-    }
-  }
-
-  "GET /register/user/v2/self/termsOfServiceComplianceStatus" should "get the user's Terms of Service Compliance Status" in {
-    val (user, _, routes) = createTestUser(tosAccepted = true)
-
-    Get("/register/user/v2/self/termsOfServiceComplianceStatus") ~> routes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      val complianceStatus = responseAs[TermsOfServiceComplianceStatus]
-      complianceStatus.userId shouldBe user.id
-      complianceStatus.permitsSystemUsage shouldBe true
-      complianceStatus.userHasAcceptedLatestTos shouldBe true
+      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = false, enabled = false, termsOfService = false))
     }
   }
 }

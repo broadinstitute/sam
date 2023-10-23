@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.AdminUpdateUserRequest
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAllowances}
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
@@ -427,6 +427,15 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
       case UserService.emailRegex() => IO.unit
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }
+
+  def getUserAllowances(samUser: SamUser, samRequestContext: SamRequestContext): IO[SamUserAllowances] =
+    for {
+      tosStatus <- tosService.getTosComplianceStatus(samUser, samRequestContext)
+    } yield SamUserAllowances(
+      allowed = samUser.enabled && tosStatus.permitsSystemUsage,
+      enabled = samUser.enabled,
+      termsOfService = tosStatus.permitsSystemUsage
+    )
 }
 
 object UserService {

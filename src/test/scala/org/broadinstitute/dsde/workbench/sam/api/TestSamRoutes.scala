@@ -19,11 +19,13 @@ import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfSer
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.concurrent.ScalaFutures
 
+import java.time.Instant
 import scala.concurrent.ExecutionContext
 
 /** Created by dvoet on 7/14/17.
@@ -49,7 +51,7 @@ class TestSamRoutes(
       userService,
       statusService,
       managedGroupService,
-      TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"),
+      TermsOfServiceConfig(true, false, "1", "app.terra.bio/#terms-of-service", Option(Instant.now()), Option("0")),
       policyEvaluatorService,
       tosService,
       LiquibaseConfig("", false),
@@ -91,7 +93,7 @@ class TestSamTosEnabledRoutes(
       userService,
       statusService,
       managedGroupService,
-      TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"),
+      TermsOfServiceConfig(true, false, "1", "app.terra.bio/#terms-of-service", Option(Instant.now()), Option("0")),
       policyEvaluatorService,
       tosService,
       LiquibaseConfig("", false),

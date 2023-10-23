@@ -47,7 +47,8 @@ abstract class MockSamRoutes(
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging
     with ResourceRoutes
-    with UserRoutes
+    with OldUserRoutes
+    with UserRoutesV1
     with MockStatusRoutes
     with TermsOfServiceRoutes
     with ExtensionRoutes
@@ -63,7 +64,7 @@ abstract class MockSamRoutes(
       termsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
-          pathPrefix("register")(userRoutes(samRequestContext)) ~
+          pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
             pathPrefix("api") {
               // IMPORTANT - all routes under /api must have an active user
               withActiveUser(samRequestContext) { samUser =>
@@ -72,7 +73,7 @@ abstract class MockSamRoutes(
                   adminRoutes(samUser, samRequestContextWithUser) ~
                   extensionRoutes(samUser, samRequestContextWithUser) ~
                   groupRoutes(samUser, samRequestContextWithUser) ~
-                  apiUserRoutes(samUser, samRequestContextWithUser) ~
+                  userRoutesV1(samUser, samRequestContextWithUser) ~
                   azureRoutes(samUser, samRequestContextWithUser)
               }
             }
