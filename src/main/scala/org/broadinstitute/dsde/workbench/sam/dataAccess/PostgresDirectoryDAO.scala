@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -947,5 +947,34 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       } else {
         ()
       }
+    }
+
+  override def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]] =
+    readOnlyTransaction("getUserAttributes", samRequestContext) { implicit session =>
+      val userAttributesTable = UserAttributesTable.syntax
+      val column = UserAttributesTable.column
+
+      val loadUserAttributesQuery =
+        samsql"""
+                 select ${userAttributesTable.resultAll}
+                 from ${UserAttributesTable as userAttributesTable}
+                 where ${column.samUserId} = $userId
+        """
+
+      val userAttributesRecordOpt: Option[UserAttributesRecord] = loadUserAttributesQuery.map(UserAttributesTable(userAttributesTable)).first().apply()
+      userAttributesRecordOpt.map(UserAttributesTable.unmarshalUserAttributesRecord)
+    }
+
+  override def setUserAttributes(userAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("setUserAttributes", samRequestContext) { implicit session =>
+      val userAttributesTable = UserAttributesTable.syntax
+      val userAttributesColumns = UserAttributesTable.column
+      samsql"""
+        insert into ${UserAttributesTable as userAttributesTable} (${userAttributesColumns.samUserId}, ${userAttributesColumns.marketingConsent}, ${userAttributesColumns.updatedAt})
+          values (${userAttributes.userId}, ${userAttributes.marketingConsent}, ${Instant.now()})
+        on conflict(${userAttributesColumns.samUserId})
+          do update set ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
+            ${userAttributesColumns.updatedAt} = ${Instant.now()}
+           """.update().apply() > 0
     }
 }

@@ -7,7 +7,7 @@ import akka.stream.Materializer
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, WorkbenchGroup}
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -61,6 +61,11 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   }
   def withAllowedUsers(samUsers: Iterable[SamUser]): MockSamRoutesBuilder = {
     userServiceBuilder.withAllowedUsers(samUsers)
+    this
+  }
+
+  def withUserAttributes(samUser: SamUser, userAttributes: SamUserAttributes): MockSamRoutesBuilder = {
+    userServiceBuilder.withUserAttributes(samUser, userAttributes)
     this
   }
 

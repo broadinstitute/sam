@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+  <changeSet logicalFilePath="dummy" author="tlangs" id="add_sam_user_attributes_table">
+    <createTable tableName="SAM_USER_ATTRIBUTES">
+      <column name="sam_user_id" type="VARCHAR">
+        <constraints primaryKey="true" foreignKeyName="FK_SUA_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
+      </column>
+      <column name="marketing_consent" type="BOOLEAN">
+        <constraints primaryKey="false" nullable="false"/>
+      </column>
+      <column name="updated_at" type="timestamptz"/>
+    </createTable>
+
+    <sql stripComments="true">
+      INSERT INTO sam_user_attributes
+      (sam_user_id,
+       marketing_consent,
+       updated_at)
+      SELECT su.id             as sam_user_id,
+             true              as marketing_consent,
+             current_timestamp as updated_at
+      FROM sam_user su
+    </sql>
+
+  </changeSet>
+</databaseChangeLog>

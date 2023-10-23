@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.IdiomaticMockito.StubbingOps
@@ -128,6 +128,11 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     .doReturn(IO.unit)
     .when(mockedDirectoryDAO)
     .deleteUser(any[WorkbenchUserId], any[SamRequestContext])
+
+  lenient()
+    .doReturn(IO.unit)
+    .when(mockedDirectoryDAO)
+    .setUserAttributes(any[SamUserAttributes], any[SamRequestContext])
 
   def withExistingUser(samUser: SamUser): StatefulMockDirectoryDaoBuilder = withExistingUsers(Set(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): StatefulMockDirectoryDaoBuilder = {

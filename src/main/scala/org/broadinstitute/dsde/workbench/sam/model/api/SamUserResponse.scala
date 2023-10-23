@@ -11,7 +11,7 @@ import java.time.Instant
 
 object SamUserResponse {
 
-  implicit val SamUserFormat: RootJsonFormat[SamUserResponse] = jsonFormat8(SamUserResponse.apply)
+  implicit val SamUserResponseFormat: RootJsonFormat[SamUserResponse] = jsonFormat8(SamUserResponse.apply)
 
   def apply(samUser: SamUser, allowed: Boolean): SamUserResponse =
     SamUserResponse(

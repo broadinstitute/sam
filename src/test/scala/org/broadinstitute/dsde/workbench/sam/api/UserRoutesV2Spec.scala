@@ -7,7 +7,14 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForSamUserResponseMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAllowances, SamUserResponse}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  SamUser,
+  SamUserAllowances,
+  SamUserAttributes,
+  SamUserAttributesRequest,
+  SamUserRegistrationRequest,
+  SamUserResponse
+}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar
@@ -20,6 +27,22 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
   val thirdUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
   val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+
+  "POST /api/users/v2/self/register" should "register a user when the required attributes are provided" in {
+    // Arrange
+    val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser)
+      .withAllowedUser(defaultUser)
+      .callAsNonAdminUser(Some(defaultUser))
+      .build
+
+    // Act and Assert
+    Post(s"/api/users/v2/self/register", SamUserRegistrationRequest(userAttributesRequest)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Created
+      responseAs[SamUserResponse] should beForUser(defaultUser)
+    }
+  }
 
   "GET /api/users/v2/self" should "get the user object of the requesting user" in {
     // Arrange
@@ -152,6 +175,57 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     Get(s"/api/users/v2/${thirdUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = false, enabled = false, termsOfService = false))
+    }
+  }
+
+  "GET /api/users/v2/self/attributes" should "get the user attributes of the calling user" in {
+    // Arrange
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
+
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .withUserAttributes(defaultUser, userAttributes)
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/attributes") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserAttributes] should be(userAttributes)
+    }
+  }
+
+  it should "return Not Found if the user has no attributes" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/attributes") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "PATCH /api/users/v2/self/attributes" should "update the user attributes of the calling user" in {
+    // Arrange
+    val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = false)
+
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .withUserAttributes(defaultUser, userAttributes)
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Patch(s"/api/users/v2/self/attributes", userAttributesRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserAttributes] should be(userAttributes)
     }
   }
 }
