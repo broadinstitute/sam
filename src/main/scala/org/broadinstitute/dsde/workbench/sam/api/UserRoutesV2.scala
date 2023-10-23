@@ -42,26 +42,26 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
             pathEndOrSingleSlash {
               getSamUserResponse(samUser, samRequestContext)
             } ~
-              // api/users/v2/self/allowed
-              pathPrefix("allowed") {
-                pathEndOrSingleSlash {
-                  getSamUserAllowances(samUser, samRequestContext)
-                }
-              }
-          } ~
-            pathPrefix(Segment) { samUserId =>
-              val workbenchUserId = WorkbenchUserId(samUserId)
-              // api/users/v2/{sam_user_id}
+            // api/users/v2/self/allowed
+            pathPrefix("allowed") {
               pathEndOrSingleSlash {
-                regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
-              } ~
-                // api/users/v2/{sam_user_id}/allowed
-                pathPrefix("allowed") {
-                  pathEndOrSingleSlash {
-                    regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
-                  }
-                }
+                getSamUserAllowances(samUser, samRequestContext)
+              }
             }
+          } ~
+          pathPrefix(Segment) { samUserId =>
+            val workbenchUserId = WorkbenchUserId(samUserId)
+            // api/users/v2/{sam_user_id}
+            pathEndOrSingleSlash {
+              regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+            } ~
+            // api/users/v2/{sam_user_id}/allowed
+            pathPrefix("allowed") {
+              pathEndOrSingleSlash {
+                regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+              }
+            }
+          }
         }
       }
     }

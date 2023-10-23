@@ -43,12 +43,43 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
               }
             }
           } ~
-            (changeForbiddenToNotFound & withUserAllowInactive(samRequestContext)) { user =>
+          (changeForbiddenToNotFound & withUserAllowInactive(samRequestContext)) { user =>
+            get {
+              parameter("userDetailsOnly".?) { userDetailsOnly =>
+                complete {
+                  userService.getUserStatus(user.id, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
+                    statusOption
+                      .map { status =>
+                        StatusCodes.OK -> Option(status)
+                      }
+                      .getOrElse(StatusCodes.NotFound -> None)
+                  }
+                }
+              }
+            }
+          }
+        } ~
+        pathPrefix("termsofservice") {
+          pathPrefix("status") {
+            pathEndOrSingleSlash {
               get {
-                parameter("userDetailsOnly".?) { userDetailsOnly =>
+                withUserAllowInactive(samRequestContext) { samUser =>
                   complete {
-                    userService.getUserStatus(user.id, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
-                      statusOption
+                    tosService.getTosComplianceStatus(samUser, samRequestContext).map { tosAcceptanceStatus =>
+                      StatusCodes.OK -> Option(JsBoolean(tosAcceptanceStatus.permitsSystemUsage))
+                    }
+                  }
+                }
+              }
+            }
+          } ~
+          pathEndOrSingleSlash {
+            post {
+              withUserAllowInactive(samRequestContext) { samUser =>
+                withTermsOfServiceAcceptance {
+                  complete {
+                    userService.acceptTermsOfService(samUser.id, samRequestContext).map { userStatusOption =>
+                      userStatusOption
                         .map { status =>
                           StatusCodes.OK -> Option(status)
                         }
@@ -57,53 +88,22 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
                   }
                 }
               }
-            }
-        } ~
-          pathPrefix("termsofservice") {
-            pathPrefix("status") {
-              pathEndOrSingleSlash {
-                get {
-                  withUserAllowInactive(samRequestContext) { samUser =>
-                    complete {
-                      tosService.getTosComplianceStatus(samUser, samRequestContext).map { tosAcceptanceStatus =>
-                        StatusCodes.OK -> Option(JsBoolean(tosAcceptanceStatus.permitsSystemUsage))
+            } ~
+            delete {
+              withUserAllowInactive(samRequestContext) { samUser =>
+                complete {
+                  userService.rejectTermsOfService(samUser.id, samRequestContext).map { userStatusOption =>
+                    userStatusOption
+                      .map { status =>
+                        StatusCodes.OK -> Option(status)
                       }
-                    }
+                      .getOrElse(StatusCodes.NotFound -> None)
                   }
                 }
               }
-            } ~
-              pathEndOrSingleSlash {
-                post {
-                  withUserAllowInactive(samRequestContext) { samUser =>
-                    withTermsOfServiceAcceptance {
-                      complete {
-                        userService.acceptTermsOfService(samUser.id, samRequestContext).map { userStatusOption =>
-                          userStatusOption
-                            .map { status =>
-                              StatusCodes.OK -> Option(status)
-                            }
-                            .getOrElse(StatusCodes.NotFound -> None)
-                        }
-                      }
-                    }
-                  }
-                } ~
-                  delete {
-                    withUserAllowInactive(samRequestContext) { samUser =>
-                      complete {
-                        userService.rejectTermsOfService(samUser.id, samRequestContext).map { userStatusOption =>
-                          userStatusOption
-                            .map { status =>
-                              StatusCodes.OK -> Option(status)
-                            }
-                            .getOrElse(StatusCodes.NotFound -> None)
-                        }
-                      }
-                    }
-                  }
-              }
+            }
           }
+        }
       } ~ pathPrefix("v2") {
         pathPrefix("self") {
           pathEndOrSingleSlash {
@@ -115,38 +115,38 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
               }
             }
           } ~
-            (changeForbiddenToNotFound & withUserAllowInactive(samRequestContext)) { user =>
-              path("info") {
-                get {
-                  complete {
-                    userService.getUserStatusInfo(user, samRequestContext)
-                  }
+          (changeForbiddenToNotFound & withUserAllowInactive(samRequestContext)) { user =>
+            path("info") {
+              get {
+                complete {
+                  userService.getUserStatusInfo(user, samRequestContext)
                 }
-              } ~
-                path("diagnostics") {
-                  get {
-                    complete {
-                      userService.getUserStatusDiagnostics(user.id, samRequestContext).map { statusOption =>
-                        statusOption
-                          .map { status =>
-                            StatusCodes.OK -> Option(status)
-                          }
-                          .getOrElse(StatusCodes.NotFound -> None)
+              }
+            } ~
+            path("diagnostics") {
+              get {
+                complete {
+                  userService.getUserStatusDiagnostics(user.id, samRequestContext).map { statusOption =>
+                    statusOption
+                      .map { status =>
+                        StatusCodes.OK -> Option(status)
                       }
-                    }
-                  }
-                } ~
-                path("termsOfServiceDetails") {
-                  get {
-                    complete(tosService.getTosDetails(user, samRequestContext))
-                  }
-                } ~
-                path("termsOfServiceComplianceStatus") {
-                  get {
-                    complete(tosService.getTosComplianceStatus(user, samRequestContext))
+                      .getOrElse(StatusCodes.NotFound -> None)
                   }
                 }
+              }
+            } ~
+            path("termsOfServiceDetails") {
+              get {
+                complete(tosService.getTosDetails(user, samRequestContext))
+              }
+            } ~
+            path("termsOfServiceComplianceStatus") {
+              get {
+                complete(tosService.getTosComplianceStatus(user, samRequestContext))
+              }
             }
+          }
         }
       }
     }

@@ -61,30 +61,30 @@ abstract class SamRoutes(
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
-      oidcConfig.oauth2Routes ~
-      statusRoutes ~
-      oldTermsOfServiceRoutes ~
-      termsOfServiceRoutes ~
-      withExecutionContext(ExecutionContext.global) {
-        withSamRequestContext { samRequestContext =>
-          pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
-            pathPrefix("api") {
-              // these routes are for machine to machine authorized requests
-              // the whitelisted service admin account email is in the header of the request
-              serviceAdminRoutes(samRequestContext) ~
-                userRoutesV2(samRequestContext) ~
-                withActiveUser(samRequestContext) { samUser =>
-                  val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-                  resourceRoutes(samUser, samRequestContextWithUser) ~
-                    adminRoutes(samUser, samRequestContextWithUser) ~
-                    extensionRoutes(samUser, samRequestContextWithUser) ~
-                    groupRoutes(samUser, samRequestContextWithUser) ~
-                    azureRoutes(samUser, samRequestContextWithUser) ~
-                    userRoutesV1(samUser, samRequestContextWithUser)
-                }
-            }
+    oidcConfig.oauth2Routes ~
+    statusRoutes ~
+    oldTermsOfServiceRoutes ~
+    termsOfServiceRoutes ~
+    withExecutionContext(ExecutionContext.global) {
+      withSamRequestContext { samRequestContext =>
+        pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
+        pathPrefix("api") {
+          // these routes are for machine to machine authorized requests
+          // the whitelisted service admin account email is in the header of the request
+          serviceAdminRoutes(samRequestContext) ~
+          userRoutesV2(samRequestContext) ~
+          withActiveUser(samRequestContext) { samUser =>
+            val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+            resourceRoutes(samUser, samRequestContextWithUser) ~
+            adminRoutes(samUser, samRequestContextWithUser) ~
+            extensionRoutes(samUser, samRequestContextWithUser) ~
+            groupRoutes(samUser, samRequestContextWithUser) ~
+            azureRoutes(samUser, samRequestContextWithUser) ~
+            userRoutesV1(samUser, samRequestContextWithUser)
+          }
         }
       }
+    }
   }
 
   // basis for logRequestResult lifted from http://stackoverflow.com/questions/32475471/how-does-one-log-akka-http-client-requests
