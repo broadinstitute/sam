@@ -93,7 +93,7 @@ class OldUserRoutesV2Spec extends OldUserRoutesSpecHelper {
 
     Get("/register/user/v2/self/termsOfServiceDetails") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      val details = responseAs[TermsOfServiceDetails]
+      val details = responseAs[OldTermsOfServiceDetails]
       details.isEnabled should be(true)
       details.isGracePeriodEnabled should be(TestSupport.tosConfig.isGracePeriodEnabled)
       details.userAcceptedVersion should not be empty

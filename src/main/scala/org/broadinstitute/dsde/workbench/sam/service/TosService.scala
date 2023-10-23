@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, OldTermsOfServiceDetails}
 
 import java.io.{FileNotFoundException, IOException}
 import scala.concurrent.{Await, ExecutionContext}
@@ -33,8 +33,8 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
   private val termsOfServiceUri = s"${tosConfig.baseUrl}/${tosConfig.version}/termsOfService.md"
   private val privacyPolicyUri = s"${tosConfig.baseUrl}/${tosConfig.version}/privacyPolicy.md"
 
-  val termsOfServiceText = TermsOfServiceDocument(termsOfServiceUri)
-  val privacyPolicyText = TermsOfServiceDocument(privacyPolicyUri)
+  val termsOfServiceText: String = TermsOfServiceDocument(termsOfServiceUri)
+  val privacyPolicyText: String = TermsOfServiceDocument(privacyPolicyUri)
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao
@@ -47,9 +47,9 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       .withInfoLogMessage(s"$userId has rejected version ${tosConfig.version} of the Terms of Service")
 
   @Deprecated
-  def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceDetails] =
+  def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[OldTermsOfServiceDetails] =
     directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>
-      TermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
+      OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
 
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
