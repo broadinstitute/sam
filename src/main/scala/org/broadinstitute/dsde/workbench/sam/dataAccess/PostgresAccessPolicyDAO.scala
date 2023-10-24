@@ -1376,6 +1376,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       }
 
       val listUserResourcesQuery = new ListUserResourcesQuery()
+      logger.info(listUserResourcesQuery.query.statement)
       val queryResults = listUserResourcesQuery.query
         .map { rs =>
           val rolesAndActions = RolesAndActions(

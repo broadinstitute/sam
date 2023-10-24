@@ -6,7 +6,6 @@ import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import io.prometheus.client.CollectorRegistry
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{
@@ -20,7 +19,7 @@ import org.broadinstitute.dsde.workbench.google.{
   HttpGoogleStorageDAO
 }
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
@@ -32,6 +31,7 @@ import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.util.Sentry.initSentry
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.typelevel.log4cats.StructuredLogger
@@ -42,7 +42,6 @@ import java.nio.file.{Files, Paths}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
 
@@ -51,16 +50,7 @@ object Boot extends IOApp with LazyLogging {
     initSentry()
     implicit val system = ActorSystem("sam")
 
-    (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
-      logger.error("sam failed to start, trying again in 5s", t)
-
-      // Shutdown all akka http connection pools/servers so we can re-bind to the ports
-      Http().shutdownAllConnectionPools() *> system.terminate()
-      // Clean up prometheus registry so it will be fresh on reboot
-      CollectorRegistry.defaultRegistry.clear()
-
-      IO.sleep(5 seconds) *> run(args)
-    }
+    startup() *> ExitCode.Success.pure[IO]
   }
 
   private def startup()(implicit system: ActorSystem): IO[Unit] = {
@@ -68,22 +58,31 @@ object Boot extends IOApp with LazyLogging {
     val appDependencies = createAppDependencies(appConfig)
 
     appDependencies.use { dependencies => // this is where the resource is used
-      livenessServerStartup(dependencies.directoryDAO)
-      for {
-        _ <- dependencies.samApplication.resourceService.initResourceTypes().onError { case t: Throwable =>
-          IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
-        }
-
-        _ <- dependencies.policyEvaluatorService.initPolicy()
-
-        _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
-
-        binding <- IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(dependencies.samRoutes.route))).onError { case t: Throwable =>
-          IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
-        }
-        _ <- IO.fromFuture(IO(binding.whenTerminated))
-        _ <- IO(system.terminate())
-      } yield ()
+      import cats.effect.unsafe.implicits.global
+      dependencies.accessPolicyDAO
+        .listUserResourcesWithRolesAndActions(
+          ResourceTypeName("workspace"),
+          WorkbenchUserId("123"),
+          SamRequestContext()
+        )
+        .unsafeRunSync()
+      IO(system.terminate())
+//      livenessServerStartup(dependencies.directoryDAO)
+//      for {
+//        _ <- dependencies.samApplication.resourceService.initResourceTypes().onError { case t: Throwable =>
+//          IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+//        }
+//
+//        _ <- dependencies.policyEvaluatorService.initPolicy()
+//
+//        _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
+//
+//        binding <- IO.fromFuture(IO(Http().newServerAt("0.0.0.0", 8080).bind(dependencies.samRoutes.route))).onError { case t: Throwable =>
+//          IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
+//        }
+//        _ <- IO.fromFuture(IO(binding.whenTerminated))
+//        _ <- IO(system.terminate())
+//      } yield ()
     }
   }
 
