@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails, TermsOfServiceResponse}
 
 import java.io.{FileNotFoundException, IOException}
 import scala.concurrent.{Await, ExecutionContext}
@@ -46,6 +46,17 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       .rejectTermsOfService(userId, tosConfig.version, samRequestContext)
       .withInfoLogMessage(s"$userId has rejected version ${tosConfig.version} of the Terms of Service")
 
+  def getTosConfig(): IO[TermsOfServiceResponse] = {
+    val inRollingWindow = tosConfig.rollingAcceptanceWindowExpiration.exists(Instant.now().isAfter(_))
+    IO.pure(
+      TermsOfServiceResponse(
+        enforced = tosConfig.isTosEnabled,
+        currentVersion = tosConfig.version,
+        inGracePeriod = tosConfig.isGracePeriodEnabled,
+        inRollingAcceptanceWindow = inRollingWindow
+      )
+    )
+  }
   @Deprecated
   def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceDetails] =
     directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>

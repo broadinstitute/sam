@@ -78,6 +78,7 @@ object UserStatusDetails {
 
 @Deprecated
 @Lenses final case class TermsOfServiceDetails(isEnabled: Boolean, isGracePeriodEnabled: Boolean, currentVersion: String, userAcceptedVersion: Option[String])
+@Lenses final case class TermsOfServiceResponse(enforced: Boolean, currentVersion: String, inGracePeriod: Boolean, inRollingAcceptanceWindow: Boolean)
 @Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }
