@@ -1789,7 +1789,7 @@ paths:
     patch:
       tags:
         - Resources
-      summary: Update the groups in the Auth Domain for a resource
+      summary: Add groups to the Auth Domain for a resource (removal of groups is not permitted)
       operationId: patchAuthDomainV2
       parameters:
         - name: resourceTypeName
