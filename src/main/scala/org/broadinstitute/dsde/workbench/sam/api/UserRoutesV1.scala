@@ -28,17 +28,17 @@ trait UserRoutesV1 extends SamUserDirectives with SamRequestContextDirectives {
           }
         }
       } ~
-        pathPrefix("invite") {
-          post {
-            path(Segment) { inviteeEmail =>
-              complete {
-                userService
-                  .inviteUser(WorkbenchEmail(inviteeEmail.trim), samRequestContext)
-                  .map(userStatus => StatusCodes.Created -> userStatus)
-              }
+      pathPrefix("invite") {
+        post {
+          path(Segment) { inviteeEmail =>
+            complete {
+              userService
+                .inviteUser(WorkbenchEmail(inviteeEmail.trim), samRequestContext)
+                .map(userStatus => StatusCodes.Created -> userStatus)
             }
           }
         }
+      }
     }
   }
 

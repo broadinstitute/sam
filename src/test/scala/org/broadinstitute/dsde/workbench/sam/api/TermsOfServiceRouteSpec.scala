@@ -4,11 +4,10 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
-import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceResponse
+import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
 import org.scalatest.concurrent.Eventually.eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
 class TermsOfServiceRouteSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport {
@@ -19,7 +18,7 @@ class TermsOfServiceRouteSpec extends AnyFlatSpec with Matchers with ScalatestRo
     eventually {
       Get("/termsOfService/v1") ~> samRoutes.route ~> check {
         status shouldEqual StatusCodes.OK
-        responseAs[TermsOfServiceResponse] shouldBe TermsOfServiceResponse(
+        responseAs[TermsOfServiceConfigResponse] shouldBe TermsOfServiceConfigResponse(
           enforced = true,
           currentVersion = "0",
           inGracePeriod = false,

@@ -4,7 +4,6 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.sam.service.TosService
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
 import scala.concurrent.ExecutionContext
@@ -42,58 +41,58 @@ trait TermsOfServiceRoutes {
             complete(tosService.getTosConfig())
           }
         } ~
-          pathPrefix("docs") { // api/termsOfService/v1/docs
+        pathPrefix("docs") { // api/termsOfService/v1/docs
+          pathEndOrSingleSlash {
+            get {
+              complete(StatusCodes.NotImplemented)
+            }
+          } ~
+          pathPrefix("redirect") { // api/termsOfService/v1/docs/redirect
+            pathEndOrSingleSlash {
+              get {
+                complete(StatusCodes.NotImplemented)
+              }
+            }
+          }
+        } ~
+        pathPrefix("user") { // api/termsOfService/v1/user
+          pathPrefix("self") { // api/termsOfService/v1/user/self
             pathEndOrSingleSlash {
               get {
                 complete(StatusCodes.NotImplemented)
               }
             } ~
-              pathPrefix("redirect") { // api/termsOfService/v1/docs/redirect
-                pathEndOrSingleSlash {
-                  get {
-                    complete(StatusCodes.NotImplemented)
-                  }
+            pathPrefix("accept") { // api/termsOfService/v1/user/accept
+              pathEndOrSingleSlash {
+                put {
+                  complete(StatusCodes.NotImplemented)
                 }
               }
+            } ~
+            pathPrefix("reject") { // api/termsOfService/v1/user/reject
+              pathEndOrSingleSlash {
+                put {
+                  complete(StatusCodes.NotImplemented)
+                }
+              }
+            }
           } ~
-          pathPrefix("user") { // api/termsOfService/v1/user
-            pathPrefix("self") { // api/termsOfService/v1/user/self
+          // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
+          pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
+            pathEndOrSingleSlash {
+              get {
+                complete(StatusCodes.NotImplemented)
+              }
+            } ~
+            pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
               pathEndOrSingleSlash {
                 get {
                   complete(StatusCodes.NotImplemented)
                 }
-              } ~
-                pathPrefix("accept") { // api/termsOfService/v1/user/accept
-                  pathEndOrSingleSlash {
-                    put {
-                      complete(StatusCodes.NotImplemented)
-                    }
-                  }
-                } ~
-                pathPrefix("reject") { // api/termsOfService/v1/user/reject
-                  pathEndOrSingleSlash {
-                    put {
-                      complete(StatusCodes.NotImplemented)
-                    }
-                  }
-                }
-            } ~
-              // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
-              pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
-                pathEndOrSingleSlash {
-                  get {
-                    complete(StatusCodes.NotImplemented)
-                  }
-                } ~
-                  pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
-                    pathEndOrSingleSlash {
-                      get {
-                        complete(StatusCodes.NotImplemented)
-                      }
-                    }
-                  }
               }
+            }
           }
+        }
       }
     }
 }
