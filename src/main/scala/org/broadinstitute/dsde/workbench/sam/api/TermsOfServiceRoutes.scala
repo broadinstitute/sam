@@ -39,22 +39,20 @@ trait TermsOfServiceRoutes {
       }
 
   def publicTermsOfServiceRoutes: server.Route =
-    Routes.publicTermsOfServiceV1Routes
     pathPrefix("termsOfService" / "v1")(Routes.publicTermsOfServiceV1Routes)
 
   def userTermsOfServiceRoutes(samRequestContext: SamRequestContext): server.Route =
-//    Routes.userTermsOfServiceV1Routes(samRequestContext)
     pathPrefix("termsOfService" / "v1" / "user")(Routes.userTermsOfServiceV1Routes(samRequestContext))
 
   private object Routes {
-    // termsOfService/v1
+    // /termsOfService/v1
     def publicTermsOfServiceV1Routes: server.Route =
       concat(
         pathEndOrSingleSlash(Actions.getCurrentTermsOfService),
         pathPrefix("docs")(Routes.termsOfServiceDocRoutes)
       )
 
-    // termsOfService/v1/user
+    // /api/termsOfService/v1/user
     def userTermsOfServiceV1Routes(samRequestContext: SamRequestContext): server.Route =
       concat(
         pathPrefix("self")(Actions.getTermsOfServiceDetailsForSelf(samRequestContext)),
@@ -63,19 +61,20 @@ trait TermsOfServiceRoutes {
         pathPrefix(Segment)(userId => Routes.termsOfServiceUserRoutes(userId, samRequestContext))
       )
 
-    // termsOfService/v1/docs
+    // /termsOfService/v1/docs
     private def termsOfServiceDocRoutes: server.Route =
       concat(
         pathEndOrSingleSlash(Actions.getTermsOfServiceDocs),
         pathPrefix("redirect")(termsOfServiceDocsRedirectRoutes)
       )
 
-    // termsOfService/v1/docs/redirect
+    // /termsOfService/v1/docs/redirect
     private def termsOfServiceDocsRedirectRoutes: server.Route =
       concat(
         pathEndOrSingleSlash(Actions.getTermsOfServiceDocsRedirect)
       )
 
+    // /api/termsOfService/v1/user
     private def termsOfServiceUserRoutes(userId: String, samRequestContext: SamRequestContext): server.Route =
       concat(
         pathEndOrSingleSlash(Actions.getUsersTermsOfServiceDetails(userId, samRequestContext)),
