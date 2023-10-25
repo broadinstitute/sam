@@ -16,11 +16,15 @@ import scala.concurrent.Future
 
 // Don't like having any required parameters in the constructor, but alas, they're needed to be able to finally
 // build the routes.  *sniff sniff* I smell potential refactoring.
+//
+// NOTE: In order to use the Routes from this builder to make an authenticated request, you must have either an
+// AdminUser, an EnabledUser, or a DisabledUser specified - this is due to how SamRoutes works with Akka directives
+// to make sure that the calling user is a valid user.
 class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetrics[IO]) {
 
-  private val cloudExtensionsBuilder: MockCloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup)
-  cloudExtensionsBuilder.withNonAdminUser()
+  private val cloudExtensionsBuilder: MockCloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup).withNonAdminUser()
   private val userServiceBuilder: MockUserServiceBuilder = MockUserServiceBuilder()
+  private val mockTosServiceBuilder = MockTosServiceBuilder()
 
   // Needing to keep track of the enabled user is kind of gross.  But this is a single user that exists in the DB.  This
   // is used when we need to test admin routes that look up stuff about _another_ user (the `enabledUser`) when called
@@ -38,6 +42,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     enabledUser = Option(samUser)
     userServiceBuilder.withEnabledUser(samUser)
     cloudExtensionsBuilder.withEnabledUser(samUser)
+    mockTosServiceBuilder.withAcceptedStateForUser(samUser, isAccepted = true)
     this
   }
 
@@ -45,6 +50,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     enabledUser = Option(samUsers.head)
     userServiceBuilder.withEnabledUsers(samUsers)
     cloudExtensionsBuilder.withEnabledUsers(samUsers)
+    mockTosServiceBuilder.withAllAccepted()
     this
   }
 
@@ -107,7 +113,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   def build: SamRoutes = {
     val mockUserService = userServiceBuilder.build
     val mockCloudExtensions = cloudExtensionsBuilder.build
-    val mockTosService = MockTosServiceBuilder().withAllAccepted().build
+    val mockTosService = mockTosServiceBuilder.build
 
     new SamRoutes(
       null,

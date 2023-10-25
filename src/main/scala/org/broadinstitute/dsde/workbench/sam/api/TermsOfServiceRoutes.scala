@@ -5,13 +5,11 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.{pathPrefix, _}
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
-import org.broadinstitute.dsde.workbench.sam.model.SamUserTos
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.TosService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-import java.time.Instant
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
 
@@ -107,7 +105,7 @@ trait TermsOfServiceRoutes {
 
     def getUsersTermsOfServiceDetails(userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route =
       get {
-        complete(StatusCodes.OK, SamUserTos(userId, "v123", "", Instant.now))
+        complete(StatusCodes.OK, tosService.getTermsOfServiceDetails(userId, samRequestContext))
       }
 
     def getTermsOfServiceDetailsForSelf(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
