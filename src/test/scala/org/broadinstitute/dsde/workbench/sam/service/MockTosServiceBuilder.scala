@@ -43,7 +43,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     lenient()
       .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
       .when(tosService)
-      .getTermsOfServiceDetails(any[WorkbenchUserId], any[SamRequestContext])
+      .getTermsOfServiceDetails(any[WorkbenchUserId], any[SamUser], any[SamRequestContext])
   }
 
   private def setAcceptedStateForUserTo(samUser: SamUser, isAccepted: Boolean, version: String = "v1") = {
@@ -61,7 +61,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     lenient()
       .doReturn(IO.pure(SamUserTos(samUser.id, version, action, rightNow)))
       .when(tosService)
-      .getTermsOfServiceDetails(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+      .getTermsOfServiceDetails(ArgumentMatchers.eq(samUser.id), any[SamUser], any[SamRequestContext])
   }
 
   def build: TosService = tosService

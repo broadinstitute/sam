@@ -52,10 +52,10 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
 
-  def getTermsOfServiceDetails(samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = {
-    directoryDao.getUserTos(samUserId, samRequestContext).map {
+  def getTermsOfServiceDetails(requestedUserId: WorkbenchUserId, requestingUser: SamUser, samRequestContext: SamRequestContext): IO[SamUserTos] = {
+    directoryDao.getUserTos(requestedUserId, samRequestContext).map {
       case Some(samUserTos) => samUserTos
-      case None => return IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user ${samUserId}")))
+      case None => return IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user ${requestedUserId}")))
     }
   }
 

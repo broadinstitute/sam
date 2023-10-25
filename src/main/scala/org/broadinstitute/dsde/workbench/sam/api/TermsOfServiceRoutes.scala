@@ -81,7 +81,7 @@ trait TermsOfServiceRoutes {
       validate(samUserIdPattern.matches(rawUserId), "User ID must be alpha numeric") {
         val requestedUserId = WorkbenchUserId(rawUserId)
         concat(
-          pathEndOrSingleSlash(Actions.getUsersTermsOfServiceDetails(requestedUserId, samRequestContext)),
+          pathEndOrSingleSlash(Actions.getUsersTermsOfServiceDetails(requestedUserId, requestingSamUser, samRequestContext)),
           pathPrefix("history")(Actions.getTermsOfServiceHistoryForUser(requestedUserId, samRequestContext))
         )
       }
@@ -103,13 +103,13 @@ trait TermsOfServiceRoutes {
         complete(StatusCodes.NotImplemented)
       }
 
-    def getUsersTermsOfServiceDetails(userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route =
+    def getUsersTermsOfServiceDetails(requestedUserId: WorkbenchUserId, requestingUser: SamUser, samRequestContext: SamRequestContext): server.Route =
       get {
-        complete(StatusCodes.OK, tosService.getTermsOfServiceDetails(userId, samRequestContext))
+        complete(StatusCodes.OK, tosService.getTermsOfServiceDetails(requestedUserId, requestingUser, samRequestContext))
       }
 
     def getTermsOfServiceDetailsForSelf(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-      getUsersTermsOfServiceDetails(samUser.id, samRequestContext)
+      getUsersTermsOfServiceDetails(samUser.id, samUser, samRequestContext)
 
     def acceptTermsOfServiceForUser(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
       put {
