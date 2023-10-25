@@ -7,11 +7,13 @@ import akka.http.scaladsl.server.Directives.{pathPrefix, _}
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.model.SamUserTos
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.TosService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
 import scala.concurrent.ExecutionContext
+import scala.util.matching.Regex
 
 trait TermsOfServiceRoutes {
   val tosService: TosService
@@ -41,10 +43,12 @@ trait TermsOfServiceRoutes {
   def publicTermsOfServiceRoutes: server.Route =
     pathPrefix("termsOfService" / "v1")(Routes.publicTermsOfServiceV1Routes)
 
-  def userTermsOfServiceRoutes(samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("termsOfService" / "v1" / "user")(Routes.userTermsOfServiceV1Routes(samRequestContext))
+  def userTermsOfServiceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+    pathPrefix("termsOfService" / "v1" / "user")(Routes.userTermsOfServiceV1Routes(samUser, samRequestContext))
 
   private object Routes {
+    private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
+
     // /termsOfService/v1
     def publicTermsOfServiceV1Routes: server.Route =
       concat(
@@ -53,12 +57,12 @@ trait TermsOfServiceRoutes {
       )
 
     // /api/termsOfService/v1/user
-    def userTermsOfServiceV1Routes(samRequestContext: SamRequestContext): server.Route =
+    def userTermsOfServiceV1Routes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
       concat(
-        pathPrefix("self")(Actions.getTermsOfServiceDetailsForSelf(samRequestContext)),
-        pathPrefix("accept")(pathEndOrSingleSlash(Actions.acceptTermsOfServiceForUser(samRequestContext))),
-        pathPrefix("reject")(pathEndOrSingleSlash(Actions.rejectTermsOfServiceForUser(samRequestContext))),
-        pathPrefix(Segment)(userId => Routes.termsOfServiceUserRoutes(userId, samRequestContext))
+        pathPrefix("self")(Actions.getTermsOfServiceDetailsForSelf(samUser, samRequestContext)),
+        pathPrefix("accept")(pathEndOrSingleSlash(Actions.acceptTermsOfServiceForUser(samUser, samRequestContext))),
+        pathPrefix("reject")(pathEndOrSingleSlash(Actions.rejectTermsOfServiceForUser(samUser, samRequestContext))),
+        pathPrefix(Segment)(userId => Routes.termsOfServiceForUserRoutes(userId, samUser, samRequestContext))
       )
 
     // /termsOfService/v1/docs
@@ -75,11 +79,14 @@ trait TermsOfServiceRoutes {
       )
 
     // /api/termsOfService/v1/user
-    private def termsOfServiceUserRoutes(userId: String, samRequestContext: SamRequestContext): server.Route =
-      concat(
-        pathEndOrSingleSlash(Actions.getUsersTermsOfServiceDetails(userId, samRequestContext)),
-        pathPrefix("history")(Actions.getTermsOfServiceHistoryForUser(userId, samRequestContext))
-      )
+    private def termsOfServiceForUserRoutes(rawUserId: String, requestingSamUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+      validate(samUserIdPattern.matches(rawUserId), "User ID must be alpha numeric") {
+        val requestedUserId = WorkbenchUserId(rawUserId)
+        concat(
+          pathEndOrSingleSlash(Actions.getUsersTermsOfServiceDetails(requestedUserId, samRequestContext)),
+          pathPrefix("history")(Actions.getTermsOfServiceHistoryForUser(requestedUserId, samRequestContext))
+        )
+      }
   }
 
   private object Actions {
@@ -98,28 +105,25 @@ trait TermsOfServiceRoutes {
         complete(StatusCodes.NotImplemented)
       }
 
-    def getUsersTermsOfServiceDetails(userId: String, samRequestContext: SamRequestContext): server.Route =
+    def getUsersTermsOfServiceDetails(userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route =
       get {
-//        val shellOfAUser = SamUser(WorkbenchUserId(userId), None, WorkbenchEmail(""), None, enabled = false)
-//        tosService.getTermsOfServiceDetails(shellOfAUser, samRequestContext)
-        complete(StatusCodes.OK, SamUserTos(WorkbenchUserId("foo"), "v123", "", Instant.now))
+        complete(StatusCodes.OK, SamUserTos(userId, "v123", "", Instant.now))
       }
 
-    def getTermsOfServiceDetailsForSelf(samRequestContext: SamRequestContext): server.Route =
-      // Get UserId from headers
-      getUsersTermsOfServiceDetails("getFromHeaders", samRequestContext)
+    def getTermsOfServiceDetailsForSelf(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+      getUsersTermsOfServiceDetails(samUser.id, samRequestContext)
 
-    def acceptTermsOfServiceForUser(samRequestContext: SamRequestContext): server.Route =
+    def acceptTermsOfServiceForUser(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
       put {
         complete(StatusCodes.NotImplemented)
       }
 
-    def rejectTermsOfServiceForUser(samRequestContext: SamRequestContext): server.Route =
+    def rejectTermsOfServiceForUser(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
       put {
         complete(StatusCodes.NotImplemented)
       }
 
-    def getTermsOfServiceHistoryForUser(userId: String, samRequestContext: SamRequestContext): server.Route =
+    def getTermsOfServiceHistoryForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route =
       get {
         complete(StatusCodes.NotImplemented)
       }

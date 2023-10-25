@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.sam.TestSupport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
@@ -71,6 +72,12 @@ class TermsOfServiceRouteSpec extends AnyFlatSpec with Matchers with ScalatestRo
       withClue(s"${responseAs[String]} is not parsable as an instance of `SamUserTos`.") {
         responseAs[SamUserTos]
       }
+    }
+  }
+
+  "GET /api/termsOfService/v1/user/{invalid_sam_user_id_format}" should "return a 404" in {
+    Get("/api/termsOfService/v1/user/bad!_str~ng") ~> Route.seal(samRoutes.route) ~> check {
+      status shouldEqual StatusCodes.BadRequest
     }
   }
 

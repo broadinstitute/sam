@@ -75,7 +75,7 @@ abstract class MockSamRoutes(
                   groupRoutes(samUser, samRequestContextWithUser) ~
                   userRoutesV1(samUser, samRequestContextWithUser) ~
                   azureRoutes(samUser, samRequestContextWithUser) ~
-                  userTermsOfServiceRoutes(samRequestContextWithUser)
+                  userTermsOfServiceRoutes(samUser, samRequestContextWithUser)
               }
             }
         }

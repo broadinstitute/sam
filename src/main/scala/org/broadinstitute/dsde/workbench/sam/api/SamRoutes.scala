@@ -81,7 +81,7 @@ abstract class SamRoutes(
             groupRoutes(samUser, samRequestContextWithUser) ~
             azureRoutes(samUser, samRequestContextWithUser) ~
             userRoutesV1(samUser, samRequestContextWithUser) ~
-            userTermsOfServiceRoutes(samRequestContextWithUser)
+            userTermsOfServiceRoutes(samUser, samRequestContextWithUser)
           }
         }
       }
