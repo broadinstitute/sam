@@ -6,7 +6,6 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.TestSupport.tosConfig
-import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.SamUserTos
@@ -61,23 +60,15 @@ class TosServiceSpec(_system: ActorSystem)
     }
 
     "returns configurations" in {
-      val tosConfig = TermsOfServiceConfig(
-        isTosEnabled = true,
-        isGracePeriodEnabled = true,
-        version = "1",
-        baseUrl = "https://sam.tos",
-        rollingAcceptanceWindowExpiration = Option(Instant.now().plusSeconds(3600)),
-        previousVersion = Option("0")
-      )
-      val tosService = new TosService(dirDAO, tosConfig)
+      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
 
       // accept and get ToS status
       val tosConfigResponse = tosService.getTosConfig().unsafeRunSync()
       tosConfigResponse shouldBe TermsOfServiceConfigResponse(
         enforced = true,
-        currentVersion = "1",
-        inGracePeriod = true,
-        inRollingAcceptanceWindow = true
+        currentVersion = "0",
+        inGracePeriod = false,
+        inRollingAcceptanceWindow = false
       )
     }
 

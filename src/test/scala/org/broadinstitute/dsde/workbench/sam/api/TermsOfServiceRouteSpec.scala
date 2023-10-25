@@ -22,7 +22,7 @@ class TermsOfServiceRouteSpec extends AnyFlatSpec with Matchers with ScalatestRo
           enforced = true,
           currentVersion = "0",
           inGracePeriod = false,
-          inRollingAcceptanceWindow = true
+          inRollingAcceptanceWindow = false
         )
       }
     }

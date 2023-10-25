@@ -1781,6 +1781,14 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           from ${ResourceTable as resource}
           join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
           join ${EffectiveResourcePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
+          -- https://broadworkbench.atlassian.net/browse/ID-891
+          -- We had to optimize this query, the following join condition shouldn't make a difference on the results
+          -- but it forces the postgres query planner to do an index scan instead of a full table scan of EffectiveResourcePolicyTable
+            and ${effPol.resourceId} in (
+              select ${resource.id} from ${ResourceTable as resource}
+              join ${ResourceTypeTable as resourceType} on ${resourceType.id} = ${resource.resourceTypeId}
+              where ${resourceType.name} = ${resourceTypeName}
+            )
           join ${PolicyTable as policy} on ${effPol.sourcePolicyId} = ${policy.id}
           $additionalJoins
           where ${resourceType.name} = ${resourceTypeName}
