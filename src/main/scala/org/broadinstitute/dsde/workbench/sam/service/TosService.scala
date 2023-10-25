@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, OldTermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{OldTermsOfServiceDetails, SamUserTos, TermsOfServiceComplianceStatus}
 
 import java.io.{FileNotFoundException, IOException}
 import scala.concurrent.{Await, ExecutionContext}
@@ -51,6 +51,13 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
     directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>
       OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
+
+  def getTermsOfServiceDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[SamUserTos] = {
+    directoryDao.getUserTos(samUser.id, samRequestContext).map {
+      case Some(samUserTos) => samUserTos
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user ${samUser.id}"))
+    }
+  }
 
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
     latestUserTos <- directoryDao.getUserTos(samUser.id, samRequestContext)

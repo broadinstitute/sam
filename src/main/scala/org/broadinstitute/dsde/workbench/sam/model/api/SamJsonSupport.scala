@@ -1,41 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.model.api
 
 import org.broadinstitute.dsde.workbench.model.ValueObjectFormat
-import org.broadinstitute.dsde.workbench.sam.model.{
-  AccessPolicyDescendantPermissions,
-  AccessPolicyName,
-  AccessPolicyResponseEntry,
-  CreateResourcePolicyResponse,
-  CreateResourceRequest,
-  CreateResourceResponse,
-  FullyQualifiedPolicyId,
-  FullyQualifiedResourceId,
-  GroupSyncResponse,
-  ManagedGroupAccessInstructions,
-  ManagedGroupMembershipEntry,
-  PolicyIdentifiers,
-  RequesterPaysSignedUrlRequest,
-  ResourceAction,
-  ResourceActionPattern,
-  ResourceId,
-  ResourceRole,
-  ResourceRoleName,
-  ResourceType,
-  ResourceTypeName,
-  RolesAndActions,
-  SignedUrlRequest,
-  TermsOfServiceAcceptance,
-  TermsOfServiceComplianceStatus,
-  OldTermsOfServiceDetails,
-  TermsOfServiceDetails,
-  UserIdInfo,
-  UserPolicyResponse,
-  UserResourcesResponse,
-  UserStatus,
-  UserStatusDetails,
-  UserStatusDiagnostics,
-  UserStatusInfo
-}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicyDescendantPermissions, AccessPolicyName, AccessPolicyResponseEntry, CreateResourcePolicyResponse, CreateResourceRequest, CreateResourceResponse, FullyQualifiedPolicyId, FullyQualifiedResourceId, GroupSyncResponse, ManagedGroupAccessInstructions, ManagedGroupMembershipEntry, OldTermsOfServiceDetails, PolicyIdentifiers, RequesterPaysSignedUrlRequest, ResourceAction, ResourceActionPattern, ResourceId, ResourceRole, ResourceRoleName, ResourceType, ResourceTypeName, RolesAndActions, SamUserTos, SignedUrlRequest, TermsOfServiceAcceptance, TermsOfServiceComplianceStatus, UserIdInfo, UserPolicyResponse, UserResourcesResponse, UserStatus, UserStatusDetails, UserStatusDiagnostics, UserStatusInfo}
 import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamApiJsonProtocol.PolicyInfoResponseBodyJsonFormat
@@ -70,7 +36,7 @@ object SamJsonSupport {
 
   implicit val oldTermsOfServiceDetailsFormat = jsonFormat4(OldTermsOfServiceDetails.apply)
 
-  implicit val termsOfServiceDetailsFormat = jsonFormat3(TermsOfServiceDetails.apply)
+  implicit val SamUserTosFormat = jsonFormat4(SamUserTos.apply)
 
   implicit val termsOfAcceptanceStatusFormat = jsonFormat3(TermsOfServiceComplianceStatus.apply)
 

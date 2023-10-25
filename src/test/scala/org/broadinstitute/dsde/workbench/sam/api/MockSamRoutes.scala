@@ -61,7 +61,7 @@ abstract class MockSamRoutes(
       oidcConfig.oauth2Routes ~
       statusRoutes ~
       oldTermsOfServiceRoutes ~
-      termsOfServiceRoutes ~
+      publicTermsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
           pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
@@ -74,7 +74,8 @@ abstract class MockSamRoutes(
                   extensionRoutes(samUser, samRequestContextWithUser) ~
                   groupRoutes(samUser, samRequestContextWithUser) ~
                   userRoutesV1(samUser, samRequestContextWithUser) ~
-                  azureRoutes(samUser, samRequestContextWithUser)
+                  azureRoutes(samUser, samRequestContextWithUser) ~
+                  userTermsOfServiceRoutes(samRequestContextWithUser)
               }
             }
         }
