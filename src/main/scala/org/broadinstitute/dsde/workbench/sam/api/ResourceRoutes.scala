@@ -6,6 +6,7 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
@@ -27,6 +28,20 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
   val liquibaseConfig: LiquibaseConfig
+
+
+  def resourceRoutesV3(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
+    pathPrefix("resources" / "v3") {
+      pathPrefix(Segment) { resourceTypeName =>
+        pathPrefix("filter") {
+          pathEndOrSingleSlash {
+            get {
+              filterUserResources(samUser, ResourceTypeName(resourceTypeName), samRequestContext)
+            }
+          }
+        }
+      }
+    }
 
   def resourceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
@@ -555,5 +570,11 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       ) {
         complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
       }
+    }
+
+  def filterUserResources(samUser: SamUser, resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): Route =
+    parameters("policies".as[AccessPolicyName].*, "roles".as[ResourceRoleName].*, "actions".as[ResourceAction].*, "includePublic" ? false) {
+      (policies: Iterable[AccessPolicyName], roles: Iterable[ResourceRoleName], actions: Iterable[ResourceAction], includePublic: Boolean) =>
+        complete(resourceService.filterResources(samUser, resourceTypeName, policies, roles, actions, includePublic, samRequestContext))
     }
 }

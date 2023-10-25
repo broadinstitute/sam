@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api._
+import org.broadinstitute.dsde.workbench.sam.model.api.{FilterResourcesResponse, _}
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext, groupByFirstInPair}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -1678,6 +1678,59 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         .toSet
     }
   }
+
+  override def filterResources(samUser: SamUser,
+                               resourceTypeName: ResourceTypeName,
+                               policies: Iterable[AccessPolicyName],
+                               roles: Iterable[ResourceRoleName],
+                               actions: Iterable[ResourceAction],
+                               includePublic: Boolean,
+                               samRequestContext: SamRequestContext): IO[Seq[FilteredResource]] = {
+    if (includePublic) {
+      IO.raiseError(new NotImplementedError("Filtering public resources is not yet implemented"))
+    } else {
+      val samGroupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
+      val resourcePolicy = PolicyTable.syntax("resourcePolicy")
+      val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
+      val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
+      val resourceRole = ResourceRoleTable.syntax("resourceRole")
+      val roleAction = RoleActionTable.syntax("roleAction")
+      val resourceAction = ResourceActionTable.syntax("resourceAction")
+      val resource = ResourceTable.syntax("resource")
+
+      val query = samsql"""
+
+      select distinct sr.name, sraction.action as action, srp.name as policy, srr.role as role
+      from sam_group_member_flat sgmf
+               left join sam_resource_policy srp on sgmf.group_id = srp.group_id
+               left join sam_effective_resource_policy serp on srp.id = serp.source_policy_id
+               left join sam_effective_policy_role sepr on serp.id = sepr.effective_resource_policy_id
+               left join sam_resource_role srr on sepr.resource_role_id = srr.id
+               left join sam_role_action sra on sra.resource_role_id = sepr.resource_role_id
+               left join sam_resource_action sraction on sraction.id = sra.resource_action_id
+               left join sam_resource sr on srp.resource_id = sr.id
+      where sgmf.member_user_id = '109758768814209341772'
+        and sr.resource_type_id = 9
+        and srp.name in ('reader', 'owner')
+        and srr.role in ('reader', 'owner')
+        and sraction.action in ('read', 'own')
+      union
+      select distinct sr.name, sra.action as action, srp.name as policy, null as role
+      from sam_group_member_flat sgmf
+               left join sam_resource_policy srp on sgmf.group_id = srp.group_id
+               left join sam_effective_resource_policy serp on srp.id = serp.source_policy_id
+               left join sam_effective_policy_action sepa on serp.id = sepa.effective_resource_policy_id
+               left join sam_resource_action sra on sepa.resource_action_id = sra.id
+               left join sam_resource sr on srp.resource_id = sr.id
+      where sgmf.member_user_id = '109758768814209341772'
+        and sr.resource_type_id = 9
+        and srp.name in ('reader', 'owner')
+        and sra.action in ('read', 'own')
+            """
+    }
+
+  }
+
 
   private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName])(implicit session: DBSession): Int = {
     val resource = ResourceTable.syntax("resource")

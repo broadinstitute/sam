@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import cats.Applicative
 import cats.data.NonEmptyList
@@ -14,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, FilteredResources, SamUser}
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
 import java.util.UUID
@@ -910,5 +911,21 @@ class ResourceService(
     val removeEventSet = if (removeEvent.changeDetails.isEmpty) Set.empty else Set(removeEvent)
     val addEventSet = if (addEvent.changeDetails.isEmpty) Set.empty else Set(addEvent)
     addEventSet ++ removeEventSet
+  }
+
+  def filterResources(samUser: SamUser,
+                      resourceTypeName: ResourceTypeName,
+                      policies: Iterable[AccessPolicyName],
+                      roles: Iterable[ResourceRoleName],
+                      actions: Iterable[ResourceAction],
+                      includePublic: Boolean,
+                      samRequestContext: SamRequestContext): FilteredResources = {
+    accessPolicyDAO.filterResources(samUser,
+      resourceTypeName,
+      policies,
+      roles,
+      actions,
+      includePublic,
+      samRequestContext)
   }
 }
