@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.db
 
-import cats.effect.{Async, IO, ParallelF, Resource}
+import cats.effect.{Async, IO, Resource}
 import com.google.common.base.Throwables
 import com.typesafe.scalalogging.LazyLogging
 import io.opencensus.trace.AttributeValue
