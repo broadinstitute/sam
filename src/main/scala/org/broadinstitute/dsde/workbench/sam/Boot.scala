@@ -205,7 +205,7 @@ object Boot extends IOApp with LazyLogging {
   ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO], AzureManagedResourceGroupDAO, LastQuotaErrorDAO)] =
     for {
       writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbConfig)
-      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbConfig)
+      readDbRef <- DbReference.resource(appConfig.liquibaseConfig.copy(initWithLiquibase = false), readDbConfig)
 
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
       accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)

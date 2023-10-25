@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.db
 
-import cats.effect.{Async, IO, Resource}
+import cats.effect.{Async, IO, ParallelF, Resource}
 import com.google.common.base.Throwables
 import com.typesafe.scalalogging.LazyLogging
 import io.opencensus.trace.AttributeValue
@@ -51,7 +51,10 @@ object DbReference extends LazyLogging {
     DBs.setup(dbName)
     DBs.loadGlobalSettings()
     if (liquibaseConfig.initWithLiquibase) {
+      logger.info(s"Initializing $dbName with liquibase")
       initWithLiquibase(liquibaseConfig, dbName)
+    } else {
+      logger.info(s"Initializing $dbName with without liquibase")
     }
 
     DbReference(dbName, dbExecutionContext)
