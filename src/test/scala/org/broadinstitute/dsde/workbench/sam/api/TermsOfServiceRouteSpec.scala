@@ -73,12 +73,12 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
   }
 
   describe("GET /api/termsOfService/v1/user/self") {
-    it("should return ToS status for the calling user") {
+    it("should return an instance of `SamUserTos`") {
       Get("/api/termsOfService/v1/user/self") ~> samRoutes.route ~> check {
-        status shouldEqual StatusCodes.OK
         withClue(s"${responseAs[String]} is not parsable as an instance of `SamUserTos`.") {
           responseAs[SamUserTos]
         }
+        status shouldEqual StatusCodes.OK
       }
     }
   }
@@ -97,10 +97,8 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
         status shouldEqual StatusCodes.OK
       }
     }
-  }
 
-  describe("GET /api/termsOfService/v1/user/{valid_but_non_existing_user_id}") {
-    it("should return a 404") {
+   it("should return 404 when USER_ID is does not exist") {
       val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
         .withEnabledUser(Generator.genWorkbenchUserGoogle.sample.get)
@@ -109,10 +107,8 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
         status shouldEqual StatusCodes.NotFound
       }
     }
-  }
 
-  describe("GET /api/termsOfService/v1/user/{invalid_sam_user_id_format}") {
-    it("should return a 404") {
+    it("should return 400 when called with an invalidly formatted USER_ID") {
       Get("/api/termsOfService/v1/user/bad!_str~ng") ~> Route.seal(samRoutes.route) ~> check {
         status shouldEqual StatusCodes.BadRequest
       }
