@@ -40,25 +40,25 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
     }
   }
 
-  describe("GET /termsOfService/v1") {
+  describe("GET /api/termsOfService/v1") {
     it("should be a valid route") {
-      Get("/termsOfService/v1") ~> samRoutes.route ~> check {
+      Get("/api/termsOfService/v1") ~> samRoutes.route ~> check {
         status shouldBe StatusCodes.NotImplemented
       }
     }
   }
 
-  describe("GET /termsOfService/v1/docs") {
+  describe("GET /api/termsOfService/v1/docs") {
     it("should be a valid route") {
-      Get("/termsOfService/v1/docs") ~> samRoutes.route ~> check {
+      Get("/api/termsOfService/v1/docs") ~> samRoutes.route ~> check {
         status shouldBe StatusCodes.NotImplemented
       }
     }
   }
 
-  describe("GET /termsOfService/v1/docs/redirect") {
+  describe("GET /api/termsOfService/v1/docs/redirect") {
     it("should be a valid route") {
-      Get("/termsOfService/v1/docs/redirect") ~> samRoutes.route ~> check {
+      Get("/api/termsOfService/v1/docs/redirect") ~> samRoutes.route ~> check {
         status shouldBe StatusCodes.NotImplemented
       }
     }

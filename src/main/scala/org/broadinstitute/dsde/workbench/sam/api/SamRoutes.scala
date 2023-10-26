@@ -64,7 +64,6 @@ abstract class SamRoutes(
     oidcConfig.oauth2Routes ~
     statusRoutes ~
     oldTermsOfServiceRoutes ~
-    publicTermsOfServiceRoutes ~
     withExecutionContext(ExecutionContext.global) {
       withSamRequestContext { samRequestContext =>
         pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
@@ -73,6 +72,7 @@ abstract class SamRoutes(
           // the whitelisted service admin account email is in the header of the request
           serviceAdminRoutes(samRequestContext) ~
           userRoutesV2(samRequestContext) ~
+          publicTermsOfServiceRoutes ~
           withActiveUser(samRequestContext) { samUser =>
             isWorkbenchAdmin(samUser) { isAdmin =>
               val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
