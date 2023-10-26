@@ -1,20 +1,23 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
-import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
+import org.broadinstitute.dsde.workbench.model.{WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.tosConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
+import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model.SamUserTos
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.Mockito.RETURNS_SMART_NULLS
 import org.mockito.scalatest.MockitoSugar
+import org.scalatest.Inside.inside
 import org.scalatest.freespec.AnyFreeSpecLike
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
 
 import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -26,7 +29,9 @@ class TosServiceSpec(_system: ActorSystem)
     with BeforeAndAfterAll
     with BeforeAndAfter
     with PropertyBasedTesting
-    with MockitoSugar {
+    with MockitoSugar
+    with TimeMatchers
+    with OptionValues {
 
   def this() = this(ActorSystem("TosServiceSpec"))
 
@@ -39,10 +44,10 @@ class TosServiceSpec(_system: ActorSystem)
     super.afterAll()
   }
 
-  lazy val dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+  private lazy val dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
-  val defaultUser = Generator.genWorkbenchUserBoth.sample.get
-  val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
+  private val defaultUser = Generator.genWorkbenchUserBoth.sample.get
+  private val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
 
   before {
     clearDatabase()
@@ -414,6 +419,7 @@ class TosServiceSpec(_system: ActorSystem)
         }
       }
     }
+
     "when a service account is using the api" - {
       "let it use the api regardless of tos status" in {
         when(dirDAO.getUserTos(serviceAccountUser.id, samRequestContext))
@@ -423,6 +429,71 @@ class TosServiceSpec(_system: ActorSystem)
         val complianceStatus =
           tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTosComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
         complianceStatus.permitsSystemUsage shouldBe true
+      }
+    }
+
+    "can retrieve Terms of Service details for a user" - {
+      "if the requesting user is an admin" in {
+        // Arrange
+        val tosVersion = "v1"
+        val adminUser = Generator.genWorkbenchUserBoth.sample.get
+        val directoryDao = new MockDirectoryDaoBuilder()
+          .withAcceptedTermsOfServiceForUser(defaultUser, tosVersion)
+          .build
+
+        val tosService = new TosService(directoryDao, TestSupport.tosConfig)
+
+        // Act
+        val samUserTos = runAndWait(tosService.getTermsOfServiceDetails(defaultUser.id, adminUser, isAdmin = true, samRequestContext))
+
+        // Assert
+        inside(samUserTos) { case SamUserTos(id, version, action, createdAt) =>
+          id should be(defaultUser.id)
+          version should be(tosVersion)
+          action should be("accepted")
+          createdAt should beAround(Instant.now)
+        }
+      }
+
+      "if the requesting user is not an admin but is the same as the requested user" in {
+        // Arrange
+        val tosVersion = "v1"
+        val tosService = MockTosServiceBuilder()
+          .withAcceptedStateForUser(defaultUser, isAccepted = true, tosVersion)
+          .build
+
+        // Act
+        val samUserTos = runAndWait(tosService.getTermsOfServiceDetails(defaultUser.id, defaultUser, isAdmin = false, samRequestContext))
+
+        // Assert
+        inside(samUserTos) { case SamUserTos(id, version, action, createdAt) =>
+          id should be(defaultUser.id)
+          version should be(tosVersion)
+          action should be("accepted")
+          createdAt should beAround(Instant.now)
+        }
+      }
+    }
+
+    "cannot retrieve Terms of Service details for another user" - {
+      "if requesting user is not an admin and the requested user is a different user" in {
+        // Arrange
+        val tosVersion = "v1"
+        val nonAdminUser = Generator.genWorkbenchUserBoth.sample.get
+        val someRandoUser = Generator.genWorkbenchUserBoth.sample.get
+        val directoryDao = new MockDirectoryDaoBuilder()
+          .withExistingUser(someRandoUser)
+          .withAcceptedTermsOfServiceForUser(someRandoUser, tosVersion)
+          .build
+
+        val tosService = new TosService(directoryDao, TestSupport.tosConfig)
+
+        // Act and Assert
+        val e = intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(tosService.getTermsOfServiceDetails(someRandoUser.id, nonAdminUser, isAdmin = false, samRequestContext))
+        }
+
+        assert(e.errorReport.statusCode.value == StatusCodes.Unauthorized, "User should not be authorized to see other users' Terms of Service details")
       }
     }
   }

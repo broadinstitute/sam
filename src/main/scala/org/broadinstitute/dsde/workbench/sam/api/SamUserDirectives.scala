@@ -50,6 +50,9 @@ trait SamUserDirectives {
       }
     }
 
+  def isWorkbenchAdmin(samUser: SamUser): Directive1[Boolean] =
+    onSuccess(cloudExtensions.isWorkbenchAdmin(samUser.email))
+
   def asAdminServiceUser: Directive0
 
   val oldTermsOfServiceUrl = "app.terra.bio/#terms-of-service"

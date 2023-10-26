@@ -29,8 +29,8 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     this
   }
 
-  def withAcceptedStateForUser(samUser: SamUser, isAccepted: Boolean): MockTosServiceBuilder = {
-    setAcceptedStateForUserTo(samUser, isAccepted)
+  def withAcceptedStateForUser(samUser: SamUser, isAccepted: Boolean, version: String = "v1"): MockTosServiceBuilder = {
+    setAcceptedStateForUserTo(samUser, isAccepted, version)
     this
   }
 
@@ -43,10 +43,10 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     lenient()
       .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
       .when(tosService)
-      .getTermsOfServiceDetails(any[WorkbenchUserId], any[SamUser], any[SamRequestContext])
+      .getTermsOfServiceDetails(any[WorkbenchUserId], any[SamUser], any[Boolean], any[SamRequestContext])
   }
 
-  private def setAcceptedStateForUserTo(samUser: SamUser, isAccepted: Boolean, version: String = "v1") = {
+  private def setAcceptedStateForUserTo(samUser: SamUser, isAccepted: Boolean, version: String) = {
     val matchesUser = new ArgumentMatcher[SamUser] {
       override def matches(argument: SamUser): Boolean =
         argument.id.equals(samUser.id)
@@ -61,7 +61,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     lenient()
       .doReturn(IO.pure(SamUserTos(samUser.id, version, action, rightNow)))
       .when(tosService)
-      .getTermsOfServiceDetails(ArgumentMatchers.eq(samUser.id), any[SamUser], any[SamRequestContext])
+      .getTermsOfServiceDetails(ArgumentMatchers.eq(samUser.id), any[SamUser], any[Boolean], any[SamRequestContext])
   }
 
   def build: TosService = tosService

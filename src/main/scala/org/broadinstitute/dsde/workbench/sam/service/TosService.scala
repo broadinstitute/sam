@@ -52,10 +52,14 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
 
-  def getTermsOfServiceDetails(requestedUserId: WorkbenchUserId, requestingUser: SamUser, samRequestContext: SamRequestContext): IO[SamUserTos] = {
-    directoryDao.getUserTos(requestedUserId, samRequestContext).map {
-      case Some(samUserTos) => samUserTos
-      case None => return IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user ${requestedUserId}")))
+  def getTermsOfServiceDetails(requestedUserId: WorkbenchUserId, requestingUser: SamUser, isAdmin: Boolean, samRequestContext: SamRequestContext): IO[SamUserTos] = {
+    if (isAdmin || (requestedUserId == requestingUser.id)) {
+      directoryDao.getUserTos(requestedUserId, samRequestContext).map {
+        case Some(samUserTos) => samUserTos
+        case None => return IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user ${requestedUserId}")))
+      }
+    } else {
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "You are not allowed to make this request")))
     }
   }
 

@@ -68,14 +68,16 @@ abstract class MockSamRoutes(
             pathPrefix("api") {
               // IMPORTANT - all routes under /api must have an active user
               withActiveUser(samRequestContext) { samUser =>
-                val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-                resourceRoutes(samUser, samRequestContextWithUser) ~
-                  adminRoutes(samUser, samRequestContextWithUser) ~
-                  extensionRoutes(samUser, samRequestContextWithUser) ~
-                  groupRoutes(samUser, samRequestContextWithUser) ~
-                  userRoutesV1(samUser, samRequestContextWithUser) ~
-                  azureRoutes(samUser, samRequestContextWithUser) ~
-                  userTermsOfServiceRoutes(samUser, samRequestContextWithUser)
+                isWorkbenchAdmin(samUser) { isAdmin =>
+                  val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+                  resourceRoutes(samUser, samRequestContextWithUser) ~
+                    adminRoutes(samUser, samRequestContextWithUser) ~
+                    extensionRoutes(samUser, samRequestContextWithUser) ~
+                    groupRoutes(samUser, samRequestContextWithUser) ~
+                    userRoutesV1(samUser, samRequestContextWithUser) ~
+                    azureRoutes(samUser, samRequestContextWithUser) ~
+                    userTermsOfServiceRoutes(samUser, isAdmin, samRequestContextWithUser)
+                }
               }
             }
         }

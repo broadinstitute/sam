@@ -74,14 +74,16 @@ abstract class SamRoutes(
           serviceAdminRoutes(samRequestContext) ~
           userRoutesV2(samRequestContext) ~
           withActiveUser(samRequestContext) { samUser =>
-            val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-            resourceRoutes(samUser, samRequestContextWithUser) ~
-            adminRoutes(samUser, samRequestContextWithUser) ~
-            extensionRoutes(samUser, samRequestContextWithUser) ~
-            groupRoutes(samUser, samRequestContextWithUser) ~
-            azureRoutes(samUser, samRequestContextWithUser) ~
-            userRoutesV1(samUser, samRequestContextWithUser) ~
-            userTermsOfServiceRoutes(samUser, samRequestContextWithUser)
+            isWorkbenchAdmin(samUser) { isAdmin =>
+              val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+              resourceRoutes(samUser, samRequestContextWithUser) ~
+              adminRoutes(samUser, samRequestContextWithUser) ~
+              extensionRoutes(samUser, samRequestContextWithUser) ~
+              groupRoutes(samUser, samRequestContextWithUser) ~
+              azureRoutes(samUser, samRequestContextWithUser) ~
+              userRoutesV1(samUser, samRequestContextWithUser) ~
+              userTermsOfServiceRoutes(samUser, isAdmin, samRequestContextWithUser)
+            }
           }
         }
       }
