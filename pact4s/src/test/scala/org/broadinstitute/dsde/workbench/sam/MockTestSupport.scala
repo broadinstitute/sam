@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server.{Directive, Directive0, Directive1}
-import akka.http.scaladsl.server.Directives.{complete, extractRequest, onSuccess, optionalHeaderValueByName}
+import akka.http.scaladsl.server.Directives.{complete, extractRequest, onSuccess, optionalHeaderValueByName, provide}
 import akka.stream.Materializer
 import cats.effect._
 import cats.effect.unsafe.implicits.global

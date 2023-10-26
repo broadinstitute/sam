@@ -29,4 +29,6 @@ trait MockSamUserDirectives extends SamUserDirectives {
     case None => failWith(new Exception("samUser not specified"))
     case Some(u) => provide(u)
   }
+
+  override def isWorkbenchAdmin(samUser: SamUser): Directive1[Boolean] = provide(false)
 }

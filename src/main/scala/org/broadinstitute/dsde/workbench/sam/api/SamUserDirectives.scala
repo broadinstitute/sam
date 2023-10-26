@@ -55,8 +55,7 @@ trait SamUserDirectives {
   // was added so we can do the "isAdmin calculation" in the routes, just like we've always done it, but then pass this
   // data into the Services to let them make their own authz determination.  If we can change the way we define admins
   // from _not_ depending on Google, then we may be able to get rid of this directive.
-  def isWorkbenchAdmin(samUser: SamUser): Directive1[Boolean] =
-    onSuccess(cloudExtensions.isWorkbenchAdmin(samUser.email))
+  def isWorkbenchAdmin(samUser: SamUser): Directive1[Boolean]
 
   def asAdminServiceUser: Directive0
 

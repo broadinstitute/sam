@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.server.Directives.{onSuccess, reject}
+import akka.http.scaladsl.server.Directives.{onSuccess, provide, reject}
 import akka.http.scaladsl.server._
 import akka.stream.Materializer
 import cats.effect.IO
@@ -145,9 +145,13 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       }
 
       override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route = reject
+
       implicit val errorReportSource: ErrorReportSource = ErrorReportSource("test")
-      override def asAdminServiceUser: Directive0 = if (asServiceAdminUser) Directive.Empty
-      else reject(AuthorizationFailedRejection)
+
+      override def asAdminServiceUser: Directive0 =
+        if (asServiceAdminUser) Directive.Empty else reject(AuthorizationFailedRejection)
+
+      override def isWorkbenchAdmin(samUser: SamUser): Directive1[Boolean] = provide(asServiceAdminUser)
     }
   }
 }
