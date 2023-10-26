@@ -39,7 +39,10 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
     ManagedIdentityDisplayName("Managed Identity")
   )
 
-  val actionPatterns: Set[ResourceActionPattern] = Set(ResourceActionPattern("write", "description of pattern1", authDomainConstrainable = false), ResourceActionPattern("read", "description of pattern2", authDomainConstrainable = false))
+  val actionPatterns: Set[ResourceActionPattern] = Set(
+    ResourceActionPattern("write", "description of pattern1", authDomainConstrainable = false),
+    ResourceActionPattern("read", "description of pattern2", authDomainConstrainable = false)
+  )
   val writeAction: ResourceAction = ResourceAction("write")
   val readAction: ResourceAction = ResourceAction("read")
 
@@ -76,7 +79,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "create a group with access instructions" in {
-        assume (databaseEnabled, databaseEnabledClue)
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, Option("access instructions"), samRequestContext = samRequestContext).unsafeRunSync() shouldEqual defaultGroup
       }
 

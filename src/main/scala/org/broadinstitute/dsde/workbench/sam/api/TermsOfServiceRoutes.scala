@@ -77,7 +77,12 @@ trait TermsOfServiceRoutes {
       )
 
     // /api/termsOfService/v1/user
-    private def termsOfServiceForUserRoutes(rawUserId: String, requestingSamUser: SamUser, isAdmin: Boolean, samRequestContext: SamRequestContext): server.Route =
+    private def termsOfServiceForUserRoutes(
+        rawUserId: String,
+        requestingSamUser: SamUser,
+        isAdmin: Boolean,
+        samRequestContext: SamRequestContext
+    ): server.Route =
       validate(samUserIdPattern.matches(rawUserId), "User ID must be alpha numeric") {
         val requestedUserId = WorkbenchUserId(rawUserId)
         concat(
@@ -103,7 +108,12 @@ trait TermsOfServiceRoutes {
         complete(StatusCodes.NotImplemented)
       }
 
-    def getUsersTermsOfServiceDetails(requestedUserId: WorkbenchUserId, requestingUser: SamUser, isAdmin: Boolean, samRequestContext: SamRequestContext): server.Route =
+    def getUsersTermsOfServiceDetails(
+        requestedUserId: WorkbenchUserId,
+        requestingUser: SamUser,
+        isAdmin: Boolean,
+        samRequestContext: SamRequestContext
+    ): server.Route =
       get {
         complete(StatusCodes.OK, tosService.getTermsOfServiceDetails(requestedUserId, requestingUser, isAdmin, samRequestContext))
       }

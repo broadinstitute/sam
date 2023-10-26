@@ -98,7 +98,7 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       }
     }
 
-   it("should return 404 when USER_ID is does not exist") {
+    it("should return 404 when USER_ID is does not exist") {
       val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
         .withEnabledUser(Generator.genWorkbenchUserGoogle.sample.get)
