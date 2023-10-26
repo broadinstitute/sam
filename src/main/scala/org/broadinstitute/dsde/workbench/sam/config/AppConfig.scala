@@ -149,7 +149,7 @@ object AppConfig {
       config.as[DatabaseConfig]("sam_read"),
       config.as[DatabaseConfig]("sam_write"),
       config.as[DatabaseConfig]("sam_background"),
-      config.as[DatabaseConfig]("sam_bad_query")
+      config.as[DatabaseConfig]("sam_read_replica")
     )
   }
 
