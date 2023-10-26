@@ -38,16 +38,18 @@ trait TermsOfServiceRoutes {
         }
       }
 
+  // Do not know and do not care who the calling user is - unauthenticated requests
   def publicTermsOfServiceRoutes: server.Route =
     pathPrefix("termsOfService" / "v1")(Routes.publicTermsOfServiceV1Routes)
 
+  // Must be able to authenticate and authorize the calling user - authenticated requests
   def userTermsOfServiceRoutes(samUser: SamUser, isAdmin: Boolean, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("termsOfService" / "v1" / "user")(Routes.userTermsOfServiceV1Routes(samUser, isAdmin, samRequestContext))
 
   private object Routes {
     private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
 
-    // /termsOfService/v1
+    // /api/termsOfService/v1
     def publicTermsOfServiceV1Routes: server.Route =
       concat(
         pathEndOrSingleSlash(Actions.getCurrentTermsOfService),
@@ -63,14 +65,14 @@ trait TermsOfServiceRoutes {
         pathPrefix(Segment)(userId => Routes.termsOfServiceForUserRoutes(userId, samUser, isAdmin, samRequestContext))
       )
 
-    // /termsOfService/v1/docs
+    // /api/termsOfService/v1/docs
     private def termsOfServiceDocRoutes: server.Route =
       concat(
         pathEndOrSingleSlash(Actions.getTermsOfServiceDocs),
         pathPrefix("redirect")(termsOfServiceDocsRedirectRoutes)
       )
 
-    // /termsOfService/v1/docs/redirect
+    // /api/termsOfService/v1/docs/redirect
     private def termsOfServiceDocsRedirectRoutes: server.Route =
       concat(
         pathEndOrSingleSlash(Actions.getTermsOfServiceDocsRedirect)
