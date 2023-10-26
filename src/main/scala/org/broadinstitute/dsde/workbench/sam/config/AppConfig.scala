@@ -145,7 +145,12 @@ object AppConfig {
   }
 
   implicit val samDatabaseConfigReader: ValueReader[SamDatabaseConfig] = ValueReader.relative { config =>
-    SamDatabaseConfig(config.as[DatabaseConfig]("sam_read"), config.as[DatabaseConfig]("sam_write"), config.as[DatabaseConfig]("sam_background"))
+    SamDatabaseConfig(
+      config.as[DatabaseConfig]("sam_read"),
+      config.as[DatabaseConfig]("sam_write"),
+      config.as[DatabaseConfig]("sam_background"),
+      config.as[DatabaseConfig]("sam_bad_query")
+    )
   }
 
   final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String], serviceAccountAdmins: Set[WorkbenchEmail])

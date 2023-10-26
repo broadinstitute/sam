@@ -13,9 +13,16 @@ import cats.effect.Temporal
 trait DatabaseSupport {
   protected val writeDbRef: DbReference
   protected val readDbRef: DbReference
+  protected val badQueryDbRef: Option[DbReference] = None
 
   protected def readOnlyTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A): IO[A] = {
     val databaseIO = IO(readDbRef.readOnly(databaseFunction))
+    readDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO)
+  }
+
+  protected def readOnlyTransactionBadQuery[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A): IO[A] = {
+    val dbRef = badQueryDbRef.getOrElse(readDbRef)
+    val databaseIO = IO(dbRef.readOnly(databaseFunction))
     readDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO)
   }
 
