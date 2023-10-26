@@ -32,15 +32,13 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
 
   def resourceRoutesV3(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("resources" / "v3") {
-      pathPrefix(Segment) { resourceTypeName =>
         pathPrefix("filter") {
           pathEndOrSingleSlash {
             get {
-              filterUserResources(samUser, ResourceTypeName(resourceTypeName), samRequestContext)
+              filterUserResources(samUser, samRequestContext)
             }
           }
         }
-      }
     }
 
   def resourceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
@@ -572,9 +570,9 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     }
 
-  def filterUserResources(samUser: SamUser, resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): Route =
-    parameters("policies".as[AccessPolicyName].*, "roles".as[ResourceRoleName].*, "actions".as[ResourceAction].*, "includePublic" ? false) {
-      (policies: Iterable[AccessPolicyName], roles: Iterable[ResourceRoleName], actions: Iterable[ResourceAction], includePublic: Boolean) =>
-        complete(resourceService.filterResources(samUser, resourceTypeName, policies, roles, actions, includePublic, samRequestContext))
+  def filterUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    parameters("resourceTypes".as[ResourceTypeName].*, "policies".as[AccessPolicyName].*, "roles".as[ResourceRoleName].*, "actions".as[ResourceAction].*, "includePublic" ? false) {
+      (resourceTypes: Iterable[ResourceTypeName], policies: Iterable[AccessPolicyName], roles: Iterable[ResourceRoleName], actions: Iterable[ResourceAction], includePublic: Boolean) =>
+        complete(resourceService.filterResources(samUser, resourceTypes, policies, roles, actions, includePublic, samRequestContext))
     }
 }

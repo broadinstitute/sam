@@ -108,7 +108,7 @@ trait AccessPolicyDAO {
       }
     }
 
-  def filterResources(samUser: SamUser, resourceTypeName: ResourceTypeName, policies: Iterable[AccessPolicyName], roles: Iterable[ResourceRoleName], actions: Iterable[ResourceAction], includePublic: Boolean, samRequestContext: SamRequestContext): FilteredResources
+  def filterResources(samUser: SamUser, resourceTypeNames: Iterable[ResourceTypeName], policies: Iterable[AccessPolicyName], roles: Iterable[ResourceRoleName], actions: Iterable[ResourceAction], includePublic: Boolean, samRequestContext: SamRequestContext): FilteredResources
 
 }
 

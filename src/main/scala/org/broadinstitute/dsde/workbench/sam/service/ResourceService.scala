@@ -914,14 +914,14 @@ class ResourceService(
   }
 
   def filterResources(samUser: SamUser,
-                      resourceTypeName: ResourceTypeName,
+                      resourceTypeNames: Iterable[ResourceTypeName],
                       policies: Iterable[AccessPolicyName],
                       roles: Iterable[ResourceRoleName],
                       actions: Iterable[ResourceAction],
                       includePublic: Boolean,
-                      samRequestContext: SamRequestContext): FilteredResources = {
+                      samRequestContext: SamRequestContext): IO[FilteredResources] = {
     accessPolicyDAO.filterResources(samUser,
-      resourceTypeName,
+      resourceTypeNames,
       policies,
       roles,
       actions,

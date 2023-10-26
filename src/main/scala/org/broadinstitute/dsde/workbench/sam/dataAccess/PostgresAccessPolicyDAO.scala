@@ -1680,7 +1680,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   }
 
   override def filterResources(samUser: SamUser,
-                               resourceTypeName: ResourceTypeName,
+                               resourceTypeNames: Iterable[ResourceTypeName],
                                policies: Iterable[AccessPolicyName],
                                roles: Iterable[ResourceRoleName],
                                actions: Iterable[ResourceAction],
@@ -1689,18 +1689,34 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     if (includePublic) {
       IO.raiseError(new NotImplementedError("Filtering public resources is not yet implemented"))
     } else {
-      val samGroupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
+      val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
       val resourcePolicy = PolicyTable.syntax("resourcePolicy")
+      val resourcePolicyColumn = PolicyTable.column
       val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
       val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
       val resourceRole = ResourceRoleTable.syntax("resourceRole")
+      val resourceRoleColumn = ResourceRoleTable.column
       val roleAction = RoleActionTable.syntax("roleAction")
+      val roleActionColumn = RoleActionTable.column
       val resourceAction = ResourceActionTable.syntax("resourceAction")
+      val resourceActionColumn = ResourceActionTable.column
       val resource = ResourceTable.syntax("resource")
+      val resourceColumn = ResourceTable.column
 
-      val query = samsql"""
+      val query =
+      samsql"""
+        select distinct ${resourceColumn.name} as resource_id, ${resourcePolicyColumn.name} as policy, ${resourceRoleColumn.role} as role, ${roleActionColumn.action} as action
+        from ${GroupMemberFlatTable as groupMemberFlat}
+          left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
+          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
+          left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
+          left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
+            """
 
-      select distinct sr.name, sraction.action as action, srp.name as policy, srr.role as role
+
+      val rawQuery = samsql"""
+
+      select distinct sr.name, srp.name as policy, srr.role as role, sraction.action as action
       from sam_group_member_flat sgmf
                left join sam_resource_policy srp on sgmf.group_id = srp.group_id
                left join sam_effective_resource_policy serp on srp.id = serp.source_policy_id
@@ -1708,20 +1724,20 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
                left join sam_resource_role srr on sepr.resource_role_id = srr.id
                left join sam_role_action sra on sra.resource_role_id = sepr.resource_role_id
                left join sam_resource_action sraction on sraction.id = sra.resource_action_id
-               left join sam_resource sr on srp.resource_id = sr.id
+               left join sam_resource sr on serp.resource_id = sr.id
       where sgmf.member_user_id = '109758768814209341772'
         and sr.resource_type_id = 9
         and srp.name in ('reader', 'owner')
         and srr.role in ('reader', 'owner')
         and sraction.action in ('read', 'own')
       union
-      select distinct sr.name, sra.action as action, srp.name as policy, null as role
+      select distinct sr.name, srp.name as policy, null as role, sra.action as action
       from sam_group_member_flat sgmf
                left join sam_resource_policy srp on sgmf.group_id = srp.group_id
                left join sam_effective_resource_policy serp on srp.id = serp.source_policy_id
                left join sam_effective_policy_action sepa on serp.id = sepa.effective_resource_policy_id
                left join sam_resource_action sra on sepa.resource_action_id = sra.id
-               left join sam_resource sr on srp.resource_id = sr.id
+               left join sam_resource sr on serp.resource_id = sr.id
       where sgmf.member_user_id = '109758768814209341772'
         and sr.resource_type_id = 9
         and srp.name in ('reader', 'owner')
