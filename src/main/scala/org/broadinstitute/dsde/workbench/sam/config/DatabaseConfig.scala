@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
-final case class SamDatabaseConfig(samRead: DatabaseConfig, samWrite: DatabaseConfig, samBackground: DatabaseConfig, samBadQuery: DatabaseConfig)
+final case class SamDatabaseConfig(samRead: DatabaseConfig, samWrite: DatabaseConfig, samBackground: DatabaseConfig, samReadReplica: DatabaseConfig)
 
 final case class DatabaseConfig(
     dbName: Symbol,

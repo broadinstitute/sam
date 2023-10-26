@@ -110,7 +110,7 @@ object Boot extends IOApp with LazyLogging {
         appConfig,
         appConfig.samDatabaseConfig.samWrite,
         appConfig.samDatabaseConfig.samRead,
-        appConfig.samDatabaseConfig.samBadQuery
+        appConfig.samDatabaseConfig.samReadReplica
       )
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
@@ -204,15 +204,15 @@ object Boot extends IOApp with LazyLogging {
       appConfig: AppConfig,
       writeDbConfig: DatabaseConfig,
       readDbConfig: DatabaseConfig,
-      badQueryDbConfig: DatabaseConfig
+      readReplicaDbConfig: DatabaseConfig
   ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO], AzureManagedResourceGroupDAO, LastQuotaErrorDAO)] =
     for {
       writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbConfig)
       readDbRef <- DbReference.resource(appConfig.liquibaseConfig.copy(initWithLiquibase = false), readDbConfig)
-      badQueryDbRef <- DbReference.resource(appConfig.liquibaseConfig.copy(initWithLiquibase = false), readDbConfig)
+      readReplicaDbRef <- DbReference.resource(appConfig.liquibaseConfig.copy(initWithLiquibase = false), readReplicaDbConfig)
 
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
-      accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef, Some(badQueryDbRef))
+      accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef, Some(readReplicaDbRef))
       postgresDistributedLockDAO = new PostgresDistributedLockDAO[IO](writeDbRef, readDbRef, appConfig.distributedLockConfig)
       azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(writeDbRef, readDbRef)
       lastQuotaErrorDAO = new PostgresLastQuotaErrorDAO(writeDbRef, readDbRef)

@@ -26,7 +26,7 @@ import cats.effect.Temporal
 class PostgresAccessPolicyDAO(
     protected val writeDbRef: DbReference,
     protected val readDbRef: DbReference,
-    protected override val badQueryDbRef: Option[DbReference] = None
+    protected override val readReplicaDbRef: Option[DbReference] = None
 )(implicit timer: Temporal[IO])
     extends AccessPolicyDAO
     with DatabaseSupport
@@ -1357,7 +1357,7 @@ class PostgresAccessPolicyDAO(
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
   ): IO[Iterable[ResourceIdWithRolesAndActions]] =
-    readOnlyTransactionBadQuery("listUserResourcesWithRolesAndActions", samRequestContext) { implicit session =>
+    readOnlyTransactionReadReplica("listUserResourcesWithRolesAndActions", samRequestContext) { implicit session =>
       class ListUserResourcesQuery extends UserResourcesQuery(resourceTypeName, None, userId) {
         val policyRole = EffectivePolicyRoleTable.syntax("policyRole")
         val resourceRole = ResourceRoleTable.syntax("resourceRole")
