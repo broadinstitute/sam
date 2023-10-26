@@ -58,31 +58,31 @@ abstract class MockSamRoutes(
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
-    oidcConfig.oauth2Routes ~
-    statusRoutes ~
-    oldTermsOfServiceRoutes ~
-    publicTermsOfServiceRoutes ~
-    withExecutionContext(ExecutionContext.global) {
-      withSamRequestContext { samRequestContext =>
-        pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
-        pathPrefix("api") {
-          // IMPORTANT - all routes under /api must have an active user
-          publicTermsOfServiceRoutes ~
-          withActiveUser(samRequestContext) { samUser =>
-            isWorkbenchAdmin(samUser) { isAdmin =>
-              val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-              resourceRoutes(samUser, samRequestContextWithUser) ~
-              adminRoutes(samUser, samRequestContextWithUser) ~
-              extensionRoutes(samUser, samRequestContextWithUser) ~
-              groupRoutes(samUser, samRequestContextWithUser) ~
-              userRoutesV1(samUser, samRequestContextWithUser) ~
-              azureRoutes(samUser, samRequestContextWithUser) ~
-              userTermsOfServiceRoutes(samUser, isAdmin, samRequestContextWithUser)
+      oidcConfig.oauth2Routes ~
+      statusRoutes ~
+      oldTermsOfServiceRoutes ~
+      publicTermsOfServiceRoutes ~
+      withExecutionContext(ExecutionContext.global) {
+        withSamRequestContext { samRequestContext =>
+          pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
+            pathPrefix("api") {
+              // IMPORTANT - all routes under /api must have an active user
+              publicTermsOfServiceRoutes ~
+                withActiveUser(samRequestContext) { samUser =>
+                  isWorkbenchAdmin(samUser) { isAdmin =>
+                    val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+                    resourceRoutes(samUser, samRequestContextWithUser) ~
+                      adminRoutes(samUser, samRequestContextWithUser) ~
+                      extensionRoutes(samUser, samRequestContextWithUser) ~
+                      groupRoutes(samUser, samRequestContextWithUser) ~
+                      userRoutesV1(samUser, samRequestContextWithUser) ~
+                      azureRoutes(samUser, samRequestContextWithUser) ~
+                      userTermsOfServiceRoutes(samUser, isAdmin, samRequestContextWithUser)
+                  }
+                }
             }
-          }
         }
       }
-    }
   }
 
   // basis for logRequestResult lifted from http://stackoverflow.com/questions/32475471/how-does-one-log-akka-http-client-requests
