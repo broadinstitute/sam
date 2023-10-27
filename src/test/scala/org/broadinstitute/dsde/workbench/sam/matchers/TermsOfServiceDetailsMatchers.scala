@@ -34,13 +34,12 @@ trait TermsOfServiceDetailsMatchers {
 
   def permitsSystemUsage(expectedValue: Boolean): HavePropertyMatcher[TermsOfServiceDetails, Boolean] =
     new HavePropertyMatcher[TermsOfServiceDetails, Boolean] {
-      def apply(termsOfServiceDetails: TermsOfServiceDetails): HavePropertyMatchResult[Boolean] = {
+      def apply(termsOfServiceDetails: TermsOfServiceDetails): HavePropertyMatchResult[Boolean] =
         HavePropertyMatchResult(
           expectedValue == termsOfServiceDetails.permitsSystemUsage,
           "permitsSystemUsage",
           expectedValue,
           termsOfServiceDetails.permitsSystemUsage
         )
-      }
     }
 }

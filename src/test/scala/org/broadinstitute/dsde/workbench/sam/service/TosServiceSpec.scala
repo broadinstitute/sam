@@ -444,13 +444,14 @@ class TosServiceSpec(_system: ActorSystem)
         val tosService = new TosService(directoryDao, TestSupport.tosConfig)
 
         // Act
-        val userTosDetails: TermsOfServiceDetails = runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, adminUser, isAdmin = true, samRequestContext))
+        val userTosDetails: TermsOfServiceDetails =
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, adminUser, isAdmin = true, samRequestContext))
 
         // Assert
         userTosDetails should have {
-          latestAcceptedVersion (tosVersion)
-          acceptedOn (Instant.now)
-          permitsSystemUsage (true)
+          latestAcceptedVersion(tosVersion)
+          acceptedOn(Instant.now)
+          permitsSystemUsage(true)
         }
       }
 
@@ -464,7 +465,8 @@ class TosServiceSpec(_system: ActorSystem)
         val tosService = new TosService(directoryDao, TestSupport.tosConfig)
 
         // Act
-        val userTosDetails: TermsOfServiceDetails = runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, defaultUser, isAdmin = false, samRequestContext))
+        val userTosDetails: TermsOfServiceDetails =
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, defaultUser, isAdmin = false, samRequestContext))
 
         // Assert
         userTosDetails should have {
