@@ -61,7 +61,6 @@ abstract class MockSamRoutes(
       oidcConfig.oauth2Routes ~
       statusRoutes ~
       oldTermsOfServiceRoutes ~
-      publicTermsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
           pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
