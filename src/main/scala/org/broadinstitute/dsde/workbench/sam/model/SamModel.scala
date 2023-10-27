@@ -84,6 +84,8 @@ object UserStatusDetails {
     userAcceptedVersion: Option[String]
 )
 
+@Lenses final case class TermsOfServiceDetails(latestAcceptedVersion: String, acceptedOn: Instant, permitsSystemUsage: Boolean)
+
 @Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }

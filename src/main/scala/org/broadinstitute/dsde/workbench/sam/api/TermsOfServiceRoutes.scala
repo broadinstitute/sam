@@ -117,7 +117,7 @@ trait TermsOfServiceRoutes {
         samRequestContext: SamRequestContext
     ): server.Route =
       get {
-        complete(StatusCodes.OK, tosService.getTermsOfServiceDetails(requestedUserId, requestingUser, isAdmin, samRequestContext))
+        complete(StatusCodes.OK, tosService.getTermsOfServiceDetailsForUser(requestedUserId, requestingUser, isAdmin, samRequestContext))
       }
 
     def getTermsOfServiceDetailsForSelf(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =

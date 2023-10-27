@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{OldTermsOfServiceDetails, SamUserTos, TermsOfServiceComplianceStatus}
+import org.broadinstitute.dsde.workbench.sam.model.{OldTermsOfServiceDetails, SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
 
 import java.io.{FileNotFoundException, IOException}
 import scala.concurrent.{Await, ExecutionContext}
@@ -52,23 +52,41 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
 
-  def getTermsOfServiceDetails(
+  def getTermsOfServiceDetailsForUser(
       requestedUserId: WorkbenchUserId,
       requestingUser: SamUser,
       isAdmin: Boolean,
       samRequestContext: SamRequestContext
-  ): IO[SamUserTos] =
+  ): IO[TermsOfServiceDetails] = {
     if (isAdmin || (requestedUserId == requestingUser.id)) {
-      directoryDao.getUserTos(requestedUserId, samRequestContext).map {
-        case Some(samUserTos) => samUserTos
-        case None =>
-          return IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user ${requestedUserId}"))
-          )
+      for {
+        currentSamUserTos <- loadTosRecordForUser(requestedUserId, Option(tosConfig.version), samRequestContext)
+        previousSamUserTos <- loadTosRecordForUser(requestedUserId, tosConfig.previousVersion, samRequestContext)
+        requestedUser <- loadUser(requestedUserId, samRequestContext)
+      } yield {
+        TermsOfServiceDetails(
+          currentSamUserTos.version,
+          currentSamUserTos.createdAt,
+          tosAcceptancePermitsSystemUsage(requestedUser, Option(currentSamUserTos), Option(previousSamUserTos)))
       }
     } else {
       IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "You are not allowed to make this request")))
     }
+  }
+
+  private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
+    directoryDao.loadUser(userId, samRequestContext).map {
+      case Some(samUser) => samUser
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find user:${userId}"))
+    }
+
+  // Note: if version is None, then the query will return the last accepted ToS info for the user
+  private def loadTosRecordForUser(userId: WorkbenchUserId, version: Option[String], samRequestContext: SamRequestContext): IO[SamUserTos] = {
+    directoryDao.getUserTosVersion(userId, version, samRequestContext).map {
+      case Some(samUserTos) => samUserTos
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user:${userId}"))
+    }
+  }
 
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
     latestUserTos <- directoryDao.getUserTos(samUser.id, samRequestContext)

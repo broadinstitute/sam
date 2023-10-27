@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, TermsOfServiceDetails}
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.concurrent.Eventually.eventually
@@ -73,10 +73,10 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
   }
 
   describe("GET /api/termsOfService/v1/user/self") {
-    it("should return an instance of `SamUserTos`") {
+    it("should return an instance of `TermsOfServiceDetails`") {
       Get("/api/termsOfService/v1/user/self") ~> samRoutes.route ~> check {
-        withClue(s"${responseAs[String]} is not parsable as an instance of `SamUserTos`.") {
-          responseAs[SamUserTos]
+        withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceDetails`.") {
+          responseAs[TermsOfServiceDetails]
         }
         status shouldEqual StatusCodes.OK
       }
@@ -84,15 +84,16 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
   }
 
   describe("GET /api/termsOfService/v1/user/{USER_ID}") {
-    it("should return an instance of `SamUserTos`") {
+    it("should return an instance of `TermsOfServiceDetails`") {
       val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
       val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
         .withEnabledUser(defaultUser)
+        .withTosStateForUser(defaultUser, isAccepted = true, "0")
 
       Get(s"/api/termsOfService/v1/user/${defaultUser.id}") ~> mockSamRoutesBuilder.build.route ~> check {
-        withClue(s"${responseAs[String]} is not parsable as an instance of `SamUserTos`.") {
-          responseAs[SamUserTos]
+        withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceDetails`.") {
+          responseAs[TermsOfServiceDetails]
         }
         status shouldEqual StatusCodes.OK
       }

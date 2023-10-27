@@ -70,6 +70,11 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     this
   }
 
+  def withTosStateForUser(samUser: SamUser, isAccepted: Boolean, version: String = "0"): MockSamRoutesBuilder = {
+    mockTosServiceBuilder.withAcceptedStateForUser(samUser, isAccepted, version)
+    this
+  }
+
   def withUserAttributes(samUser: SamUser, userAttributes: SamUserAttributes): MockSamRoutesBuilder = {
     userServiceBuilder.withUserAttributes(samUser, userAttributes)
     this
