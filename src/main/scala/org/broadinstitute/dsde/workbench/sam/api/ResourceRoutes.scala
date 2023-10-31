@@ -29,17 +29,6 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   val resourceService: ResourceService
   val liquibaseConfig: LiquibaseConfig
 
-  def resourceRoutesV3(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("resources" / "v3") {
-      pathPrefix("filter") {
-        pathEndOrSingleSlash {
-          get {
-            filterUserResources(samUser, samRequestContext)
-          }
-        }
-      }
-    }
-
   def resourceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     (pathPrefix("config" / "v1" / "resourceTypes") | pathPrefix("resourceTypes")) {
       pathEndOrSingleSlash {
@@ -126,7 +115,15 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
             }
           }
         }
-      } ~ pathPrefix("resources" / "v2") {
+      } ~
+      pathPrefix("resources" / "v2") {
+        pathPrefix("filter") {
+          pathEndOrSingleSlash {
+            get {
+              filterUserResources(samUser, samRequestContext)
+            }
+          }
+        } ~
         pathPrefix(Segment) { resourceTypeName =>
           withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
             pathEndOrSingleSlash {
@@ -243,8 +240,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
             }
           }
         }
-      } ~
-      resourceRoutesV3(samUser, samRequestContext)
+      }
 
   // this object supresses the deprecation warning on listUserAccessPolicies
   // see https://github.com/scala/bug/issues/7934

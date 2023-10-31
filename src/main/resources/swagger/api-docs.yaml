@@ -1558,7 +1558,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/resources/v3/filter:
+  /api/resources/v2/filter:
     get:
       tags:
         - Resources
@@ -1575,24 +1575,32 @@ paths:
           required: false
           schema:
             type: array
+            items:
+              type: string
         - name: policies
           in: query
           description: Names of policies to filter on
           required: false
           schema:
             type: array
+            items:
+              type: string
         - name: roles
           in: query
           description: Names of roles to filter on
           required: false
           schema:
             type: array
+            items:
+              type: string
         - name: actions
           in: query
           description: Names of actions to filter on
           required: false
           schema:
             type: array
+            items:
+              type: string
         - name: includePublic
           in: query
           description: Include public resources in the response
