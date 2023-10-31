@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
 
 import java.io.{FileNotFoundException, IOException}
 import scala.concurrent.{Await, ExecutionContext}
@@ -45,6 +46,18 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
     directoryDao
       .rejectTermsOfService(userId, tosConfig.version, samRequestContext)
       .withInfoLogMessage(s"$userId has rejected version ${tosConfig.version} of the Terms of Service")
+
+  def getTosConfig(): IO[TermsOfServiceConfigResponse] =
+    IO.pure(
+      TermsOfServiceConfigResponse(
+        enforced = tosConfig.isTosEnabled,
+        currentVersion = tosConfig.version,
+        inGracePeriod = tosConfig.isGracePeriodEnabled,
+        inRollingAcceptanceWindow = isRollingWindowInEffect()
+      )
+    )
+
+  private def isRollingWindowInEffect() = tosConfig.rollingAcceptanceWindowExpiration.exists(Instant.now().isBefore(_))
 
   @Deprecated
   def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceDetails] =
@@ -78,12 +91,7 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && tos.action == TosTable.ACCEPT
 
       val userHasAcceptedPreviousVersion = userHasAcceptedPreviousTosVersion(previousUserTos)
-      val now = Instant.now()
-      val userInsideOfRollingAcceptanceWindow = tosConfig.rollingAcceptanceWindowExpiration match {
-        case Some(expiration) =>
-          expiration.isAfter(now) && userHasAcceptedPreviousVersion
-        case None => false
-      }
+      val userInsideOfRollingAcceptanceWindow = isRollingWindowInEffect() && userHasAcceptedPreviousVersion
 
       userHasAcceptedLatestVersion || userInsideOfRollingAcceptanceWindow || userCanUseSystemUnderGracePeriod
 
