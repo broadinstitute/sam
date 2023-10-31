@@ -14,7 +14,13 @@ import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  AccessPolicyMembershipRequest,
+  AccessPolicyMembershipResponse,
+  FilteredResource,
+  FilteredResources,
+  SamUser
+}
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
 import java.util.UUID
@@ -910,5 +916,37 @@ class ResourceService(
     val removeEventSet = if (removeEvent.changeDetails.isEmpty) Set.empty else Set(removeEvent)
     val addEventSet = if (addEvent.changeDetails.isEmpty) Set.empty else Set(addEvent)
     addEventSet ++ removeEventSet
+  }
+
+  def filterResources(
+      samUser: SamUser,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[FilteredResources] = {
+    val filterResourcesResult = accessPolicyDAO.filterResources(samUser, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+
+    for {
+      dbResult <- filterResourcesResult
+    } yield {
+      val groupedFilteredResource = dbResult
+        .groupBy(_.resourceId)
+        .map { tuple =>
+          val (k, v) = tuple
+          FilteredResource(
+            resourceId = k,
+            resourceType = v.map(_.resourceTypeName).head,
+            policies = v.flatMap(_.policy).toSet,
+            roles = v.flatMap(_.role).toSet,
+            actions = v.flatMap(_.action).toSet,
+            isPublic = v.map(_.isPublic).head
+          )
+        }
+        .toSet
+      FilteredResources(resources = groupedFilteredResource)
+    }
   }
 }

@@ -1558,6 +1558,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2/filter:
+    get:
+      tags:
+        - Resources
+      summary: Filter resources the calling user has access to.
+        This endpoint MUST NOT be used to determine if a user has an action on a resource. This endpoint is ONLY
+        for determining the state of the user's permissions. It does not take into account enabled status, or Terms of Service Compliance.
+        To check if a user is allowed to execute an action on a resource, use /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}
+        By default, public resources are not included. Including public resources incurs a 3x cost of DB performance.
+      operationId: filterResourcesV3
+      parameters:
+        - name: resourceTypes
+          in: query
+          description: Types of resources to filter on
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: policies
+          in: query
+          description: Names of policies to filter on
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: roles
+          in: query
+          description: Names of roles to filter on
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: actions
+          in: query
+          description: Names of actions to filter on
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: includePublic
+          in: query
+          description: Include public resources in the response
+          required: false
+          schema:
+            type: boolean
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FilteredResourcesResponse'
   /api/resources/v2/{resourceTypeName}:
     get:
       tags:
@@ -4048,6 +4106,34 @@ components:
           type: boolean
           description: Whether or not the user is enabled
       description: specification of a UpdateUserRequest
+    FilteredResourcesResponse:
+      type: object
+      properties:
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilteredResource'
+    FilteredResource:
+      type: object
+      properties:
+        resourceType:
+          type: string
+          description: resourceType of the resource
+        resourceId:
+          type: string
+          description: resourceId of the resource
+        policies:
+          type: string
+          description: policies the user is a part of on the resource
+        roles:
+          type: string
+          description: roles the user has on the resource
+        actions:
+          type: string
+          description: actions the user has on the resource
+        isPublic:
+          type: string
+          description: isPublic is the resource public or not
   securitySchemes:
     googleoauth:
       type: oauth2
