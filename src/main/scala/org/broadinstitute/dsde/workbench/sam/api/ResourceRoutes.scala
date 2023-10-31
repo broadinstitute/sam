@@ -29,16 +29,15 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   val resourceService: ResourceService
   val liquibaseConfig: LiquibaseConfig
 
-
   def resourceRoutesV3(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("resources" / "v3") {
-        pathPrefix("filter") {
-          pathEndOrSingleSlash {
-            get {
-              filterUserResources(samUser, samRequestContext)
-            }
+      pathPrefix("filter") {
+        pathEndOrSingleSlash {
+          get {
+            filterUserResources(samUser, samRequestContext)
           }
         }
+      }
     }
 
   def resourceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
@@ -244,7 +243,8 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
             }
           }
         }
-      }
+      } ~
+      resourceRoutesV3(samUser, samRequestContext)
 
   // this object supresses the deprecation warning on listUserAccessPolicies
   // see https://github.com/scala/bug/issues/7934
@@ -571,8 +571,18 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def filterUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    parameters("resourceTypes".as[ResourceTypeName].*, "policies".as[AccessPolicyName].*, "roles".as[ResourceRoleName].*, "actions".as[ResourceAction].*, "includePublic" ? false) {
-      (resourceTypes: Iterable[ResourceTypeName], policies: Iterable[AccessPolicyName], roles: Iterable[ResourceRoleName], actions: Iterable[ResourceAction], includePublic: Boolean) =>
-        complete(resourceService.filterResources(samUser, resourceTypes, policies, roles, actions, includePublic, samRequestContext))
+    parameters("resourceTypes".as[String].*, "policies".as[String].*, "roles".as[String].*, "actions".as[String].*, "includePublic" ? false) {
+      (resourceTypes: Iterable[String], policies: Iterable[String], roles: Iterable[String], actions: Iterable[String], includePublic: Boolean) =>
+        complete(
+          resourceService.filterResources(
+            samUser,
+            resourceTypes.map(ResourceTypeName(_)),
+            policies.map(AccessPolicyName(_)),
+            roles.map(ResourceRoleName(_)),
+            actions.map(ResourceAction(_)),
+            includePublic,
+            samRequestContext
+          )
+        )
     }
 }

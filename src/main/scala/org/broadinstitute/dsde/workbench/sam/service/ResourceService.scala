@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import cats.Applicative
 import cats.data.NonEmptyList
@@ -15,7 +14,13 @@ import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, FilteredResources, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  AccessPolicyMembershipRequest,
+  AccessPolicyMembershipResponse,
+  FilteredResource,
+  FilteredResources,
+  SamUser
+}
 import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
 
 import java.util.UUID
@@ -913,19 +918,35 @@ class ResourceService(
     addEventSet ++ removeEventSet
   }
 
-  def filterResources(samUser: SamUser,
-                      resourceTypeNames: Iterable[ResourceTypeName],
-                      policies: Iterable[AccessPolicyName],
-                      roles: Iterable[ResourceRoleName],
-                      actions: Iterable[ResourceAction],
-                      includePublic: Boolean,
-                      samRequestContext: SamRequestContext): IO[FilteredResources] = {
-    accessPolicyDAO.filterResources(samUser,
-      resourceTypeNames,
-      policies,
-      roles,
-      actions,
-      includePublic,
-      samRequestContext)
+  def filterResources(
+      samUser: SamUser,
+      resourceTypeNames: Iterable[ResourceTypeName],
+      policies: Iterable[AccessPolicyName],
+      roles: Iterable[ResourceRoleName],
+      actions: Iterable[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[FilteredResources] = {
+    val filterResourcesResult = accessPolicyDAO.filterResources(samUser, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+
+    for {
+      dbResult <- filterResourcesResult
+    } yield {
+      val groupedFilteredResource = dbResult
+        .groupBy(_.resourceId)
+        .map { tuple =>
+          val (k, v) = tuple
+          FilteredResource(
+            resourceId = k,
+            resourceType = v.map(_.resourceTypeName).head,
+            policies = v.flatMap(_.policy),
+            roles = v.flatMap(_.role),
+            actions = v.flatMap(_.action),
+            isPublic = v.map(_.isPublic).head
+          )
+        }
+        .toSet
+      FilteredResources(resources = groupedFilteredResource)
+    }
   }
 }

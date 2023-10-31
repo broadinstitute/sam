@@ -1591,117 +1591,118 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       }
     }
 
+    def createResourceHierarchy(
+        member: Option[WorkbenchSubject],
+        actions: Set[ResourceAction],
+        roles: Set[ResourceRoleName],
+        public: Boolean,
+        resourceType: ResourceTypeName = resourceTypeName
+    ) = {
+      val grandParentResource = Resource(resourceType, ResourceId(uuid), Set.empty)
+      // parent is of different type to ensure it is excluded in query
+      val parentResource = Resource(otherResourceType.name, ResourceId(uuid), Set.empty)
+      val childResource = Resource(resourceType, ResourceId(uuid), Set.empty)
+
+      // background policies exist to be excluded by the db query
+      val backgroundPolicy = AccessPolicy(
+        FullyQualifiedPolicyId(childResource.fullyQualifiedId, AccessPolicyName(uuid)),
+        Set.empty,
+        WorkbenchEmail(s"${uuid}@policy.com"),
+        Set(ownerRole.roleName),
+        Set.empty,
+        Set.empty,
+        false
+      )
+      val parentBackgroundPolicy = AccessPolicy(
+        FullyQualifiedPolicyId(parentResource.fullyQualifiedId, AccessPolicyName(uuid)),
+        Set.empty,
+        WorkbenchEmail(s"${uuid}@policy.com"),
+        Set(ownerRole.roleName),
+        Set.empty,
+        Set.empty,
+        false
+      )
+
+      val probeRolesPolicy = AccessPolicy(
+        FullyQualifiedPolicyId(grandParentResource.fullyQualifiedId, AccessPolicyName(uuid)),
+        member.toSet,
+        WorkbenchEmail(s"${uuid}@policy.com"),
+        Set.empty,
+        Set.empty,
+        Set(AccessPolicyDescendantPermissions(resourceType, Set.empty, roles)),
+        public
+      )
+      val probeActionsPolicy = AccessPolicy(
+        FullyQualifiedPolicyId(grandParentResource.fullyQualifiedId, AccessPolicyName(uuid)),
+        member.toSet,
+        WorkbenchEmail(s"${uuid}@policy.com"),
+        Set.empty,
+        Set.empty,
+        Set(AccessPolicyDescendantPermissions(resourceType, actions, Set.empty)),
+        public
+      )
+
+      (for {
+        _ <- dao.createResource(grandParentResource, samRequestContext)
+        _ <- dao.createResource(parentResource, samRequestContext)
+        _ <- dao.createResource(childResource, samRequestContext)
+        _ <- dao.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+        _ <- dao.setResourceParent(parentResource.fullyQualifiedId, grandParentResource.fullyQualifiedId, samRequestContext)
+        _ <- dao.createPolicy(probeRolesPolicy, samRequestContext)
+        _ <- dao.createPolicy(probeActionsPolicy, samRequestContext)
+        _ <- dao.createPolicy(backgroundPolicy, samRequestContext)
+        _ <- dao.createPolicy(parentBackgroundPolicy, samRequestContext)
+      } yield childResource).unsafeRunSync()
+    }
+
+    def createResource(
+        member: Option[WorkbenchSubject],
+        actions: Set[ResourceAction],
+        roles: Set[ResourceRoleName],
+        public: Boolean,
+        resourceType: ResourceTypeName = resourceTypeName
+    ) = {
+      val resource = Resource(resourceType, ResourceId(uuid), Set.empty)
+
+      // background policies exist to be excluded by the db query
+      val backgroundPolicy = AccessPolicy(
+        FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName(uuid)),
+        Set.empty,
+        WorkbenchEmail(s"${uuid}@policy.com"),
+        Set(ownerRole.roleName),
+        Set.empty,
+        Set.empty,
+        false
+      )
+
+      val probeRolesPolicy = AccessPolicy(
+        FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName(uuid)),
+        member.toSet,
+        WorkbenchEmail(s"${uuid}@policy.com"),
+        roles,
+        Set.empty,
+        Set.empty,
+        public
+      )
+      val probeActionsPolicy = AccessPolicy(
+        FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName(uuid)),
+        member.toSet,
+        WorkbenchEmail(s"${uuid}@policy.com"),
+        Set.empty,
+        actions,
+        Set.empty,
+        public
+      )
+
+      (for {
+        _ <- dao.createResource(resource, samRequestContext)
+        _ <- dao.createPolicy(probeRolesPolicy, samRequestContext)
+        _ <- dao.createPolicy(probeActionsPolicy, samRequestContext)
+        _ <- dao.createPolicy(backgroundPolicy, samRequestContext)
+      } yield resource).unsafeRunSync()
+    }
+
     "listUserResourcesWithRolesAndActions" - {
-      def createResourceHierarchy(
-          member: Option[WorkbenchSubject],
-          actions: Set[ResourceAction],
-          roles: Set[ResourceRoleName],
-          public: Boolean,
-          resourceType: ResourceTypeName = resourceTypeName
-      ) = {
-        val grandParentResource = Resource(resourceType, ResourceId(uuid), Set.empty)
-        // parent is of different type to ensure it is excluded in query
-        val parentResource = Resource(otherResourceType.name, ResourceId(uuid), Set.empty)
-        val childResource = Resource(resourceType, ResourceId(uuid), Set.empty)
-
-        // background policies exist to be excluded by the db query
-        val backgroundPolicy = AccessPolicy(
-          FullyQualifiedPolicyId(childResource.fullyQualifiedId, AccessPolicyName(uuid)),
-          Set.empty,
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          Set(ownerRole.roleName),
-          Set.empty,
-          Set.empty,
-          false
-        )
-        val parentBackgroundPolicy = AccessPolicy(
-          FullyQualifiedPolicyId(parentResource.fullyQualifiedId, AccessPolicyName(uuid)),
-          Set.empty,
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          Set(ownerRole.roleName),
-          Set.empty,
-          Set.empty,
-          false
-        )
-
-        val probeRolesPolicy = AccessPolicy(
-          FullyQualifiedPolicyId(grandParentResource.fullyQualifiedId, AccessPolicyName(uuid)),
-          member.toSet,
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          Set.empty,
-          Set.empty,
-          Set(AccessPolicyDescendantPermissions(resourceType, Set.empty, roles)),
-          public
-        )
-        val probeActionsPolicy = AccessPolicy(
-          FullyQualifiedPolicyId(grandParentResource.fullyQualifiedId, AccessPolicyName(uuid)),
-          member.toSet,
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          Set.empty,
-          Set.empty,
-          Set(AccessPolicyDescendantPermissions(resourceType, actions, Set.empty)),
-          public
-        )
-
-        (for {
-          _ <- dao.createResource(grandParentResource, samRequestContext)
-          _ <- dao.createResource(parentResource, samRequestContext)
-          _ <- dao.createResource(childResource, samRequestContext)
-          _ <- dao.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
-          _ <- dao.setResourceParent(parentResource.fullyQualifiedId, grandParentResource.fullyQualifiedId, samRequestContext)
-          _ <- dao.createPolicy(probeRolesPolicy, samRequestContext)
-          _ <- dao.createPolicy(probeActionsPolicy, samRequestContext)
-          _ <- dao.createPolicy(backgroundPolicy, samRequestContext)
-          _ <- dao.createPolicy(parentBackgroundPolicy, samRequestContext)
-        } yield childResource).unsafeRunSync()
-      }
-
-      def createResource(
-          member: Option[WorkbenchSubject],
-          actions: Set[ResourceAction],
-          roles: Set[ResourceRoleName],
-          public: Boolean,
-          resourceType: ResourceTypeName = resourceTypeName
-      ) = {
-        val resource = Resource(resourceType, ResourceId(uuid), Set.empty)
-
-        // background policies exist to be excluded by the db query
-        val backgroundPolicy = AccessPolicy(
-          FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName(uuid)),
-          Set.empty,
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          Set(ownerRole.roleName),
-          Set.empty,
-          Set.empty,
-          false
-        )
-
-        val probeRolesPolicy = AccessPolicy(
-          FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName(uuid)),
-          member.toSet,
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          roles,
-          Set.empty,
-          Set.empty,
-          public
-        )
-        val probeActionsPolicy = AccessPolicy(
-          FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName(uuid)),
-          member.toSet,
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          Set.empty,
-          actions,
-          Set.empty,
-          public
-        )
-
-        (for {
-          _ <- dao.createResource(resource, samRequestContext)
-          _ <- dao.createPolicy(probeRolesPolicy, samRequestContext)
-          _ <- dao.createPolicy(probeActionsPolicy, samRequestContext)
-          _ <- dao.createPolicy(backgroundPolicy, samRequestContext)
-        } yield resource).unsafeRunSync()
-      }
 
       "lists all a user's resources of a type" in {
         assume(databaseEnabled, databaseEnabledClue)
@@ -3100,6 +3101,137 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         testSetup.unsafeRunSync()
 
         dao.listResourceChildren(parentResource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldBe allChildrenIds
+      }
+    }
+
+    "filterResources" - {
+      "filters the user's resources by policy, action, and role" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
+
+        dirDao.createUser(user, samRequestContext).unsafeRunSync()
+        dirDao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.addGroupMember(subGroup.id, user.id, samRequestContext).unsafeRunSync()
+        dirDao.addGroupMember(parentGroup.id, subGroup.id, samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        dao.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
+
+        // 1 reader role, 1 write action on policy
+        createResource(Option(user.id), Set(writeAction), Set(readerRole.roleName), false)
+        // 1 reader role, 1 write action on policy
+        createResource(Option(parentGroup.id), Set(writeAction), Set(readerRole.roleName), false)
+        // 1 reader role, 1 write action on policy
+        createResourceHierarchy(Option(user.id), Set(writeAction), Set(readerRole.roleName), false)
+        // 1 reader role, 1 write action on policy
+        createResourceHierarchy(Option(parentGroup.id), Set(writeAction), Set(readerRole.roleName), false)
+
+        // 1 public reader role, 1 public write action on policy
+        val publicResource = createResource(None, Set(writeAction), Set(readerRole.roleName), true)
+        // 1 public reader role, 1 public write action on policy
+        val publicChildResource = createResourceHierarchy(None, Set(writeAction), Set(readerRole.roleName), true)
+
+        // 1 reader role
+        val kitchenSink = createResourceHierarchy(Option(user.id), Set.empty, Set(readerRole.roleName), false)
+        // 1 owner role (1 read action, 1 write action)
+        val directProbePolicy = AccessPolicy(
+          FullyQualifiedPolicyId(kitchenSink.fullyQualifiedId, AccessPolicyName(uuid)),
+          Set(user.id),
+          WorkbenchEmail(s"${uuid}@policy.com"),
+          Set(ownerRole.roleName),
+          Set.empty,
+          Set.empty,
+          false
+        )
+        // No roles available
+        val publicProbePolicy = AccessPolicy(
+          FullyQualifiedPolicyId(kitchenSink.fullyQualifiedId, AccessPolicyName(uuid)),
+          Set.empty,
+          WorkbenchEmail(s"${uuid}@policy.com"),
+          Set(actionlessRole.roleName),
+          Set.empty,
+          Set.empty,
+          true
+        )
+        dao.createPolicy(directProbePolicy, samRequestContext).unsafeRunSync()
+        dao.createPolicy(publicProbePolicy, samRequestContext).unsafeRunSync()
+
+        val writeActions = dao.filterResources(user, Seq(resourceType.name), Seq.empty, Seq.empty, Seq(writeAction), false, samRequestContext).unsafeRunSync()
+        writeActions.length should be(5)
+        writeActions.map(_.action).forall(a => a.exists(_.equals(writeAction))) should be(true)
+        writeActions.map(_.isPublic).forall(ip => !ip) should be(true)
+
+        val writerViaOwner = writeActions.filter(r => r.role.exists(_.equals(ownerRole.roleName)))
+        writerViaOwner.size should be(1)
+
+        val readActions = dao.filterResources(user, Seq(resourceType.name), Seq.empty, Seq.empty, Seq(readAction), false, samRequestContext).unsafeRunSync()
+        readActions.length should be(6)
+
+        val readerViaOwner = readActions.filter(r => r.role.exists(_.equals(ownerRole.roleName)))
+        readerViaOwner.size should be(1)
+
+        val readerRoles = dao.filterResources(user, Seq(resourceType.name), Seq.empty, Seq(readerRole.roleName), Seq.empty, false, samRequestContext).unsafeRunSync()
+        readerRoles.size should be(5)
+
+        val policies = dao.filterResources(user, Seq(resourceTypeName), Seq(directProbePolicy.id.accessPolicyName), Seq.empty, Seq.empty, false, samRequestContext).unsafeRunSync()
+        val foundPolicies = policies.flatMap(_.policy).toSet
+        foundPolicies.size should be(1)
+        foundPolicies.head should be(directProbePolicy.id.accessPolicyName)
+
+        val writeActionsIncludingPublic = dao.filterResources(user, Seq(resourceType.name), Seq.empty, Seq.empty, Seq(writeAction), true, samRequestContext).unsafeRunSync()
+        writeActionsIncludingPublic.length should be(7)
+        writeActionsIncludingPublic.filter(_.isPublic).map(_.resourceId).toSet should be(Set(publicResource.resourceId, publicChildResource.resourceId))
+
+        val readerRolesIncludingPublic = dao.filterResources(user, Seq(resourceType.name), Seq.empty, Seq(readerRole.roleName), Seq.empty, true, samRequestContext).unsafeRunSync()
+        readerRolesIncludingPublic.size should be(7)
+        readerRolesIncludingPublic.filter(_.isPublic).map(_.resourceId).toSet should be(Set(publicResource.resourceId, publicChildResource.resourceId))
+      }
+
+      "filters on the user's policies, roles, and actions when using nested roles" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
+
+        val includesRole = ResourceRole(ResourceRoleName("includes"), Set(writeAction), includedRoles = Set(readerRole.roleName))
+        val descendsRole =
+          ResourceRole(ResourceRoleName("descends"), Set(readAction, writeAction), descendantRoles = Map(resourceType.name -> Set(ownerRole.roleName)))
+        val nestedResourceType =
+          resourceType.copy(name = ResourceTypeName("nested"), roles = Set(includesRole, descendsRole, readerRole, ownerRole, actionlessRole))
+
+        dirDao.createUser(user, samRequestContext).unsafeRunSync()
+        dirDao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.addGroupMember(subGroup.id, user.id, samRequestContext).unsafeRunSync()
+        dirDao.addGroupMember(parentGroup.id, subGroup.id, samRequestContext).unsafeRunSync()
+        dao.upsertResourceTypes(Set(resourceType, nestedResourceType, otherResourceType), samRequestContext).unsafeRunSync()
+
+        val directAccessResource =
+          createResource(Option(user.id), Set(writeAction), Set(includesRole.roleName, descendsRole.roleName), false, nestedResourceType.name)
+        val publicResource = createResource(None, Set(writeAction), Set(includesRole.roleName, descendsRole.roleName), true, nestedResourceType.name)
+        val groupAccessResource =
+          createResource(Option(parentGroup.id), Set(writeAction), Set(includesRole.roleName, descendsRole.roleName), false, nestedResourceType.name)
+
+        val directAccessChildResource =
+          createResourceHierarchy(Option(user.id), Set(writeAction), Set(includesRole.roleName, descendsRole.roleName), false, nestedResourceType.name)
+        val publicChildResource =
+          createResourceHierarchy(None, Set(writeAction), Set(includesRole.roleName, descendsRole.roleName), true, nestedResourceType.name)
+        val groupAccessChildResource =
+          createResourceHierarchy(Option(parentGroup.id), Set(writeAction), Set(includesRole.roleName, descendsRole.roleName), false, nestedResourceType.name)
+
+
+        val nestedReaderRoles = dao.filterResources(user, Seq(nestedResourceType.name), Seq.empty, Seq(readerRole.roleName), Seq.empty, false, samRequestContext).unsafeRunSync()
+        nestedReaderRoles.size should be(4)
+        nestedReaderRoles.map(_.resourceId).toSet should be(Set(directAccessResource.resourceId, groupAccessResource.resourceId, directAccessChildResource.resourceId, groupAccessChildResource.resourceId))
+
+        val publicNestedReaderRoles = dao.filterResources(user, Seq(nestedResourceType.name), Seq.empty, Seq(readerRole.roleName), Seq.empty, true, samRequestContext).unsafeRunSync()
+        publicNestedReaderRoles.size should be(6)
+        publicNestedReaderRoles.filter(_.isPublic).map(_.resourceId).toSet should be(Set(publicResource.resourceId, publicChildResource.resourceId))
       }
     }
   }

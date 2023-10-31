@@ -361,4 +361,16 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
         )
       }
     }
+
+  override def filterResources(
+      samUser: SamUser,
+      resourceTypeNames: Iterable[ResourceTypeName],
+      policies: Iterable[AccessPolicyName],
+      roles: Iterable[ResourceRoleName],
+      actions: Iterable[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[FilterResourcesResult]] =
+    IO.pure(Seq.empty)
+
 }

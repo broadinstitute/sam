@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.data.NonEmptyList
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipResponse, FilteredResources, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipResponse, SamUser}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -107,8 +107,15 @@ trait AccessPolicyDAO {
         ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
       }
     }
-
-  def filterResources(samUser: SamUser, resourceTypeNames: Iterable[ResourceTypeName], policies: Iterable[AccessPolicyName], roles: Iterable[ResourceRoleName], actions: Iterable[ResourceAction], includePublic: Boolean, samRequestContext: SamRequestContext): IO[Seq[FilteredResources]]
+  def filterResources(
+      samUser: SamUser,
+      resourceTypeNames: Iterable[ResourceTypeName],
+      policies: Iterable[AccessPolicyName],
+      roles: Iterable[ResourceRoleName],
+      actions: Iterable[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[FilterResourcesResult]]
 
 }
 

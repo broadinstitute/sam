@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{FilterResourcesResponse, _}
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext, groupByFirstInPair}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -1678,66 +1678,119 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         .toSet
     }
   }
+  override def filterResources(
+      samUser: SamUser,
+      resourceTypeNames: Iterable[ResourceTypeName],
+      policies: Iterable[AccessPolicyName],
+      roles: Iterable[ResourceRoleName],
+      actions: Iterable[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[FilterResourcesResult]] = {
+    val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
+    val resourcePolicy = PolicyTable.syntax("resourcePolicy")
+    val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
+    val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
+    val effectivePolicyAction = EffectivePolicyActionTable.syntax("effectivePolicyAction")
+    val resourceRole = ResourceRoleTable.syntax("resourceRole")
+    val roleAction = RoleActionTable.syntax("roleAction")
+    val resourceAction = ResourceActionTable.syntax("resourceAction")
+    val resource = ResourceTable.syntax("resource")
 
-  override def filterResources(samUser: SamUser,
-                               resourceTypeNames: Iterable[ResourceTypeName],
-                               policies: Iterable[AccessPolicyName],
-                               roles: Iterable[ResourceRoleName],
-                               actions: Iterable[ResourceAction],
-                               includePublic: Boolean,
-                               samRequestContext: SamRequestContext): IO[Seq[FilteredResource]] = {
-    if (includePublic) {
-      IO.raiseError(new NotImplementedError("Filtering public resources is not yet implemented"))
-    } else {
-      val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
-      val resourcePolicy = PolicyTable.syntax("resourcePolicy")
-      val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
-      val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
-      val effectivePolicyAction = EffectivePolicyActionTable.syntax("effectivePolicyAction")
-      val resourceRole = ResourceRoleTable.syntax("resourceRole")
-      val roleAction = RoleActionTable.syntax("roleAction")
-      val resourceAction = ResourceActionTable.syntax("resourceAction")
-      val resource = ResourceTable.syntax("resource")
+    val resourceTypePKsToName: Map[ResourceTypePK, ResourceTypeName] =
+      resourceTypeNames.flatMap(name => resourceTypePKsByName.get(name).map(pk => pk -> name)).toMap
 
-      val resourceTypeConstraint = if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in  (${resourceTypeNames.flatMap(resourceTypePKsByName.get)})" else samsqls""
-      val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in ($policies)" else samsqls""
-      val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in ($roles)" else samsqls""
-      val actionConstraint = if (actions.nonEmpty) samsqls"and ${resourceAction} in ($actions)" else samsqls""
+    val resourceTypeConstraint =
+      if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in  (${resourceTypeNames.flatMap(resourceTypePKsByName.get).toSet})"
+      else samsqls""
+    val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in (${policies.toSet})" else samsqls""
+    val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in (${roles.toSet})" else samsqls""
+    val actionConstraint = if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions.toSet})" else samsqls""
 
-      val query = samsql"""
-        select distinct ${resource.name} as resource_id, ${resourcePolicy.name} as policy, ${resourceRole.role} as role, ${roleAction.action} as action
-        from ${GroupMemberFlatTable as groupMemberFlat}
-          left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
-          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
+    val policyRoleActionQuery =
+      samsqls"""
+        select distinct ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}
+          from ${GroupMemberFlatTable as groupMemberFlat}
+            left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
+            left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
+            left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
+            left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
+            left join ${RoleActionTable as roleAction} on ${effectivePolicyRole.resourceRoleId} = ${roleAction.resourceRoleId}
+            left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id}
+            left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
+          where ${groupMemberFlat.memberUserId} = ${samUser.id}
+            $resourceTypeConstraint
+            $policyConstraint
+            $roleConstraint
+            $actionConstraint"""
+    val policyActionQuery =
+      samsqls"""
+        select distinct ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}
+          from ${GroupMemberFlatTable as groupMemberFlat}
+            left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
+            left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
+            left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
+            left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
+            left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
+          where ${groupMemberFlat.memberUserId} = ${samUser.id}
+            $resourceTypeConstraint
+            $policyConstraint
+            $actionConstraint"""
+
+
+    val publicRoleActionQuery =
+      samsqls"""
+        select distinct ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}
+        from ${PolicyTable as resourcePolicy}
+          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
           left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
           left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
           left join ${RoleActionTable as roleAction} on ${effectivePolicyRole.resourceRoleId} = ${roleAction.resourceRoleId}
           left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id}
-          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
-        where ${groupMemberFlat.memberUserId} = ${samUser.id}
+          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
+        where ${resourcePolicy.public}
           $resourceTypeConstraint
           $policyConstraint
           $roleConstraint
-          $actionConstraint
-        union
-        select distinct ${resource.name} as resource_id, ${resourcePolicy.name} as policy, null as role, ${roleAction.action} as action
-        from ${GroupMemberFlatTable as groupMemberFlat}
-          left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
-          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
+          $actionConstraint"""
+    val publicPolicyActionQuery =
+      samsqls"""
+        select distinct ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}
+        from ${PolicyTable as resourcePolicy}
+          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
           left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
           left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
-          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
-        where ${groupMemberFlat.memberUserId} = ${samUser.id}
+          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
+        where ${resourcePolicy.public}
           $resourceTypeConstraint
           $policyConstraint
-          $actionConstraint
-            """
+          $actionConstraint"""
 
-      query.map()
+    val includePolicyActionQuery = if (policies.nonEmpty || actions.nonEmpty) samsqls"union $policyActionQuery" else samsqls""
+    val includePublicPolicyActionQuery = if ((policies.nonEmpty || actions.nonEmpty) && includePublic) samsqls"union $publicPolicyActionQuery" else samsqls""
+    val includePublicQuery = if (includePublic) samsqls"union $publicRoleActionQuery $includePublicPolicyActionQuery" else samsqls""
+
+    val query =
+      samsqls"""$policyRoleActionQuery
+                            $includePolicyActionQuery
+                            $includePublicQuery"""
+
+    readOnlyTransaction("filterResources", samRequestContext) { implicit session =>
+      samsql"$query"
+        .map(rs =>
+          FilterResourcesResult(
+            rs.get[ResourceId](resource.resultName.name),
+            resourceTypePKsToName(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
+            rs.stringOpt(resourcePolicy.resultName.name).map(AccessPolicyName(_)),
+            rs.stringOpt(resourceRole.resultName.role).map(ResourceRoleName(_)),
+            rs.stringOpt(resourceAction.resultName.action).map(ResourceAction(_)),
+            rs.get[Boolean](resourcePolicy.resultName.public)
+          )
+        )
+        .list()
+        .apply()
     }
-
   }
-
 
   private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName])(implicit session: DBSession): Int = {
     val resource = ResourceTable.syntax("resource")
