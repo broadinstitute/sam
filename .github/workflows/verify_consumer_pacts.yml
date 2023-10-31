@@ -292,6 +292,9 @@ jobs:
                           -e PACT_BROKER_URL=${{ env.PACT_BROKER_URL }} \
                           -e PACT_BROKER_USERNAME=${{ env.PACT_BROKER_USERNAME }} \
                           -e PACT_BROKER_PASSWORD=${{ env.PACT_BROKER_PASSWORD }} \
+                          -e POSTGRES_READ_URL=localhost:5432 \
+                          -e POSTGRES_USERNAME=sam-test \
+                          -e POSTGRES_PASSWORD=sam-test \
                           sbtscala/scala-sbt:openjdk-17.0.2_1.7.2_2.13.10 \
                           sbt "set scalafmtOnCompile := false" "project pact4s" "testOnly *SamProviderSpec"
 
