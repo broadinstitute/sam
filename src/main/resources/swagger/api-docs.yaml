@@ -3266,6 +3266,19 @@ paths:
             text/plain:
               schema:
                 type: string
+  /termsOfService/v1:
+    get:
+      tags:
+        - TermsOfService
+      summary: Returns details about the currently deployed version of the terms of service.
+      operationId: termsOfServiceGet
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermsOfServiceConfigResponse'
   /version:
     get:
       tags:
@@ -3903,6 +3916,30 @@ components:
           type: boolean
           description: true if the user is in their proxy group
       description: ""
+    TermsOfServiceConfigResponse:
+      required:
+        - enforced
+        - currentVersion
+        - inGracePeriod
+        - inRollingAcceptanceWindow
+      type: object
+      properties:
+        enforced:
+          type: boolean
+          description: true if terms of service is enforced in Sam
+        currentVersion:
+          type: string
+          description: the current version of terms of service for the system
+        inGracePeriod:
+          type: boolean
+          description: true if there is currently a grace period enabled,
+            letting users use the system without accepting the terms of service
+        inRollingAcceptanceWindow:
+          type: boolean
+          description: true if there is a rolling acceptance window active. This
+            means that users who have not accepted the latest terms of service
+            version (and who have accepted the previous version) will be allowed to use the system 
+            for a period of time after the terms of service have been updated.
     TermsOfServiceDetails:
       required:
         - isEnabled
