@@ -109,10 +109,10 @@ trait AccessPolicyDAO {
     }
   def filterResources(
       samUser: SamUser,
-      resourceTypeNames: Iterable[ResourceTypeName],
-      policies: Iterable[AccessPolicyName],
-      roles: Iterable[ResourceRoleName],
-      actions: Iterable[ResourceAction],
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]]

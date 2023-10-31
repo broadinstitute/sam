@@ -19,8 +19,8 @@ object FilteredResource {
 case class FilteredResource(
     resourceType: ResourceTypeName,
     resourceId: ResourceId,
-    policies: Seq[AccessPolicyName],
-    roles: Seq[ResourceRoleName],
-    actions: Seq[ResourceAction],
+    policies: Set[AccessPolicyName],
+    roles: Set[ResourceRoleName],
+    actions: Set[ResourceAction],
     isPublic: Boolean
 )

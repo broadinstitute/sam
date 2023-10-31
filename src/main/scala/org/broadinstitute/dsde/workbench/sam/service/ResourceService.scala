@@ -920,10 +920,10 @@ class ResourceService(
 
   def filterResources(
       samUser: SamUser,
-      resourceTypeNames: Iterable[ResourceTypeName],
-      policies: Iterable[AccessPolicyName],
-      roles: Iterable[ResourceRoleName],
-      actions: Iterable[ResourceAction],
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResources] = {
@@ -939,9 +939,9 @@ class ResourceService(
           FilteredResource(
             resourceId = k,
             resourceType = v.map(_.resourceTypeName).head,
-            policies = v.flatMap(_.policy),
-            roles = v.flatMap(_.role),
-            actions = v.flatMap(_.action),
+            policies = v.flatMap(_.policy).toSet,
+            roles = v.flatMap(_.role).toSet,
+            actions = v.flatMap(_.action).toSet,
             isPublic = v.map(_.isPublic).head
           )
         }

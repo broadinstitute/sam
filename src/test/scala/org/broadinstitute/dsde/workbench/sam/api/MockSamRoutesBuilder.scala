@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.MockitoSugar.mock
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -105,12 +106,13 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   //  this one just builds and implements a trait, instead of just mocking out the dependencies that we then inject into
   //  the real object under test. I think the key here would be refactoring `SamRoutes`.
   def build: SamRoutes = {
+    val mockResourceService = mock[ResourceService]
     val mockUserService = userServiceBuilder.build
     val mockCloudExtensions = cloudExtensionsBuilder.build
     val mockTosService = MockTosServiceBuilder().withAllAccepted().build
 
     new SamRoutes(
-      null,
+      mockResourceService,
       mockUserService,
       null,
       null,

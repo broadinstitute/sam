@@ -571,15 +571,15 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def filterUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    parameters("resourceTypes".as[String].*, "policies".as[String].*, "roles".as[String].*, "actions".as[String].*, "includePublic" ? false) {
-      (resourceTypes: Iterable[String], policies: Iterable[String], roles: Iterable[String], actions: Iterable[String], includePublic: Boolean) =>
+    parameters("resourceTypes".as[String].?, "policies".as[String].?, "roles".as[String].?, "actions".as[String].?, "includePublic" ? false) {
+      (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean) =>
         complete(
           resourceService.filterResources(
             samUser,
-            resourceTypes.map(ResourceTypeName(_)),
-            policies.map(AccessPolicyName(_)),
-            roles.map(ResourceRoleName(_)),
-            actions.map(ResourceAction(_)),
+            resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
+            policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
+            roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
+            actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
             includePublic,
             samRequestContext
           )

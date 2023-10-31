@@ -1680,10 +1680,10 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   }
   override def filterResources(
       samUser: SamUser,
-      resourceTypeNames: Iterable[ResourceTypeName],
-      policies: Iterable[AccessPolicyName],
-      roles: Iterable[ResourceRoleName],
-      actions: Iterable[ResourceAction],
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]] = {
@@ -1736,7 +1736,6 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
             $resourceTypeConstraint
             $policyConstraint
             $actionConstraint"""
-
 
     val publicRoleActionQuery =
       samsqls"""
