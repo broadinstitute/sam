@@ -5,11 +5,10 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.{pathPrefix, _}
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.TosService
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
@@ -17,6 +16,7 @@ import scala.util.matching.Regex
 trait TermsOfServiceRoutes {
   val tosService: TosService
   implicit val executionContext: ExecutionContext
+  private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
 
   @deprecated("Being replaced by REST-ful termsOfService routes")
   def oldTermsOfServiceRoutes: server.Route =
@@ -39,104 +39,75 @@ trait TermsOfServiceRoutes {
         }
       }
 
-  // Do not know and do not care who the calling user is - unauthenticated requests
   def publicTermsOfServiceRoutes: server.Route =
-    pathPrefix("termsOfService" / "v1")(Routes.publicTermsOfServiceV1Routes)
+    pathPrefix("termsOfService") {
+      pathPrefix("v1") { // api/termsOfService/v1
+        pathEndOrSingleSlash {
+          get {
+            complete(tosService.getTosConfig())
+          }
+        } ~
+        pathPrefix("docs") { // api/termsOfService/v1/docs
+          pathEndOrSingleSlash {
+            get {
+              complete(StatusCodes.NotImplemented)
+            }
+          } ~
+          pathPrefix("redirect") { // api/termsOfService/v1/docs/redirect
+            pathEndOrSingleSlash {
+              get {
+                complete(StatusCodes.NotImplemented)
+              }
+            }
+          }
+        }
+      }
+    }
 
-  // Must be able to authenticate and authorize the calling user - authenticated requests
   def userTermsOfServiceRoutes(samUser: SamUser, isAdmin: Boolean, samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("termsOfService" / "v1" / "user")(Routes.userTermsOfServiceV1Routes(samUser, isAdmin, samRequestContext))
-
-  private object Routes {
-    private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
-
-    // /api/termsOfService/v1
-    def publicTermsOfServiceV1Routes: server.Route =
-      concat(
-        pathEndOrSingleSlash(Actions.getCurrentTermsOfService),
-        pathPrefix("docs")(Routes.termsOfServiceDocRoutes)
-      )
-
-    // /api/termsOfService/v1/user
-    def userTermsOfServiceV1Routes(samUser: SamUser, isAdmin: Boolean, samRequestContext: SamRequestContext): server.Route =
-      concat(
-        pathPrefix("self")(Actions.getTermsOfServiceDetailsForSelf(samUser, samRequestContext)),
-        pathPrefix("accept")(pathEndOrSingleSlash(Actions.acceptTermsOfServiceForUser(samUser, samRequestContext))),
-        pathPrefix("reject")(pathEndOrSingleSlash(Actions.rejectTermsOfServiceForUser(samUser, samRequestContext))),
-        pathPrefix(Segment)(userId => Routes.termsOfServiceForUserRoutes(userId, samUser, isAdmin, samRequestContext))
-      )
-
-    // /api/termsOfService/v1/docs
-    private def termsOfServiceDocRoutes: server.Route =
-      concat(
-        pathEndOrSingleSlash(Actions.getTermsOfServiceDocs),
-        pathPrefix("redirect")(termsOfServiceDocsRedirectRoutes)
-      )
-
-    // /api/termsOfService/v1/docs/redirect
-    private def termsOfServiceDocsRedirectRoutes: server.Route =
-      concat(
-        pathEndOrSingleSlash(Actions.getTermsOfServiceDocsRedirect)
-      )
-
-    // /api/termsOfService/v1/user
-    private def termsOfServiceForUserRoutes(
-        rawUserId: String,
-        requestingSamUser: SamUser,
-        isAdmin: Boolean,
-        samRequestContext: SamRequestContext
-    ): server.Route =
-      validate(samUserIdPattern.matches(rawUserId), "User ID must be alpha numeric") {
-        val requestedUserId = WorkbenchUserId(rawUserId)
-        concat(
-          pathEndOrSingleSlash(Actions.getUsersTermsOfServiceDetails(requestedUserId, requestingSamUser, isAdmin, samRequestContext)),
-          pathPrefix("history")(Actions.getTermsOfServiceHistoryForUser(requestedUserId, samRequestContext))
-        )
+    pathPrefix("termsOfService") {
+      pathPrefix("v1") {
+        pathPrefix("user") { // api/termsOfService/v1/user
+          pathPrefix("self") { // api/termsOfService/v1/user/self
+            pathEndOrSingleSlash {
+              get {
+                complete(StatusCodes.OK, tosService.getTermsOfServiceDetailsForUser(samUser.id, samUser, isAdmin = false, samRequestContext))
+              }
+            } ~
+            pathPrefix("accept") { // api/termsOfService/v1/user/accept
+              pathEndOrSingleSlash {
+                put {
+                  complete(StatusCodes.NotImplemented)
+                }
+              }
+            } ~
+            pathPrefix("reject") { // api/termsOfService/v1/user/reject
+              pathEndOrSingleSlash {
+                put {
+                  complete(StatusCodes.NotImplemented)
+                }
+              }
+            }
+          } ~
+          // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
+          pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
+            validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
+              val requestUserId = WorkbenchUserId(userId)
+              pathEndOrSingleSlash {
+                get {
+                  complete(StatusCodes.OK, tosService.getTermsOfServiceDetailsForUser(requestUserId, samUser, isAdmin, samRequestContext))
+                }
+              } ~
+              pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
+                pathEndOrSingleSlash {
+                  get {
+                    complete(StatusCodes.NotImplemented)
+                  }
+                }
+              }
+            }
+          }
+        }
       }
-  }
-
-  private object Actions {
-    def getCurrentTermsOfService: server.Route =
-      get {
-        complete(StatusCodes.NotImplemented)
-      }
-
-    def getTermsOfServiceDocs: server.Route =
-      get {
-        complete(StatusCodes.NotImplemented)
-      }
-
-    def getTermsOfServiceDocsRedirect: server.Route =
-      get {
-        complete(StatusCodes.NotImplemented)
-      }
-
-    def getUsersTermsOfServiceDetails(
-        requestedUserId: WorkbenchUserId,
-        requestingUser: SamUser,
-        isAdmin: Boolean,
-        samRequestContext: SamRequestContext
-    ): server.Route =
-      get {
-        complete(StatusCodes.OK, tosService.getTermsOfServiceDetailsForUser(requestedUserId, requestingUser, isAdmin, samRequestContext))
-      }
-
-    def getTermsOfServiceDetailsForSelf(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-      getUsersTermsOfServiceDetails(samUser.id, samUser, isAdmin = false, samRequestContext)
-
-    def acceptTermsOfServiceForUser(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-      put {
-        complete(StatusCodes.NotImplemented)
-      }
-
-    def rejectTermsOfServiceForUser(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-      put {
-        complete(StatusCodes.NotImplemented)
-      }
-
-    def getTermsOfServiceHistoryForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): server.Route =
-      get {
-        complete(StatusCodes.NotImplemented)
-      }
-  }
+    }
 }

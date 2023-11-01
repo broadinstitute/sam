@@ -10,9 +10,8 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.tosConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.{TermsOfServiceDetailsMatchers, TimeMatchers}
-import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceDetails}
-import org.broadinstitute.dsde.workbench.sam.model.SamUserTos
 import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
+import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceDetails}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.Mockito.RETURNS_SMART_NULLS

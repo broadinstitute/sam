@@ -6,25 +6,22 @@ import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
-import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.FutureWithLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.errorReportSource
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, TermsOfServiceConfigResponse}
 import org.broadinstitute.dsde.workbench.sam.model.{OldTermsOfServiceDetails, SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
-import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
-import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.io.{FileNotFoundException, IOException}
-import scala.concurrent.{Await, ExecutionContext}
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import java.time.Instant
+import scala.concurrent.{Await, ExecutionContext}
 import scala.io.Source
 
 class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceConfig)(
