@@ -308,11 +308,12 @@ class SamProviderSpec
     )
 
   it should "Verify pacts" in {
+    val publishResults = sys.env.getOrElse("PACT_PUBLISH_RESULTS", "false").toBoolean
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
-      publishVerificationResults = Some(
+      publishVerificationResults = if (publishResults) Some(
         PublishVerificationResults(gitSha, ProviderTags(branch))
-      ),
+      ) else None,
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE
       ).toList,
