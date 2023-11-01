@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.TosService
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext

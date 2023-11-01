@@ -11,6 +11,8 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirec
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.{TermsOfServiceDetailsMatchers, TimeMatchers}
 import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.SamUserTos
+import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.Mockito.RETURNS_SMART_NULLS
@@ -61,6 +63,19 @@ class TosServiceSpec(_system: ActorSystem)
   "TosService" - {
     "is enabled by default" in {
       TestSupport.tosConfig.isTosEnabled shouldBe true
+    }
+
+    "returns configurations" in {
+      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+
+      // accept and get ToS status
+      val tosConfigResponse = tosService.getTosConfig().unsafeRunSync()
+      tosConfigResponse shouldBe TermsOfServiceConfigResponse(
+        enforced = true,
+        currentVersion = "0",
+        inGracePeriod = false,
+        inRollingAcceptanceWindow = false
+      )
     }
 
     "accepts the ToS for a user" in {

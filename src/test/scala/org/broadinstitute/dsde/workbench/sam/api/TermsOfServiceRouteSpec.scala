@@ -6,6 +6,7 @@ import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
+import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, TermsOfServiceDetails}
@@ -14,6 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.concurrent.Eventually.eventually
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
 class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRouteTest with TestSupport {
   val samRoutes: TestSamRoutes = TestSamRoutes(Map.empty)
@@ -21,6 +23,24 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
   describe("GET /tos/text") {
     it("should return the tos text") {
       assume(databaseEnabled, databaseEnabledClue)
+  "GET /termsOfService/v1" should "return the current tos config" in {
+
+    val samRoutes = TestSamRoutes(Map.empty)
+    eventually {
+      Get("/termsOfService/v1") ~> samRoutes.route ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[TermsOfServiceConfigResponse] shouldBe TermsOfServiceConfigResponse(
+          enforced = true,
+          currentVersion = "0",
+          inGracePeriod = false,
+          inRollingAcceptanceWindow = false
+        )
+      }
+    }
+  }
+
+  "GET /tos/text" should "return the tos text" in {
+    assume(databaseEnabled, databaseEnabledClue)
 
       eventually {
         Get("/tos/text") ~> samRoutes.route ~> check {

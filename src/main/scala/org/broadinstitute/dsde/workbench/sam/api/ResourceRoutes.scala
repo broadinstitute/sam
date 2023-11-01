@@ -6,6 +6,7 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
@@ -114,7 +115,15 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
             }
           }
         }
-      } ~ pathPrefix("resources" / "v2") {
+      } ~
+      pathPrefix("resources" / "v2") {
+        pathPrefix("filter") {
+          pathEndOrSingleSlash {
+            get {
+              filterUserResources(samUser, samRequestContext)
+            }
+          }
+        } ~
         pathPrefix(Segment) { resourceTypeName =>
           withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
             pathEndOrSingleSlash {
@@ -555,5 +564,21 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       ) {
         complete(resourceService.deletePolicy(policyId, samRequestContext).map(_ => StatusCodes.NoContent))
       }
+    }
+
+  def filterUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    parameters("resourceTypes".as[String].?, "policies".as[String].?, "roles".as[String].?, "actions".as[String].?, "includePublic" ? false) {
+      (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean) =>
+        complete(
+          resourceService.filterResources(
+            samUser,
+            resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
+            policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
+            roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
+            actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
+            includePublic,
+            samRequestContext
+          )
+        )
     }
 }
