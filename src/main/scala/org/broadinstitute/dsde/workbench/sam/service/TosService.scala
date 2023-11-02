@@ -60,6 +60,16 @@ class TosService(
       )
     )
 
+  def getTosText(docSet: Set[String]): IO[String] =
+    docSet match {
+      case set if set.isEmpty => IO.pure(termsOfServiceText)
+      case set if set.size == 1 && set.contains("privacyPolicy") => IO.pure(privacyPolicyText)
+      case set if set.size == 1 && set.contains("termsOfService") => IO.pure(termsOfServiceText)
+      case set if set.size == 2 && set.contains("privacyPolicy") && set.contains("termsOfService") =>
+        IO.pure(termsOfServiceText + "\n\n" + privacyPolicyText)
+      case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Invalid doc parameter")))
+    }
+
   private def isRollingWindowInEffect() = tosConfig.rollingAcceptanceWindowExpiration.exists(Instant.now().isBefore(_))
 
   @Deprecated

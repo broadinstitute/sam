@@ -3279,7 +3279,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermsOfServiceConfigResponse'
-
+  /termsOfService/v1/docs:
+    get:
+      tags:
+        - TermsOfService
+      summary: Gets terms of service text and/or privacy policy text depending on query parameters.
+      operationId: getTermsOfServiceDocs
+      parameters:
+        - name: doc
+          in: query
+          description: Array of strings containing 'termsOfService' and/or 'privacyPolicy'.
+          required: true
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        200:
+          description: success
+          content:
+            text/plain:
+              schema:
+                type: string
   /termsOfService/v1/user/self:
     get:
       tags:
