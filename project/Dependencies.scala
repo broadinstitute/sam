@@ -16,7 +16,7 @@ object Dependencies {
   val workbenchUtil2V = s"0.4-$workbenchLibV"
   val workbenchModelV = s"0.18-$workbenchLibV"
   val workbenchGoogleV = s"0.27-$workbenchLibV"
-  val workbenchGoogle2V = s"0.34-4a0519cb"
+  val workbenchGoogle2V = s"0.34-a0519cb"
   val workbenchNotificationsV = s"0.5-$workbenchLibV"
   val workbenchOauth2V = s"0.4-$workbenchLibV"
   val workbenchOpenTelemetryV = s"0.5-$workbenchLibV"
