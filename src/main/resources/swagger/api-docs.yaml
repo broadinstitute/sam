@@ -2946,7 +2946,7 @@ paths:
               $ref: '#/components/schemas/SamUserAttributes'
       responses:
         200:
-          description: attibubutes set
+          description: attributes set
           content:
             application/json:
               schema:
