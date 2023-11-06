@@ -1705,11 +1705,11 @@ class PostgresAccessPolicyDAO(
       resourceTypeNames.flatMap(name => resourceTypePKsByName.get(name).map(pk => pk -> name)).toMap
 
     val resourceTypeConstraint =
-      if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in  (${resourceTypeNames.flatMap(resourceTypePKsByName.get).toSet})"
+      if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in  (${resourceTypeNames.flatMap(resourceTypePKsByName.get)})"
       else samsqls""
-    val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in (${policies.toSet})" else samsqls""
-    val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in (${roles.toSet})" else samsqls""
-    val actionConstraint = if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions.toSet})" else samsqls""
+    val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in (${policies})" else samsqls""
+    val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in (${roles})" else samsqls""
+    val actionConstraint = if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions})" else samsqls""
 
     val policyRoleActionQuery =
       samsqls"""
