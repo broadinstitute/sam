@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
 
-trait TermsOfServiceRoutes {
+trait TermsOfServiceRoutes extends SamUserDirectives {
   val tosService: TosService
   implicit val executionContext: ExecutionContext
   private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
@@ -64,14 +64,16 @@ trait TermsOfServiceRoutes {
       }
     }
 
-  def userTermsOfServiceRoutes(samUser: SamUser, isAdmin: Boolean, samRequestContext: SamRequestContext): server.Route =
+  def userTermsOfServiceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("termsOfService") {
       pathPrefix("v1") {
         pathPrefix("user") { // api/termsOfService/v1/user
           pathPrefix("self") { // api/termsOfService/v1/user/self
             pathEndOrSingleSlash {
               get {
-                complete(StatusCodes.OK, tosService.getTermsOfServiceDetailsForUser(samUser.id, samUser, isAdmin = false, samRequestContext))
+                complete {
+                  tosService.getTermsOfServiceDetailsForUser(samUser.id, samUser, isAdmin = false, samRequestContext)
+                }
               }
             } ~
             pathPrefix("accept") { // api/termsOfService/v1/user/accept
@@ -94,8 +96,12 @@ trait TermsOfServiceRoutes {
             validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
               val requestUserId = WorkbenchUserId(userId)
               pathEndOrSingleSlash {
-                get {
-                  complete(StatusCodes.OK, tosService.getTermsOfServiceDetailsForUser(requestUserId, samUser, isAdmin, samRequestContext))
+                isWorkbenchAdmin(samUser) { isAdmin =>
+                  get {
+                    complete {
+                      tosService.getTermsOfServiceDetailsForUser(requestUserId, samUser, isAdmin, samRequestContext)
+                    }
+                  }
                 }
               } ~
               pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
