@@ -284,6 +284,7 @@ jobs:
                           -v "$PWD":/working/sam \
                           -v ${{ env.COURSIER_CACHE }}:/root/.cache \
                           -v ${{ env.SBT_CACHE }}:/root/.sbt \
+                          -e PACT_PUBLISH_RESULTS=true \
                           -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
                           -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
                           -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \

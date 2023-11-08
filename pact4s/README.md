@@ -29,6 +29,9 @@ Or you can run the following command from the root of the project:
 sbt "set scalafmtOnCompile := false" "project pact4s" "testOnly *SamProviderSpec"
 ```
 
+## Publishing Pacts
+Publishing is disabled by default. To enable publishing, set the `PACT_PUBLISH_RESULTS` environment variable to `true`.
+
 ## References
 * https://broadworkbench.atlassian.net/wiki/spaces/IRT/pages/2660368406/Getting+Started+with+Pact+Contract+Testing
 * https://broadworkbench.atlassian.net/wiki/spaces/IRT/pages/2681143308/Pact+Broker+Infrastructure
