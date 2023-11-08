@@ -11,15 +11,15 @@ object Dependencies {
   val postgresDriverVersion = "42.5.0"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "32f499b"
-  val workbenchUtilV = s"0.9-$workbenchLibV"
-  val workbenchUtil2V = s"0.4-$workbenchLibV"
-  val workbenchModelV = s"0.18-$workbenchLibV"
-  val workbenchGoogleV = s"0.27-$workbenchLibV"
-  val workbenchGoogle2V = s"0.30-$workbenchLibV"
-  val workbenchNotificationsV = s"0.5-$workbenchLibV"
-  val workbenchOauth2V = s"0.4-$workbenchLibV"
-  val workbenchOpenTelemetryV = s"0.5-$workbenchLibV"
+  val workbenchLibV = "a0519cb" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchUtilV = s"0.10-$workbenchLibV"
+  val workbenchUtil2V = s"0.7-$workbenchLibV"
+  val workbenchModelV = s"0.19-$workbenchLibV"
+  val workbenchGoogleV = s"0.30-$workbenchLibV"
+  val workbenchGoogle2V = s"0.34-$workbenchLibV"
+  val workbenchNotificationsV = s"0.6-$workbenchLibV"
+  val workbenchOauth2V = s"0.5-$workbenchLibV"
+  val workbenchOpenTelemetryV = s"0.7-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.12-SNAPSHOT"
   val slf4jVersion = "2.0.6"
@@ -103,7 +103,7 @@ object Dependencies {
   val workbenchGoogle2Tests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.126.10" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.6" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 

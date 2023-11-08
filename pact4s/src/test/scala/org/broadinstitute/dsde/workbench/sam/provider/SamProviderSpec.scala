@@ -286,7 +286,7 @@ class SamProviderSpec
       .getOrElse(NoOpFilter)
 
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
-    name = "sam-provider",
+    name = "sam",
     pactSource = PactSource
       .PactBrokerWithSelectors(
         brokerUrl = pactBrokerUrl
