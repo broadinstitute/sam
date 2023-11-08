@@ -53,7 +53,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     resourceTypes.map { case (resourceTypeName, resourceType) =>
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
     val mockManagedGroupService =

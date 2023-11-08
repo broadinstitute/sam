@@ -86,7 +86,7 @@ trait OldUserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRo
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val directoryDAO = new MockDirectoryDAO()
 
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, directoryDAO, TestSupport.tosConfig)
     val samRoutes = new TestSamRoutes(
       null,
       null,

@@ -64,9 +64,6 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     SamUser(genWorkbenchUserId(System.currentTimeMillis()), googleSubjectId, oidcHeaders.email, azureB2CId, false)
   }
 
-  override def isWorkbenchAdmin(samUser: SamUser): Directive1[Boolean] =
-    onSuccess(cloudExtensions.isWorkbenchAdmin(samUser.email))
-
   /** Utility function that knows how to convert all the various headers into OIDCHeaders
     */
   private def requireOidcHeaders: Directive1[OIDCHeaders] =

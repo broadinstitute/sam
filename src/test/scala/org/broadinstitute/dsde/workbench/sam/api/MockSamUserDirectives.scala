@@ -30,5 +30,4 @@ trait MockSamUserDirectives extends SamUserDirectives {
     case Some(u) => provide(u)
   }
 
-  override def isWorkbenchAdmin(samUser: SamUser): Directive1[Boolean] = provide(false)
 }

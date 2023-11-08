@@ -16,7 +16,7 @@ class OldUserRoutesV2Spec extends OldUserRoutesSpecHelper {
   def withSARoutes[T](testCode: (TestSamRoutes, TestSamRoutes) => T): T = {
     val directoryDAO = new MockDirectoryDAO()
 
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, directoryDAO, TestSupport.tosConfig)
     val samRoutes = new TestSamRoutes(
       null,
       null,

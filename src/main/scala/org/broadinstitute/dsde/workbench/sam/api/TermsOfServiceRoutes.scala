@@ -5,10 +5,10 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.{pathPrefix, _}
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.TosService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
@@ -72,7 +72,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
             pathEndOrSingleSlash {
               get {
                 complete {
-                  tosService.getTermsOfServiceDetailsForUser(samUser.id, samUser, isAdmin = false, samRequestContext)
+                  tosService.getTermsOfServiceDetailsForUser(samUser.id, samUser, samRequestContext)
                 }
               }
             } ~
@@ -96,11 +96,9 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
             validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
               val requestUserId = WorkbenchUserId(userId)
               pathEndOrSingleSlash {
-                isWorkbenchAdmin(samUser) { isAdmin =>
-                  get {
-                    complete {
-                      tosService.getTermsOfServiceDetailsForUser(requestUserId, samUser, isAdmin, samRequestContext)
-                    }
+                get {
+                  complete {
+                    tosService.getTermsOfServiceDetailsForUser(requestUserId, samUser, samRequestContext)
                   }
                 }
               } ~

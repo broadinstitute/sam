@@ -24,7 +24,11 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext}
 import scala.io.Source
 
-class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceConfig)(
+class TosService(
+    val cloudExtensions: CloudExtensions,
+    directoryDao: DirectoryDAO,
+    val tosConfig: TermsOfServiceConfig
+)(
     implicit val executionContext: ExecutionContext,
     implicit val actorSystem: ActorSystem
 ) extends LazyLogging {
@@ -66,10 +70,9 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
   def getTermsOfServiceDetailsForUser(
       requestedUserId: WorkbenchUserId,
       requestingUser: SamUser,
-      isAdmin: Boolean,
       samRequestContext: SamRequestContext
-  ): IO[TermsOfServiceDetails] =
-    if (isAdmin || (requestedUserId == requestingUser.id)) {
+  ): IO[TermsOfServiceDetails] = {
+    def loadUserTosDetails =
       for {
         currentSamUserTos <- loadTosRecordForUser(requestedUserId, Option(tosConfig.version), samRequestContext)
         previousSamUserTos <- loadTosRecordForUser(requestedUserId, tosConfig.previousVersion, samRequestContext)
@@ -79,9 +82,19 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
         currentSamUserTos.createdAt,
         tosAcceptancePermitsSystemUsage(requestedUser, Option(currentSamUserTos), Option(previousSamUserTos))
       )
+
+    if (requestedUserId != requestingUser.id) {
+      IO.fromFuture(IO(cloudExtensions.isWorkbenchAdmin(requestingUser.email))).flatMap { isAdmin =>
+        if (isAdmin) {
+          loadUserTosDetails
+        } else {
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "You are not allowed to make this request")))
+        }
+      }
     } else {
-      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "You are not allowed to make this request")))
+      loadUserTosDetails
     }
+  }
 
   private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     directoryDao.loadUser(userId, samRequestContext).map {

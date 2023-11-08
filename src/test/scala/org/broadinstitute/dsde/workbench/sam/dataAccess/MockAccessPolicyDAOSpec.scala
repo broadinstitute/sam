@@ -65,7 +65,7 @@ class MockAccessPolicyDAOSpec(_system: ActorSystem)
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao, ldapDirDao)
     val resourceService =
       new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain, Set.empty)
-    val userService = new UserService(ldapDirDao, NoExtensions, Seq.empty, new TosService(ldapDirDao, TestSupport.tosConfig))
+    val userService = new UserService(ldapDirDao, NoExtensions, Seq.empty, new TosService(NoExtensions, ldapDirDao, TestSupport.tosConfig))
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     shared.resourceTypes foreach { case (_, resourceType) => resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync() }
@@ -81,7 +81,7 @@ class MockAccessPolicyDAOSpec(_system: ActorSystem)
     val resourceService =
       new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain, Set.empty)
     val userService =
-      new UserService(mockDirectoryDAO, NoExtensions, Seq.empty, new TosService(mockDirectoryDAO, TestSupport.tosConfig))
+      new UserService(mockDirectoryDAO, NoExtensions, Seq.empty, new TosService(NoExtensions, mockDirectoryDAO, TestSupport.tosConfig))
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain)
   }
