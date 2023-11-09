@@ -6,36 +6,39 @@ import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
-import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.FutureWithLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.errorReportSource
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
-import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, TermsOfServiceConfigResponse}
+import org.broadinstitute.dsde.workbench.sam.model.{OldTermsOfServiceDetails, SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
+import org.broadinstitute.dsde.workbench.sam.util.{SamRequestContext, SupportsAdmin}
 
 import java.io.{FileNotFoundException, IOException}
-import scala.concurrent.{Await, ExecutionContext}
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import java.time.Instant
+import scala.concurrent.{Await, ExecutionContext}
 import scala.io.Source
 
-class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceConfig)(
+class TosService(
+    val cloudExtensions: CloudExtensions,
+    directoryDao: DirectoryDAO,
+    val tosConfig: TermsOfServiceConfig
+)(
     implicit val executionContext: ExecutionContext,
     implicit val actorSystem: ActorSystem
-) extends LazyLogging {
+) extends LazyLogging
+    with SupportsAdmin {
 
   private val termsOfServiceUri = s"${tosConfig.baseUrl}/${tosConfig.version}/termsOfService.md"
   private val privacyPolicyUri = s"${tosConfig.baseUrl}/${tosConfig.version}/privacyPolicy.md"
 
-  val termsOfServiceText = TermsOfServiceDocument(termsOfServiceUri)
-  val privacyPolicyText = TermsOfServiceDocument(privacyPolicyUri)
+  val termsOfServiceText: String = TermsOfServiceDocument(termsOfServiceUri)
+  val privacyPolicyText: String = TermsOfServiceDocument(privacyPolicyUri)
 
   def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao
@@ -60,9 +63,38 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
   private def isRollingWindowInEffect() = tosConfig.rollingAcceptanceWindowExpiration.exists(Instant.now().isBefore(_))
 
   @Deprecated
-  def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceDetails] =
+  def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[OldTermsOfServiceDetails] =
     directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>
-      TermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
+      OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
+    }
+
+  def getTermsOfServiceDetailsForUser(
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[TermsOfServiceDetails] =
+    ensureAdminIfNeeded[TermsOfServiceDetails](userId, samRequestContext) {
+      for {
+        currentSamUserTos <- loadTosRecordForUser(userId, Option(tosConfig.version), samRequestContext)
+        previousSamUserTos <- loadTosRecordForUser(userId, tosConfig.previousVersion, samRequestContext)
+        requestedUser <- loadUser(userId, samRequestContext)
+      } yield TermsOfServiceDetails(
+        currentSamUserTos.version,
+        currentSamUserTos.createdAt,
+        tosAcceptancePermitsSystemUsage(requestedUser, Option(currentSamUserTos), Option(previousSamUserTos))
+      )
+    }
+
+  private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
+    directoryDao.loadUser(userId, samRequestContext).map {
+      case Some(samUser) => samUser
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find user:${userId}"))
+    }
+
+  // Note: if version is None, then the query will return the last accepted ToS info for the user
+  private def loadTosRecordForUser(userId: WorkbenchUserId, version: Option[String], samRequestContext: SamRequestContext): IO[SamUserTos] =
+    directoryDao.getUserTosVersion(userId, version, samRequestContext).map {
+      case Some(samUserTos) => samUserTos
+      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user:${userId}"))
     }
 
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {

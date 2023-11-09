@@ -3279,6 +3279,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermsOfServiceConfigResponse'
+
+  /termsOfService/v1/user/self:
+    get:
+      tags:
+        - TermsOfService
+      summary: Returns details about the requesting user's terms of service status.
+      operationId: userTermsOfServiceGetSelf
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+
+  /termsOfService/v1/user/{sam_user_id}:
+    get:
+      tags:
+        - TermsOfService
+      summary: gets a user's terms of service status, can only get another user's status if the requester is an admin.
+      operationId: userTermsOfServiceGet
+      parameters:
+        - name: sam_user_id
+          in: path
+          description: the id of the sam user to get terms of service status for
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /version:
     get:
       tags:
@@ -3940,6 +3987,24 @@ components:
             means that users who have not accepted the latest terms of service
             version (and who have accepted the previous version) will be allowed to use the system 
             for a period of time after the terms of service have been updated.
+    UserTermsOfServiceDetails:
+      required:
+        - latestAcceptedVersion
+        - acceptedOn
+        - permitsSystemUsage
+      type: object
+      properties:
+        latestAcceptedVersion:
+          type: string
+          description: The latest version of the terms of service that the requesting user has accepted.
+        acceptedOn:
+          type: string
+          format: date-time
+          description: The timestamp marking when the user accepted the terms of service matching latestAcceptedVersion.
+        permitsSystemUsage:
+          type: boolean
+          description: based on the user's currently accepted terms of service version and when the terms of service were last changed,
+            should the user still be permitted to use the system?
     TermsOfServiceDetails:
       required:
         - isEnabled

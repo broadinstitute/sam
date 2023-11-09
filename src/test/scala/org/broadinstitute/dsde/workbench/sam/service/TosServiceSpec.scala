@@ -1,21 +1,23 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
-import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.tosConfig
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.SamUserTos
+import org.broadinstitute.dsde.workbench.sam.matchers.{TermsOfServiceDetailsMatchers, TimeMatchers}
 import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos, TermsOfServiceDetails}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.Mockito.RETURNS_SMART_NULLS
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.freespec.AnyFreeSpecLike
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
 
 import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -27,7 +29,12 @@ class TosServiceSpec(_system: ActorSystem)
     with BeforeAndAfterAll
     with BeforeAndAfter
     with PropertyBasedTesting
-    with MockitoSugar {
+    with MockitoSugar
+    with TimeMatchers
+    with OptionValues
+    with TermsOfServiceDetailsMatchers {
+
+  val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
   def this() = this(ActorSystem("TosServiceSpec"))
 
@@ -40,10 +47,10 @@ class TosServiceSpec(_system: ActorSystem)
     super.afterAll()
   }
 
-  lazy val dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+  private lazy val dirDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
 
-  val defaultUser = Generator.genWorkbenchUserBoth.sample.get
-  val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
+  private val defaultUser = Generator.genWorkbenchUserBoth.sample.get
+  private val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
 
   before {
     clearDatabase()
@@ -60,7 +67,7 @@ class TosServiceSpec(_system: ActorSystem)
     }
 
     "returns configurations" in {
-      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
 
       // accept and get ToS status
       val tosConfigResponse = tosService.getTosConfig().unsafeRunSync()
@@ -76,7 +83,7 @@ class TosServiceSpec(_system: ActorSystem)
       when(dirDAO.acceptTermsOfService(any[WorkbenchUserId], any[String], any[SamRequestContext]))
         .thenReturn(IO.pure(true))
 
-      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
 
       // accept and get ToS status
       val acceptTosStatusResult = tosService.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
@@ -90,7 +97,7 @@ class TosServiceSpec(_system: ActorSystem)
         .thenReturn(IO.pure(true))
 
       // reject and get ToS status
-      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
       val rejectTosStatusResult = tosService.rejectTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
 
       rejectTosStatusResult shouldBe true
@@ -101,7 +108,7 @@ class TosServiceSpec(_system: ActorSystem)
       val tosVersion = "2"
       val previousTosVersion = Option("1")
       val tosService =
-        new TosService(dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
+        new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
       when(dirDAO.getUserTos(serviceAccountUser.id, samRequestContext))
         .thenReturn(IO.pure(Some(SamUserTos(serviceAccountUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
 
@@ -113,7 +120,7 @@ class TosServiceSpec(_system: ActorSystem)
     }
 
     "loads the Terms of Service text when TosService is instantiated" in {
-      val tosService = new TosService(dirDAO, TestSupport.tosConfig.copy(version = "2"))
+      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = "2"))
       tosService.termsOfServiceText contains "Test Terms of Service"
       tosService.privacyPolicyText contains "Test Privacy Policy"
     }
@@ -129,6 +136,7 @@ class TosServiceSpec(_system: ActorSystem)
     val cannotUseTheSystem = "says the user cannot use the system"
     val canUseTheSystem = "says the user can use the system"
     val tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled = new TosService(
+      NoExtensions,
       dirDAO,
       TestSupport.tosConfig.copy(
         isTosEnabled = true,
@@ -139,11 +147,13 @@ class TosServiceSpec(_system: ActorSystem)
     )
     val tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled =
       new TosService(
+        NoExtensions,
         dirDAO,
         TestSupport.tosConfig
           .copy(version = tosVersion, isGracePeriodEnabled = true, previousVersion = previousVersionOpt)
       )
     val tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled = new TosService(
+      NoExtensions,
       dirDAO,
       TestSupport.tosConfig.copy(
         isTosEnabled = true,
@@ -154,6 +164,7 @@ class TosServiceSpec(_system: ActorSystem)
       )
     )
     val tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled = new TosService(
+      NoExtensions,
       dirDAO,
       TestSupport.tosConfig.copy(
         isTosEnabled = true,
@@ -169,6 +180,7 @@ class TosServiceSpec(_system: ActorSystem)
         val previousTosVersion = None
         val tosService =
           new TosService(
+            NoExtensions,
             dirDAO,
             TestSupport.tosConfig.copy(
               isTosEnabled = true,
@@ -428,6 +440,7 @@ class TosServiceSpec(_system: ActorSystem)
         }
       }
     }
+
     "when a service account is using the api" - {
       "let it use the api regardless of tos status" in {
         when(dirDAO.getUserTos(serviceAccountUser.id, samRequestContext))
@@ -437,6 +450,73 @@ class TosServiceSpec(_system: ActorSystem)
         val complianceStatus =
           tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTosComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
         complianceStatus.permitsSystemUsage shouldBe true
+      }
+    }
+
+    "can retrieve Terms of Service details for a user" - {
+      "if the requesting user is an admin" in {
+        // Arrange
+        val tosVersion = "0"
+        val adminUser = Generator.genWorkbenchUserBoth.sample.get
+        val directoryDao = new MockDirectoryDaoBuilder()
+          .withAcceptedTermsOfServiceForUser(defaultUser, tosVersion)
+          .build
+
+        val tosService = new TosService(NoExtensions, directoryDao, TestSupport.tosConfig)
+
+        // Act
+        val userTosDetails: TermsOfServiceDetails =
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, SamRequestContext(None, None, Some(adminUser))))
+
+        // Assert
+        userTosDetails should have {
+          latestAcceptedVersion(tosVersion)
+          acceptedOn(Instant.now)
+          permitsSystemUsage(true)
+        }
+      }
+
+      "if the requesting user is not an admin but is the same as the requested user" in {
+        // Arrange
+        val tosVersion = "0"
+        val directoryDao = new MockDirectoryDaoBuilder()
+          .withAcceptedTermsOfServiceForUser(defaultUser, tosVersion)
+          .build
+
+        val tosService = new TosService(NoExtensions, directoryDao, TestSupport.tosConfig)
+
+        // Act
+        val userTosDetails: TermsOfServiceDetails =
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, SamRequestContext(None, None, Some(defaultUser))))
+
+        // Assert
+        userTosDetails should have {
+          latestAcceptedVersion(tosVersion)
+          acceptedOn(Instant.now)
+          permitsSystemUsage(true)
+        }
+      }
+    }
+
+    "cannot retrieve Terms of Service details for another user" - {
+      "if requesting user is not an admin and the requested user is a different user" in {
+        // Arrange
+        val tosVersion = "v1"
+        val nonAdminUser = Generator.genWorkbenchUserBoth.sample.get
+        val someRandoUser = Generator.genWorkbenchUserBoth.sample.get
+        val directoryDao = new MockDirectoryDaoBuilder()
+          .withAcceptedTermsOfServiceForUser(someRandoUser, tosVersion)
+          .build
+        val cloudExt = MockCloudExtensionsBuilder(allUsersGroup).withNonAdminUser().build
+
+        val tosService = new TosService(cloudExt, directoryDao, TestSupport.tosConfig)
+
+        // Act and Assert
+        val e = intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(someRandoUser.id, SamRequestContext(None, None, Some(nonAdminUser))))
+        }
+
+        assert(e.errorReport.statusCode.value == StatusCodes.Unauthorized, "User should not be authorized to see other users' Terms of Service details")
       }
     }
   }

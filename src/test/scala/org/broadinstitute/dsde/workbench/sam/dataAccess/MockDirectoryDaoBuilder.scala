@@ -2,7 +2,8 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
@@ -40,6 +41,7 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   mockedDirectoryDAO.setUserRegisteredAt(any[WorkbenchUserId], any[Instant], any[SamRequestContext]) returns IO.unit
   mockedDirectoryDAO.setUserAttributes(any[SamUserAttributes], any[SamRequestContext]) returns IO.unit
   mockedDirectoryDAO.getUserAttributes(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
+  mockedDirectoryDAO.getUserTosVersion(any[WorkbenchUserId], any[Some[String]], any[SamRequestContext]) returns IO(None)
 
   def withHealthyDatabase: MockDirectoryDaoBuilder = {
     mockedDirectoryDAO.checkStatus(any[SamRequestContext]) returns IO(true)
@@ -108,6 +110,22 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
 
   def withUserAttributes(samUserAttributes: SamUserAttributes): MockDirectoryDaoBuilder = {
     mockedDirectoryDAO.getUserAttributes(eqTo(samUserAttributes.userId), any[SamRequestContext]) returns IO(Some(samUserAttributes))
+    this
+  }
+
+  def withAcceptedTermsOfServiceForUser(samUser: SamUser, tosVersion: String): MockDirectoryDaoBuilder = {
+    makeUserExist(samUser)
+    val samUserTos = SamUserTos(samUser.id, tosVersion, TosTable.ACCEPT, Instant.now)
+    mockedDirectoryDAO.getUserTos(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUserTos))
+    mockedDirectoryDAO.getUserTosVersion(eqTo(samUser.id), eqTo(Some(tosVersion)), any[SamRequestContext]) returns IO(Option(samUserTos))
+    this
+  }
+
+  def withRejectedTermsOfServiceForUser(samUser: SamUser, tosVersion: String): MockDirectoryDaoBuilder = {
+    makeUserExist(samUser)
+    val samUserTos = SamUserTos(samUser.id, tosVersion, TosTable.REJECT, Instant.now)
+    mockedDirectoryDAO.getUserTos(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUserTos))
+    mockedDirectoryDAO.getUserTosVersion(eqTo(samUser.id), eqTo(Some(tosVersion)), any[SamRequestContext]) returns IO(Option(samUserTos))
     this
   }
 

@@ -192,7 +192,7 @@ object TestSamRoutes {
       emailDomain,
       allowedAdminEmailDomains = adminEmailDomains.getOrElse(Set.empty)
     )
-    val mockTosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val mockTosService = new TosService(cloudXtns, directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, cloudXtns, Seq.empty, mockTosService)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, cloudXtns, emailDomain)
