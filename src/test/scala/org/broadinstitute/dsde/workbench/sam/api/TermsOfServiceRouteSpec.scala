@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -62,9 +62,28 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
 
   describe("GET /api/termsOfService/v1/docs") {
     val samRoutes = TestSamRoutes(Map.empty)
-    it("should be a valid route") {
+    it("should return the terms of service text when no query parameters are passed") {
       Get("/api/termsOfService/v1/docs") ~> samRoutes.route ~> check {
-        status shouldBe StatusCodes.NotImplemented
+        responseAs[String] shouldBe samRoutes.tosService.termsOfServiceText
+        status shouldBe StatusCodes.OK
+      }
+    }
+    it("should return the terms of service text when 'termsOfService' is passed as a query param.") {
+      Get(Uri("/api/termsOfService/v1/docs").withQuery(Uri.Query("doc=termsOfService"))) ~> samRoutes.route ~> check {
+        responseAs[String] shouldBe samRoutes.tosService.termsOfServiceText
+        status shouldBe StatusCodes.OK
+      }
+    }
+    it("should return the privacy policy text when 'privacyPolicy' is passed as a query param.") {
+      Get(Uri("/api/termsOfService/v1/docs").withQuery(Uri.Query("doc=privacyPolicy"))) ~> samRoutes.route ~> check {
+        responseAs[String] shouldBe samRoutes.tosService.privacyPolicyText
+        status shouldBe StatusCodes.OK
+      }
+    }
+    it("should return the terms of service text and privacy policy text when 'termsOfService,privacyPolicy' is passed as a query param.") {
+      Get(Uri("/api/termsOfService/v1/docs").withQuery(Uri.Query("doc=termsOfService,privacyPolicy"))) ~> samRoutes.route ~> check {
+        responseAs[String] shouldBe s"${samRoutes.tosService.termsOfServiceText}\n\n${samRoutes.tosService.privacyPolicyText}"
+        status shouldBe StatusCodes.OK
       }
     }
   }

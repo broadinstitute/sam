@@ -50,7 +50,13 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
         pathPrefix("docs") { // api/termsOfService/v1/docs
           pathEndOrSingleSlash {
             get {
-              complete(StatusCodes.NotImplemented)
+              parameters("doc".as[String].?) { (doc: Option[String]) =>
+                val docSet = doc.map(_.split(",").toSet).getOrElse(Set.empty)
+                if (docSet.subsetOf(Set(tosService.termsOfServiceTextKey, tosService.privacyPolicyTextKey)))
+                  complete(tosService.getTosText(docSet))
+                else
+                  complete(StatusCodes.BadRequest)
+              }
             }
           } ~
           pathPrefix("redirect") { // api/termsOfService/v1/docs/redirect
