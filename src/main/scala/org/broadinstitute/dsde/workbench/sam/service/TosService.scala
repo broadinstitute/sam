@@ -67,34 +67,37 @@ class TosService(
       OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
 
+  def ensureAdminIfNeeded[A](userId: WorkbenchUserId, samRequestContext: SamRequestContext)(func: => IO[A]): IO[A] = {
+    val unauthorized = new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "You are not allowed to make this request"))
+    samRequestContext.samUser match {
+      case Some(requestingUser) =>
+        if (userId != requestingUser.id) {
+          IO.fromFuture(IO(cloudExtensions.isWorkbenchAdmin(requestingUser.email))).flatMap {
+            case true => func
+            case false => IO.raiseError(unauthorized)
+          }
+        } else {
+          func
+        }
+      case None => IO.raiseError(unauthorized)
+    }
+  }
+
   def getTermsOfServiceDetailsForUser(
-      requestedUserId: WorkbenchUserId,
-      requestingUser: SamUser,
+      userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
-  ): IO[TermsOfServiceDetails] = {
-    def loadUserTosDetails =
+  ): IO[TermsOfServiceDetails] =
+    ensureAdminIfNeeded[TermsOfServiceDetails](userId, samRequestContext) {
       for {
-        currentSamUserTos <- loadTosRecordForUser(requestedUserId, Option(tosConfig.version), samRequestContext)
-        previousSamUserTos <- loadTosRecordForUser(requestedUserId, tosConfig.previousVersion, samRequestContext)
-        requestedUser <- loadUser(requestedUserId, samRequestContext)
+        currentSamUserTos <- loadTosRecordForUser(userId, Option(tosConfig.version), samRequestContext)
+        previousSamUserTos <- loadTosRecordForUser(userId, tosConfig.previousVersion, samRequestContext)
+        requestedUser <- loadUser(userId, samRequestContext)
       } yield TermsOfServiceDetails(
         currentSamUserTos.version,
         currentSamUserTos.createdAt,
         tosAcceptancePermitsSystemUsage(requestedUser, Option(currentSamUserTos), Option(previousSamUserTos))
       )
-
-    if (requestedUserId != requestingUser.id) {
-      IO.fromFuture(IO(cloudExtensions.isWorkbenchAdmin(requestingUser.email))).flatMap { isAdmin =>
-        if (isAdmin) {
-          loadUserTosDetails
-        } else {
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "You are not allowed to make this request")))
-        }
-      }
-    } else {
-      loadUserTosDetails
     }
-  }
 
   private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     directoryDao.loadUser(userId, samRequestContext).map {

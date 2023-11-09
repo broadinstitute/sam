@@ -72,7 +72,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
             pathEndOrSingleSlash {
               get {
                 complete {
-                  tosService.getTermsOfServiceDetailsForUser(samUser.id, samUser, samRequestContext)
+                  tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
                 }
               }
             } ~
@@ -98,7 +98,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
               pathEndOrSingleSlash {
                 get {
                   complete {
-                    tosService.getTermsOfServiceDetailsForUser(requestUserId, samUser, samRequestContext)
+                    tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
                   }
                 }
               } ~
