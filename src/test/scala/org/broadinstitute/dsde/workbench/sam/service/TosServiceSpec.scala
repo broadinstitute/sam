@@ -124,7 +124,7 @@ class TosServiceSpec(_system: ActorSystem)
       val tosVersion = "2"
       val previousTosVersion = Option("1")
       val tosService =
-        new TosService(dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
+        new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
       when(dirDAO.getUserTos(uamiUser.id, samRequestContext))
         .thenReturn(IO.pure(Some(SamUserTos(uamiUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
 
