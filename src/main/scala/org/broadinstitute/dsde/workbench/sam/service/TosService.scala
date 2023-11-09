@@ -63,13 +63,16 @@ class TosService(
       )
     )
 
-  def getTosText(docSet: Set[String]): IO[Option[String]] =
+  def getTosText(docSet: Set[String]): IO[String] =
     docSet match {
-      case set if set.isEmpty => IO.pure(Option(termsOfServiceText))
-      case set if set.equals(Set(privacyPolicyTextKey)) => IO.pure(Option(privacyPolicyText))
-      case set if set.equals(Set(termsOfServiceTextKey)) => IO.pure(Option(termsOfServiceText))
-      case set if set.equals(Set(termsOfServiceTextKey, privacyPolicyTextKey)) => IO.pure(Option(termsOfServiceText + "\n\n" + privacyPolicyText))
-      case _ => IO.pure(None)
+      case set if set.isEmpty => IO.pure(termsOfServiceText)
+      case set if set.equals(Set(privacyPolicyTextKey)) => IO.pure(privacyPolicyText)
+      case set if set.equals(Set(termsOfServiceTextKey)) => IO.pure(termsOfServiceText)
+      case set if set.equals(Set(termsOfServiceTextKey, privacyPolicyTextKey)) => IO.pure(termsOfServiceText + "\n\n" + privacyPolicyText)
+      case _ =>
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(ErrorReport(s"Docs parameters must be one of: $termsOfServiceTextKey, $privacyPolicyTextKey, or both"))
+        )
     }
 
   private def isRollingWindowInEffect() = tosConfig.rollingAcceptanceWindowExpiration.exists(Instant.now().isBefore(_))

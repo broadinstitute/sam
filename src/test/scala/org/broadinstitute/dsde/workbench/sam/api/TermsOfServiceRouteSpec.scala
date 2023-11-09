@@ -3,9 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Route
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
@@ -87,38 +84,6 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       Get(Uri("/api/termsOfService/v1/docs").withQuery(Uri.Query("doc=termsOfService,privacyPolicy"))) ~> samRoutes.route ~> check {
         responseAs[String] shouldBe s"${samRoutes.tosService.termsOfServiceText}\n\n${samRoutes.tosService.privacyPolicyText}"
         status shouldBe StatusCodes.OK
-      }
-    }
-  }
-
-  describe("GET /api/termsOfService/v1/docs/redirect") {
-    val samRoutes = TestSamRoutes(Map.empty)
-    it("should be a valid route") {
-      Get("/api/termsOfService/v1/docs/redirect") ~> samRoutes.route ~> check {
-        status shouldBe StatusCodes.NotImplemented
-      }
-    }
-  }
-
-  describe("GET /api/termsOfService/v1/user") {
-    val samRoutes = TestSamRoutes(Map.empty)
-    it("should not be handled") {
-      Get("/api/termsOfService/v1/user") ~> samRoutes.route ~> check {
-        assert(!handled, "`GET /api/termsOfService/v1/user` should not be a handled route")
-      }
-    }
-  }
-
-  describe("GET /api/termsOfService/v1/user/self") {
-    val samRoutes = TestSamRoutes(Map.empty)
-    it("should return an instance of `TermsOfServiceDetails`") {
-      Get("/api/termsOfService/v1/user/self") ~> samRoutes.route ~> check {
-        withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceDetails`.") {
-          responseAs[TermsOfServiceDetails]
-        }
-    it("should be a valid route") {
-      Get("/api/termsOfService/v1/docs") ~> samRoutes.route ~> check {
-        status shouldBe StatusCodes.NotImplemented
       }
     }
   }

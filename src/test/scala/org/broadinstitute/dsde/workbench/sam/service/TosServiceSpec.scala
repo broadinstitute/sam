@@ -80,28 +80,28 @@ class TosServiceSpec(_system: ActorSystem)
     }
 
     "returns terms of service text when no query parameters are passed" in {
-      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
 
       val tosText = tosService.getTosText(Set.empty).unsafeRunSync()
       tosText shouldBe tosService.termsOfServiceText
     }
 
     "returns terms of service text by default" in {
-      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
 
       val tosText = tosService.getTosText(Set("termsOfService")).unsafeRunSync()
       tosText shouldBe tosService.termsOfServiceText
     }
 
     "returns privacy policy text" in {
-      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
 
       val tosText = tosService.getTosText(Set("privacyPolicy")).unsafeRunSync()
       tosText shouldBe tosService.privacyPolicyText
     }
 
     "returns privacy policy text and terms of service text" in {
-      val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
 
       val tosText = tosService.getTosText(Set("privacyPolicy", "termsOfService")).unsafeRunSync()
       tosText shouldBe s"${tosService.termsOfServiceText}\n\n${tosService.privacyPolicyText}"
