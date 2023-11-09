@@ -34,6 +34,9 @@ class TosService(
 ) extends LazyLogging
     with SupportsAdmin {
 
+  val termsOfServiceTextKey = "termsOfService"
+  val privacyPolicyTextKey = "privacyPolicy"
+
   private val termsOfServiceUri = s"${tosConfig.baseUrl}/${tosConfig.version}/termsOfService.md"
   private val privacyPolicyUri = s"${tosConfig.baseUrl}/${tosConfig.version}/privacyPolicy.md"
 
@@ -63,9 +66,9 @@ class TosService(
   def getTosText(docSet: Set[String]): IO[Option[String]] =
     docSet match {
       case set if set.isEmpty => IO.pure(Option(termsOfServiceText))
-      case set if set.equals(Set("privacyPolicy")) => IO.pure(Option(privacyPolicyText))
-      case set if set.equals(Set("termsOfService")) => IO.pure(Option(termsOfServiceText))
-      case set if set.equals(Set("termsOfService", "privacyPolicy")) => IO.pure(Option(termsOfServiceText + "\n\n" + privacyPolicyText))
+      case set if set.equals(Set(privacyPolicyTextKey)) => IO.pure(Option(privacyPolicyText))
+      case set if set.equals(Set(termsOfServiceTextKey)) => IO.pure(Option(termsOfServiceText))
+      case set if set.equals(Set(termsOfServiceTextKey, privacyPolicyTextKey)) => IO.pure(Option(termsOfServiceText + "\n\n" + privacyPolicyText))
       case _ => IO.pure(None)
     }
 
