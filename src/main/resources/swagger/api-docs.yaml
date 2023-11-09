@@ -3347,6 +3347,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+
+  /termsOfService/v1/user/self:
+    get:
+      tags:
+        - TermsOfService
+      summary: Returns details about the requesting user's terms of service status.
+      operationId: userTermsOfServiceGetSelf
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+
+  /termsOfService/v1/user/{sam_user_id}:
+    get:
+      tags:
+        - TermsOfService
+      summary: gets a user's terms of service status, can only get another user's status if the requester is an admin.
+      operationId: userTermsOfServiceGet
+      parameters:
+        - name: sam_user_id
+          in: path
+          description: the id of the sam user to get terms of service status for
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /version:
     get:
       tags:
