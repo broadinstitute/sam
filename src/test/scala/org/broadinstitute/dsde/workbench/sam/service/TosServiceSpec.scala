@@ -466,7 +466,7 @@ class TosServiceSpec(_system: ActorSystem)
 
         // Act
         val userTosDetails: TermsOfServiceDetails =
-          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContext))
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, SamRequestContext(None, None, Some(adminUser))))
 
         // Assert
         userTosDetails should have {
@@ -487,7 +487,7 @@ class TosServiceSpec(_system: ActorSystem)
 
         // Act
         val userTosDetails: TermsOfServiceDetails =
-          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContext))
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, SamRequestContext(None, None, Some(defaultUser))))
 
         // Assert
         userTosDetails should have {
@@ -513,7 +513,7 @@ class TosServiceSpec(_system: ActorSystem)
 
         // Act and Assert
         val e = intercept[WorkbenchExceptionWithErrorReport] {
-          runAndWait(tosService.getTermsOfServiceDetailsForUser(someRandoUser.id, samRequestContext))
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(someRandoUser.id, SamRequestContext(None, None, Some(nonAdminUser))))
         }
 
         assert(e.errorReport.statusCode.value == StatusCodes.Unauthorized, "User should not be authorized to see other users' Terms of Service details")

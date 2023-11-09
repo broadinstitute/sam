@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, TermsOfServiceConfigResponse}
 import org.broadinstitute.dsde.workbench.sam.model.{OldTermsOfServiceDetails, SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.util.{SamRequestContext, SupportsAdmin}
 
 import java.io.{FileNotFoundException, IOException}
 import java.time.Instant
@@ -31,7 +31,8 @@ class TosService(
 )(
     implicit val executionContext: ExecutionContext,
     implicit val actorSystem: ActorSystem
-) extends LazyLogging {
+) extends LazyLogging
+    with SupportsAdmin {
 
   private val termsOfServiceUri = s"${tosConfig.baseUrl}/${tosConfig.version}/termsOfService.md"
   private val privacyPolicyUri = s"${tosConfig.baseUrl}/${tosConfig.version}/privacyPolicy.md"
@@ -66,22 +67,6 @@ class TosService(
     directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>
       OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
-
-  def ensureAdminIfNeeded[A](userId: WorkbenchUserId, samRequestContext: SamRequestContext)(func: => IO[A]): IO[A] = {
-    val unauthorized = new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "You are not allowed to make this request"))
-    samRequestContext.samUser match {
-      case Some(requestingUser) =>
-        if (userId != requestingUser.id) {
-          IO.fromFuture(IO(cloudExtensions.isWorkbenchAdmin(requestingUser.email))).flatMap {
-            case true => func
-            case false => IO.raiseError(unauthorized)
-          }
-        } else {
-          func
-        }
-      case None => IO.raiseError(unauthorized)
-    }
-  }
 
   def getTermsOfServiceDetailsForUser(
       userId: WorkbenchUserId,
