@@ -490,7 +490,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
           samDeps.userService,
           samDeps.resourceService,
           samDeps.statusService,
-          new TosService(samDeps.directoryDAO, TestSupport.tosConfig)
+          new TosService(samDeps.cloudExtensions, samDeps.directoryDAO, TestSupport.tosConfig)
         )
       )
       .unsafeRunSync()
@@ -514,7 +514,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
           samDeps.userService,
           samDeps.resourceService,
           samDeps.statusService,
-          new TosService(samDeps.directoryDAO, TestSupport.tosConfig)
+          new TosService(samDeps.cloudExtensions, samDeps.directoryDAO, TestSupport.tosConfig)
         )
       )
       .unsafeRunSync()

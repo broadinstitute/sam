@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import akka.http.scaladsl.server.{Directive, Directive0, Directive1}
 import akka.http.scaladsl.server.Directives.{complete, extractRequest, onSuccess, optionalHeaderValueByName}
+import akka.http.scaladsl.server.{Directive, Directive0, Directive1}
 import akka.stream.Materializer
 import cats.effect._
 import cats.effect.unsafe.implicits.global
@@ -142,7 +142,7 @@ object MockTestSupport extends MockTestSupport {
     )
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, tosConfig)
+    val tosService = new TosService(googleExt, directoryDAO, tosConfig)
     val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     MockSamDependencies(
       mockResourceService,

@@ -8,7 +8,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.service.UserService
+import org.broadinstitute.dsde.workbench.sam.service.{TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsBoolean
 
@@ -19,6 +19,7 @@ import scala.concurrent.ExecutionContext
 trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
   val userService: UserService
+  val tosService: TosService
 
   /** Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where a user is not found. In most routes that is appropriate
     * but in the user routes it should be a 404.
