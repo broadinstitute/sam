@@ -17,7 +17,6 @@ import org.scalatest.matchers.should.Matchers
 
 class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRouteTest with TestSupport {
 
-  // Eventually being replaced by REST-ful termsOfService routes
   describe("GET /tos/text") {
     it("return the tos text") {
       assume(databaseEnabled, databaseEnabledClue)
@@ -32,7 +31,6 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
     }
   }
 
-  // Eventually being replaced by REST-ful termsOfService routes
   describe("GET /privacy/text") {
     it("return the privacy policy text") {
       val samRoutes = TestSamRoutes(Map.empty)

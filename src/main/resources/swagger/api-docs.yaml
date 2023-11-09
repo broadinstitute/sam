@@ -3285,7 +3285,7 @@ paths:
       parameters:
         - name: sam_user_id
           in: path
-          description: the id of the sam user to get terms of service details for
+          description: the id of the sam user to get terms of service status for
           required: true
           schema:
             type: string
