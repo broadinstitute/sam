@@ -3320,7 +3320,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-
+  /termsOfService/v1/user/self/accept:
+    get:
+      tags:
+        - TermsOfService
+      summary: Accepts the current terms of service for the requesting user.
+      operationId: userTermsOfServiceAcceptSelf
+      responses:
+        200:
+          description: OK
   /termsOfService/v1/user/{sam_user_id}:
     get:
       tags:
