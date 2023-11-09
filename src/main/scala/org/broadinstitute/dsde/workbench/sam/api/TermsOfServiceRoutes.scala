@@ -92,7 +92,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
             pathPrefix("reject") { // api/termsOfService/v1/user/reject
               pathEndOrSingleSlash {
                 put {
-                  complete(StatusCodes.NotImplemented)
+                  complete(tosService.rejectTosStatus(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
                 }
               }
             }
