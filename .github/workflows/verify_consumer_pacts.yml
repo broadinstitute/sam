@@ -284,6 +284,7 @@ jobs:
                           -v "$PWD":/working/sam \
                           -v ${{ env.COURSIER_CACHE }}:/root/.cache \
                           -v ${{ env.SBT_CACHE }}:/root/.sbt \
+                          -e PACT_PUBLISH_RESULTS=true \
                           -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
                           -e PROVIDER_SHA=${{ env.PROVIDER_SHA }} \
                           -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \
@@ -310,4 +311,4 @@ jobs:
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
-          inputs: '{ "pacticipant": "sam-provider", "version": "${{ needs.verify-consumer-pact.outputs.provider-sha }}" }'
+          inputs: '{ "pacticipant": "sam", "version": "${{ needs.verify-consumer-pact.outputs.provider-sha }}" }'
