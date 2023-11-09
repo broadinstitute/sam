@@ -152,4 +152,23 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
     }
   }
 
+  it("should return 204 when tos accepted") {
+    val samRoutes = TestSamRoutes(Map.empty)
+    eventually {
+      Put("/api/termsOfService/v1/user/self/accept") ~> samRoutes.route ~> check {
+        status shouldEqual StatusCodes.NoContent
+        responseAs[String] shouldBe ""
+      }
+    }
+  }
+
+  it("should return 204 when tos rejected") {
+    val samRoutes = TestSamRoutes(Map.empty)
+    eventually {
+      Put("/api/termsOfService/v1/user/self/reject") ~> samRoutes.route ~> check {
+        status shouldEqual StatusCodes.NoContent
+        responseAs[String] shouldBe ""
+      }
+    }
+  }
 }
