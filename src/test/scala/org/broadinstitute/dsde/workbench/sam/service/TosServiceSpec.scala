@@ -44,6 +44,7 @@ class TosServiceSpec(_system: ActorSystem)
 
   val defaultUser = Generator.genWorkbenchUserBoth.sample.get
   val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
+  val uamiUser = Generator.genWorkbenchUserAzureUami.sample.get
 
   before {
     clearDatabase()
@@ -109,6 +110,21 @@ class TosServiceSpec(_system: ActorSystem)
         .thenReturn(IO.pure(Some(SamUserTos(serviceAccountUser.id, previousTosVersion.get, TosTable.ACCEPT, Instant.now()))))
 
       val complianceStatus = tosService.getTosComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
+      complianceStatus.permitsSystemUsage shouldBe true
+    }
+
+    "always allows UAMI users to use the system" in {
+      val tosVersion = "2"
+      val previousTosVersion = Option("1")
+      val tosService =
+        new TosService(dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
+      when(dirDAO.getUserTos(uamiUser.id, samRequestContext))
+        .thenReturn(IO.pure(Some(SamUserTos(uamiUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
+
+      when(dirDAO.getUserTosVersion(uamiUser.id, previousTosVersion, samRequestContext))
+        .thenReturn(IO.pure(Some(SamUserTos(uamiUser.id, previousTosVersion.get, TosTable.ACCEPT, Instant.now()))))
+
+      val complianceStatus = tosService.getTosComplianceStatus(uamiUser, samRequestContext).unsafeRunSync()
       complianceStatus.permitsSystemUsage shouldBe true
     }
 

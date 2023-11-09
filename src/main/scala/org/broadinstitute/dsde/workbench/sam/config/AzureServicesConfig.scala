@@ -5,5 +5,6 @@ case class AzureServicesConfig(
     managedAppClientId: String,
     managedAppClientSecret: String,
     managedAppTenantId: String,
-    managedAppPlans: Seq[ManagedAppPlan]
+    managedAppPlans: Seq[ManagedAppPlan],
+    allowManagedIdentityUserCreation: Boolean
 ) {}

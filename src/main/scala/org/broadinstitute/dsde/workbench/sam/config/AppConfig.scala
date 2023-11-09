@@ -177,7 +177,8 @@ object AppConfig {
               config.getString("managedAppClientId"),
               config.getString("managedAppClientSecret"),
               config.getString("managedAppTenantId"),
-              config.as[Seq[ManagedAppPlan]]("managedAppPlans")
+              config.as[Seq[ManagedAppPlan]]("managedAppPlans"),
+              config.as[Option[Boolean]]("allowManagedIdentityUserCreation").getOrElse(false)
             )
           )
         } else {

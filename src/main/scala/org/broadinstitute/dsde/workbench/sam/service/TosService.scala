@@ -79,7 +79,7 @@ class TosService(val directoryDao: DirectoryDAO, val tosConfig: TermsOfServiceCo
       return true
     }
     // Service Account users do not need to accept ToS
-    val userIsServiceAccount = StandardSamUserDirectives.SAdomain.matches(user.email.value)
+    val userIsServiceAccount = StandardSamUserDirectives.SAdomain.matches(user.email.value) || StandardSamUserDirectives.UAMIdomain.matches(user.email.value)
     if (userIsServiceAccount) {
       return true
     }
