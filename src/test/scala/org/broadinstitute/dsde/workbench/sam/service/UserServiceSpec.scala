@@ -321,9 +321,9 @@ class OldUserServiceSpec(_system: ActorSystem)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
-    tos = new TosService(dirDAO, TestSupport.tosConfig)
+    tos = new TosService(googleExtensions, dirDAO, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)
-    tosServiceEnabled = new TosService(dirDAO, TestSupport.tosConfig)
+    tosServiceEnabled = new TosService(googleExtensions, dirDAO, TestSupport.tosConfig)
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
   }
 

@@ -462,7 +462,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       configResourceTypes,
       superAdminsGroup
     )
-    val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
     val service = new UserService(dirDAO, googleExtensions, Seq.empty, tosService)
 
     val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
@@ -865,10 +865,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
     )
 
     val app = SamApplication(
-      new UserService(mockDirectoryDAO, ge, Seq.empty, new TosService(mockDirectoryDAO, TestSupport.tosConfig)),
+      new UserService(mockDirectoryDAO, ge, Seq.empty, new TosService(NoExtensions, mockDirectoryDAO, TestSupport.tosConfig)),
       new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com", Set.empty),
       null,
-      new TosService(mockDirectoryDAO, TestSupport.tosConfig)
+      new TosService(NoExtensions, mockDirectoryDAO, TestSupport.tosConfig)
     )
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
@@ -1237,7 +1237,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       configResourceTypes,
       superAdminsGroup
     )
-    val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
     val service = new UserService(dirDAO, googleExtensions, Seq.empty, tosService)
 
     (googleExtensions, service, tosService)
