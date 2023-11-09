@@ -52,7 +52,10 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
             get {
               parameters("doc".as[String].?) { (doc: Option[String]) =>
                 val docSet = doc.map(_.split(",").toSet).getOrElse(Set.empty)
-                complete(tosService.getTosText(docSet))
+                if (docSet.subsetOf(Set("termsOfService", "privacyPolicy")))
+                  complete(tosService.getTosText(docSet))
+                else
+                  complete(StatusCodes.BadRequest)
               }
             }
           } ~
