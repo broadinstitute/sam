@@ -1,7 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genNewWorkbenchUserAzureUami, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
+import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.matchers.BeEnabledInMatcher.beEnabledIn
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForUserMatcher.beForUser
@@ -62,6 +63,28 @@ class CreateUserSpec extends UserServiceTestTraits {
         // Assert
         inside(newUsersStatus) { status =>
           status should beForUser(newAzureUser)
+          "google" should beEnabledIn(status)
+          "ldap" should beEnabledIn(status)
+          "allUsersGroup" should beEnabledIn(status)
+          "adminEnabled" should beEnabledIn(status)
+          "tosAccepted" shouldNot beEnabledIn(status)
+        }
+      }
+
+      it("after authenticating with a Microsoft managed identity") {
+        // Arrange
+        val newAzureUser = genNewWorkbenchUserAzureUami.sample.get
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService: UserService =
+          new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, Some(AzureServicesConfig("", "", "", Seq.empty, true)))
+
+        // Act
+        val newUsersStatus = runAndWait(userService.createUser(newAzureUser, samRequestContext))
+
+        // Assert
+        inside(newUsersStatus) { status =>
+          status should beForUser(newAzureUser.copy(email = WorkbenchEmail(s"${newAzureUser.azureB2CId.get.value}@uami.terra.bio")))
           "google" should beEnabledIn(status)
           "ldap" should beEnabledIn(status)
           "allUsersGroup" should beEnabledIn(status)
@@ -228,6 +251,33 @@ class CreateUserSpec extends UserServiceTestTraits {
         // Act and Assert
         assertThrows[WorkbenchExceptionWithErrorReport] {
           runAndWait(userService.createUser(userWithoutIds, Some(invalidRegistrationRequest), samRequestContext))
+        }
+      }
+
+      it("with a Microsoft managed identity if the feature is disabled") {
+        // Arrange
+        val newAzureUser = genNewWorkbenchUserAzureUami.sample.get
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userServiceDisabledFeature: UserService =
+          new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, Some(AzureServicesConfig("", "", "", Seq.empty, false)))
+
+        // Act and Assert
+        assertThrows[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userServiceDisabledFeature.createUser(newAzureUser, samRequestContext))
+        }
+      }
+
+      it("with a Microsoft managed identity if the azure is disabled") {
+        // Arrange
+        val newAzureUser = genNewWorkbenchUserAzureUami.sample.get
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userServiceNoAzureConfig: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+        // Act and Assert
+        assertThrows[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userServiceNoAzureConfig.createUser(newAzureUser, samRequestContext))
         }
       }
     }

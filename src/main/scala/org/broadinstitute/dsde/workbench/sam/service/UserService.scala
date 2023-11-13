@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
+import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{
@@ -32,15 +33,35 @@ import scala.util.matching.Regex
 
 /** Created by dvoet on 7/14/17.
   */
-class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExtensions, blockedEmailDomains: Seq[String], tosService: TosService)(implicit
+class UserService(
+    val directoryDAO: DirectoryDAO,
+    val cloudExtensions: CloudExtensions,
+    blockedEmailDomains: Seq[String],
+    tosService: TosService,
+    azureConfig: Option[AzureServicesConfig] = None
+)(implicit
     val executionContext: ExecutionContext,
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging {
   def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
     createUser(possibleNewUser, None, samRequestContext)
 
-  def createUser(possibleNewUser: SamUser, registrationRequest: Option[SamUserRegistrationRequest], samRequestContext: SamRequestContext): IO[UserStatus] =
+  def createUser(
+      possibleNewUserMaybeWithEmail: SamUser,
+      registrationRequest: Option[SamUserRegistrationRequest],
+      samRequestContext: SamRequestContext
+  ): IO[UserStatus] =
     openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
+      val email =
+        if (shouldCreateUamiEmail(possibleNewUserMaybeWithEmail)) {
+          // If the email is missing but Azure B2C ID exist, this is a managed identity. If the config allows it, create an
+          // email address for the user.  This is because the email address is used as the unique identifier for the user.
+          WorkbenchEmail(s"${possibleNewUserMaybeWithEmail.azureB2CId.get.value}@uami.terra.bio")
+        } else {
+          possibleNewUserMaybeWithEmail.email
+        }
+      val possibleNewUser = possibleNewUserMaybeWithEmail.copy(email = email)
+
       // Validate the values set on the possible new user, short circuit if there's a problem
       val validationErrors = validateUser(possibleNewUser)
       if (validationErrors.nonEmpty) {
@@ -75,6 +96,11 @@ class UserService(val directoryDAO: DirectoryDAO, val cloudExtensions: CloudExte
         )
       )
     }
+
+  private def shouldCreateUamiEmail(possibleNewUserMaybeWithEmail: SamUser) =
+    possibleNewUserMaybeWithEmail.email.value.isEmpty && possibleNewUserMaybeWithEmail.azureB2CId.nonEmpty && azureConfig.exists(
+      _.allowManagedIdentityUserCreation
+    )
 
   private def registerNewUserAttributes(
       userId: WorkbenchUserId,

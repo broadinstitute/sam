@@ -51,6 +51,7 @@ class TosServiceSpec(_system: ActorSystem)
 
   private val defaultUser = Generator.genWorkbenchUserBoth.sample.get
   private val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
+  private val uamiUser = Generator.genWorkbenchUserAzureUami.sample.get
 
   before {
     clearDatabase()
@@ -137,13 +138,24 @@ class TosServiceSpec(_system: ActorSystem)
       val previousTosVersion = Option("1")
       val tosService =
         new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
-      when(dirDAO.getUserTos(serviceAccountUser.id, samRequestContext))
-        .thenReturn(IO.pure(Some(SamUserTos(serviceAccountUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
+      when(dirDAO.getUserTos(serviceAccountUser.id, samRequestContext)).thenReturn(IO.pure(None))
 
-      when(dirDAO.getUserTosVersion(serviceAccountUser.id, previousTosVersion, samRequestContext))
-        .thenReturn(IO.pure(Some(SamUserTos(serviceAccountUser.id, previousTosVersion.get, TosTable.ACCEPT, Instant.now()))))
+      when(dirDAO.getUserTosVersion(serviceAccountUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
 
       val complianceStatus = tosService.getTosComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
+      complianceStatus.permitsSystemUsage shouldBe true
+    }
+
+    "always allows UAMI users to use the system" in {
+      val tosVersion = "2"
+      val previousTosVersion = Option("1")
+      val tosService =
+        new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
+      when(dirDAO.getUserTos(uamiUser.id, samRequestContext)).thenReturn(IO.pure(None))
+
+      when(dirDAO.getUserTosVersion(uamiUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
+
+      val complianceStatus = tosService.getTosComplianceStatus(uamiUser, samRequestContext).unsafeRunSync()
       complianceStatus.permitsSystemUsage shouldBe true
     }
 
