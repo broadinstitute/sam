@@ -11,25 +11,21 @@ on:
     paths-ignore: ['**.md']
 
 jobs:
+  tag:
+    uses: ./.github/workflows/tag.yml
+    secrets: inherit
+
   sam-build-tag-publish-job:
     runs-on: ubuntu-latest
+    needs: [ tag ]
     permissions:
       contents: 'read'
       id-token: 'write'
     outputs:
       custom-version-json: ${{ steps.render-sam-version.outputs.custom-version-json }}
-      tag: ${{ steps.tag.outputs.tag }}
+      tag: ${{ needs.tag.outputs.tag }}
     steps:
       - uses: 'actions/checkout@v3'
-
-      - name: Bump the tag to a new version
-        uses: databiosphere/github-actions/actions/bumper@bumper-0.0.6
-        id: tag
-        env:
-          DEFAULT_BUMP: patch
-          GITHUB_TOKEN: ${{ secrets.BROADBOT_TOKEN }}
-          RELEASE_BRANCHES: develop
-          WITH_V: true
 
       - name: debug outputs
         run: |-
@@ -64,7 +60,7 @@ jobs:
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.name }}", "sam-release-tag": "${{ steps.tag.outputs.tag }}" }'
+          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ steps.extract-branch.outputs.name }}", "sam-release-tag": "${{ needs.tag.outputs.tag }}" }'
 
       - name: Render Sam version
         id: render-sam-version
@@ -72,7 +68,7 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "$GITHUB_CONTEXT"
-          echo 'custom-version-json={\"sam\":{\"appVersion\":\"${{ steps.tag.outputs.tag }}\"}}' >> $GITHUB_OUTPUT
+          echo 'custom-version-json={\"sam\":{\"appVersion\":\"${{ needs.tag.outputs.tag }}\"}}' >> $GITHUB_OUTPUT
 
   prepare-configs:
     runs-on: ubuntu-latest
