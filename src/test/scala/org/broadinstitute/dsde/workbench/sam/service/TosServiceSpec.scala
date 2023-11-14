@@ -503,9 +503,13 @@ class TosServiceSpec(_system: ActorSystem)
           .withAcceptedTermsOfServiceForUser(defaultUser, tosVersion)
           .build
 
-        val tosService = new TosService(new NoExtensions {
+        val tosService = new TosService(
+          new NoExtensions {
             override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(memberEmail == adminUser.email)
-        }, directoryDao, TestSupport.tosConfig)
+          },
+          directoryDao,
+          TestSupport.tosConfig
+        )
 
         // Act
         val userTosDetails: TermsOfServiceDetails =
