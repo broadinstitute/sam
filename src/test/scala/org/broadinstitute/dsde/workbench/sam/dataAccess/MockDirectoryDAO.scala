@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
-import java.util.Date
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
@@ -14,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbench
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
+import java.util.Date
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 
@@ -23,6 +23,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
   private val userTos: mutable.Map[WorkbenchUserId, SamUserTos] = new TrieMap()
+  private val userTosHistory: mutable.Map[WorkbenchUserId, List[SamUserTos]] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, SamUserAttributes] = new TrieMap()
 
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
@@ -313,6 +314,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case Some(user) =>
         users.put(userId, user)
         userTos.put(userId, SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
+        val userHistory = userTosHistory.getOrElse(userId, List.empty)
+        userTosHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
         true
     }
 
@@ -322,6 +325,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case Some(user) =>
         users.put(userId, user)
         userTos.put(userId, SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
+        val userHistory = userTosHistory.getOrElse(userId, List.empty)
+        userTosHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
         true
     }
 
@@ -340,6 +345,12 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
           case Some(_) => userTos.get(userId)
           case None => None
         }
+    }
+
+  override def getUserTosHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
+    loadUser(userId, samRequestContext).map {
+      case None => List.empty
+      case Some(_) => userTosHistory.getOrElse(userId, List.empty)
     }
 
   override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {

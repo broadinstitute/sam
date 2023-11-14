@@ -85,6 +85,8 @@ object UserStatusDetails {
 )
 
 @Lenses final case class TermsOfServiceDetails(latestAcceptedVersion: String, acceptedOn: Instant, permitsSystemUsage: Boolean)
+@Lenses final case class TermsOfServiceHistory(history: List[TermsOfServiceHistoryRecord])
+@Lenses final case class TermsOfServiceHistoryRecord(action: String, version: String, timestamp: Instant)
 
 @Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
@@ -254,6 +256,7 @@ final case class SamUserTos(id: WorkbenchUserId, version: String, action: String
       this.action == userTos.action
     case _ => false
   }
+  def toHistoryRecord: TermsOfServiceHistoryRecord = TermsOfServiceHistoryRecord(action, version, createdAt)
 }
 object SamLenses {
   val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource

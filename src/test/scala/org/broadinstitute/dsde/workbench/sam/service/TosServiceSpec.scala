@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirec
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.{TermsOfServiceDetailsMatchers, TimeMatchers}
 import org.broadinstitute.dsde.workbench.sam.model.api.TermsOfServiceConfigResponse
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos, TermsOfServiceDetails, TermsOfServiceHistory}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.Mockito.RETURNS_SMART_NULLS
@@ -554,6 +554,74 @@ class TosServiceSpec(_system: ActorSystem)
         // Act and Assert
         val e = intercept[WorkbenchExceptionWithErrorReport] {
           runAndWait(tosService.getTermsOfServiceDetailsForUser(someRandoUser.id, SamRequestContext(None, None, Some(nonAdminUser))))
+        }
+
+        assert(e.errorReport.statusCode.value == StatusCodes.Unauthorized, "User should not be authorized to see other users' Terms of Service details")
+      }
+    }
+
+    "can retrieve Terms of Service history for a user" - {
+      "if the requesting user is an admin" in {
+        // Arrange
+        val tosVersion = "0"
+        val adminUser = Generator.genWorkbenchUserBoth.sample.get
+        val record1 = SamUserTos(adminUser.id, tosVersion, TosTable.ACCEPT, Instant.now())
+        val record2 = SamUserTos(adminUser.id, tosVersion, TosTable.REJECT, Instant.now().minusSeconds(5))
+        val directoryDao = new MockDirectoryDaoBuilder()
+          .withTermsOfServiceHistoryForUser(defaultUser, List(record1, record2))
+          .build
+
+        val tosService = new TosService(NoExtensions, directoryDao, TestSupport.tosConfig)
+
+        // Act
+        val userTosDetails: TermsOfServiceHistory =
+          runAndWait(tosService.getTermsOfServiceHistoryForUser(defaultUser.id, SamRequestContext(None, None, Some(adminUser)), 5))
+
+        // Assert
+        userTosDetails.history.size shouldBe 2
+        userTosDetails.history.head shouldBe record1.toHistoryRecord
+        userTosDetails.history.last shouldBe record2.toHistoryRecord
+      }
+
+      "if the requesting user is not an admin but is the same as the requested user" in {
+        // Arrange
+        val tosVersion = "0"
+        val userTos1 = SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, Instant.now())
+        val userTos2 = SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, Instant.now().minusSeconds(5))
+        val directoryDao = new MockDirectoryDaoBuilder()
+          .withTermsOfServiceHistoryForUser(defaultUser, List(userTos1, userTos2))
+          .build
+
+        val tosService = new TosService(NoExtensions, directoryDao, TestSupport.tosConfig)
+
+        // Act
+        val userTosDetails: TermsOfServiceHistory =
+          runAndWait(tosService.getTermsOfServiceHistoryForUser(defaultUser.id, SamRequestContext(None, None, Some(defaultUser)), 5))
+
+        // Assert
+        userTosDetails.history.size shouldBe 2
+        userTosDetails.history.head shouldBe userTos1.toHistoryRecord
+        userTosDetails.history.last shouldBe userTos2.toHistoryRecord
+      }
+    }
+    "cannot retrieve Terms of Service history for another user" - {
+      "if requesting user is not an admin and the requested user is a different user" in {
+        // Arrange
+        val tosVersion = "v1"
+        val nonAdminUser = Generator.genWorkbenchUserBoth.sample.get
+        val someRandoUser = Generator.genWorkbenchUserBoth.sample.get
+        val userTos1 = SamUserTos(someRandoUser.id, tosVersion, TosTable.ACCEPT, Instant.now())
+        val userTos2 = SamUserTos(someRandoUser.id, tosVersion, TosTable.REJECT, Instant.now().minusSeconds(5))
+        val directoryDao = new MockDirectoryDaoBuilder()
+          .withTermsOfServiceHistoryForUser(someRandoUser, List(userTos1, userTos2))
+          .build
+        val cloudExt = MockCloudExtensionsBuilder(allUsersGroup).withNonAdminUser().build
+
+        val tosService = new TosService(cloudExt, directoryDao, TestSupport.tosConfig)
+
+        // Act and Assert
+        val e = intercept[WorkbenchExceptionWithErrorReport] {
+          runAndWait(tosService.getTermsOfServiceHistoryForUser(someRandoUser.id, SamRequestContext(None, None, Some(nonAdminUser)), 5))
         }
 
         assert(e.errorReport.statusCode.value == StatusCodes.Unauthorized, "User should not be authorized to see other users' Terms of Service details")

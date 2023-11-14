@@ -7,6 +7,7 @@ import akka.stream.Materializer
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, WorkbenchGroup}
 import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
+import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceHistory
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -73,6 +74,11 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
 
   def withTosStateForUser(samUser: SamUser, isAccepted: Boolean, version: String = "0"): MockSamRoutesBuilder = {
     mockTosServiceBuilder.withAcceptedStateForUser(samUser, isAccepted, version)
+    this
+  }
+
+  def withTosHistoryForUser(samUser: SamUser, tosHistory: TermsOfServiceHistory): MockSamRoutesBuilder = {
+    mockTosServiceBuilder.withTosHistoryForUser(samUser, tosHistory)
     this
   }
 

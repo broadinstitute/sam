@@ -5,7 +5,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{TermsOfServiceComplianceStatus, TermsOfServiceDetails, TermsOfServiceHistory, TermsOfServiceHistoryRecord}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
@@ -30,6 +30,14 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     this
   }
 
+  def withTosHistoryForUser(samUser: SamUser, tosHistory: TermsOfServiceHistory): MockTosServiceBuilder = {
+    lenient()
+      .doReturn(IO.pure(tosHistory))
+      .when(tosService)
+      .getTermsOfServiceHistoryForUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext], any[Integer])
+    this
+  }
+
   def withAcceptedStateForUser(samUser: SamUser, isAccepted: Boolean, version: String = "v1"): MockTosServiceBuilder = {
     setAcceptedStateForUserTo(samUser, isAccepted, version)
     this
@@ -45,6 +53,10 @@ case class MockTosServiceBuilder() extends MockitoSugar {
       .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
       .when(tosService)
       .getTermsOfServiceDetailsForUser(any[WorkbenchUserId], any[SamRequestContext])
+    lenient()
+      .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
+      .when(tosService)
+      .getTermsOfServiceHistoryForUser(any[WorkbenchUserId], any[SamRequestContext], any[Integer])
   }
 
   private def setAcceptedStateForUserTo(samUser: SamUser, isAccepted: Boolean, version: String) = {
@@ -63,6 +75,11 @@ case class MockTosServiceBuilder() extends MockitoSugar {
       .doReturn(IO.pure(TermsOfServiceDetails(version, rightNow, permitsSystemUsage = isAccepted)))
       .when(tosService)
       .getTermsOfServiceDetailsForUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
+
+    lenient()
+      .doReturn(IO.pure(TermsOfServiceHistory(List(TermsOfServiceHistoryRecord(action, version, rightNow)))))
+      .when(tosService)
+      .getTermsOfServiceHistoryForUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext], any[Integer])
   }
 
   def build: TosService = tosService

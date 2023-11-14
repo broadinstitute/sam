@@ -95,6 +95,17 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
                   complete(tosService.rejectTosStatus(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
                 }
               }
+            } ~
+            pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
+              pathEndOrSingleSlash {
+                get {
+                  parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
+                    complete {
+                      tosService.getTermsOfServiceHistoryForUser(samUser.id, samRequestContext, limit)
+                    }
+                  }
+                }
+              }
             }
           } ~
           // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
@@ -111,7 +122,9 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
               pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
                 pathEndOrSingleSlash {
                   get {
-                    complete(StatusCodes.NotImplemented)
+                    parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
+                      complete(tosService.getTermsOfServiceHistoryForUser(requestUserId, samRequestContext, limit))
+                    }
                   }
                 }
               }

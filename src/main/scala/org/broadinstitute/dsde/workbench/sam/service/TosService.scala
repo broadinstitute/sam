@@ -13,7 +13,14 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, TermsOfServiceConfigResponse}
-import org.broadinstitute.dsde.workbench.sam.model.{OldTermsOfServiceDetails, SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{
+  OldTermsOfServiceDetails,
+  SamUserTos,
+  TermsOfServiceComplianceStatus,
+  TermsOfServiceDetails,
+  TermsOfServiceHistory,
+  TermsOfServiceHistoryRecord
+}
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
 import org.broadinstitute.dsde.workbench.sam.util.{SamRequestContext, SupportsAdmin}
 
@@ -110,6 +117,18 @@ class TosService(
     directoryDao.getUserTosVersion(userId, version, samRequestContext).map {
       case Some(samUserTos) => samUserTos
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user:${userId}"))
+    }
+
+  def getTermsOfServiceHistoryForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[TermsOfServiceHistory] =
+    ensureAdminIfNeeded[TermsOfServiceHistory](userId, samRequestContext) {
+      directoryDao.getUserTosHistory(userId, samRequestContext, limit).map {
+        case samUserTosHistory if samUserTosHistory.isEmpty =>
+          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find any Terms of Service entries for user:${userId}"))
+        case samUserTosHistory =>
+          TermsOfServiceHistory(
+            samUserTosHistory.map(historyRecord => TermsOfServiceHistoryRecord(historyRecord.action, historyRecord.version, historyRecord.createdAt))
+          )
+      }
     }
 
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {

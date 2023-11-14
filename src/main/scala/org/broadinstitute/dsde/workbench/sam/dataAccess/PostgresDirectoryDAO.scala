@@ -648,7 +648,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
-  // When no tosVersion is specified, return the latest TosRecord for the user
   override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
     readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
@@ -682,6 +681,22 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
   }
+
+  override def getUserTosHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
+    readOnlyTransaction("getUserTosHistory", samRequestContext) { implicit session =>
+      val tosTable = TosTable.syntax
+      val column = TosTable.column
+
+      val loadUserTosQuery =
+        samsql"""select ${tosTable.resultAll}
+              from ${TosTable as tosTable}
+              where ${column.samUserId} = ${userId}
+              order by ${column.createdAt} desc
+              limit ${limit}"""
+
+      val userTosRecordOpt: List[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).list().apply()
+      userTosRecordOpt.map(TosTable.unmarshalUserRecord)
+    }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
     readOnlyTransaction("isEnabled", samRequestContext) { implicit session =>

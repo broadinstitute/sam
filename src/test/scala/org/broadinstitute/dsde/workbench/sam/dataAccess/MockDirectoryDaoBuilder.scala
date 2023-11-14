@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.mockito.{IdiomaticMockito, Strictness}
@@ -126,6 +126,14 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
     val samUserTos = SamUserTos(samUser.id, tosVersion, TosTable.REJECT, Instant.now)
     mockedDirectoryDAO.getUserTos(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUserTos))
     mockedDirectoryDAO.getUserTosVersion(eqTo(samUser.id), eqTo(Some(tosVersion)), any[SamRequestContext]) returns IO(Option(samUserTos))
+    this
+  }
+
+  def withTermsOfServiceHistoryForUser(samUser: SamUser, tosHistory: List[SamUserTos]): MockDirectoryDaoBuilder = {
+    makeUserExist(samUser)
+    mockedDirectoryDAO.getUserTos(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(tosHistory.head))
+    mockedDirectoryDAO.getUserTosVersion(eqTo(samUser.id), any[Option[String]], any[SamRequestContext]) returns IO(Option(tosHistory.head))
+    mockedDirectoryDAO.getUserTosHistory(eqTo(samUser.id), any[SamRequestContext], any[Integer]) returns IO(tosHistory)
     this
   }
 
