@@ -10,6 +10,10 @@ on:
       - develop
     paths-ignore: ['**.md']
 
+env:
+  BEE_CREATE_RUN_NAME: 'bee-create-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
+  BEE_DESTROY_RUN_NAME: 'bee-destroy-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
+
 jobs:
   tag:
     uses: ./.github/workflows/tag.yml
@@ -125,14 +129,20 @@ jobs:
           echo '${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}'
 
       - name: dispatch to terra-github-workflows
-        uses: broadinstitute/workflow-dispatch@v3
+        uses: broadinstitute/workflow-dispatch@v4.0.0
         with:
+          run-name: "${{ env.BEE_CREATE_RUN_NAME }}-${{ matrix.terra-env }}"
           workflow: bee-create
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "version-template": "${{ matrix.terra-env }}", "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}" }'
+          inputs: '{
+            "run-name": "${{ env.BEE_CREATE_RUN_NAME }}-${{ matrix.terra-env }}",
+            "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}",
+            "version-template": "${{ matrix.terra-env }}",
+            "custom-version-json": "${{ needs.sam-build-tag-publish-job.outputs.custom-version-json }}"
+          }'
 
   sam-smoke-test-job:
     strategy:
@@ -238,11 +248,15 @@ jobs:
       id-token: 'write'
     steps:
       - name: dispatch to terra-github-workflows
-        uses: broadinstitute/workflow-dispatch@v3
+        uses: broadinstitute/workflow-dispatch@v4.0.0
         with:
+          run-name: "${{ env.BEE_DESTROY_RUN_NAME }}-${{ matrix.terra-env }}"
           workflow: bee-destroy
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}" }'
+          inputs: '{
+            "run-name": "${{ env.BEE_DESTROY_RUN_NAME }}-${{ matrix.terra-env }}",
+            "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}"
+          }'
