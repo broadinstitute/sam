@@ -90,6 +90,7 @@ jobs:
       id-token: 'write'
     outputs:
       provider-sha: ${{ steps.verification-test.outputs.provider-sha }}
+      provider-version: ${{ steps.verification-test.outputs.provider-version }}
 
     steps:
       - name: Checkout current code
