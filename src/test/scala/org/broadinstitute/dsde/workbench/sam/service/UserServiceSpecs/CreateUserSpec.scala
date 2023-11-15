@@ -24,13 +24,6 @@ class CreateUserSpec extends UserServiceTestTraits {
   val defaultTosService: TosService = MockTosServiceBuilder().build
 
   describe("A new User") {
-    describe("should be able to register with Terms of Service accepted") {
-
-    }
-    describe("should not be able to register with Terms of Service rejected") {
-
-    }
-
     describe("should be able to register with old registration method") {
 
       // Not sure if this test can happen in the real world anymore now that we always log users in through B2C.

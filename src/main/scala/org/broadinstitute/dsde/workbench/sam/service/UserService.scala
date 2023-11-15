@@ -103,7 +103,6 @@ class UserService(
       _.allowManagedIdentityUserCreation
     )
 
-  // add function like registerNewUserAttributes which accepts ToS on behalf of user
   private def registerNewUserAttributes(
       userId: WorkbenchUserId,
       registrationRequest: Option[SamUserRegistrationRequest],
