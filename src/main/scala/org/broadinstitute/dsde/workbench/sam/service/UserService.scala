@@ -114,7 +114,11 @@ class UserService(
     setUserAttributesFromRequest(userId, attributes, samRequestContext).map(_ => ())
   }
 
-  private def maybeAcceptTermsOfService(userId: WorkbenchUserId, registrationRequest: Option[SamUserRegistrationRequest], samRequestContext: SamRequestContext): IO[Unit] =
+  private def maybeAcceptTermsOfService(
+      userId: WorkbenchUserId,
+      registrationRequest: Option[SamUserRegistrationRequest],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
     if (registrationRequest.exists(_.acceptsTermsOfService)) {
       tosService.acceptCurrentTermsOfService(userId, samRequestContext).map(_ => ())
     } else {

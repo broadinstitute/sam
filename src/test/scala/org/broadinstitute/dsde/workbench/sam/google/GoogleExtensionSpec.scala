@@ -49,7 +49,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     with MockitoSugar
     with ScalaFutures
     with BeforeAndAfterAll
-      with BeforeAndAfterEach
+    with BeforeAndAfterEach
     with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
