@@ -78,7 +78,7 @@ class UserService(
         newUser <- assertUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext)
         maybeWorkbenchSubject <- directoryDAO.loadSubjectFromEmail(newUser.email, samRequestContext)
         registeredUser <- attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject, newUser, samRequestContext)
-        _ <- tosService.acceptCurrentTermsOfService(registeredUser.id, samRequestContext)
+        _ <- maybeAcceptTermsOfService(registeredUser.id, registrationRequest, samRequestContext)
         _ <- registerNewUserAttributes(registeredUser.id, registrationRequest, samRequestContext)
         registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
@@ -93,7 +93,7 @@ class UserService(
           "allUsersGroup" -> true,
           "google" -> true,
           "adminEnabled" -> true,
-          "tosAccepted" -> true // Setting as true because we require a user to accept terms of service in order to register
+          "tosAccepted" -> registrationRequest.exists(_.acceptsTermsOfService)
         )
       )
     }
@@ -113,6 +113,13 @@ class UserService(
       .getOrElse(SamUserAttributesRequest(marketingConsent = Some(false)))
     setUserAttributesFromRequest(userId, attributes, samRequestContext).map(_ => ())
   }
+
+  private def maybeAcceptTermsOfService(userId: WorkbenchUserId, registrationRequest: Option[SamUserRegistrationRequest], samRequestContext: SamRequestContext): IO[Unit] =
+    if (registrationRequest.exists(_.acceptsTermsOfService)) {
+      tosService.acceptCurrentTermsOfService(userId, samRequestContext).map(_ => ())
+    } else {
+      IO.unit
+    }
 
   private def attemptToRegisterSubjectAsAUser(
       maybeWorkbenchSubject: Option[WorkbenchSubject],
