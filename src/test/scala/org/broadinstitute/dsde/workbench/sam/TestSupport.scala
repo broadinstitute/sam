@@ -266,13 +266,13 @@ object TestSupport extends TestSupport {
 
   def newUserWithAcceptedTos(services: StandardSamUserDirectives, samUser: SamUser, samRequestContext: SamRequestContext): SamUser = {
     TestSupport.runAndWait(services.userService.directoryDAO.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(services.tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(services.tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
     TestSupport.runAndWait(services.userService.directoryDAO.loadUser(samUser.id, samRequestContext)).orNull
   }
 
   def newUserStatusWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
     TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
     TestSupport.runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly = false, samRequestContext)).orNull
   }
 

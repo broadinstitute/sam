@@ -167,7 +167,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
     userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
-    services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
+    services.tosService.rejectCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.Unauthorized
@@ -179,7 +179,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
     userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
-    services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
+    services.tosService.rejectCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.Unauthorized
@@ -191,7 +191,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(Left(user.googleSubjectId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
     userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
-    services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
+    services.tosService.rejectCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.OK
@@ -203,7 +203,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
     userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
-    services.tosService.acceptTosStatus(user.id, samRequestContext).unsafeRunSync()
+    services.tosService.acceptCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.OK
