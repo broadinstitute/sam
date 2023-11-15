@@ -65,5 +65,13 @@ case class MockTosServiceBuilder() extends MockitoSugar {
       .getTermsOfServiceDetailsForUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
   }
 
-  def build: TosService = tosService
+  private def initializeDefaults(mockTosService: TosService): Unit = {
+    when(mockTosService.acceptCurrentTermsOfService(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.pure(true))
+    when(mockTosService.rejectCurrentTermsOfService(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.pure(true))
+  }
+
+  def build: TosService = {
+    initializeDefaults(tosService)
+    tosService
+  }
 }

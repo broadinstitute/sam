@@ -24,8 +24,14 @@ class CreateUserSpec extends UserServiceTestTraits {
   val defaultTosService: TosService = MockTosServiceBuilder().build
 
   describe("A new User") {
+    describe("should be able to register with Terms of Service accepted") {
 
-    describe("should be able to register") {
+    }
+    describe("should not be able to register with Terms of Service rejected") {
+
+    }
+
+    describe("should be able to register with old registration method") {
 
       // Not sure if this test can happen in the real world anymore now that we always log users in through B2C.
       // Keeping it here for now just in case.
@@ -121,13 +127,17 @@ class CreateUserSpec extends UserServiceTestTraits {
         val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
         val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
-        val userRegistrationRequest = SamUserRegistrationRequest(SamUserAttributesRequest(marketingConsent = Some(false)))
+        val userRegistrationRequest = SamUserRegistrationRequest(
+          acceptsTermsOfService = true,
+          SamUserAttributesRequest(marketingConsent = Some(false))
+        )
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(newUserWithBothCloudIds, Some(userRegistrationRequest), samRequestContext))
 
         // Assert
         verify(directoryDAO).setUserAttributes(SamUserAttributes(newUsersStatus.userInfo.userSubjectId, marketingConsent = false), samRequestContext)
+        verify(defaultTosService).acceptCurrentTermsOfService(newUsersStatus.userInfo.userSubjectId, samRequestContext)
       }
     }
 
@@ -246,7 +256,28 @@ class CreateUserSpec extends UserServiceTestTraits {
         val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
         val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
-        val invalidRegistrationRequest = SamUserRegistrationRequest(SamUserAttributesRequest(marketingConsent = None))
+        val invalidRegistrationRequest = SamUserRegistrationRequest(
+          acceptsTermsOfService = true,
+          SamUserAttributesRequest( marketingConsent = None)
+        )
+
+        // Act and Assert
+        assertThrows[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userService.createUser(userWithoutIds, Some(invalidRegistrationRequest), samRequestContext))
+        }
+      }
+
+      it("without accepting the Terms of Service") {
+        // Arrange
+        val userWithoutIds = genWorkbenchUserBoth.sample.get.copy(googleSubjectId = None, azureB2CId = None)
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+        val invalidRegistrationRequest = SamUserRegistrationRequest(
+          acceptsTermsOfService = false,
+          SamUserAttributesRequest(marketingConsent = None)
+        )
 
         // Act and Assert
         assertThrows[WorkbenchExceptionWithErrorReport] {
