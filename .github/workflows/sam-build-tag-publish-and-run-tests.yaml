@@ -246,7 +246,7 @@ jobs:
           inputs: '{ 
             "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", 
             "ENV": "${{ matrix.testing-env }}", 
-            "test-context":${{ steps.test-context.outputs.test-context }}
+            "test-context": "${{ steps.test-context.outputs.test-context }}"
           }'
 
   destroy-bee-workflow:
