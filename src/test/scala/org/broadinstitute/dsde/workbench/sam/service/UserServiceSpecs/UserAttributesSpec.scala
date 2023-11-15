@@ -92,7 +92,9 @@ class UserAttributesSpec extends UserServiceTestTraits {
       val userAttributes = SamUserAttributes(user.id, marketingConsent = true)
 
       // Act
-      runAndWait(userService.createUser(user, Some(SamUserRegistrationRequest(true, SamUserAttributesRequest(marketingConsent = Some(true)))), samRequestContext))
+      runAndWait(
+        userService.createUser(user, Some(SamUserRegistrationRequest(true, SamUserAttributesRequest(marketingConsent = Some(true)))), samRequestContext)
+      )
 
       // Assert
       verify(directoryDAO).setUserAttributes(eqTo(userAttributes), any[SamRequestContext])

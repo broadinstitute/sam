@@ -10,8 +10,8 @@ object SamUserRegistrationRequest {
   implicit val SamUserRegistrationRequestFormat: RootJsonFormat[SamUserRegistrationRequest] = jsonFormat2(SamUserRegistrationRequest.apply)
 }
 case class SamUserRegistrationRequest(
-     acceptsTermsOfService: Boolean,
-     userAttributes: SamUserAttributesRequest
+    acceptsTermsOfService: Boolean,
+    userAttributes: SamUserAttributesRequest
 ) {
   def validateForNewUser: Option[Seq[ErrorReport]] = Option(
     Seq(

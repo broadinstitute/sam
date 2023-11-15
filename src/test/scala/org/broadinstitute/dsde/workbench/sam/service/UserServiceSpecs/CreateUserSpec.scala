@@ -251,7 +251,7 @@ class CreateUserSpec extends UserServiceTestTraits {
 
         val invalidRegistrationRequest = SamUserRegistrationRequest(
           acceptsTermsOfService = true,
-          SamUserAttributesRequest( marketingConsent = None)
+          SamUserAttributesRequest(marketingConsent = None)
         )
 
         // Act and Assert
