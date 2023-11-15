@@ -59,7 +59,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     )
 
     // Act and Assert
-    Get(s"/api/resources/v2/filter", SamUserRegistrationRequest(userAttributesRequest)) ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2/filter", SamUserRegistrationRequest(true, userAttributesRequest)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
     verify(samRoutes.resourceService).filterResources(
@@ -74,7 +74,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
 
     Get(
       s"/api/resources/v2/filter?resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true",
-      SamUserRegistrationRequest(userAttributesRequest)
+      SamUserRegistrationRequest(true, userAttributesRequest)
     ) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }

@@ -65,7 +65,7 @@ class TestSamRoutes(
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def createUserAndAcceptTos(samUser: SamUser, samRequestContext: SamRequestContext): Unit = {
     TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
   }
 
   override def asAdminServiceUser: Directive0 = Directive.Empty
@@ -199,7 +199,7 @@ object TestSamRoutes {
     TestSupport.runAndWait(mockUserService.createUser(user, samRequestContext))
 
     if (acceptTermsOfService) {
-      TestSupport.runAndWait(mockTosService.acceptTosStatus(user.id, samRequestContext))
+      TestSupport.runAndWait(mockTosService.acceptCurrentTermsOfService(user.id, samRequestContext))
     }
 
     val allUsersGroup = TestSupport.runAndWait(cloudXtns.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
