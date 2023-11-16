@@ -21,6 +21,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
 
 import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 class TosServiceSpec(_system: ActorSystem)
     extends TestKit(_system)
@@ -71,7 +72,7 @@ class TosServiceSpec(_system: ActorSystem)
       val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
 
       // accept and get ToS status
-      val tosConfigResponse = tosService.getTosConfig().unsafeRunSync()
+      val tosConfigResponse = tosService.getTermsOfServiceConfig().unsafeRunSync()
       tosConfigResponse shouldBe TermsOfServiceConfigResponse(
         enforced = true,
         currentVersion = "0",
@@ -115,8 +116,8 @@ class TosServiceSpec(_system: ActorSystem)
       val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
 
       // accept and get ToS status
-      val acceptTosStatusResult = tosService.acceptTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
-      acceptTosStatusResult shouldBe true
+      val acceptTermsOfServiceResult = tosService.acceptCurrentTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+      acceptTermsOfServiceResult shouldBe true
 
       verify(dirDAO).acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext)
     }
@@ -127,9 +128,9 @@ class TosServiceSpec(_system: ActorSystem)
 
       // reject and get ToS status
       val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
-      val rejectTosStatusResult = tosService.rejectTosStatus(defaultUser.id, samRequestContext).unsafeRunSync()
+      val rejectTermsOfServiceResult = tosService.rejectCurrentTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
 
-      rejectTosStatusResult shouldBe true
+      rejectTermsOfServiceResult shouldBe true
       verify(dirDAO).rejectTermsOfService(defaultUser.id, tosConfig.version, samRequestContext)
     }
 
@@ -502,7 +503,13 @@ class TosServiceSpec(_system: ActorSystem)
           .withAcceptedTermsOfServiceForUser(defaultUser, tosVersion)
           .build
 
-        val tosService = new TosService(NoExtensions, directoryDao, TestSupport.tosConfig)
+        val tosService = new TosService(
+          new NoExtensions {
+            override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(memberEmail == adminUser.email)
+          },
+          directoryDao,
+          TestSupport.tosConfig
+        )
 
         // Act
         val userTosDetails: TermsOfServiceDetails =

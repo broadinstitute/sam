@@ -212,6 +212,8 @@ class SamProviderSpec
   // Provider branch, sha
   lazy val branch: String = sys.env.getOrElse("PROVIDER_BRANCH", "")
   lazy val gitSha: String = sys.env.getOrElse("PROVIDER_SHA", "")
+  // gitSha is deprecated, use providerVer instead
+  lazy val providerVer: String = sys.env.getOrElse("PROVIDER_VERSION", "")
   // Consumer name, bran, sha (used for webhook events only)
   lazy val consumerName: Option[String] = sys.env.get("CONSUMER_NAME")
   lazy val consumerBranch: Option[String] = sys.env.get("CONSUMER_BRANCH")
@@ -293,7 +295,7 @@ class SamProviderSpec
       )
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-      .withPendingPactsEnabled(ProviderTags(gitSha))
+      .withPendingPactsEnabled(ProviderTags(providerVer))
   ).withHost("localhost")
     .withPort(8080)
     .withRequestFiltering(requestFilter)
@@ -311,9 +313,12 @@ class SamProviderSpec
     val publishResults = sys.env.getOrElse("PACT_PUBLISH_RESULTS", "false").toBoolean
     verifyPacts(
       providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
-      publishVerificationResults = if (publishResults) Some(
-        PublishVerificationResults(gitSha, ProviderTags(branch))
-      ) else None,
+      publishVerificationResults =
+        if (publishResults)
+          Some(
+            PublishVerificationResults(providerVer, ProviderTags(branch))
+          )
+        else None,
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE
       ).toList,
