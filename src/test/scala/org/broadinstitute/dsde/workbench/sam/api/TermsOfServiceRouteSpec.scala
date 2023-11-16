@@ -15,7 +15,6 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.concurrent.Eventually.eventually
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
-import spray.json.DefaultJsonProtocol._
 
 import java.time.Instant
 
@@ -169,7 +168,8 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
 
       Get(s"/api/termsOfService/v1/user/${defaultUser.id}/history") ~> mockSamRoutesBuilder.build.route ~> check {
         withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceHistoryRecord`.") {
-          responseAs[List[TermsOfServiceHistoryRecord]] shouldBe List(record1, record2)
+          responseAs[String] shouldBe s"""{"history":[{"action":"${record1.action}","timestamp":"${record1.timestamp}","version":"${record1.version}"},{"action":"${record2.action}","timestamp":"${record2.timestamp}","version":"${record2.version}"}]}"""
+          responseAs[TermsOfServiceHistory] shouldBe TermsOfServiceHistory(List(record1, record2))
         }
         status shouldEqual StatusCodes.OK
       }
@@ -199,7 +199,8 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
 
       Get(s"/api/termsOfService/v1/user/self/history") ~> mockSamRoutesBuilder.build.route ~> check {
         withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceHistoryRecord`.") {
-          responseAs[List[TermsOfServiceHistoryRecord]] shouldBe List(record1, record2)
+          responseAs[String] shouldBe s"""{"history":[{"action":"${record1.action}","timestamp":"${record1.timestamp}","version":"${record1.version}"},{"action":"${record2.action}","timestamp":"${record2.timestamp}","version":"${record2.version}"}]}"""
+          responseAs[TermsOfServiceHistory] shouldBe TermsOfServiceHistory(List(record1, record2))
         }
         status shouldEqual StatusCodes.OK
       }

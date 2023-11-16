@@ -44,7 +44,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
       pathPrefix("v1") { // api/termsOfService/v1
         pathEndOrSingleSlash {
           get {
-            complete(tosService.getTosConfig())
+            complete(tosService.getTermsOfServiceConfig())
           }
         } ~
         pathPrefix("docs") { // api/termsOfService/v1/docs
@@ -85,14 +85,14 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
             pathPrefix("accept") { // api/termsOfService/v1/user/accept
               pathEndOrSingleSlash {
                 put {
-                  complete(tosService.acceptTosStatus(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
+                  complete(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
                 }
               }
             } ~
             pathPrefix("reject") { // api/termsOfService/v1/user/reject
               pathEndOrSingleSlash {
                 put {
-                  complete(tosService.rejectTosStatus(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
+                  complete(tosService.rejectCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
                 }
               }
             } ~

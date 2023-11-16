@@ -50,17 +50,17 @@ class TosService(
   val termsOfServiceText: String = TermsOfServiceDocument(termsOfServiceUri)
   val privacyPolicyText: String = TermsOfServiceDocument(privacyPolicyUri)
 
-  def acceptTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
+  def acceptCurrentTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao
       .acceptTermsOfService(userId, tosConfig.version, samRequestContext)
       .withInfoLogMessage(s"$userId has accepted version ${tosConfig.version} of the Terms of Service")
 
-  def rejectTosStatus(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
+  def rejectCurrentTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDao
       .rejectTermsOfService(userId, tosConfig.version, samRequestContext)
       .withInfoLogMessage(s"$userId has rejected version ${tosConfig.version} of the Terms of Service")
 
-  def getTosConfig(): IO[TermsOfServiceConfigResponse] =
+  def getTermsOfServiceConfig(): IO[TermsOfServiceConfigResponse] =
     IO.pure(
       TermsOfServiceConfigResponse(
         enforced = tosConfig.isTosEnabled,

@@ -60,7 +60,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
     TestSupport.runAndWait(mockUserService.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,

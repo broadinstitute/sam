@@ -55,7 +55,7 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
     TestSupport.runAndWait(mockUserService.createUser(defaultUserInfo, samRequestContext))
-    TestSupport.runAndWait(tosService.acceptTosStatus(defaultUserInfo.id, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptCurrentTermsOfService(defaultUserInfo.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,

@@ -3,7 +3,6 @@ package service
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
-import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
@@ -43,9 +42,11 @@ class UserService(
     val executionContext: ExecutionContext,
     val openTelemetry: OpenTelemetryMetrics[IO]
 ) extends LazyLogging {
+  // this is what's currently called
   def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
     createUser(possibleNewUser, None, samRequestContext)
 
+  // this is the new version (not currently being used)
   def createUser(
       possibleNewUserMaybeWithEmail: SamUser,
       registrationRequest: Option[SamUserRegistrationRequest],
@@ -73,11 +74,11 @@ class UserService(
           new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid registration request", registrationRequestErrors.get))
         )
       }
-
       for {
         newUser <- assertUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext)
         maybeWorkbenchSubject <- directoryDAO.loadSubjectFromEmail(newUser.email, samRequestContext)
         registeredUser <- attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject, newUser, samRequestContext)
+        _ <- maybeAcceptTermsOfService(registeredUser.id, registrationRequest, samRequestContext)
         _ <- registerNewUserAttributes(registeredUser.id, registrationRequest, samRequestContext)
         registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
         _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
@@ -92,7 +93,7 @@ class UserService(
           "allUsersGroup" -> true,
           "google" -> true,
           "adminEnabled" -> true,
-          "tosAccepted" -> false // Not sure about this one, but pretty sure this should always be false for a newly created user
+          "tosAccepted" -> registrationRequest.exists(_.acceptsTermsOfService)
         )
       )
     }
@@ -112,6 +113,17 @@ class UserService(
       .getOrElse(SamUserAttributesRequest(marketingConsent = Some(false)))
     setUserAttributesFromRequest(userId, attributes, samRequestContext).map(_ => ())
   }
+
+  private def maybeAcceptTermsOfService(
+      userId: WorkbenchUserId,
+      registrationRequest: Option[SamUserRegistrationRequest],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    if (registrationRequest.exists(_.acceptsTermsOfService)) {
+      tosService.acceptCurrentTermsOfService(userId, samRequestContext).map(_ => ())
+    } else {
+      IO.unit
+    }
 
   private def attemptToRegisterSubjectAsAUser(
       maybeWorkbenchSubject: Option[WorkbenchSubject],
@@ -350,13 +362,13 @@ class UserService(
 
   def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     for {
-      _ <- tosService.acceptTosStatus(userId, samRequestContext)
+      _ <- tosService.acceptCurrentTermsOfService(userId, samRequestContext)
       status <- getUserStatus(userId, false, samRequestContext)
     } yield status
 
   def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     for {
-      _ <- tosService.rejectTosStatus(userId, samRequestContext)
+      _ <- tosService.rejectCurrentTermsOfService(userId, samRequestContext)
       status <- getUserStatus(userId, false, samRequestContext)
     } yield status
 
