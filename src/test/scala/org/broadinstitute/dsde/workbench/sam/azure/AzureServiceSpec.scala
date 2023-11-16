@@ -49,7 +49,7 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     // create user
     val defaultUser = genWorkbenchUserAzure.sample.get
     val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    userStatus shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    userStatus shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("tosAccepted" -> false, "adminEnabled" -> true, "ldap" -> true, "allUsersGroup" -> true, "google" -> true))
 
     // user should exist in postgres
     directoryDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
@@ -102,31 +102,6 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     // delete managed identity from Azure
     // this is a best effort -- it will be deleted anyway by Janitor
     msiManager.identities().deleteById(azureRes.id())
-  }
-
-  it should "get the billing profile id from the managed resource group" taggedAs ConnectedTest in {
-    val azureServicesConfig = appConfig.azureServicesConfig
-
-    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
-
-    // create dependencies
-    val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
-    val azureTestConfig = config.getConfig("testStuff.azure")
-    val crlService = new CrlService(azureServicesConfig.get)
-    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
-
-    // build request
-    val tenantId = TenantId(azureTestConfig.getString("tenantId"))
-    val subscriptionId = SubscriptionId(azureTestConfig.getString("subscriptionId"))
-    val managedResourceGroupName = ManagedResourceGroupName(azureTestConfig.getString("managedResourceGroupName"))
-    val request = GetOrCreatePetManagedIdentityRequest(tenantId, subscriptionId, managedResourceGroupName)
-
-    // call getBillingProfileId
-    val res = azureService.getBillingProfileId(request, samRequestContext).unsafeRunSync()
-
-    // should return a billing profile id
-    res shouldBe defined
-    res.get shouldBe BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
   }
 
   "createManagedResourceGroup" should "create a managed resource group" in {

@@ -22,12 +22,6 @@ import scala.jdk.CollectionConverters._
 
 class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO) {
 
-  // Static region in which to create all managed identities.
-  // Managed identities are regional resources in Azure but they can be used across
-  // regions. So it's safe to just use a static region and not make this configurable.
-  // See: https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/managed-identities-faq#can-the-same-managed-identity-be-used-across-multiple-regions
-  private val managedIdentityRegion = Region.US_EAST
-
   // Tag on the MRG to specify the Sam billing-profile id
   private val billingProfileTag = "terra.billingProfileId"
 
@@ -111,16 +105,18 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       samRequestContext: SamRequestContext
   ): IO[(PetManagedIdentity, Boolean)] =
     for {
-      manager <- crlService.buildMsiManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
+      msiManager <- crlService.buildMsiManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
+      mrgManager <- crlService.buildResourceManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
       petName = toManagedIdentityNameFromUser(user)
-      context = managedIdentityContext(mrgCoords, petName)
+      region <- getRegionFromMrg(mrgCoords, mrgManager, samRequestContext)
+      context = managedIdentityContext(mrgCoords, petName, region)
       azureUami <- traceIOWithContext("createUAMI", samRequestContext) { _ =>
         IO(
           // note that this will not fail when the UAMI already exists
-          manager
+          msiManager
             .identities()
             .define(petName.value)
-            .withRegion(managedIdentityRegion)
+            .withRegion(region)
             .withExistingResourceGroup(mrgCoords.managedResourceGroupName.value)
             .withTags(managedIdentityTags(user).asJava)
             .create(context)
@@ -129,6 +125,12 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       petToCreate = PetManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()))
       createdPet <- directoryDAO.createPetManagedIdentity(petToCreate, samRequestContext)
     } yield (createdPet, true)
+
+  private def getRegionFromMrg(mrgCoords: ManagedResourceGroupCoordinates, mrgManager: ResourceManager, samRequestContext: SamRequestContext) = {
+    traceIOWithContext("getRegionFromMrg", samRequestContext) { _ =>
+      IO(mrgManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value).region())
+    }
+  }
 
   /** Loads a SamUser from the database by email.
     */
@@ -233,7 +235,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   private def managedIdentityTags(user: SamUser): Map[String, String] =
     Map("samUserId" -> user.id.value, "samUserEmail" -> user.email.value)
 
-  private def managedIdentityContext(mrgCoords: ManagedResourceGroupCoordinates, petName: ManagedIdentityDisplayName): Context =
+  private def managedIdentityContext(mrgCoords: ManagedResourceGroupCoordinates, petName: ManagedIdentityDisplayName, region: Region): Context =
     Defaults.buildContext(
       CreateUserAssignedManagedIdentityRequestData
         .builder()
@@ -241,7 +243,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         .setSubscriptionId(mrgCoords.subscriptionId.value)
         .setResourceGroupName(mrgCoords.managedResourceGroupName.value)
         .setName(petName.value)
-        .setRegion(managedIdentityRegion)
+        .setRegion(region)
         .build()
     )
 
