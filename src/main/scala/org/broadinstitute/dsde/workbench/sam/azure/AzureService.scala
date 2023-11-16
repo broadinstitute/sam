@@ -126,11 +126,10 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       createdPet <- directoryDAO.createPetManagedIdentity(petToCreate, samRequestContext)
     } yield (createdPet, true)
 
-  private def getRegionFromMrg(mrgCoords: ManagedResourceGroupCoordinates, mrgManager: ResourceManager, samRequestContext: SamRequestContext) = {
+  private def getRegionFromMrg(mrgCoords: ManagedResourceGroupCoordinates, mrgManager: ResourceManager, samRequestContext: SamRequestContext) =
     traceIOWithContext("getRegionFromMrg", samRequestContext) { _ =>
       IO(mrgManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value).region())
     }
-  }
 
   /** Loads a SamUser from the database by email.
     */

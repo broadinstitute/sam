@@ -49,7 +49,10 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     // create user
     val defaultUser = genWorkbenchUserAzure.sample.get
     val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    userStatus shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("tosAccepted" -> false, "adminEnabled" -> true, "ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    userStatus shouldBe UserStatus(
+      UserStatusDetails(defaultUser.id, defaultUser.email),
+      Map("tosAccepted" -> false, "adminEnabled" -> true, "ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    )
 
     // user should exist in postgres
     directoryDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
