@@ -3383,7 +3383,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+                $ref: '#/components/schemas/UserTermsOfServiceHistory'
         404:
           description: user has no history of terms of service actions
           content:
@@ -3415,7 +3415,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+                $ref: '#/components/schemas/UserTermsOfServiceHistory'
         404:
           description: user has no history of terms of service actions
           content:
@@ -4139,6 +4139,33 @@ components:
           type: boolean
           description: based on the user's currently accepted terms of service version and when the terms of service were last changed,
             should the user still be permitted to use the system?
+    UserTermsOfServiceHistory:
+      required:
+        - history
+      type: object
+      description: a user's terms of service action history
+      properties:
+        latestAcceptedVersion:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserTermsOfServiceRecord'
+    UserTermsOfServiceRecord:
+      required:
+        - action
+        - version
+        - timestamp
+      type: object
+      properties:
+        action:
+          type: string
+          description: the terms of service action the user took
+        version:
+          type: string
+          description: the version of the terms of service the user accepted/rejected
+        timestamp:
+          type: string
+          format: date-time
+          description: the timestamp of the action
     ManagedResourceGroupCoordinates:
       required:
         - tenantId
