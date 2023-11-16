@@ -21,7 +21,6 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, OptionValues}
 
 import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 
 class TosServiceSpec(_system: ActorSystem)
     extends TestKit(_system)
@@ -515,13 +514,9 @@ class TosServiceSpec(_system: ActorSystem)
           .withAcceptedTermsOfServiceForUser(defaultUser, tosVersion)
           .build
 
-        val tosService = new TosService(
-          new NoExtensions {
-            override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(memberEmail == adminUser.email)
-          },
-          directoryDao,
-          TestSupport.tosConfig
-        )
+        val cloudExt = MockCloudExtensionsBuilder(allUsersGroup).withAdminUser().build
+
+        val tosService = new TosService(cloudExt, directoryDao, TestSupport.tosConfig)
 
         // Act
         val userTosDetails: TermsOfServiceDetails =
@@ -542,7 +537,9 @@ class TosServiceSpec(_system: ActorSystem)
           .withAcceptedTermsOfServiceForUser(defaultUser, tosVersion)
           .build
 
-        val tosService = new TosService(NoExtensions, directoryDao, TestSupport.tosConfig)
+        val cloudExt = MockCloudExtensionsBuilder(allUsersGroup).withNonAdminUser().build
+
+        val tosService = new TosService(cloudExt, directoryDao, TestSupport.tosConfig)
 
         // Act
         val userTosDetails: TermsOfServiceDetails =
@@ -589,8 +586,9 @@ class TosServiceSpec(_system: ActorSystem)
         val directoryDao = new MockDirectoryDaoBuilder()
           .withTermsOfServiceHistoryForUser(defaultUser, List(record1, record2))
           .build
+        val cloudExt = MockCloudExtensionsBuilder(allUsersGroup).withAdminUser().build
 
-        val tosService = new TosService(NoExtensions, directoryDao, TestSupport.tosConfig)
+        val tosService = new TosService(cloudExt, directoryDao, TestSupport.tosConfig)
 
         // Act
         val userTosDetails: TermsOfServiceHistory =
@@ -611,7 +609,9 @@ class TosServiceSpec(_system: ActorSystem)
           .withTermsOfServiceHistoryForUser(defaultUser, List(userTos1, userTos2))
           .build
 
-        val tosService = new TosService(NoExtensions, directoryDao, TestSupport.tosConfig)
+        val cloudExt = MockCloudExtensionsBuilder(allUsersGroup).withNonAdminUser().build
+
+        val tosService = new TosService(cloudExt, directoryDao, TestSupport.tosConfig)
 
         // Act
         val userTosDetails: TermsOfServiceHistory =
