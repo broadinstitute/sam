@@ -664,7 +664,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
 
-  override def getUserTermsOfServiceVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] = {
+  override def getUserTermsOfServiceVersion(
+      userId: WorkbenchUserId,
+      tosVersion: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[Option[SamUserTos]] = {
     if (tosVersion.isEmpty) return IO(None)
     readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
