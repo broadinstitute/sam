@@ -77,8 +77,8 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     this
   }
 
-  def withTosHistoryForUser(samUser: SamUser, tosHistory: TermsOfServiceHistory): MockSamRoutesBuilder = {
-    mockTosServiceBuilder.withTosHistoryForUser(samUser, tosHistory)
+  def withTermsOfServiceHistoryForUser(samUser: SamUser, tosHistory: TermsOfServiceHistory): MockSamRoutesBuilder = {
+    mockTosServiceBuilder.withTermsOfServiceHistoryForUser(samUser, tosHistory)
     this
   }
 

@@ -164,7 +164,7 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       val record2 = TermsOfServiceHistoryRecord(TosTable.REJECT, "0", Instant.now.minusSeconds(5))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
         .withEnabledUser(defaultUser)
-        .withTosHistoryForUser(defaultUser, TermsOfServiceHistory(List(record1, record2)))
+        .withTermsOfServiceHistoryForUser(defaultUser, TermsOfServiceHistory(List(record1, record2)))
 
       Get(s"/api/termsOfService/v1/user/${defaultUser.id}/history") ~> mockSamRoutesBuilder.build.route ~> check {
         withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceHistoryRecord`.") {
@@ -195,7 +195,7 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       val record2 = TermsOfServiceHistoryRecord(TosTable.REJECT, "0", Instant.now.minusSeconds(5))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
         .withEnabledUser(defaultUser)
-        .withTosHistoryForUser(defaultUser, TermsOfServiceHistory(List(record1, record2)))
+        .withTermsOfServiceHistoryForUser(defaultUser, TermsOfServiceHistory(List(record1, record2)))
 
       Get(s"/api/termsOfService/v1/user/self/history") ~> mockSamRoutesBuilder.build.route ~> check {
         withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceHistoryRecord`.") {

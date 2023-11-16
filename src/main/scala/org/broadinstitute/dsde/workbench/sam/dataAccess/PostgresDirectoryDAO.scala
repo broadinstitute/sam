@@ -648,7 +648,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
-  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
     readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
@@ -664,7 +664,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
 
-  override def getUserTosVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] = {
+  override def getUserTermsOfServiceVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] = {
     if (tosVersion.isEmpty) return IO(None)
     readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
@@ -682,7 +682,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
-  override def getUserTosHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
+  override def getUserTermsOfServiceHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
     readOnlyTransaction("getUserTosHistory", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column

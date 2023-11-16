@@ -30,7 +30,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     this
   }
 
-  def withTosHistoryForUser(samUser: SamUser, tosHistory: TermsOfServiceHistory): MockTosServiceBuilder = {
+  def withTermsOfServiceHistoryForUser(samUser: SamUser, tosHistory: TermsOfServiceHistory): MockTosServiceBuilder = {
     lenient()
       .doReturn(IO.pure(tosHistory))
       .when(tosService)
@@ -47,7 +47,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     lenient()
       .doAnswer((i: InvocationOnMock) => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, isAccepted, isAccepted)))
       .when(tosService)
-      .getTosComplianceStatus(any[SamUser], any[SamRequestContext])
+      .getTermsOfServiceComplianceStatus(any[SamUser], any[SamRequestContext])
 
     lenient()
       .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
@@ -67,7 +67,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     lenient()
       .doReturn(IO.pure(TermsOfServiceComplianceStatus(samUser.id, isAccepted, isAccepted)))
       .when(tosService)
-      .getTosComplianceStatus(ArgumentMatchers.argThat(matchesUser), any[SamRequestContext])
+      .getTermsOfServiceComplianceStatus(ArgumentMatchers.argThat(matchesUser), any[SamRequestContext])
 
     val action = if (isAccepted) TosTable.ACCEPT else TosTable.REJECT
     val rightNow = Instant.now

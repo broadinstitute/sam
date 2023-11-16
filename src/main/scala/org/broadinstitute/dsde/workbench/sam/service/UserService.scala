@@ -339,7 +339,7 @@ class UserService(
               allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case _: NameNotFoundException =>
                 false
               }
-              tosComplianceStatus <- tosService.getTosComplianceStatus(user, samRequestContext)
+              tosComplianceStatus <- tosService.getTermsOfServiceComplianceStatus(user, samRequestContext)
               adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
             } yield {
               // We are removing references to LDAP but this will require an API version change here, so we are leaving
@@ -382,7 +382,7 @@ class UserService(
   // Mixing up the endpoint to return user info AND status information is only causing problems and confusion
   def getUserStatusInfo(user: SamUser, samRequestContext: SamRequestContext): IO[UserStatusInfo] =
     for {
-      tosAcceptanceDetails <- tosService.getTosComplianceStatus(user, samRequestContext)
+      tosAcceptanceDetails <- tosService.getTermsOfServiceComplianceStatus(user, samRequestContext)
     } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.permitsSystemUsage && user.enabled, user.enabled)
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusDiagnostics]] =
@@ -390,7 +390,7 @@ class UserService(
       directoryDAO.loadUser(userId, samRequestContext).flatMap {
         case Some(user) =>
           // pulled out of for comprehension to allow concurrent execution
-          val tosAcceptanceStatus = tosService.getTosComplianceStatus(user, samRequestContext)
+          val tosAcceptanceStatus = tosService.getTermsOfServiceComplianceStatus(user, samRequestContext)
           val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext)
           val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
             directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case e: NameNotFoundException => false }
@@ -496,7 +496,7 @@ class UserService(
 
   def getUserAllowances(samUser: SamUser, samRequestContext: SamRequestContext): IO[SamUserAllowances] =
     for {
-      tosStatus <- tosService.getTosComplianceStatus(samUser, samRequestContext)
+      tosStatus <- tosService.getTermsOfServiceComplianceStatus(samUser, samRequestContext)
     } yield SamUserAllowances(
       allowed = samUser.enabled && tosStatus.permitsSystemUsage,
       enabled = samUser.enabled,
