@@ -73,6 +73,7 @@ abstract class SamRoutes(
           // the whitelisted service admin account email is in the header of the request
           serviceAdminRoutes(samRequestContext) ~
           userRoutesV2(samRequestContext) ~
+          userTermsOfServiceRoutes(samRequestContext) ~
           withActiveUser(samRequestContext) { samUser =>
             val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
             resourceRoutes(samUser, samRequestContextWithUser) ~
@@ -81,11 +82,6 @@ abstract class SamRoutes(
             groupRoutes(samUser, samRequestContextWithUser) ~
             azureRoutes(samUser, samRequestContextWithUser) ~
             userRoutesV1(samUser, samRequestContextWithUser)
-          } ~
-          withUserAllowTermsOfService(samRequestContext) { samUser =>
-            val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-            userTermsOfServiceRoutes(samUser, samRequestContextWithUser)
-
           }
         }
       }

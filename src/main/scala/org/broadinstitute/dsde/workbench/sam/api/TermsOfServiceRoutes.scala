@@ -70,48 +70,51 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
       }
     }
 
-  def userTermsOfServiceRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("termsOfService") {
-      pathPrefix("v1") {
-        pathPrefix("user") { // api/termsOfService/v1/user
-          pathPrefix("self") { // api/termsOfService/v1/user/self
-            pathEndOrSingleSlash {
-              get {
-                complete {
-                  tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
-                }
-              }
-            } ~
-            pathPrefix("accept") { // api/termsOfService/v1/user/accept
-              pathEndOrSingleSlash {
-                put {
-                  complete(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
-                }
-              }
-            } ~
-            pathPrefix("reject") { // api/termsOfService/v1/user/reject
-              pathEndOrSingleSlash {
-                put {
-                  complete(tosService.rejectCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
-                }
-              }
-            }
-          } ~
-          // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
-          pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
-            validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
-              val requestUserId = WorkbenchUserId(userId)
+  def userTermsOfServiceRoutes(samRequestContextWithoutUser: SamRequestContext): server.Route =
+    withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+      val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+      pathPrefix("termsOfService") {
+        pathPrefix("v1") {
+          pathPrefix("user") { // api/termsOfService/v1/user
+            pathPrefix("self") { // api/termsOfService/v1/user/self
               pathEndOrSingleSlash {
                 get {
                   complete {
-                    tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
+                    tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
                   }
                 }
               } ~
-              pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
+              pathPrefix("accept") { // api/termsOfService/v1/user/accept
+                pathEndOrSingleSlash {
+                  put {
+                    complete(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
+                  }
+                }
+              } ~
+              pathPrefix("reject") { // api/termsOfService/v1/user/reject
+                pathEndOrSingleSlash {
+                  put {
+                    complete(tosService.rejectCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
+                  }
+                }
+              }
+            } ~
+            // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
+            pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
+              validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
+                val requestUserId = WorkbenchUserId(userId)
                 pathEndOrSingleSlash {
                   get {
-                    complete(StatusCodes.NotImplemented)
+                    complete {
+                      tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
+                    }
+                  }
+                } ~
+                pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
+                  pathEndOrSingleSlash {
+                    get {
+                      complete(StatusCodes.NotImplemented)
+                    }
                   }
                 }
               }
@@ -120,4 +123,5 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
         }
       }
     }
+
 }

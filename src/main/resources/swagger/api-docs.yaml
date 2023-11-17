@@ -4216,6 +4216,9 @@ components:
     SamUserRegistrationRequest:
       type: object
       properties:
+        acceptsTermsOfService:
+          type: boolean
+          description: does the user accept the terms of service
         userAttributes:
           $ref: '#/components/schemas/SamUserAttributes'
     UpdateUserRequest:

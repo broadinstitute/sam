@@ -54,15 +54,6 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     }
   }
 
-  def withUserAllowTermsOfService(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
-    onSuccess {
-      getSamUserRegardlessOfTermsOfService(oidcHeaders, userService, samRequestContext).unsafeToFuture()
-    }.tmap { samUser =>
-      logger.debug(s"Handling request for an active Sam User who has not accepted the latest terms of service: $samUser")
-      samUser
-    }
-  }
-
   def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildSamUser)
 
   private def buildSamUser(oidcHeaders: OIDCHeaders): SamUser = {
@@ -144,17 +135,6 @@ object StandardSamUserDirectives {
       user
     }
 
-  def getSamUserRegardlessOfTermsOfService(oidcHeaders: OIDCHeaders, userService: UserService, samRequestContext: SamRequestContext): IO[SamUser] =
-    for {
-      user <- getSamUser(oidcHeaders, userService, samRequestContext)
-      allowances <- userService.getUserAllowances(user, samRequestContext)
-    } yield {
-      if (!allowances.getEnabled) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
-      }
-
-      user
-    }
   private def loadUserMaybeUpdateAzureB2CId(
       azureB2CId: AzureB2CId,
       maybeGoogleSubjectId: Option[GoogleSubjectId],

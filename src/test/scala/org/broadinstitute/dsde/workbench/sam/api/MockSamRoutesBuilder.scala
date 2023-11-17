@@ -158,9 +158,6 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       override def asAdminServiceUser: Directive0 =
         if (asServiceAdminUser) Directive.Empty else reject(AuthorizationFailedRejection)
 
-      override def withUserAllowTermsOfService(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-        Future.successful(getActiveUser)
-      }
     }
   }
 }
