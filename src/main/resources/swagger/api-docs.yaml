@@ -3266,7 +3266,7 @@ paths:
             text/plain:
               schema:
                 type: string
-  /termsOfService/v1:
+  /api/termsOfService/v1:
     get:
       tags:
         - TermsOfService
@@ -3279,7 +3279,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermsOfServiceConfigResponse'
-  /termsOfService/v1/docs:
+  /api/termsOfService/v1/docs:
     get:
       tags:
         - TermsOfService
@@ -3301,7 +3301,7 @@ paths:
             text/plain:
               schema:
                 type: string
-  /termsOfService/v1/user/self:
+  /api/termsOfService/v1/user/self:
     get:
       tags:
         - TermsOfService
@@ -3320,7 +3320,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /termsOfService/v1/user/self/accept:
+  /api/termsOfService/v1/user/self/accept:
     get:
       tags:
         - TermsOfService
@@ -3329,7 +3329,7 @@ paths:
       responses:
         204:
           description: OK
-  /termsOfService/v1/user/self/reject:
+  /api/termsOfService/v1/user/self/reject:
     get:
       tags:
         - TermsOfService
@@ -3338,7 +3338,7 @@ paths:
       responses:
         204:
           description: OK
-  /termsOfService/v1/user/{sam_user_id}:
+  /api/termsOfService/v1/user/{sam_user_id}:
     get:
       tags:
         - TermsOfService
