@@ -3320,7 +3320,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
   /api/termsOfService/v1/user/self/accept:
-    get:
+    put:
       tags:
         - TermsOfService
       summary: Accepts the current terms of service for the requesting user.
@@ -3329,7 +3329,7 @@ paths:
         204:
           description: OK
   /api/termsOfService/v1/user/self/reject:
-    get:
+    put:
       tags:
         - TermsOfService
       summary: Rejects the current terms of service for the requesting user.
