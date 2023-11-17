@@ -40,6 +40,14 @@ trait SamUserDirectives {
     */
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser]
 
+  /** Extracts authentication information from headers, looks up user in database, returns user regardless of terms of service status. Specifically named to be
+    * clear that users who have not accepted the latest Terms of Service are permitted. Throws 403 exception if user does not exist (not 404 because that would
+    * mean the requested URL does not exist).
+    *
+    * @param samRequestContext
+    * @return
+    */
+  def withUserAllowTermsOfService(samRequestContext: SamRequestContext): Directive1[SamUser]
   def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser]
 
   def asWorkbenchAdmin(samUser: SamUser): Directive0 =

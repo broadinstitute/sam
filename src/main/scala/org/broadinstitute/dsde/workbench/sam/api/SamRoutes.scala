@@ -80,8 +80,12 @@ abstract class SamRoutes(
             extensionRoutes(samUser, samRequestContextWithUser) ~
             groupRoutes(samUser, samRequestContextWithUser) ~
             azureRoutes(samUser, samRequestContextWithUser) ~
-            userRoutesV1(samUser, samRequestContextWithUser) ~
+            userRoutesV1(samUser, samRequestContextWithUser)
+          } ~
+          withUserAllowTermsOfService(samRequestContext) { samUser =>
+            val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
             userTermsOfServiceRoutes(samUser, samRequestContextWithUser)
+
           }
         }
       }

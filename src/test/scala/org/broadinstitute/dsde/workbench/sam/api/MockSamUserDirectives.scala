@@ -25,6 +25,10 @@ trait MockSamUserDirectives extends SamUserDirectives {
     StandardSamUserDirectives.getSamUser(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
   }
 
+  override def withUserAllowTermsOfService(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
+    StandardSamUserDirectives.getSamUserRegardlessOfTermsOfService(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
+  }
+
   override def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = newSamUser match {
     case None => failWith(new Exception("samUser not specified"))
     case Some(u) => provide(u)
