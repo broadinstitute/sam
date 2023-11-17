@@ -89,15 +89,26 @@ class TosService(
   ): IO[TermsOfServiceDetails] =
     ensureAdminIfNeeded[TermsOfServiceDetails](userId, samRequestContext) {
       for {
-        currentSamUserTos <- loadTosRecordForUser(userId, Option(tosConfig.version), samRequestContext)
+        currentTos <- ensureCurrentTermsOfService(userId, samRequestContext)
         previousSamUserTos <- loadTosRecordForUser(userId, tosConfig.previousVersion, samRequestContext)
         requestedUser <- loadUser(userId, samRequestContext)
       } yield TermsOfServiceDetails(
-        currentSamUserTos.version,
-        currentSamUserTos.createdAt,
-        tosAcceptancePermitsSystemUsage(requestedUser, Option(currentSamUserTos), Option(previousSamUserTos))
+        currentTos.version,
+        currentTos.createdAt,
+        tosAcceptancePermitsSystemUsage(requestedUser, Option(currentTos), previousSamUserTos)
       )
     }
+
+  private def ensureCurrentTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
+    maybeTermsOfServiceRecord <- loadTosRecordForUser(userId, Option(tosConfig.version), samRequestContext)
+    latestUserTermsOfService <- maybeTermsOfServiceRecord
+      .map(IO.pure)
+      .getOrElse(
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find current terms of service for user:${userId}"))
+        )
+      )
+  } yield latestUserTermsOfService
 
   private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     directoryDao.loadUser(userId, samRequestContext).map {
@@ -106,11 +117,8 @@ class TosService(
     }
 
   // Note: if version is None, then the query will return the last accepted ToS info for the user
-  private def loadTosRecordForUser(userId: WorkbenchUserId, version: Option[String], samRequestContext: SamRequestContext): IO[SamUserTos] =
-    directoryDao.getUserTosVersion(userId, version, samRequestContext).map {
-      case Some(samUserTos) => samUserTos
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user:${userId}"))
-    }
+  private def loadTosRecordForUser(userId: WorkbenchUserId, version: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    directoryDao.getUserTosVersion(userId, version, samRequestContext)
 
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
     latestUserTos <- directoryDao.getUserTos(samUser.id, samRequestContext)
