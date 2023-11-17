@@ -43,11 +43,11 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
     }
   }
 
-  describe("GET /api/termsOfService/v1") {
+  describe("GET /termsOfService/v1") {
     it("return the current tos config") {
       val samRoutes = TestSamRoutes(Map.empty)
       eventually {
-        Get("/api/termsOfService/v1") ~> samRoutes.route ~> check {
+        Get("/termsOfService/v1") ~> samRoutes.route ~> check {
           status shouldEqual StatusCodes.OK
           responseAs[TermsOfServiceConfigResponse] shouldBe TermsOfServiceConfigResponse(
             enforced = true,
@@ -60,38 +60,38 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
     }
   }
 
-  describe("GET /api/termsOfService/v1/docs") {
+  describe("GET /termsOfService/v1/docs") {
     val samRoutes = TestSamRoutes(Map.empty)
     it("should return the terms of service text when no query parameters are passed") {
-      Get("/api/termsOfService/v1/docs") ~> samRoutes.route ~> check {
+      Get("/termsOfService/v1/docs") ~> samRoutes.route ~> check {
         responseAs[String] shouldBe samRoutes.tosService.termsOfServiceText
         status shouldBe StatusCodes.OK
       }
     }
     it("should return the terms of service text when 'termsOfService' is passed as a query param.") {
-      Get(Uri("/api/termsOfService/v1/docs").withQuery(Uri.Query("doc=termsOfService"))) ~> samRoutes.route ~> check {
+      Get(Uri("/termsOfService/v1/docs").withQuery(Uri.Query("doc=termsOfService"))) ~> samRoutes.route ~> check {
         responseAs[String] shouldBe samRoutes.tosService.termsOfServiceText
         status shouldBe StatusCodes.OK
       }
     }
     it("should return the privacy policy text when 'privacyPolicy' is passed as a query param.") {
-      Get(Uri("/api/termsOfService/v1/docs").withQuery(Uri.Query("doc=privacyPolicy"))) ~> samRoutes.route ~> check {
+      Get(Uri("/termsOfService/v1/docs").withQuery(Uri.Query("doc=privacyPolicy"))) ~> samRoutes.route ~> check {
         responseAs[String] shouldBe samRoutes.tosService.privacyPolicyText
         status shouldBe StatusCodes.OK
       }
     }
     it("should return the terms of service text and privacy policy text when 'termsOfService,privacyPolicy' is passed as a query param.") {
-      Get(Uri("/api/termsOfService/v1/docs").withQuery(Uri.Query("doc=termsOfService,privacyPolicy"))) ~> samRoutes.route ~> check {
+      Get(Uri("/termsOfService/v1/docs").withQuery(Uri.Query("doc=termsOfService,privacyPolicy"))) ~> samRoutes.route ~> check {
         responseAs[String] shouldBe s"${samRoutes.tosService.termsOfServiceText}\n\n${samRoutes.tosService.privacyPolicyText}"
         status shouldBe StatusCodes.OK
       }
     }
   }
 
-  describe("GET /api/termsOfService/v1/docs/redirect") {
+  describe("GET /termsOfService/v1/docs/redirect") {
     val samRoutes = TestSamRoutes(Map.empty)
     it("should be a valid route") {
-      Get("/api/termsOfService/v1/docs/redirect") ~> samRoutes.route ~> check {
+      Get("/termsOfService/v1/docs/redirect") ~> samRoutes.route ~> check {
         status shouldBe StatusCodes.NotImplemented
       }
     }

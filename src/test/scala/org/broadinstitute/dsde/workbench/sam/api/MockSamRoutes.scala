@@ -61,12 +61,12 @@ abstract class MockSamRoutes(
       oidcConfig.oauth2Routes ~
       statusRoutes ~
       oldTermsOfServiceRoutes ~
-      withExecutionContext(ExecutionContext.global) {
+      publicTermsOfServiceRoutes ~
+    withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
           pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
             pathPrefix("api") {
               // IMPORTANT - all routes under /api must have an active user
-              publicTermsOfServiceRoutes ~
                 withActiveUser(samRequestContext) { samUser =>
                   val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
                   resourceRoutes(samUser, samRequestContextWithUser) ~

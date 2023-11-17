@@ -41,13 +41,13 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
 
   def publicTermsOfServiceRoutes: server.Route =
     pathPrefix("termsOfService") {
-      pathPrefix("v1") { // api/termsOfService/v1
+      pathPrefix("v1") { // /termsOfService/v1
         pathEndOrSingleSlash {
           get {
             complete(tosService.getTermsOfServiceConfig())
           }
         } ~
-        pathPrefix("docs") { // api/termsOfService/v1/docs
+        pathPrefix("docs") { // /termsOfService/v1/docs
           pathEndOrSingleSlash {
             get {
               parameters("doc".as[String].?) { (doc: Option[String]) =>
@@ -59,7 +59,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
               }
             }
           } ~
-          pathPrefix("redirect") { // api/termsOfService/v1/docs/redirect
+          pathPrefix("redirect") { // /termsOfService/v1/docs/redirect
             pathEndOrSingleSlash {
               get {
                 complete(StatusCodes.NotImplemented)

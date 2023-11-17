@@ -3266,7 +3266,7 @@ paths:
             text/plain:
               schema:
                 type: string
-  /api/termsOfService/v1:
+  /termsOfService/v1:
     get:
       tags:
         - TermsOfService
@@ -3279,7 +3279,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermsOfServiceConfigResponse'
-  /api/termsOfService/v1/docs:
+  /termsOfService/v1/docs:
     get:
       tags:
         - TermsOfService
@@ -3289,7 +3289,6 @@ paths:
         - name: doc
           in: query
           description: Array of strings containing 'termsOfService' and/or 'privacyPolicy'.
-          required: true
           schema:
             type: array
             items:
