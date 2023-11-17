@@ -64,7 +64,7 @@ abstract class SamRoutes(
     oidcConfig.oauth2Routes ~
     statusRoutes ~
     oldTermsOfServiceRoutes ~
-      publicTermsOfServiceRoutes ~
+    publicTermsOfServiceRoutes ~
     withExecutionContext(ExecutionContext.global) {
       withSamRequestContext { samRequestContext =>
         pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
