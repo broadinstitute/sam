@@ -94,7 +94,8 @@ class TosService(
       } yield TermsOfServiceDetails(
         currentTos.version,
         currentTos.createdAt,
-        tosAcceptancePermitsSystemUsage(requestedUser, Option(currentTos))
+        tosAcceptancePermitsSystemUsage(requestedUser, Option(currentTos)),
+        currentTos.version.equals(tosConfig.version)
       )
     }
 

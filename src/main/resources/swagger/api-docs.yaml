@@ -4029,6 +4029,7 @@ components:
         - latestAcceptedVersion
         - acceptedOn
         - permitsSystemUsage
+        - isCurrentVersion
       type: object
       properties:
         latestAcceptedVersion:
@@ -4042,6 +4043,9 @@ components:
           type: boolean
           description: based on the user's currently accepted terms of service version and when the terms of service were last changed,
             should the user still be permitted to use the system?
+        isCurrentVersion:
+          type: boolean
+          description: Is the Terms of Service version the user has accepted the current Terms of Service version of the system.
     TermsOfServiceDetails:
       required:
         - isEnabled
