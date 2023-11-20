@@ -22,8 +22,8 @@ import scala.collection.mutable
 class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap(), passStatusCheck: Boolean = true) extends DirectoryDAO {
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
-  private val userTos: mutable.Map[WorkbenchUserId, SamUserTos] = new TrieMap()
-  private val userTosHistory: mutable.Map[WorkbenchUserId, List[SamUserTos]] = new TrieMap()
+  private val userTermsOfService: mutable.Map[WorkbenchUserId, SamUserTos] = new TrieMap()
+  private val userTermsOfServiceHistory: mutable.Map[WorkbenchUserId, List[SamUserTos]] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, SamUserAttributes] = new TrieMap()
 
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
@@ -313,9 +313,9 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case None => false
       case Some(user) =>
         users.put(userId, user)
-        userTos.put(userId, SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
-        val userHistory = userTosHistory.getOrElse(userId, List.empty)
-        userTosHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
+        userTermsOfService.put(userId, SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
+        val userHistory = userTermsOfServiceHistory.getOrElse(userId, List.empty)
+        userTermsOfServiceHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
         true
     }
 
@@ -324,9 +324,9 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case None => false
       case Some(user) =>
         users.put(userId, user)
-        userTos.put(userId, SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
-        val userHistory = userTosHistory.getOrElse(userId, List.empty)
-        userTosHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
+        userTermsOfService.put(userId, SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
+        val userHistory = userTermsOfServiceHistory.getOrElse(userId, List.empty)
+        userTermsOfServiceHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
         true
     }
 
@@ -334,7 +334,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     loadUser(userId, samRequestContext).map {
       case None => None
       case Some(_) =>
-        userTos.get(userId)
+        userTermsOfService.get(userId)
     }
 
   override def getUserTermsOfServiceVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
@@ -342,7 +342,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case None => None
       case Some(_) =>
         tosVersion match {
-          case Some(_) => userTos.get(userId)
+          case Some(_) => userTermsOfService.get(userId)
           case None => None
         }
     }
@@ -350,7 +350,7 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def getUserTermsOfServiceHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
     loadUser(userId, samRequestContext).map {
       case None => List.empty
-      case Some(_) => userTosHistory.getOrElse(userId, List.empty)
+      case Some(_) => userTermsOfServiceHistory.getOrElse(userId, List.empty)
     }
 
   override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {
