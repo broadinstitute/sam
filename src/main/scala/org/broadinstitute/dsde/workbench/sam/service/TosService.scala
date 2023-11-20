@@ -131,13 +131,13 @@ class TosService(
     if (userIsServiceAccount) {
       return true
     }
-    if (userHasRejectedLatestTosVersion(userTos)) {
+    if (userHasRejectedCurrentTermsOfService(userTos)) {
       return false
     }
 
     val userHasAcceptedCurrentVersion = userHasAcceptedCurrentTermsOfService(userTos)
-    val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && userTos.exists(_.action.equals(TosTable.ACCEPT))
-    val userHasAcceptedPreviousVersion = userHasAcceptedPreviousTosVersion(userTos)
+    val userHasAcceptedPreviousVersion = userHasAcceptedPreviousTermsOfService(userTos)
+    val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && userHasAcceptedPreviousVersion
     val userInsideOfRollingAcceptanceWindow = isRollingWindowInEffect() && userHasAcceptedPreviousVersion
     userHasAcceptedCurrentVersion || userInsideOfRollingAcceptanceWindow || userCanUseSystemUnderGracePeriod
   }
@@ -147,12 +147,12 @@ class TosService(
       tos.version.contains(tosConfig.version) && tos.action == TosTable.ACCEPT
     }
 
-  private def userHasRejectedLatestTosVersion(userTos: Option[SamUserTos]): Boolean =
+  private def userHasRejectedCurrentTermsOfService(userTos: Option[SamUserTos]): Boolean =
     userTos.exists { tos =>
       tos.version.contains(tosConfig.version) && tos.action == TosTable.REJECT
     }
 
-  private def userHasAcceptedPreviousTosVersion(userTosOpt: Option[SamUserTos]): Boolean =
+  private def userHasAcceptedPreviousTermsOfService(userTosOpt: Option[SamUserTos]): Boolean =
     tosConfig.previousVersion.exists { previousTosVersion =>
       userTosOpt.exists { userTos =>
         userTos.version.contains(previousTosVersion) && userTos.action == TosTable.ACCEPT

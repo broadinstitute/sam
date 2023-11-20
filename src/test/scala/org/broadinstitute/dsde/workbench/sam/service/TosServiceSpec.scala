@@ -81,89 +81,97 @@ class TosServiceSpec(_system: ActorSystem)
       )
     }
 
-    "returns terms of service text when no query parameters are passed" in {
-      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+    "when getting terms of service documents " - {
+      "loads the Terms of Service text when TosService is instantiated" in {
+        val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = "2"))
+        tosService.termsOfServiceText contains "Test Terms of Service"
+        tosService.privacyPolicyText contains "Test Privacy Policy"
+      }
 
-      val tosText = tosService.getTermsOfServiceTexts(Set.empty).unsafeRunSync()
-      tosText shouldBe tosService.termsOfServiceText
+      "returns terms of service text when no query parameters are passed" in {
+        val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+
+        val tosText = tosService.getTermsOfServiceTexts(Set.empty).unsafeRunSync()
+        tosText shouldBe tosService.termsOfServiceText
+      }
+
+      "returns terms of service text by default" in {
+        val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+
+        val tosText = tosService.getTermsOfServiceTexts(Set("termsOfService")).unsafeRunSync()
+        tosText shouldBe tosService.termsOfServiceText
+      }
+
+      "returns privacy policy text" in {
+        val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+
+        val tosText = tosService.getTermsOfServiceTexts(Set("privacyPolicy")).unsafeRunSync()
+        tosText shouldBe tosService.privacyPolicyText
+      }
+
+      "returns privacy policy text and terms of service text" in {
+        val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+
+        val tosText = tosService.getTermsOfServiceTexts(Set("privacyPolicy", "termsOfService")).unsafeRunSync()
+        tosText shouldBe s"${tosService.termsOfServiceText}\n\n${tosService.privacyPolicyText}"
+      }
     }
 
-    "returns terms of service text by default" in {
-      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+    "when a user is accepting/rejecting the Terms of Service" - {
 
-      val tosText = tosService.getTermsOfServiceTexts(Set("termsOfService")).unsafeRunSync()
-      tosText shouldBe tosService.termsOfServiceText
+      "accepts the ToS for a user" in {
+        when(dirDAO.acceptTermsOfService(any[WorkbenchUserId], any[String], any[SamRequestContext]))
+          .thenReturn(IO.pure(true))
+
+        val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+
+        // accept and get ToS status
+        val acceptTermsOfServiceResult = tosService.acceptCurrentTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+        acceptTermsOfServiceResult shouldBe true
+
+        verify(dirDAO).acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext)
+      }
+
+      "rejects the ToS for a user" in {
+        when(dirDAO.rejectTermsOfService(any[WorkbenchUserId], any[String], any[SamRequestContext]))
+          .thenReturn(IO.pure(true))
+
+        // reject and get ToS status
+        val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+        val rejectTermsOfServiceResult = tosService.rejectCurrentTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+
+        rejectTermsOfServiceResult shouldBe true
+        verify(dirDAO).rejectTermsOfService(defaultUser.id, tosConfig.version, samRequestContext)
+      }
     }
 
-    "returns privacy policy text" in {
-      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+    "when presented with machine-account users" - {
 
-      val tosText = tosService.getTermsOfServiceTexts(Set("privacyPolicy")).unsafeRunSync()
-      tosText shouldBe tosService.privacyPolicyText
-    }
+      "always allows service account users to use the system" in {
+        val tosVersion = "2"
+        val previousTosVersion = Option("1")
+        val tosService =
+          new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
+        when(dirDAO.getUserTos(serviceAccountUser.id, samRequestContext)).thenReturn(IO.pure(None))
 
-    "returns privacy policy text and terms of service text" in {
-      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+        when(dirDAO.getUserTosVersion(serviceAccountUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
 
-      val tosText = tosService.getTermsOfServiceTexts(Set("privacyPolicy", "termsOfService")).unsafeRunSync()
-      tosText shouldBe s"${tosService.termsOfServiceText}\n\n${tosService.privacyPolicyText}"
-    }
+        val complianceStatus = tosService.getTosComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
+        complianceStatus.permitsSystemUsage shouldBe true
+      }
 
-    "accepts the ToS for a user" in {
-      when(dirDAO.acceptTermsOfService(any[WorkbenchUserId], any[String], any[SamRequestContext]))
-        .thenReturn(IO.pure(true))
+      "always allows UAMI users to use the system" in {
+        val tosVersion = "2"
+        val previousTosVersion = Option("1")
+        val tosService =
+          new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
+        when(dirDAO.getUserTos(uamiUser.id, samRequestContext)).thenReturn(IO.pure(None))
 
-      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
+        when(dirDAO.getUserTosVersion(uamiUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
 
-      // accept and get ToS status
-      val acceptTermsOfServiceResult = tosService.acceptCurrentTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
-      acceptTermsOfServiceResult shouldBe true
-
-      verify(dirDAO).acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext)
-    }
-
-    "rejects the ToS for a user" in {
-      when(dirDAO.rejectTermsOfService(any[WorkbenchUserId], any[String], any[SamRequestContext]))
-        .thenReturn(IO.pure(true))
-
-      // reject and get ToS status
-      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
-      val rejectTermsOfServiceResult = tosService.rejectCurrentTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
-
-      rejectTermsOfServiceResult shouldBe true
-      verify(dirDAO).rejectTermsOfService(defaultUser.id, tosConfig.version, samRequestContext)
-    }
-
-    "always allows service account users to use the system" in {
-      val tosVersion = "2"
-      val previousTosVersion = Option("1")
-      val tosService =
-        new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
-      when(dirDAO.getUserTos(serviceAccountUser.id, samRequestContext)).thenReturn(IO.pure(None))
-
-      when(dirDAO.getUserTosVersion(serviceAccountUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
-
-      val complianceStatus = tosService.getTosComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
-      complianceStatus.permitsSystemUsage shouldBe true
-    }
-
-    "always allows UAMI users to use the system" in {
-      val tosVersion = "2"
-      val previousTosVersion = Option("1")
-      val tosService =
-        new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
-      when(dirDAO.getUserTos(uamiUser.id, samRequestContext)).thenReturn(IO.pure(None))
-
-      when(dirDAO.getUserTosVersion(uamiUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
-
-      val complianceStatus = tosService.getTosComplianceStatus(uamiUser, samRequestContext).unsafeRunSync()
-      complianceStatus.permitsSystemUsage shouldBe true
-    }
-
-    "loads the Terms of Service text when TosService is instantiated" in {
-      val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = "2"))
-      tosService.termsOfServiceText contains "Test Terms of Service"
-      tosService.privacyPolicyText contains "Test Privacy Policy"
+        val complianceStatus = tosService.getTosComplianceStatus(uamiUser, samRequestContext).unsafeRunSync()
+        complianceStatus.permitsSystemUsage shouldBe true
+      }
     }
 
     val tosVersion = "2"
