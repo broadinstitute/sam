@@ -3313,7 +3313,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserTermsOfServiceDetails'
-        404:
+        403:
           description: user not found
           content:
             application/json:
