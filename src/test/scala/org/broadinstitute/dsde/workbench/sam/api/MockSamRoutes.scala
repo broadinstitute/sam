@@ -61,23 +61,23 @@ abstract class MockSamRoutes(
       oidcConfig.oauth2Routes ~
       statusRoutes ~
       oldTermsOfServiceRoutes ~
+      publicTermsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
           pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
             pathPrefix("api") {
               // IMPORTANT - all routes under /api must have an active user
-              publicTermsOfServiceRoutes ~
-                withActiveUser(samRequestContext) { samUser =>
-                  val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-                  resourceRoutes(samUser, samRequestContextWithUser) ~
-                    adminRoutes(samUser, samRequestContextWithUser) ~
-                    extensionRoutes(samUser, samRequestContextWithUser) ~
-                    groupRoutes(samUser, samRequestContextWithUser) ~
-                    userRoutesV1(samUser, samRequestContextWithUser) ~
-                    azureRoutes(samUser, samRequestContextWithUser) ~
-                    userTermsOfServiceRoutes(samUser, samRequestContextWithUser)
-                }
-            }
+              withActiveUser(samRequestContext) { samUser =>
+                val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+                resourceRoutes(samUser, samRequestContextWithUser) ~
+                  adminRoutes(samUser, samRequestContextWithUser) ~
+                  extensionRoutes(samUser, samRequestContextWithUser) ~
+                  groupRoutes(samUser, samRequestContextWithUser) ~
+                  userRoutesV1(samUser, samRequestContextWithUser) ~
+                  azureRoutes(samUser, samRequestContextWithUser)
+              }
+            } ~
+            userTermsOfServiceRoutes(samRequestContext)
         }
       }
   }

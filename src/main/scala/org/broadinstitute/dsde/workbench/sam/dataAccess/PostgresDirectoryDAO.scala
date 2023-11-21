@@ -650,38 +650,25 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
   // When no tosVersion is specified, return the latest TosRecord for the user
   override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    getUserTosVersion(userId, None, samRequestContext)
+
+  override def getUserTosVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
     readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
 
+      val versionConstraint = if (tosVersion.isDefined) samsqls"and ${column.version} = ${tosVersion.get}" else samsqls""
+
       val loadUserTosQuery =
         samsql"""select ${tosTable.resultAll}
               from ${TosTable as tosTable}
-              where ${column.samUserId} = ${userId}
+              where ${column.samUserId} = $userId $versionConstraint
               order by ${column.createdAt} desc
               limit 1"""
 
       val userTosRecordOpt: Option[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).first().apply()
       userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
-
-  override def getUserTosVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] = {
-    if (tosVersion.isEmpty) return IO(None)
-    readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
-      val tosTable = TosTable.syntax
-      val column = TosTable.column
-
-      val loadUserTosQuery =
-        samsql"""select ${tosTable.resultAll}
-              from ${TosTable as tosTable}
-              where ${column.samUserId} = ${userId} and ${column.version} = ${tosVersion}
-              order by ${column.createdAt} desc
-              limit 1"""
-
-      val userTosRecordOpt: Option[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).first().apply()
-      userTosRecordOpt.map(TosTable.unmarshalUserRecord)
-    }
-  }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
     readOnlyTransaction("isEnabled", samRequestContext) { implicit session =>

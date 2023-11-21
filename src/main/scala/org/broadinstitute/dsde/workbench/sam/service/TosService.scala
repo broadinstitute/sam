@@ -63,7 +63,7 @@ class TosService(
       )
     )
 
-  def getTosText(docSet: Set[String]): IO[String] =
+  def getTermsOfServiceTexts(docSet: Set[String]): IO[String] =
     docSet match {
       case set if set.isEmpty => IO.pure(termsOfServiceText)
       case set if set.equals(Set(privacyPolicyTextKey)) => IO.pure(privacyPolicyText)
@@ -89,39 +89,41 @@ class TosService(
   ): IO[TermsOfServiceDetails] =
     ensureAdminIfNeeded[TermsOfServiceDetails](userId, samRequestContext) {
       for {
-        currentSamUserTos <- loadTosRecordForUser(userId, Option(tosConfig.version), samRequestContext)
-        previousSamUserTos <- loadTosRecordForUser(userId, tosConfig.previousVersion, samRequestContext)
+        currentTos <- ensureLatestTermsOfService(userId, samRequestContext)
         requestedUser <- loadUser(userId, samRequestContext)
       } yield TermsOfServiceDetails(
-        currentSamUserTos.version,
-        currentSamUserTos.createdAt,
-        tosAcceptancePermitsSystemUsage(requestedUser, Option(currentSamUserTos), Option(previousSamUserTos))
+        currentTos.version,
+        currentTos.createdAt,
+        tosAcceptancePermitsSystemUsage(requestedUser, Option(currentTos)),
+        currentTos.version.equals(tosConfig.version)
       )
     }
+
+  private def ensureLatestTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
+    maybeTermsOfServiceRecord <- directoryDao.getUserTos(userId, samRequestContext)
+    latestUserTermsOfService <- maybeTermsOfServiceRecord
+      .map(IO.pure)
+      .getOrElse(
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find current terms of service for user:${userId}"))
+        )
+      )
+  } yield latestUserTermsOfService
 
   private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     directoryDao.loadUser(userId, samRequestContext).map {
       case Some(samUser) => samUser
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find user:${userId}"))
     }
-
-  // Note: if version is None, then the query will return the last accepted ToS info for the user
-  private def loadTosRecordForUser(userId: WorkbenchUserId, version: Option[String], samRequestContext: SamRequestContext): IO[SamUserTos] =
-    directoryDao.getUserTosVersion(userId, version, samRequestContext).map {
-      case Some(samUserTos) => samUserTos
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user:${userId}"))
-    }
-
   def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
     latestUserTos <- directoryDao.getUserTos(samUser.id, samRequestContext)
-    previousUserTos <- directoryDao.getUserTosVersion(samUser.id, tosConfig.previousVersion, samRequestContext)
-    userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(latestUserTos)
-    permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser, latestUserTos, previousUserTos)
+    userHasAcceptedLatestVersion = userHasAcceptedCurrentTermsOfService(latestUserTos)
+    permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser, latestUserTos)
   } yield TermsOfServiceComplianceStatus(samUser.id, userHasAcceptedLatestVersion, permitsSystemUsage)
 
   /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS, or is a service account
     */
-  private def tosAcceptancePermitsSystemUsage(user: SamUser, userTos: Option[SamUserTos], previousUserTos: Option[SamUserTos]): Boolean = {
+  private def tosAcceptancePermitsSystemUsage(user: SamUser, userTos: Option[SamUserTos]): Boolean = {
     if (!tosConfig.isTosEnabled) {
       return true
     }
@@ -130,33 +132,33 @@ class TosService(
     if (userIsServiceAccount) {
       return true
     }
-    if (userHasRejectedLatestTosVersion(userTos)) {
+    if (userHasRejectedCurrentTermsOfService(userTos)) {
       return false
     }
-    userTos.exists { tos =>
-      val userHasAcceptedLatestVersion = userHasAcceptedLatestTosVersion(Option(tos))
-      val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && tos.action == TosTable.ACCEPT
 
-      val userHasAcceptedPreviousVersion = userHasAcceptedPreviousTosVersion(previousUserTos)
-      val userInsideOfRollingAcceptanceWindow = isRollingWindowInEffect() && userHasAcceptedPreviousVersion
-
-      userHasAcceptedLatestVersion || userInsideOfRollingAcceptanceWindow || userCanUseSystemUnderGracePeriod
-
-    }
+    val userHasAcceptedCurrentVersion = userHasAcceptedCurrentTermsOfService(userTos)
+    val userHasAcceptedPreviousVersion = userHasAcceptedPreviousTermsOfService(userTos)
+    val userCanUseSystemUnderGracePeriod = tosConfig.isGracePeriodEnabled && userHasAcceptedPreviousVersion
+    val userInsideOfRollingAcceptanceWindow = isRollingWindowInEffect() && userHasAcceptedPreviousVersion
+    userHasAcceptedCurrentVersion || userInsideOfRollingAcceptanceWindow || userCanUseSystemUnderGracePeriod
   }
 
-  private def userHasAcceptedLatestTosVersion(userTos: Option[SamUserTos]): Boolean =
+  private def userHasAcceptedCurrentTermsOfService(userTos: Option[SamUserTos]): Boolean =
     userTos.exists { tos =>
       tos.version.contains(tosConfig.version) && tos.action == TosTable.ACCEPT
     }
 
-  private def userHasRejectedLatestTosVersion(userTos: Option[SamUserTos]): Boolean =
+  private def userHasRejectedCurrentTermsOfService(userTos: Option[SamUserTos]): Boolean =
     userTos.exists { tos =>
       tos.version.contains(tosConfig.version) && tos.action == TosTable.REJECT
     }
 
-  private def userHasAcceptedPreviousTosVersion(previousUserTos: Option[SamUserTos]): Boolean =
-    previousUserTos.exists(tos => tos.action == TosTable.ACCEPT)
+  private def userHasAcceptedPreviousTermsOfService(userTosOpt: Option[SamUserTos]): Boolean =
+    tosConfig.previousVersion.exists { previousTosVersion =>
+      userTosOpt.exists { userTos =>
+        userTos.version.contains(previousTosVersion) && userTos.action == TosTable.ACCEPT
+      }
+    }
 }
 
 trait TermsOfServiceDocument {
