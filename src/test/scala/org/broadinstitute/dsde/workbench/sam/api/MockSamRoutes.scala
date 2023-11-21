@@ -67,7 +67,6 @@ abstract class MockSamRoutes(
           pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
             pathPrefix("api") {
               // IMPORTANT - all routes under /api must have an active user
-              userTermsOfServiceRoutes(samRequestContext) ~
                 withActiveUser(samRequestContext) { samUser =>
                   val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
                   resourceRoutes(samUser, samRequestContextWithUser) ~
@@ -77,7 +76,8 @@ abstract class MockSamRoutes(
                     userRoutesV1(samUser, samRequestContextWithUser) ~
                     azureRoutes(samUser, samRequestContextWithUser)
                 }
-            }
+            } ~
+            userTermsOfServiceRoutes(samRequestContext)
         }
       }
   }
