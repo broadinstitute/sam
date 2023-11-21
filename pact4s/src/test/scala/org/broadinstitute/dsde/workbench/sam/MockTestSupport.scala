@@ -202,7 +202,7 @@ object MockTestSupport extends MockTestSupport {
 
     // Override the withUserAllowInactive in MockSamUserDirectives to include
     // support for user status info request with or without access token
-    override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = {
+    override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] =
       extractRequest.flatMap { request =>
         // Use an extractRequest Directive to capture the headers for debugging purpose
         val headers = request.headers
@@ -221,9 +221,9 @@ object MockTestSupport extends MockTestSupport {
             complete(StatusCodes.Unauthorized)
         }
       }
-    }
 
-    override val adminConfig: AdminConfig = AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty)
+    override val adminConfig: AdminConfig =
+      AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty)
 
     override def asAdminServiceUser: Directive0 = Directive.Empty
   }
