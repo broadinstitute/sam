@@ -16,7 +16,6 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.{FakeOpenTelemetryMetricsInterpreter, OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
@@ -51,7 +50,6 @@ trait TestSupport {
 
   implicit val futureTimeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
-  implicit val openTelemetry = FakeOpenTelemetryMetricsInterpreter
 
   val samRequestContext = SamRequestContext()
 
@@ -173,8 +171,7 @@ object TestSupport extends TestSupport {
 
   def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit
       system: ActorSystem,
-      materializer: Materializer,
-      openTelemetry: OpenTelemetryMetrics[IO]
+      materializer: Materializer
   ): SamRoutes = new SamRoutes(
     samDependencies.resourceService,
     samDependencies.userService,
@@ -214,7 +211,7 @@ object TestSupport extends TestSupport {
     override def asAdminServiceUser: Directive0 = Directive.Empty
   }
 
-  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): SamRoutes =
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes =
     genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
 
   /*

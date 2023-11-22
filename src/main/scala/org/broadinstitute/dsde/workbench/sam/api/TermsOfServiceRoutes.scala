@@ -78,7 +78,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
           pathPrefix("user") { // api/termsOfService/v1/user
             pathPrefix("self") { // api/termsOfService/v1/user/self
               pathEndOrSingleSlash {
-                getWithTelemetry(samRequestContext, "userId" -> requestUserId) {
+                get {
                   complete {
                     tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
                   }
@@ -104,7 +104,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
               validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
                 val requestUserId = WorkbenchUserId(userId)
                 pathEndOrSingleSlash {
-                  get {
+                  getWithTelemetry(samRequestContext, "userId" -> requestUserId) {
                     complete {
                       tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
                     }
@@ -112,7 +112,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
                 } ~
                 pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
                   pathEndOrSingleSlash {
-                    get {
+                    getWithTelemetry(samRequestContext, "userId" -> requestUserId) {
                       complete(StatusCodes.NotImplemented)
                     }
                   }

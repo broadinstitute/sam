@@ -19,7 +19,6 @@ import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.sdk.trace.`export`.BatchSpanProcessor
 import io.opentelemetry.sdk.trace.samplers.Sampler
 import io.opentelemetry.semconv.ResourceAttributes
-import io.prometheus.client.CollectorRegistry
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{
@@ -35,7 +34,6 @@ import org.broadinstitute.dsde.workbench.google.{
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -69,8 +67,6 @@ object Boot extends IOApp with LazyLogging {
 
       // Shutdown all akka http connection pools/servers so we can re-bind to the ports
       Http().shutdownAllConnectionPools() *> system.terminate()
-      // Clean up prometheus registry so it will be fresh on reboot
-      CollectorRegistry.defaultRegistry.clear()
 
       IO.sleep(5 seconds) *> run(args)
     }
@@ -135,11 +131,6 @@ object Boot extends IOApp with LazyLogging {
         appConfig.samDatabaseConfig.samBackground
       )
 
-      // This is for sending custom metrics to stackdriver. all custom metrics starts with `OpenCensus/sam/`.
-      // Typing in `sam` in metrics explorer will show all sam custom metrics.
-      // As best practice, we should have all related metrics under same prefix separated by `/`
-      implicit0(openTelemetry: OpenTelemetryMetrics[IO]) <- OpenTelemetryMetrics.resource[IO]("sam", appConfig.prometheusConfig.endpointPort - 1)
-
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
         foregroundDirectoryDAO,
@@ -167,8 +158,7 @@ object Boot extends IOApp with LazyLogging {
       azureManagedResourceGroupDAO,
       oauth2Config
     )(
-      actorSystem,
-      openTelemetry
+      actorSystem
     )
 
   private def cloudExtensionsInitializerResource(
@@ -418,7 +408,7 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO: PostgresDirectoryDAO,
       azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO,
       oauth2Config: OpenIDConnectConfiguration
-  )(implicit actorSystem: ActorSystem, openTelemetry: OpenTelemetryMetrics[IO]): AppDependencies = {
+  )(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(

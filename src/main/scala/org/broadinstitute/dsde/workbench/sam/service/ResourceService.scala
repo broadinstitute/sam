@@ -8,7 +8,6 @@ import cats.implicits._
 import com.google.common.annotations.VisibleForTesting
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.audit._
@@ -21,7 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.{
   FilteredResources,
   SamUser
 }
-import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext
@@ -36,10 +35,8 @@ class ResourceService(
     private val cloudExtensions: CloudExtensions,
     val emailDomain: String,
     private val allowedAdminEmailDomains: Set[String]
-)(implicit val executionContext: ExecutionContext, val openTelemetry: OpenTelemetryMetrics[IO])
+)(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
-
-  private val openTelemetryTags: Map[String, String] = Map("endpoint" -> "createResource")
 
   private[service] case class ValidatableAccessPolicy(
       policyName: AccessPolicyName,
@@ -130,7 +127,7 @@ class ResourceService(
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
   ): IO[Resource] =
-    openTelemetry.time("api.v1.resource.create.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       logger.info(s"Creating new `${resourceType.name}` with resourceId: `${resourceId}`")
       makeValidatablePolicies(policiesMap, samRequestContext).flatMap { policies =>
         validateCreateResource(resourceType, resourceId, policies, authDomain, userId, parentOpt, samRequestContext).flatMap {
@@ -322,7 +319,7 @@ class ResourceService(
   // Resources with children cannot be deleted and will throw a 400.
   @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.resource.delete.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       for {
         _ <- checkNoChildren(resource, samRequestContext)
 
@@ -376,7 +373,7 @@ class ResourceService(
     }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] =
-    openTelemetry.time("api.v1.resource.listUserRoles.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext)
     }
 
@@ -396,7 +393,7 @@ class ResourceService(
       policyMembership: AccessPolicyMembershipRequest,
       samRequestContext: SamRequestContext
   ): IO[AccessPolicy] =
-    openTelemetry.time("api.v1.resource.overwritePolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       for {
         policy <- makeValidatablePolicy(policyName, policyMembership, samRequestContext)
         _ <- validatePolicy(resourceType, policy).map {
@@ -444,7 +441,7 @@ class ResourceService(
     * @return
     */
   def overwritePolicyMembers(policyId: FullyQualifiedPolicyId, membersList: Set[WorkbenchEmail], samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.resource.overwritePolicyMembers.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       mapEmailsToSubjects(membersList, samRequestContext).flatMap { emailsToSubjects =>
         validateMemberEmails(emailsToSubjects) match {
           case Some(error) => IO.raiseError(new WorkbenchExceptionWithErrorReport(error.copy(statusCode = Option(StatusCodes.BadRequest))))
@@ -478,7 +475,7 @@ class ResourceService(
       policyIdentity: FullyQualifiedPolicyId,
       policy: ValidatableAccessPolicy,
       samRequestContext: SamRequestContext
-  ): IO[AccessPolicy] = openTelemetry.time("api.v1.resource.createOrUpdatePolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+  ): IO[AccessPolicy] =  {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet ++
       policy.memberPolicies.getOrElse(Set.empty).map(p => FullyQualifiedPolicyId(FullyQualifiedResourceId(p.resourceTypeName, p.resourceId), p.policyName))
     accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext).flatMap { originalPolicies =>
@@ -536,7 +533,7 @@ class ResourceService(
       resourceId: FullyQualifiedResourceId,
       samUser: SamUser,
       samRequestContext: SamRequestContext
-  ): IO[List[Boolean]] = openTelemetry.time("api.v1.resource.leaveResource.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+  ): IO[List[Boolean]] = {
     accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext) flatMap { policiesForResource =>
       val policiesForUser = policiesForResource.filter(_.members.contains(samUser.id)).toSet
       val publicPoliciesForResource = policiesForResource.filter(_.public).toSet
@@ -666,7 +663,7 @@ class ResourceService(
     } yield ()
 
   def addSubjectToPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
-    openTelemetry.time("api.v1.resource.addSubjectToPolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       subject match {
         case _: FullyQualifiedPolicyId if policyIdentity.resource.resourceTypeName.equals(ManagedGroupService.managedGroupTypeName) =>
           // https://broadworkbench.atlassian.net/browse/CA-257
@@ -683,7 +680,7 @@ class ResourceService(
     }
 
   def removeSubjectFromPolicy(policyIdentity: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
-    openTelemetry.time("api.v1.resource.removeSubjectFromPolicy.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       for {
         originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
         _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
@@ -714,7 +711,7 @@ class ResourceService(
   }
 
   def listResourcePolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyResponseEntry]] =
-    openTelemetry.time("api.v1.resource.listResourcePolicies.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       accessPolicyDAO.listAccessPolicyMemberships(resource, samRequestContext).map { policiesWithMembership =>
         policiesWithMembership.map { policyWithMembership =>
           AccessPolicyResponseEntry(policyWithMembership.policyName, policyWithMembership.membership, policyWithMembership.email)
@@ -798,7 +795,7 @@ class ResourceService(
   private def generateGroupEmail() = WorkbenchEmail(s"policy-${UUID.randomUUID}@$emailDomain")
 
   def isPublic(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Boolean] =
-    openTelemetry.time("api.v1.resource.isPublic.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       accessPolicyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).flatMap {
         case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "policy not found")))
         case Some(accessPolicy) => IO.pure(accessPolicy.public)
@@ -815,7 +812,7 @@ class ResourceService(
     * @return
     */
   def setPublic(policyId: FullyQualifiedPolicyId, public: Boolean, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.resource.setPublic.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       for {
         authDomain <- accessPolicyDAO.loadResourceAuthDomain(policyId.resource, samRequestContext)
         _ <- authDomain match {
@@ -843,7 +840,7 @@ class ResourceService(
     }
 
   def listAllFlattenedResourceUsers(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[UserIdInfo]] =
-    openTelemetry.time("api.v1.resource.listAllFlattenedResourceUsers.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       for {
         accessPolicies <- accessPolicyDAO.listAccessPolicies(resourceId, samRequestContext)
         members <- accessPolicies.toList.parTraverse(accessPolicy => accessPolicyDAO.listFlattenedPolicyMembers(accessPolicy.id, samRequestContext))
@@ -860,7 +857,7 @@ class ResourceService(
     * https://docs.google.com/document/d/10qGxsV9BeM6-N_Zk27_JIayE509B8LUQBGiGrqB0taY/edit#heading=h.dxz6xjtnz9la
     */
   def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.resource.setResourceParent.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       for {
         authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
         _ <- authDomain match {
@@ -886,7 +883,7 @@ class ResourceService(
     }
 
   def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] =
-    openTelemetry.time("api.v1.resource.deleteResourceParent.time", API_TIMING_DURATION_BUCKET, openTelemetryTags) {
+     {
       for {
         maybeOldParent <- accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
         _ <- maybeOldParent.traverse { oldParent =>

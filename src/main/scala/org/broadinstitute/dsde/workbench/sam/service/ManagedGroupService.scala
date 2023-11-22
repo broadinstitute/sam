@@ -4,13 +4,12 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
-import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /** Created by gpolumbo on 2/21/2018.
   */
@@ -22,7 +21,7 @@ class ManagedGroupService(
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
     private val emailDomain: String
-)(implicit val openTelemetry: OpenTelemetryMetrics[IO])
+)
     extends LazyLogging {
 
   def managedGroupType: ResourceType =
@@ -36,7 +35,7 @@ class ManagedGroupService(
       samUser: SamUser,
       accessInstructionsOpt: Option[String] = None,
       samRequestContext: SamRequestContext
-  ): IO[Resource] = openTelemetry.time("api.v1.managedGroup.create.time", API_TIMING_DURATION_BUCKET) {
+  ): IO[Resource] =  {
     def adminRole = managedGroupType.ownerRoleName
 
     val memberPolicy =
@@ -73,7 +72,7 @@ class ManagedGroupService(
       componentPolicies: Set[AccessPolicy],
       accessInstructionsOpt: Option[String],
       samRequestContext: SamRequestContext
-  ): IO[BasicWorkbenchGroup] = openTelemetry.time("api.v1.managedGroup.createAggregate.time", API_TIMING_DURATION_BUCKET) {
+  ): IO[BasicWorkbenchGroup] = {
     val email = WorkbenchEmail(constructEmail(resource.resourceId.value))
     val workbenchGroupName = WorkbenchGroupName(resource.resourceId.value)
     val groupMembers: Set[WorkbenchSubject] = componentPolicies.collect {
@@ -118,7 +117,7 @@ class ManagedGroupService(
     directoryDAO.loadGroup(WorkbenchGroupName(groupId.value), samRequestContext).map(_.map(_.email))
 
   def deleteManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.managedGroup.delete.time", API_TIMING_DURATION_BUCKET) {
+    {
       for {
         // order is important here, we want to make sure we do all the cloudExtensions calls before we touch the database
         // so failures there do not leave the database in a bad state
@@ -132,7 +131,7 @@ class ManagedGroupService(
     }
 
   def listGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ManagedGroupMembershipEntry]] =
-    openTelemetry.time("api.v1.managedGroup.list.time", API_TIMING_DURATION_BUCKET) {
+    {
       for {
         managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId, samRequestContext)
         emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName).toSet, samRequestContext)
@@ -150,7 +149,7 @@ class ManagedGroupService(
     }
 
   def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, samRequestContext: SamRequestContext): IO[Set[WorkbenchEmail]] =
-    openTelemetry.time("api.v1.managedGroup.listPolicyMemberEmails.time", API_TIMING_DURATION_BUCKET) {
+    {
       val policyIdentity =
         FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
       resourceService.loadResourcePolicy(policyIdentity, samRequestContext) flatMap {
@@ -194,7 +193,7 @@ class ManagedGroupService(
   }
 
   def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.managedGroup.requestAccess.time", API_TIMING_DURATION_BUCKET) {
+    {
       def extractGoogleSubjectId(requesterUser: Option[SamUser]): IO[WorkbenchUserId] =
         (for {
           u <- requesterUser
