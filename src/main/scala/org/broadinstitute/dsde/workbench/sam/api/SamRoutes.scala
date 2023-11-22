@@ -14,6 +14,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
+import io.opentelemetry.api.OpenTelemetry
 import io.sentry.Sentry
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
@@ -40,7 +41,8 @@ abstract class SamRoutes(
     val liquibaseConfig: LiquibaseConfig,
     val oidcConfig: OpenIDConnectConfiguration,
     val adminConfig: AdminConfig,
-    val azureService: Option[AzureService]
+    val azureService: Option[AzureService],
+    val otel: OpenTelemetry
 )(implicit
     val system: ActorSystem,
     val materializer: Materializer,

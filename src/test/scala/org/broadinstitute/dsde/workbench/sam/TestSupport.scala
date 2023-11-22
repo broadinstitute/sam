@@ -7,6 +7,7 @@ import cats.effect._
 import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import com.typesafe.config.ConfigFactory
+import io.opentelemetry.api.OpenTelemetry
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.mock._
@@ -185,7 +186,8 @@ object TestSupport extends TestSupport {
     LiquibaseConfig("", false),
     samDependencies.oauth2Config,
     samDependencies.adminConfig,
-    Some(samDependencies.azureService)
+    Some(samDependencies.azureService),
+    OpenTelemetry.noop()
   ) with MockSamUserDirectives with GoogleExtensionRoutes {
     override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
     override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {

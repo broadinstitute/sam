@@ -7,6 +7,7 @@ import akka.http.scaladsl.server.Directives.{complete, handleExceptions}
 import akka.http.scaladsl.server.{MissingHeaderRejection, Route}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.unsafe.implicits.global
+import io.opentelemetry.api.OpenTelemetry
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.Generator._
@@ -38,7 +39,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       override val tosService: TosService = new TosService(cloudExtensions, dirDAO, tosConfig)
       override val userService: UserService = new MockUserService(directoryDAO = dirDAO, tosService = tosService)
       override val adminConfig: AppConfig.AdminConfig = testAdminConfig
-
+      override val otel: OpenTelemetry = OpenTelemetry.noop
     }
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {

@@ -6,11 +6,11 @@ import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver}
 import com.google.common.annotations.VisibleForTesting
 import com.google.pubsub.v1.PubsubMessage
 import com.typesafe.scalalogging.LazyLogging
-import io.opencensus.trace.AttributeValue
+import io.opentelemetry.api.trace.Span
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
+import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json._
 
@@ -23,9 +23,11 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
     traceIO("GoogleGroupSyncMessageReceiver-PubSubMessage", SamRequestContext()) { samRequestContext =>
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
       logger.debug(s"received sync message: $groupId")
-      samRequestContext.parentSpan.foreach(
-        _.putAttribute("groupId", AttributeValue.stringAttributeValue(groupId.toString))
-      )
+      samRequestContext.otelContext
+        .map(Span.fromContext)
+        .foreach(
+          _.setAttribute("groupId", groupId.toString)
+        )
       groupSynchronizer
         .synchronizeGroupMembers(
           groupId,

@@ -131,11 +131,40 @@ object Dependencies {
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
   val circeCore = "io.circe" %% "circe-core" % "0.14.4"
 
+  // OpenTelemetry
+  val openTelemetryVersion = "1.31.0"
+  val otelApi: ModuleID = "io.opentelemetry" % "opentelemetry-api" % openTelemetryVersion
+  val otelSdk: ModuleID = "io.opentelemetry" % "opentelemetry-sdk" % openTelemetryVersion
+  val otelSdkMetrics: ModuleID = "io.opentelemetry" % "opentelemetry-sdk-metrics" % openTelemetryVersion
+  val otelExporterLogging: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-logging" % openTelemetryVersion
+  val otelSemconv: ModuleID = "io.opentelemetry.semconv" % "opentelemetry-semconv" % "1.21.0-alpha"
+  val otelSpringWebMvc: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-spring-webmvc-6.0" % (openTelemetryVersion + "-alpha")
+  val otelAnnotation: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-annotations" % openTelemetryVersion
+  val otelSpringBoot: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-spring-boot" % (openTelemetryVersion + "-alpha")
+  val otelPrometheusExporter: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-prometheus" % (openTelemetryVersion + "-alpha")
+
+  // Google cloud open telemetry exporters
+  var gcpOpenTelemetryExporterVersion = "0.25.2"
+  var googleTraceExporter: ModuleID = "com.google.cloud.opentelemetry" % "exporter-trace" % gcpOpenTelemetryExporterVersion
+
   val openCensusDependencies = Seq(
     opencensusScalaCode,
     opencensusAkkaHttp,
     opencensusStackDriverExporter,
     opencensusLoggingExporter
+  )
+
+  val openTelemetryDependencies = Seq(
+    otelApi,
+    otelSdk,
+    otelSdkMetrics,
+    otelExporterLogging,
+    otelSemconv,
+    otelSpringWebMvc,
+    otelAnnotation,
+    otelSpringBoot,
+    otelPrometheusExporter,
+    googleTraceExporter
   )
 
   val pact4sDependencies = Seq(
@@ -205,5 +234,5 @@ object Dependencies {
     azureManagedApplications,
     sentry,
     sentryLogback
-  ) ++ openCensusDependencies
+  ) ++ openCensusDependencies ++ openTelemetryDependencies
 }

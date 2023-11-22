@@ -68,14 +68,16 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
             } ~
             pathPrefix(Segment) { samUserId =>
               val workbenchUserId = WorkbenchUserId(samUserId)
-              // api/users/v2/{sam_user_id}
-              pathEndOrSingleSlash {
-                regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
-              } ~
-              // api/users/v2/{sam_user_id}/allowed
-              pathPrefix("allowed") {
+              addTelemetry(samRequestContext, "sam_user_id" -> workbenchUserId) {
+                // api/users/v2/{sam_user_id}
                 pathEndOrSingleSlash {
-                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+                } ~
+                // api/users/v2/{sam_user_id}/allowed
+                pathPrefix("allowed") {
+                  pathEndOrSingleSlash {
+                    regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                  }
                 }
               }
             }

@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
 
-trait TermsOfServiceRoutes extends SamUserDirectives {
+trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirectives {
   val tosService: TosService
   implicit val executionContext: ExecutionContext
   private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
@@ -78,7 +78,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
           pathPrefix("user") { // api/termsOfService/v1/user
             pathPrefix("self") { // api/termsOfService/v1/user/self
               pathEndOrSingleSlash {
-                get {
+                getWithTelemetry(samRequestContext, "userId" -> requestUserId) {
                   complete {
                     tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
                   }

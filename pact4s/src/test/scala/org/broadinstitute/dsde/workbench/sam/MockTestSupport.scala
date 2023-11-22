@@ -10,6 +10,7 @@ import cats.effect._
 import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import com.typesafe.config.{Config, ConfigFactory}
+import io.opentelemetry.api.OpenTelemetry
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.mock._
@@ -226,6 +227,7 @@ object MockTestSupport extends MockTestSupport {
       AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty)
 
     override def asAdminServiceUser: Directive0 = Directive.Empty
+    override val otel: OpenTelemetry = OpenTelemetry.noop
   }
 
   def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): MockSamRoutes =
