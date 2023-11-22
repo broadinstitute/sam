@@ -21,8 +21,7 @@ class ManagedGroupService(
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
     private val emailDomain: String
-)
-    extends LazyLogging {
+) extends LazyLogging {
 
   def managedGroupType: ResourceType =
     resourceTypes.getOrElse(
@@ -35,7 +34,7 @@ class ManagedGroupService(
       samUser: SamUser,
       accessInstructionsOpt: Option[String] = None,
       samRequestContext: SamRequestContext
-  ): IO[Resource] =  {
+  ): IO[Resource] = {
     def adminRole = managedGroupType.ownerRoleName
 
     val memberPolicy =
@@ -117,47 +116,42 @@ class ManagedGroupService(
     directoryDAO.loadGroup(WorkbenchGroupName(groupId.value), samRequestContext).map(_.map(_.email))
 
   def deleteManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    {
-      for {
-        // order is important here, we want to make sure we do all the cloudExtensions calls before we touch the database
-        // so failures there do not leave the database in a bad state
-        // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
-        _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
-        managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
-        _ <- resourceService.cloudDeletePolicies(managedGroupResourceId, samRequestContext)
-        _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value), samRequestContext)
-        _ <- resourceService.deleteResource(managedGroupResourceId, samRequestContext)
-      } yield ()
-    }
+    for {
+      // order is important here, we want to make sure we do all the cloudExtensions calls before we touch the database
+      // so failures there do not leave the database in a bad state
+      // resourceService.deleteResource also does cloudExtensions.onGroupDelete first thing
+      _ <- cloudExtensions.onGroupDelete(WorkbenchEmail(constructEmail(groupId.value)))
+      managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
+      _ <- resourceService.cloudDeletePolicies(managedGroupResourceId, samRequestContext)
+      _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value), samRequestContext)
+      _ <- resourceService.deleteResource(managedGroupResourceId, samRequestContext)
+    } yield ()
 
   def listGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ManagedGroupMembershipEntry]] =
-    {
-      for {
-        managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId, samRequestContext)
-        emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName).toSet, samRequestContext)
-      } yield {
-        val emailLookupMap = emailLookup.toMap
-        // This will silently ignore any group where the email could not be loaded. This can happen when a
-        // managed group is in an inconsistent state (partially created/deleted or created incorrectly).
-        // It also includes only admin and member policies
-        managedGroupsWithRole.flatMap { groupAndRole =>
-          emailLookupMap
-            .get(groupAndRole.groupName)
-            .map(email => ManagedGroupMembershipEntry(ResourceId(groupAndRole.groupName.value), groupAndRole.role, email))
-        }
+    for {
+      managedGroupsWithRole <- policyEvaluatorService.listUserManagedGroupsWithRole(userId, samRequestContext)
+      emailLookup <- directoryDAO.batchLoadGroupEmail(managedGroupsWithRole.map(_.groupName).toSet, samRequestContext)
+    } yield {
+      val emailLookupMap = emailLookup.toMap
+      // This will silently ignore any group where the email could not be loaded. This can happen when a
+      // managed group is in an inconsistent state (partially created/deleted or created incorrectly).
+      // It also includes only admin and member policies
+      managedGroupsWithRole.flatMap { groupAndRole =>
+        emailLookupMap
+          .get(groupAndRole.groupName)
+          .map(email => ManagedGroupMembershipEntry(ResourceId(groupAndRole.groupName.value), groupAndRole.role, email))
       }
     }
 
-  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, samRequestContext: SamRequestContext): IO[Set[WorkbenchEmail]] =
-    {
-      val policyIdentity =
-        FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
-      resourceService.loadResourcePolicy(policyIdentity, samRequestContext) flatMap {
-        case Some(policy) => IO.pure(policy.memberEmails)
-        case None =>
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
-      }
+  def listPolicyMemberEmails(resourceId: ResourceId, policyName: ManagedGroupPolicyName, samRequestContext: SamRequestContext): IO[Set[WorkbenchEmail]] = {
+    val policyIdentity =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), policyName)
+    resourceService.loadResourcePolicy(policyIdentity, samRequestContext) flatMap {
+      case Some(policy) => IO.pure(policy.memberEmails)
+      case None =>
+        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Group or policy could not be found: $policyIdentity")))
     }
+  }
 
   def overwritePolicyMemberEmails(
       resourceId: ResourceId,
@@ -192,45 +186,44 @@ class ManagedGroupService(
     resourceService.removeSubjectFromPolicy(resourceAndPolicyName, subject, samRequestContext)
   }
 
-  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
-    {
-      def extractGoogleSubjectId(requesterUser: Option[SamUser]): IO[WorkbenchUserId] =
-        (for {
-          u <- requesterUser
-          s <- u.googleSubjectId
-        } yield s) match {
-          case Some(subjectId) => IO.pure(WorkbenchUserId(subjectId.value))
-          // don't know how a user would get this far without getting a subject id
-          case None => IO.raiseError(new WorkbenchException(s"unable to find subject id for $requesterUserId"))
-        }
-
-      getAccessInstructions(resourceId, samRequestContext).flatMap {
-        case Some(accessInstructions) =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions"))
-          )
-        case None =>
-          // Thurloe is the thing that sends the emails and it knows only about google subject ids, not internal sam user ids
-          // so we have to do some conversion here which makes the code look less straight forward
-          val resourceAndAdminPolicyName =
-            FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
-
-          for {
-            requesterUser <- directoryDAO.loadUser(requesterUserId, samRequestContext)
-            requesterSubjectId <- extractGoogleSubjectId(requesterUser)
-            admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName, samRequestContext)
-            // ignore any admin that does not have a google subject id (they have not registered yet anyway)
-            adminUserIds = admins.flatMap { admin =>
-              admin.googleSubjectId.map(id => WorkbenchUserId(id.value))
-            }
-          } yield {
-            val notifications = adminUserIds.map { recipientUserId =>
-              Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, adminUserIds, requesterSubjectId)
-            }
-            cloudExtensions.fireAndForgetNotifications(notifications)
-          }
+  def requestAccess(resourceId: ResourceId, requesterUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
+    def extractGoogleSubjectId(requesterUser: Option[SamUser]): IO[WorkbenchUserId] =
+      (for {
+        u <- requesterUser
+        s <- u.googleSubjectId
+      } yield s) match {
+        case Some(subjectId) => IO.pure(WorkbenchUserId(subjectId.value))
+        // don't know how a user would get this far without getting a subject id
+        case None => IO.raiseError(new WorkbenchException(s"unable to find subject id for $requesterUserId"))
       }
+
+    getAccessInstructions(resourceId, samRequestContext).flatMap {
+      case Some(accessInstructions) =>
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Please follow special access instructions: $accessInstructions"))
+        )
+      case None =>
+        // Thurloe is the thing that sends the emails and it knows only about google subject ids, not internal sam user ids
+        // so we have to do some conversion here which makes the code look less straight forward
+        val resourceAndAdminPolicyName =
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, resourceId), ManagedGroupService.adminPolicyName)
+
+        for {
+          requesterUser <- directoryDAO.loadUser(requesterUserId, samRequestContext)
+          requesterSubjectId <- extractGoogleSubjectId(requesterUser)
+          admins <- accessPolicyDAO.listFlattenedPolicyMembers(resourceAndAdminPolicyName, samRequestContext)
+          // ignore any admin that does not have a google subject id (they have not registered yet anyway)
+          adminUserIds = admins.flatMap { admin =>
+            admin.googleSubjectId.map(id => WorkbenchUserId(id.value))
+          }
+        } yield {
+          val notifications = adminUserIds.map { recipientUserId =>
+            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, adminUserIds, requesterSubjectId)
+          }
+          cloudExtensions.fireAndForgetNotifications(notifications)
+        }
     }
+  }
 
   def getAccessInstructions(groupId: ResourceId, samRequestContext: SamRequestContext): IO[Option[String]] =
     directoryDAO.getManagedGroupAccessInstructions(WorkbenchGroupName(groupId.value), samRequestContext)

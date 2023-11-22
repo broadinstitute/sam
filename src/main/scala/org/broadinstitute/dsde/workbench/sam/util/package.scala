@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam
 
 package object util {
+
   /** Takes a list of pairs and returns a map grouped by the first element with values of lists of the second
     * @param list
     *   pairs to group by first element
