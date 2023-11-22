@@ -71,7 +71,7 @@ object SamJsonSupport {
 
   implicit val oldTermsOfServiceDetailsFormat = jsonFormat4(OldTermsOfServiceDetails.apply)
 
-  implicit val TermsOfServiceDetailsFormat = jsonFormat3(TermsOfServiceDetails.apply)
+  implicit val TermsOfServiceDetailsFormat = jsonFormat4(TermsOfServiceDetails.apply)
 
   implicit val SamUserTosFormat = jsonFormat4(SamUserTos.apply)
 
