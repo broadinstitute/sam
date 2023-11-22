@@ -1,10 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.IO
+import io.opentelemetry.api.GlobalOpenTelemetry
 import io.opentelemetry.context.Context
 import io.opentelemetry.instrumentation.api.instrumenter.{Instrumenter, SpanKindExtractor}
 
 object OpenTelemetryIOUtils {
+  // lazy to make sure GlobalOpenTelemetry is initialized
+  private lazy val instrumenter: Instrumenter[String, Object] =
+    Instrumenter
+      .builder[String, Object](GlobalOpenTelemetry.get(), "OpenTelemetryIOUtils", identity[String])
+      .buildInstrumenter(SpanKindExtractor.alwaysInternal())
 
   def traceIOWithContext[T](
       name: String,
@@ -26,12 +32,7 @@ object OpenTelemetryIOUtils {
 
   private def traceIOSpan[T](name: String, otelContext: Context, samRequestContext: SamRequestContext)(
       f: SamRequestContext => IO[T]
-  ): IO[T] = {
-    val instrumenter: Instrumenter[Object, Object] =
-      Instrumenter
-        .builder[Object, Object](samRequestContext.openTelemetry, "OpenTelemetryIOUtils", _ => name)
-        .buildInstrumenter(SpanKindExtractor.alwaysInternal())
-
+  ): IO[T] =
     if (instrumenter.shouldStart(otelContext, name)) {
       for {
         childContext <- IO(instrumenter.start(otelContext, name))
@@ -41,5 +42,4 @@ object OpenTelemetryIOUtils {
     } else {
       f(samRequestContext)
     }
-  }
 }

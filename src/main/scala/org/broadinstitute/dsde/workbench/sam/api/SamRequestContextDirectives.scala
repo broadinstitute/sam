@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, Directive1, ExceptionHandler}
-import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.GlobalOpenTelemetry
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.context.Context
 import io.opentelemetry.instrumentation.api.instrumenter.http.{
@@ -26,7 +26,15 @@ import scala.jdk.CollectionConverters._
 /** Created by ajang on 2020-05-28
   */
 trait SamRequestContextDirectives {
-  val otel: OpenTelemetry
+  // lazy to make sure GlobalOpenTelemetry is initialized
+  private lazy val instrumenter: Instrumenter[HttpRequest, HttpResponse] =
+    Instrumenter
+      .builder[HttpRequest, HttpResponse](GlobalOpenTelemetry.get(), "SamRequest", req => req.uri.path.toString())
+      .addAttributesExtractor(HttpServerAttributesExtractor.create[HttpRequest, HttpResponse](AkkaHttpServerAttributesGetter))
+      .setSpanStatusExtractor(HttpSpanStatusExtractor.create(AkkaHttpServerAttributesGetter))
+      .addOperationMetrics(HttpServerMetrics.get)
+      .addContextCustomizer(HttpServerRoute.builder(AkkaHttpServerAttributesGetter).build())
+      .buildInstrumenter(SpanKindExtractor.alwaysServer())
 
   /** Provides a new SamRequestContext with a root tracing span.
     */
@@ -34,7 +42,7 @@ trait SamRequestContextDirectives {
     for {
       clientIP <- extractClientIP
       otelContext <- traceRequest
-    } yield SamRequestContext(Option(otelContext), clientIP.toOption, openTelemetry = otel)
+    } yield SamRequestContext(Option(otelContext), clientIP.toOption)
 
   /** Adds the route and parameters to telemetry. The route is consistent across all requests to the same endpoint. For example, if the route is
     * /api/resource/{resourceId}, then requests to /api/resource/123 and /api/resource/345 will have the same route. The route is constructed from the uri and
@@ -98,15 +106,6 @@ trait SamRequestContextDirectives {
         provide(Context.current())
       }
     }
-
-  private val instrumenter: Instrumenter[HttpRequest, HttpResponse] =
-    Instrumenter
-      .builder[HttpRequest, HttpResponse](otel, "SamRequest", req => req.uri.path.toString())
-      .addAttributesExtractor(HttpServerAttributesExtractor.create[HttpRequest, HttpResponse](AkkaHttpServerAttributesGetter))
-      .setSpanStatusExtractor(HttpSpanStatusExtractor.create(AkkaHttpServerAttributesGetter))
-      .addOperationMetrics(HttpServerMetrics.get)
-      .addContextCustomizer(HttpServerRoute.builder(AkkaHttpServerAttributesGetter).build())
-      .buildInstrumenter(SpanKindExtractor.alwaysServer())
 
   private def recordSuccess(instrumenter: Instrumenter[HttpRequest, HttpResponse], context: Context, request: HttpRequest) =
     mapResponse { resp =>

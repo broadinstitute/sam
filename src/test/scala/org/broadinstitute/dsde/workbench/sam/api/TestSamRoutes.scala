@@ -6,7 +6,6 @@ import akka.http.scaladsl.server.Directives.reject
 import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
 import cats.effect.unsafe.implicits.global
-import io.opentelemetry.api.OpenTelemetry
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -55,8 +54,7 @@ class TestSamRoutes(
       LiquibaseConfig("", false),
       FakeOpenIDConnectConfiguration,
       AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty),
-      azureService,
-      OpenTelemetry.noop()
+      azureService
     )
     with MockSamUserDirectives
     with ExtensionRoutes
@@ -97,8 +95,7 @@ class TestSamTosEnabledRoutes(
       LiquibaseConfig("", false),
       FakeOpenIDConnectConfiguration,
       AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty),
-      azureService,
-      OpenTelemetry.noop()
+      azureService
     )
     with MockSamUserDirectives
     with ExtensionRoutes

@@ -74,6 +74,7 @@ object Boot extends IOApp with LazyLogging {
 
   private def startup()(implicit system: ActorSystem): IO[Unit] = {
     val appConfig = AppConfig.load
+    instantiateOpenTelemetry(appConfig)
     val appDependencies = createAppDependencies(appConfig)
 
     appDependencies.use { dependencies => // this is where the resource is used
@@ -439,8 +440,6 @@ object Boot extends IOApp with LazyLogging {
     val azureService = config.azureServicesConfig.map { config =>
       new AzureService(new CrlService(config), directoryDAO, azureManagedResourceGroupDAO)
     }
-    val openTelemetryInstance = instantiateOpenTelemetry(config)
-
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
         val routes = new SamRoutes(
@@ -454,8 +453,7 @@ object Boot extends IOApp with LazyLogging {
           config.liquibaseConfig,
           oauth2Config,
           config.adminConfig,
-          azureService,
-          openTelemetryInstance
+          azureService
         ) with StandardSamUserDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
@@ -474,8 +472,7 @@ object Boot extends IOApp with LazyLogging {
           config.liquibaseConfig,
           oauth2Config,
           config.adminConfig,
-          azureService,
-          openTelemetryInstance
+          azureService
         ) with StandardSamUserDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
     }

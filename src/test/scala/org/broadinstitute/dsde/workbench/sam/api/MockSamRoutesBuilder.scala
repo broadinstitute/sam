@@ -4,7 +4,6 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.server.Directives.{onSuccess, reject}
 import akka.http.scaladsl.server._
 import akka.stream.Materializer
-import io.opentelemetry.api.OpenTelemetry
 import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, WorkbenchGroup}
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -132,8 +131,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       null,
       null,
       null,
-      None,
-      OpenTelemetry.noop()
+      None
     ) {
       override val cloudExtensions: CloudExtensions = mockCloudExtensions
 

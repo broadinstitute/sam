@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
-import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.context.Context
 import org.broadinstitute.dsde.workbench.sam.audit.AuditInfo
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
@@ -18,8 +17,7 @@ import java.net.InetAddress
 case class SamRequestContext(
     otelContext: Option[Context] = None,
     clientIp: Option[InetAddress] = None,
-    samUser: Option[SamUser] = None,
-    openTelemetry: OpenTelemetry = OpenTelemetry.noop
+    samUser: Option[SamUser] = None
 ) {
   def createAuditInfo: AuditInfo = AuditInfo(samUser.map(_.id), clientIp)
 }
