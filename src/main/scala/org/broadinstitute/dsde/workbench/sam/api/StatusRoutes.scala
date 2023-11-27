@@ -5,6 +5,7 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.sam.service.StatusService
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
+import io.opentelemetry.api.GlobalOpenTelemetry
 import spray.json.{JsObject, JsString}
 import org.broadinstitute.dsde.workbench.util.health.StatusJsonSupport._
 
@@ -19,6 +20,9 @@ trait StatusRoutes {
   val statusService: StatusService
   implicit val executionContext: ExecutionContext
 
+  private lazy val checkStatusSuccessCounter = GlobalOpenTelemetry.getMeter("StatusRoutes").counterBuilder("checkStatus-success").build()
+  private lazy val checkStatusFailureCounter = GlobalOpenTelemetry.getMeter("StatusRoutes").counterBuilder("checkStatus-failure").build()
+
   def statusRoutes: server.Route =
     pathPrefix("status") {
       pathEndOrSingleSlash {
@@ -26,10 +30,10 @@ trait StatusRoutes {
           complete {
             statusService.getStatus().map { statusResponse =>
               val httpStatus = if (statusResponse.ok) {
-//                openTelemetry.incrementCounter("checkStatus-success", tags = openTelemetryTags).unsafeToFuture()
+                checkStatusSuccessCounter.add(1)
                 StatusCodes.OK
               } else {
-//                openTelemetry.incrementCounter("checkStatus-failure", tags = openTelemetryTags).unsafeToFuture()
+                checkStatusFailureCounter.add(1)
                 StatusCodes.InternalServerError
               }
               (httpStatus, statusResponse)
