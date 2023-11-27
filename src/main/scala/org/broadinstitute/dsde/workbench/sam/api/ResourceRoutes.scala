@@ -79,6 +79,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                       putPolicyMembershipOverwrite(policyId, samUser, samRequestContext)
                     } ~ pathPrefix(Segment) { email =>
                       val workbenchEmail = WorkbenchEmail(email)
+                      val memberParams = policyParams(policyId).appended(emailParam(workbenchEmail))
                       withSubject(workbenchEmail, samRequestContext) { subject =>
                         pathEndOrSingleSlash {
                           requireOneOfAction(
@@ -91,12 +92,9 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                               policyId,
                               subject,
                               samRequestContext,
-                              "resourceType" -> policyId.resource.resourceTypeName,
-                              "resourceId" -> policyId.resource.resourceId,
-                              "policyName" -> policyId.accessPolicyName,
-                              "email" -> workbenchEmail
+                              memberParams
                             ) ~
-                            deleteUserFromPolicy(policyId, subject, samRequestContext)
+                            deleteUserFromPolicy(policyId, subject, samRequestContext, memberParams)
                           }
                         }
                       }
@@ -217,18 +215,16 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                       } ~
                       pathPrefix(Segment) { email =>
                         val workbenchEmail = WorkbenchEmail(email)
+                        val memberParams = policyParams(policyId).appended(emailParam(workbenchEmail))
                         withSubject(workbenchEmail, samRequestContext) { subject =>
                           pathEndOrSingleSlash {
                             putUserInPolicy(
                               policyId,
                               subject,
                               samRequestContext,
-                              "resourceType" -> policyId.resource.resourceTypeName,
-                              "resourceId" -> policyId.resource.resourceId,
-                              "policyName" -> policyId.accessPolicyName,
-                              "email" -> workbenchEmail
+                              memberParams
                             ) ~
-                            deleteUserFromPolicy(policyId, subject, samRequestContext)
+                            deleteUserFromPolicy(policyId, subject, samRequestContext, memberParams)
                           }
                         }
                       }
@@ -239,10 +235,11 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                       path(Segment / Segment / Segment) { (memberResourceType, memberResourceId, memberPolicyName) =>
                         val memberResource = FullyQualifiedResourceId(ResourceTypeName(memberResourceType), ResourceId(memberResourceId))
                         val policySubject = FullyQualifiedPolicyId(memberResource, AccessPolicyName(memberPolicyName))
+                        val memberParams = policyParams(policyId) ++ policyParams(policySubject, "member")
                         withPolicy(policySubject, samRequestContext) { memberPolicy =>
                           pathEndOrSingleSlash {
-                            putUserInPolicy(policyId, memberPolicy.id, samRequestContext) ~
-                            deleteUserFromPolicy(policyId, memberPolicy.id, samRequestContext)
+                            putUserInPolicy(policyId, memberPolicy.id, samRequestContext, memberParams) ~
+                            deleteUserFromPolicy(policyId, memberPolicy.id, samRequestContext, memberParams)
                           }
                         }
                       }
@@ -269,17 +266,17 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    getWithTelemetry(samRequestContext, "resourceType" -> resourceType.name) {
+    getWithTelemetry(samRequestContext, resourceTypeParam(resourceType)) {
       complete(Deprecated.Corral.listUserAccessPolicies(resourceType.name, samUser.id, samRequestContext))
     }
 
   def getUserResourcesOfType(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    getWithTelemetry(samRequestContext, "resourceType" -> resourceType.name) {
+    getWithTelemetry(samRequestContext, resourceTypeParam(resourceType)) {
       complete(policyEvaluatorService.listUserResources(resourceType.name, samUser.id, samRequestContext))
     }
 
   def postResource(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    postWithTelemetry(samRequestContext, "resourceType" -> resourceType.name) {
+    postWithTelemetry(samRequestContext, resourceTypeParam(resourceType)) {
       entity(as[CreateResourceRequest]) { createResourceRequest =>
         requireCreateWithOptionalParent(createResourceRequest.parent, resourceType, samUser.id, samRequestContext) {
           if (resourceType.reuseIds && resourceType.isAuthDomainConstrainable) {
@@ -342,16 +339,13 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       else complete(StatusCodes.Forbidden -> s"Leaving a resource of type ${resourceType.name.value} is not supported")
     }
 
-  private def resourceParams(resource: FullyQualifiedResourceId): Seq[(String, ValueObject)] =
-    Seq("resourceType" -> resource.resourceTypeName, "resourceId" -> resource.resourceId)
-
   def getActionPermissionForUser(
       resource: FullyQualifiedResourceId,
       samUser: SamUser,
       action: ResourceAction,
       samRequestContext: SamRequestContext
   ): server.Route =
-    getWithTelemetry(samRequestContext, resourceParams(resource) + "action" -> action) {
+    getWithTelemetry(samRequestContext, resourceParams(resource).appended(actionParam(action)): _*) {
       complete {
         policyEvaluatorService.hasPermission(resource, action, samUser.id, samRequestContext).map { hasPermission =>
           StatusCodes.OK -> JsBoolean(hasPermission)
@@ -370,7 +364,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       userEmail: WorkbenchEmail,
       samRequestContext: SamRequestContext
   ): server.Route =
-    getWithTelemetry(samRequestContext, resourceParams(resource) + "action" -> action, "userEmail" -> userEmail) {
+    getWithTelemetry(samRequestContext, resourceParams(resource) ++ Seq(actionParam(action), emailParam(userEmail)): _*) {
       requireOneOfAction(
         resource,
         Set(SamResourceActions.readPolicies, SamResourceActions.testAnyActionAccess, SamResourceActions.testActionAccess(action)),
@@ -479,7 +473,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       policyId: FullyQualifiedPolicyId,
       subject: WorkbenchSubject,
       samRequestContext: SamRequestContext,
-      pathParams: (String, ValueObject)*
+      pathParams: Seq[(String, ValueObject)]
   ): server.Route =
     putWithTelemetry(samRequestContext, pathParams: _*) {
       complete(
@@ -491,14 +485,11 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       policyId: FullyQualifiedPolicyId,
       subject: WorkbenchSubject,
       samRequestContext: SamRequestContext,
-      pathParams: (String, ValueObject)*
+      pathParams: Seq[(String, ValueObject)]
   ): server.Route =
     deleteWithTelemetry(samRequestContext, pathParams: _*) {
       complete(resourceService.removeSubjectFromPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
     }
-
-  private def policyParams(policyId: FullyQualifiedPolicyId): Seq[(String, ValueObject)] =
-    Seq("resourceType" -> policyId.resource.resourceTypeName, "resourceId" -> policyId.resource.resourceId, "policyName" -> policyId.accessPolicyName)
 
   def getPublicFlag(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     getWithTelemetry(samRequestContext, policyParams(policyId): _*) {

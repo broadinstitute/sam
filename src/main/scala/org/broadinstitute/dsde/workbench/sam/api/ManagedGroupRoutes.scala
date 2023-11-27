@@ -30,43 +30,40 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
     (pathPrefix("groups" / "v1") | pathPrefix("group")) {
       pathPrefix(Segment) { groupId =>
         val managedGroup = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-        val groupIdParam = "groupId" -> managedGroup.resourceId
         pathEndOrSingleSlash {
-          getWithTelemetry(samRequestContext, groupIdParam) {
+          getWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleGetGroup(managedGroup.resourceId, samRequestContext)
-          } ~ postWithTelemetry(samRequestContext, groupIdParam) {
+          } ~ postWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleCreateGroup(managedGroup.resourceId, samUser, samRequestContext)
-          } ~ deleteWithTelemetry(samRequestContext, groupIdParam) {
+          } ~ deleteWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleDeleteGroup(managedGroup, samUser, samRequestContext)
           }
         } ~ pathPrefix("requestAccess") {
-          postWithTelemetry(samRequestContext, groupIdParam) {
+          postWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleRequestAccess(managedGroup, samUser, samRequestContext)
           }
         } ~ path("accessInstructions") {
-          putWithTelemetry(samRequestContext, groupIdParam) {
+          putWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
               handleSetAccessInstructions(managedGroup, accessInstructions, samUser, samRequestContext)
             }
-          } ~ getWithTelemetry(samRequestContext, groupIdParam) {
+          } ~ getWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleGetAccessInstructions(managedGroup, samRequestContext)
           }
         } ~ pathPrefix(Segment) { policyName =>
           val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
-          val policyNameParam = "policyName" -> accessPolicyName
           pathEndOrSingleSlash {
-            getWithTelemetry(samRequestContext, groupIdParam, policyNameParam) {
+            getWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName)) {
               handleListEmails(managedGroup, accessPolicyName, samUser, samRequestContext)
-            } ~ putWithTelemetry(samRequestContext, groupIdParam, policyNameParam) {
+            } ~ putWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName)) {
               handleOverwriteEmails(managedGroup, accessPolicyName, samUser, samRequestContext)
             }
           } ~ pathPrefix(Segment) { email =>
             val workbenchEmail = WorkbenchEmail(email)
-            val emailParam = "email" -> workbenchEmail
             pathEndOrSingleSlash {
-              putWithTelemetry(samRequestContext, groupIdParam, policyNameParam, emailParam) {
+              putWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName), emailParam(workbenchEmail)) {
                 handleAddEmailToPolicy(managedGroup, accessPolicyName, workbenchEmail, samUser, samRequestContext)
-              } ~ deleteWithTelemetry(samRequestContext, groupIdParam, policyNameParam, emailParam) {
+              } ~ deleteWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName), emailParam(workbenchEmail)) {
                 handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, workbenchEmail, samUser, samRequestContext)
               }
             }

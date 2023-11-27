@@ -15,7 +15,18 @@ import io.opentelemetry.instrumentation.api.instrumenter.http.{
   HttpSpanStatusExtractor
 }
 import io.opentelemetry.instrumentation.api.instrumenter.{Instrumenter, SpanKindExtractor}
-import org.broadinstitute.dsde.workbench.model.ValueObject
+import org.apache.commons.lang3.StringUtils
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.model.{ValueObject, WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.model.{
+  AccessPolicyName,
+  FullyQualifiedPolicyId,
+  FullyQualifiedResourceId,
+  ResourceAction,
+  ResourceId,
+  ResourceType,
+  ResourceTypeName
+}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.util
@@ -84,6 +95,43 @@ trait SamRequestContextDirectives {
   def patchWithTelemetry(samRequestContext: SamRequestContext, paramAndValues: (String, ValueObject)*): Directive0 =
     addTelemetry(samRequestContext, paramAndValues: _*) & patch
 
+  // the following are utility methods for constructing parameter and value tuples, use these for consistent parameter naming
+  def resourceTypeParam(resourceTypeName: ResourceTypeName, prefix: String = ""): (String, ValueObject) =
+    // the uncapitalize and prefix stuff is because some apis have 2 resource types in the path, so we need to distinguish them
+    StringUtils.uncapitalize(prefix + "ResourceType") -> resourceTypeName
+
+  def resourceTypeParam(resourceType: ResourceType): (String, ValueObject) =
+    resourceTypeParam(resourceType.name)
+
+  def resourceIdParam(resourceId: ResourceId, prefix: String = ""): (String, ValueObject) =
+    // the uncapitalize and prefix stuff is because some apis have 2 resource ids in the path, so we need to distinguish them
+    StringUtils.uncapitalize(prefix + "ResourceId") -> resourceId
+
+  def resourceParams(resource: FullyQualifiedResourceId, prefix: String = ""): Seq[(String, ValueObject)] =
+    Seq(resourceTypeParam(resource.resourceTypeName, prefix), resourceIdParam(resource.resourceId, prefix))
+
+  def emailParam(workbenchEmail: WorkbenchEmail): (String, ValueObject) =
+    "email" -> workbenchEmail
+
+  def actionParam(action: ResourceAction): (String, ValueObject) =
+    "action" -> action
+
+  def userIdParam(workbenchUserId: WorkbenchUserId): (String, ValueObject) =
+    "userId" -> workbenchUserId
+
+  def googleProjectParam(googleProject: GoogleProject): (String, ValueObject) =
+    "googleProject" -> googleProject
+
+  def policyNameParam(policyName: AccessPolicyName, prefix: String = ""): (String, ValueObject) =
+    // the uncapitalize and prefix stuff is because some apis have 2 policies in the path, so we need to distinguish them
+    StringUtils.uncapitalize(prefix + "PolicyName") -> policyName
+
+  def policyParams(policyId: FullyQualifiedPolicyId, prefix: String = ""): Seq[(String, ValueObject)] =
+    resourceParams(policyId.resource, prefix).appended(policyNameParam(policyId.accessPolicyName, prefix))
+
+  def groupIdParam(managedGroup: FullyQualifiedResourceId): (String, ValueObject) =
+    "groupId" -> managedGroup.resourceId
+
   /** Constructs a route from the uri and the parameters and values. Replace the values in the uri with the parameter name enclosed with braces. For example, if
     * the uri is /api/resource/123 and the parameters are ("resourceId", "123"), then the route will be /api/resource/{resourceId}.
     */
@@ -128,7 +176,7 @@ object AkkaHttpServerAttributesGetter extends HttpServerAttributesGetter[HttpReq
 
   override def getUrlQuery(request: HttpRequest): String = request.uri.query().toString()
 
-  /** Defaults to the path of the request. Will be overridden by the `addRouteAndParamsToTrace` directive as necessary.
+  /** Defaults to the path of the request. Overridden by the `addTelemetry` directive.
     */
   override def getHttpRoute(request: HttpRequest): String = getUrlPath(request)
 

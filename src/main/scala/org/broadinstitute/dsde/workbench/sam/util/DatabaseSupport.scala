@@ -71,7 +71,12 @@ trait DatabaseSupport {
       sleepDuration: FiniteDuration = 20 millis
   )(implicit timer: Temporal[IO]): IO[A] =
     writeDbRef
-      .runDatabaseIO(dbQueryName, samRequestContext, transactionIO, Attributes.of(AttributeKey.longKey("trial"), new java.lang.Long(trialNumber.longValue())))
+      .runDatabaseIO(
+        dbQueryName,
+        samRequestContext,
+        transactionIO,
+        Attributes.of(AttributeKey.longKey("trial"), java.lang.Long.valueOf(trialNumber.longValue()))
+      )
       .handleErrorWith {
         case psqlE: PSQLException if psqlE.getSQLState == PSQLStateExtensions.SERIALIZATION_FAILURE && trialNumber < maxTries =>
           timer.sleep(addJitter(sleepDuration, sleepDuration / 2)) *> attemptSerializableTransaction(

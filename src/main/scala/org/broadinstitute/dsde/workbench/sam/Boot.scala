@@ -365,8 +365,9 @@ object Boot extends IOApp with LazyLogging {
     maybeVersion.foreach(version => resourceBuilder.put(ResourceAttributes.SERVICE_VERSION, version))
     val resource = resourceBuilder.build
 
-    val maybeSpanProcessor = appConfig.googleConfig.flatMap { googleConfig =>
+    val maybeTracerProvider = appConfig.googleConfig.flatMap { googleConfig =>
       if (googleConfig.googleServicesConfig.traceExporter.enabled) {
+        val traceProviderBuilder = SdkTracerProvider.builder
         val googleTraceExporter = TraceExporter.createWithConfiguration(
           TraceConfiguration
             .builder()
@@ -378,16 +379,17 @@ object Boot extends IOApp with LazyLogging {
             )
             .build()
         )
-        Option(BatchSpanProcessor.builder(googleTraceExporter).build())
+        traceProviderBuilder.addSpanProcessor(BatchSpanProcessor.builder(googleTraceExporter).build())
+        val probabilitySampler = Sampler.traceIdRatioBased(googleConfig.googleServicesConfig.traceExporter.samplingProbability)
+        val sdkTracerProvider = traceProviderBuilder
+          .setResource(resource)
+          .setSampler(Sampler.parentBased(probabilitySampler))
+          .build
+        Option(sdkTracerProvider)
       } else {
         None
       }
     }
-
-    val traceProviderBuilder = SdkTracerProvider.builder
-    maybeSpanProcessor.foreach(traceProviderBuilder.addSpanProcessor)
-    // TODO config sampling
-    val sdkTracerProvider = traceProviderBuilder.setResource(resource).setSampler(Sampler.traceIdRatioBased(1.0)).build
 
     val sdkMeterProvider =
       SdkMeterProvider.builder
@@ -395,11 +397,11 @@ object Boot extends IOApp with LazyLogging {
         .setResource(resource)
         .build
 
-    OpenTelemetrySdk.builder
-      .setTracerProvider(sdkTracerProvider)
-      .setMeterProvider(sdkMeterProvider)
-      .setPropagators(ContextPropagators.create(TextMapPropagator.composite(W3CTraceContextPropagator.getInstance, W3CBaggagePropagator.getInstance)))
-      .buildAndRegisterGlobal
+    val otelBuilder = OpenTelemetrySdk.builder
+    maybeTracerProvider.foreach(otelBuilder.setTracerProvider)
+    otelBuilder.setMeterProvider(sdkMeterProvider)
+    otelBuilder.setPropagators(ContextPropagators.create(TextMapPropagator.composite(W3CTraceContextPropagator.getInstance, W3CBaggagePropagator.getInstance)))
+    otelBuilder.buildAndRegisterGlobal
   }
 
   private[sam] def createAppDependenciesWithSamRoutes(
