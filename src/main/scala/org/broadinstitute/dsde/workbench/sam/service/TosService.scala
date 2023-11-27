@@ -107,7 +107,7 @@ class TosService(
     }
 
   private def ensureLatestTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
-    maybeTermsOfServiceRecord <- directoryDao.getUserTos(userId, samRequestContext)
+    maybeTermsOfServiceRecord <- directoryDao.getUserTermsOfService(userId, samRequestContext)
     latestUserTermsOfService <- maybeTermsOfServiceRecord
       .map(IO.pure)
       .getOrElse(
@@ -121,13 +121,6 @@ class TosService(
     directoryDao.loadUser(userId, samRequestContext).map {
       case Some(samUser) => samUser
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find user:${userId}"))
-    }
-
-  // Note: if version is None, then the query will return the last accepted ToS info for the user
-  private def loadTosRecordForUser(userId: WorkbenchUserId, version: Option[String], samRequestContext: SamRequestContext): IO[SamUserTos] =
-    directoryDao.getUserTermsOfServiceVersion(userId, version, samRequestContext).map {
-      case Some(samUserTos) => samUserTos
-      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find Terms of Service entry for user:${userId}"))
     }
 
   def getTermsOfServiceHistoryForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[TermsOfServiceHistory] =
@@ -144,9 +137,8 @@ class TosService(
 
   def getTermsOfServiceComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
     latestUserTos <- directoryDao.getUserTermsOfService(samUser.id, samRequestContext)
-    previousUserTos <- directoryDao.getUserTermsOfServiceVersion(samUser.id, tosConfig.previousVersion, samRequestContext)
-    userHasAcceptedLatestVersion = userHasAcceptedLatestTermsOfServiceVersion(latestUserTos)
-    permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser, latestUserTos, previousUserTos)
+    userHasAcceptedLatestVersion = userHasAcceptedCurrentTermsOfService(latestUserTos)
+    permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser, latestUserTos)
   } yield TermsOfServiceComplianceStatus(samUser.id, userHasAcceptedLatestVersion, permitsSystemUsage)
 
   /** If grace period enabled, don't check ToS, return true If ToS disabled, return true Otherwise return true if user has accepted ToS, or is a service account

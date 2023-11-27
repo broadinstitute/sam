@@ -649,11 +649,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   // When no tosVersion is specified, return the latest TosRecord for the user
-  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
-    getUserTosVersion(userId, None, samRequestContext)
+  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    getUserTermsOfServiceVersion(userId, None, samRequestContext)
 
-  override def getUserTosVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
-    readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
+  override def getUserTermsOfServiceVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+    readOnlyTransaction("getUserTermsOfService", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
 
@@ -669,10 +669,9 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userTosRecordOpt: Option[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).first().apply()
       userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
-  }
 
   override def getUserTermsOfServiceHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
-    readOnlyTransaction("getUserTosHistory", samRequestContext) { implicit session =>
+    readOnlyTransaction("getUserTermsOfServiceHistory", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
 

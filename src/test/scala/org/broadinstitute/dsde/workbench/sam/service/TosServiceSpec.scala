@@ -151,11 +151,11 @@ class TosServiceSpec(_system: ActorSystem)
         val previousTosVersion = Option("1")
         val tosService =
           new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
-        when(dirDAO.getUserTos(serviceAccountUser.id, samRequestContext)).thenReturn(IO.pure(None))
+        when(dirDAO.getUserTermsOfService(serviceAccountUser.id, samRequestContext)).thenReturn(IO.pure(None))
 
-        when(dirDAO.getUserTosVersion(serviceAccountUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
+        when(dirDAO.getUserTermsOfServiceVersion(serviceAccountUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
 
-        val complianceStatus = tosService.getTosComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
+        val complianceStatus = tosService.getTermsOfServiceComplianceStatus(serviceAccountUser, samRequestContext).unsafeRunSync()
         complianceStatus.permitsSystemUsage shouldBe true
       }
 
@@ -164,11 +164,11 @@ class TosServiceSpec(_system: ActorSystem)
         val previousTosVersion = Option("1")
         val tosService =
           new TosService(NoExtensions, dirDAO, TestSupport.tosConfig.copy(version = tosVersion, previousVersion = previousTosVersion))
-        when(dirDAO.getUserTos(uamiUser.id, samRequestContext)).thenReturn(IO.pure(None))
+        when(dirDAO.getUserTermsOfService(uamiUser.id, samRequestContext)).thenReturn(IO.pure(None))
 
-        when(dirDAO.getUserTosVersion(uamiUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
+        when(dirDAO.getUserTermsOfServiceVersion(uamiUser.id, previousTosVersion, samRequestContext)).thenReturn(IO.pure(None))
 
-        val complianceStatus = tosService.getTosComplianceStatus(uamiUser, samRequestContext).unsafeRunSync()
+        val complianceStatus = tosService.getTermsOfServiceComplianceStatus(uamiUser, samRequestContext).unsafeRunSync()
         complianceStatus.permitsSystemUsage shouldBe true
       }
     }
