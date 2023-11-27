@@ -129,7 +129,8 @@ object Dependencies {
   val otelSemconv: ModuleID = "io.opentelemetry.semconv" % "opentelemetry-semconv" % "1.21.0-alpha"
   val otelAnnotation: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-annotations" % openTelemetryVersion
   val otelInstrumentationApi: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api" % openTelemetryVersion
-  val otelInstrumentationApiSemconv: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-semconv" % (openTelemetryVersion + "-alpha")
+  val otelInstrumentationApiSemconv: ModuleID =
+    "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-semconv" % (openTelemetryVersion + "-alpha")
   val otelPrometheusExporter: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-prometheus" % (openTelemetryVersion + "-alpha")
 
   // Google cloud open telemetry exporters
