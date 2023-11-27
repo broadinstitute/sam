@@ -20,8 +20,10 @@ trait StatusRoutes {
   val statusService: StatusService
   implicit val executionContext: ExecutionContext
 
-  private lazy val checkStatusSuccessCounter = GlobalOpenTelemetry.getMeter("StatusRoutes").counterBuilder("checkStatus-success").build()
-  private lazy val checkStatusFailureCounter = GlobalOpenTelemetry.getMeter("StatusRoutes").counterBuilder("checkStatus-failure").build()
+  // lazy to make sure GlobalOpenTelemetry is initialized
+  private lazy val otelMeter = GlobalOpenTelemetry.getMeter("StatusRoutes")
+  private lazy val checkStatusSuccessCounter = otelMeter.counterBuilder("checkStatus-success").build()
+  private lazy val checkStatusFailureCounter = otelMeter.counterBuilder("checkStatus-failure").build()
 
   def statusRoutes: server.Route =
     pathPrefix("status") {
