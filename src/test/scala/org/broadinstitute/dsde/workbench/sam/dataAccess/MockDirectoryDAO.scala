@@ -330,14 +330,22 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
         true
     }
 
-  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext, action: Option[String]): IO[Option[SamUserTos]] =
     loadUser(userId, samRequestContext).map {
       case None => None
       case Some(_) =>
-        userTermsOfService.get(userId)
+        if (action.isDefined) {
+          userTermsOfService.get(userId).filter(_.action == action.get)
+        } else
+          userTermsOfService.get(userId)
     }
 
-  override def getUserTermsOfServiceVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTermsOfServiceVersion(
+      userId: WorkbenchUserId,
+      tosVersion: Option[String],
+      samRequestContext: SamRequestContext,
+      action: Option[String]
+  ): IO[Option[SamUserTos]] =
     loadUser(userId, samRequestContext).map {
       case None => None
       case Some(_) =>

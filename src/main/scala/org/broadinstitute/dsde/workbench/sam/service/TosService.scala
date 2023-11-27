@@ -107,7 +107,7 @@ class TosService(
     }
 
   private def ensureLatestTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
-    maybeTermsOfServiceRecord <- directoryDao.getUserTermsOfService(userId, samRequestContext)
+    maybeTermsOfServiceRecord <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
     latestUserTermsOfService <- maybeTermsOfServiceRecord
       .map(IO.pure)
       .getOrElse(

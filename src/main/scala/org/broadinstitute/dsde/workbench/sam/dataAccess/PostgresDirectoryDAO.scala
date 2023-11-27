@@ -649,20 +649,32 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   // When no tosVersion is specified, return the latest TosRecord for the user
-  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
-    getUserTermsOfServiceVersion(userId, None, samRequestContext)
+  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext, action: Option[String] = None): IO[Option[SamUserTos]] =
+    getUserTermsOfServiceVersion(userId, None, samRequestContext, action)
 
-  override def getUserTermsOfServiceVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTermsOfServiceVersion(
+      userId: WorkbenchUserId,
+      tosVersion: Option[String],
+      samRequestContext: SamRequestContext,
+      action: Option[String] = None
+  ): IO[Option[SamUserTos]] =
     readOnlyTransaction("getUserTermsOfService", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
 
       val versionConstraint = if (tosVersion.isDefined) samsqls"and ${column.version} = ${tosVersion.get}" else samsqls""
 
+      val actionConstraint = action match {
+        case Some(a) => samsqls"and ${column.action} = ${a}"
+        case None => samsqls""
+      }
+
       val loadUserTosQuery =
         samsql"""select ${tosTable.resultAll}
               from ${TosTable as tosTable}
-              where ${column.samUserId} = $userId $versionConstraint
+              where ${column.samUserId} = $userId
+                $versionConstraint
+                $actionConstraint
               order by ${column.createdAt} desc
               limit 1"""
 

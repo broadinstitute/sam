@@ -1664,6 +1664,18 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val userTos = dao.getUserTermsOfService(user.id, samRequestContext).unsafeRunSync()
         userTos should be(None)
       }
+      "returns acceptances" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.acceptTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+        dao.rejectTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+
+        // Assert
+        val userTos = dao.getUserTermsOfService(user.id, samRequestContext, action = Option(TosTable.ACCEPT)).unsafeRunSync()
+        userTos should be(Some(SamUserTos(user.id, tosConfig.version, TosTable.ACCEPT, Instant.now())))
+      }
     }
 
     "checkStatus" - {

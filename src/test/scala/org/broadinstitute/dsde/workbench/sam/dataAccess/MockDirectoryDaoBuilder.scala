@@ -116,8 +116,10 @@ case class MockDirectoryDaoBuilder() extends IdiomaticMockito {
   def withAcceptedTermsOfServiceForUser(samUser: SamUser, tosVersion: String): MockDirectoryDaoBuilder = {
     makeUserExist(samUser)
     val samUserTos = SamUserTos(samUser.id, tosVersion, TosTable.ACCEPT, Instant.now)
-    mockedDirectoryDAO.getUserTermsOfService(eqTo(samUser.id), any[SamRequestContext]) returns IO(Option(samUserTos))
-    mockedDirectoryDAO.getUserTermsOfServiceVersion(eqTo(samUser.id), eqTo(Some(tosVersion)), any[SamRequestContext]) returns IO(Option(samUserTos))
+    mockedDirectoryDAO.getUserTermsOfService(eqTo(samUser.id), any[SamRequestContext], any[Option[String]]) returns IO(Option(samUserTos))
+    mockedDirectoryDAO.getUserTermsOfServiceVersion(eqTo(samUser.id), eqTo(Some(tosVersion)), any[SamRequestContext], any[Option[String]]) returns IO(
+      Option(samUserTos)
+    )
     this
   }
 
