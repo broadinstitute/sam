@@ -127,9 +127,9 @@ object Dependencies {
   val otelSdkMetrics: ModuleID = "io.opentelemetry" % "opentelemetry-sdk-metrics" % openTelemetryVersion
   val otelExporterLogging: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-logging" % openTelemetryVersion
   val otelSemconv: ModuleID = "io.opentelemetry.semconv" % "opentelemetry-semconv" % "1.21.0-alpha"
-  val otelSpringWebMvc: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-spring-webmvc-6.0" % (openTelemetryVersion + "-alpha")
   val otelAnnotation: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-annotations" % openTelemetryVersion
-  val otelSpringBoot: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-spring-boot" % (openTelemetryVersion + "-alpha")
+  val otelInstrumentationApi: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api" % openTelemetryVersion
+  val otelInstrumentationApiSemconv: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-semconv" % (openTelemetryVersion + "-alpha")
   val otelPrometheusExporter: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-prometheus" % (openTelemetryVersion + "-alpha")
 
   // Google cloud open telemetry exporters
@@ -142,9 +142,9 @@ object Dependencies {
     otelSdkMetrics,
     otelExporterLogging,
     otelSemconv,
-    otelSpringWebMvc,
     otelAnnotation,
-    otelSpringBoot,
+    otelInstrumentationApi,
+    otelInstrumentationApiSemconv,
     otelPrometheusExporter,
     googleTraceExporter
   )
