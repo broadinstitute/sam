@@ -3125,6 +3125,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets terms of service details, including user's accepted version
       operationId: getTermsOfServiceDetails
       responses:
@@ -3138,6 +3139,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets info on whether the user has accepted the latest terms of service and if they can use the system based on that
       operationId: getTermsOfServiceComplianceStatus
       responses:
@@ -3179,6 +3181,7 @@ paths:
     post:
       tags:
         - Terms of Service
+      deprecated: true
       summary: accepts terms of service
       operationId: acceptTermsOfService
       requestBody:
@@ -3204,6 +3207,7 @@ paths:
     delete:
       tags:
         - Terms of Service
+      deprecated: true
       summary: rejects terms of service
       operationId: rejectTermsOfService
       responses:
@@ -3223,6 +3227,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: returns whether or not the user has accepted the current terms of service.
       operationId: getUserTermsOfServiceStatus
       responses:
@@ -3244,6 +3249,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets terms of service text
       operationId: getTermsOfServiceText
       responses:
@@ -3257,6 +3263,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets privacy policy text
       operationId: getPrivacyPolicyText
       responses:
