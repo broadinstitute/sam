@@ -84,7 +84,7 @@ object UserStatusDetails {
     userAcceptedVersion: Option[String]
 )
 
-@Lenses final case class TermsOfServiceDetails(latestAcceptedVersion: String, acceptedOn: Instant, permitsSystemUsage: Boolean)
+@Lenses final case class TermsOfServiceDetails(latestAcceptedVersion: String, acceptedOn: Instant, permitsSystemUsage: Boolean, isCurrentVersion: Boolean)
 @Lenses final case class TermsOfServiceHistory(history: List[TermsOfServiceHistoryRecord])
 @Lenses final case class TermsOfServiceHistoryRecord(action: String, version: String, timestamp: Instant)
 

@@ -67,6 +67,9 @@ object MockCrlService extends MockitoSugar {
     lenient()
       .when(mockResourceGroup.id())
       .thenReturn(mrgName.value)
+    lenient()
+      .when(mockResourceGroup.region())
+      .thenReturn(Region.US_SOUTH_CENTRAL)
 
     val mockResourceGroups = mock[ResourceGroups](RETURNS_SMART_NULLS)
     lenient()
