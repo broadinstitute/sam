@@ -66,7 +66,7 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
               get {
                 withUserAllowInactive(samRequestContext) { samUser =>
                   complete {
-                    tosService.getTosComplianceStatus(samUser, samRequestContext).map { tosAcceptanceStatus =>
+                    tosService.getTermsOfServiceComplianceStatus(samUser, samRequestContext).map { tosAcceptanceStatus =>
                       StatusCodes.OK -> Option(JsBoolean(tosAcceptanceStatus.permitsSystemUsage))
                     }
                   }
@@ -144,7 +144,7 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
             } ~
             path("termsOfServiceComplianceStatus") {
               get {
-                complete(tosService.getTosComplianceStatus(user, samRequestContext))
+                complete(tosService.getTermsOfServiceComplianceStatus(user, samRequestContext))
               }
             }
           }
