@@ -1,4 +1,7 @@
 {{! based on https://github.com/OpenAPITools/openapi-generator/blob/master/modules/openapi-generator/src/main/resources/Java/libraries/okhttp-gson/build.sbt.mustache }}
+import Publishing._
+import Version._
+
 lazy val root = (project in file(".")).
   settings(
     Seq(organization := "org.broadinstitute.dsde.workbench",
