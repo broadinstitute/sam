@@ -5,6 +5,7 @@ import akka.http.scaladsl.server.Directives.{onSuccess, reject}
 import akka.http.scaladsl.server._
 import akka.stream.Materializer
 import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, WorkbenchGroup}
+import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceHistory
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -71,6 +72,11 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
 
   def withTosStateForUser(samUser: SamUser, isAccepted: Boolean, version: String = "0"): MockSamRoutesBuilder = {
     mockTosServiceBuilder.withAcceptedStateForUser(samUser, isAccepted, version)
+    this
+  }
+
+  def withTermsOfServiceHistoryForUser(samUser: SamUser, tosHistory: TermsOfServiceHistory): MockSamRoutesBuilder = {
+    mockTosServiceBuilder.withTermsOfServiceHistoryForUser(samUser, tosHistory)
     this
   }
 

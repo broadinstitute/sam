@@ -13,7 +13,14 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, TermsOfServiceConfigResponse}
-import org.broadinstitute.dsde.workbench.sam.model.{OldTermsOfServiceDetails, SamUserTos, TermsOfServiceComplianceStatus, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{
+  OldTermsOfServiceDetails,
+  SamUserTos,
+  TermsOfServiceComplianceStatus,
+  TermsOfServiceDetails,
+  TermsOfServiceHistory,
+  TermsOfServiceHistoryRecord
+}
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
 import org.broadinstitute.dsde.workbench.sam.util.{SamRequestContext, SupportsAdmin}
 
@@ -79,7 +86,7 @@ class TosService(
 
   @Deprecated
   def getTosDetails(samUser: SamUser, samRequestContext: SamRequestContext): IO[OldTermsOfServiceDetails] =
-    directoryDao.getUserTos(samUser.id, samRequestContext).map { tos =>
+    directoryDao.getUserTermsOfService(samUser.id, samRequestContext).map { tos =>
       OldTermsOfServiceDetails(isEnabled = true, tosConfig.isGracePeriodEnabled, tosConfig.version, tos.map(_.version))
     }
 
@@ -100,7 +107,7 @@ class TosService(
     }
 
   private def ensureLatestTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
-    maybeTermsOfServiceRecord <- directoryDao.getUserTos(userId, samRequestContext)
+    maybeTermsOfServiceRecord <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
     latestUserTermsOfService <- maybeTermsOfServiceRecord
       .map(IO.pure)
       .getOrElse(
@@ -115,8 +122,20 @@ class TosService(
       case Some(samUser) => samUser
       case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find user:${userId}"))
     }
-  def getTosComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
-    latestUserTos <- directoryDao.getUserTos(samUser.id, samRequestContext)
+
+  def getTermsOfServiceHistoryForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[TermsOfServiceHistory] =
+    ensureAdminIfNeeded[TermsOfServiceHistory](userId, samRequestContext) {
+      directoryDao.getUserTermsOfServiceHistory(userId, samRequestContext, limit).map {
+        case samUserTosHistory if samUserTosHistory.isEmpty => TermsOfServiceHistory(List.empty)
+        case samUserTosHistory =>
+          TermsOfServiceHistory(
+            samUserTosHistory.map(historyRecord => TermsOfServiceHistoryRecord(historyRecord.action, historyRecord.version, historyRecord.createdAt))
+          )
+      }
+    }
+
+  def getTermsOfServiceComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
+    latestUserTos <- directoryDao.getUserTermsOfService(samUser.id, samRequestContext)
     userHasAcceptedLatestVersion = userHasAcceptedCurrentTermsOfService(latestUserTos)
     permitsSystemUsage = tosAcceptancePermitsSystemUsage(samUser, latestUserTos)
   } yield TermsOfServiceComplianceStatus(samUser.id, userHasAcceptedLatestVersion, permitsSystemUsage)
