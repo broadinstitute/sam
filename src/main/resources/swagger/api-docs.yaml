@@ -3422,12 +3422,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserTermsOfServiceHistory'
-        404:
-          description: user has no history of terms of service actions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
   /version:
     get:
       tags:
@@ -4155,11 +4149,11 @@ components:
       type: object
       description: a user's terms of service action history
       properties:
-        latestAcceptedVersion:
+        history:
           type: array
           items:
-            $ref: '#/components/schemas/UserTermsOfServiceRecord'
-    UserTermsOfServiceRecord:
+            $ref: '#/components/schemas/UserTermsOfServiceHistoryRecord'
+    UserTermsOfServiceHistoryRecord:
       required:
         - action
         - version

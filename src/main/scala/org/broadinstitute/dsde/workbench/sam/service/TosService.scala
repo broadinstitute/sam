@@ -126,8 +126,7 @@ class TosService(
   def getTermsOfServiceHistoryForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[TermsOfServiceHistory] =
     ensureAdminIfNeeded[TermsOfServiceHistory](userId, samRequestContext) {
       directoryDao.getUserTermsOfServiceHistory(userId, samRequestContext, limit).map {
-        case samUserTosHistory if samUserTosHistory.isEmpty =>
-          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find any Terms of Service entries for user:${userId}"))
+        case samUserTosHistory if samUserTosHistory.isEmpty => TermsOfServiceHistory(List.empty)
         case samUserTosHistory =>
           TermsOfServiceHistory(
             samUserTosHistory.map(historyRecord => TermsOfServiceHistoryRecord(historyRecord.action, historyRecord.version, historyRecord.createdAt))

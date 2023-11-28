@@ -662,12 +662,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val tosTable = TosTable.syntax
       val column = TosTable.column
 
-      val versionConstraint = if (tosVersion.isDefined) samsqls"and ${column.version} = ${tosVersion.get}" else samsqls""
-
-      val actionConstraint = action match {
-        case Some(a) => samsqls"and ${column.action} = ${a}"
-        case None => samsqls""
-      }
+      val versionConstraint = tosVersion.map(v => samsqls"and ${column.version} = $v").getOrElse(samsqls"")
+      val actionConstraint = action.map(a => samsqls"and ${column.action} = $a").getOrElse(samsqls"")
 
       val loadUserTosQuery =
         samsql"""select ${tosTable.resultAll}
