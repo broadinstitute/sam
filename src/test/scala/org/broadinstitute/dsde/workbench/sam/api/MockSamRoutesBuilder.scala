@@ -4,9 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.server.Directives.{onSuccess, reject}
 import akka.http.scaladsl.server._
 import akka.stream.Materializer
-import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, WorkbenchGroup}
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceHistory
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -22,7 +20,7 @@ import scala.concurrent.Future
 // NOTE: In order to use the Routes from this builder to make an authenticated request, you must have either an
 // AdminUser, an EnabledUser, or a DisabledUser specified - this is due to how SamRoutes works with Akka directives
 // to make sure that the calling user is a valid user.
-class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetrics[IO]) {
+class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: ActorSystem, materializer: Materializer) {
 
   private val cloudExtensionsBuilder: MockCloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup).withNonAdminUser()
   private val userServiceBuilder: MockUserServiceBuilder = MockUserServiceBuilder()
@@ -163,7 +161,6 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
 
       override def asAdminServiceUser: Directive0 =
         if (asServiceAdminUser) Directive.Empty else reject(AuthorizationFailedRejection)
-
     }
   }
 }

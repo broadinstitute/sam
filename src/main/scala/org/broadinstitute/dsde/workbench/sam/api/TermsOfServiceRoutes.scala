@@ -13,7 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
 
-trait TermsOfServiceRoutes extends SamUserDirectives {
+trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirectives {
   val tosService: TosService
   implicit val executionContext: ExecutionContext
   private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
@@ -115,7 +115,7 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
               validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
                 val requestUserId = WorkbenchUserId(userId)
                 pathEndOrSingleSlash {
-                  get {
+                  getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
                     complete {
                       tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
                     }
@@ -123,11 +123,10 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
                 } ~
                 pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
                   pathEndOrSingleSlash {
-                    get {
+                    getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
                       parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
                         complete(tosService.getTermsOfServiceHistoryForUser(requestUserId, samRequestContext, limit))
-                      }
-                    }
+                      }                    }
                   }
                 }
               }
@@ -136,5 +135,4 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
         }
       }
     }
-
 }

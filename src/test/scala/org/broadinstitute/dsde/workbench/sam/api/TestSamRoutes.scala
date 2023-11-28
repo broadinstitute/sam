@@ -5,13 +5,11 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.reject
 import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -44,8 +42,7 @@ class TestSamRoutes(
 )(implicit
     override val system: ActorSystem,
     override val materializer: Materializer,
-    override val executionContext: ExecutionContext,
-    override val openTelemetry: OpenTelemetryMetrics[IO]
+    override val executionContext: ExecutionContext
 ) extends SamRoutes(
       resourceService,
       userService,
@@ -86,8 +83,7 @@ class TestSamTosEnabledRoutes(
 )(implicit
     override val system: ActorSystem,
     override val materializer: Materializer,
-    override val executionContext: ExecutionContext,
-    override val openTelemetry: OpenTelemetryMetrics[IO]
+    override val executionContext: ExecutionContext
 ) extends SamRoutes(
       resourceService,
       userService,
@@ -168,7 +164,7 @@ object TestSamRoutes {
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None,
       acceptTermsOfService: Boolean = true
-  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetrics[IO]) = {
+  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups

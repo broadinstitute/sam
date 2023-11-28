@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
+import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.jdk.CollectionConverters._

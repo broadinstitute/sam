@@ -7,7 +7,6 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.binary.Hex
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
@@ -22,7 +21,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.{
 }
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
-import org.broadinstitute.dsde.workbench.sam.util.{API_TIMING_DURATION_BUCKET, SamRequestContext}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.security.SecureRandom
 import java.time.Instant
@@ -39,8 +38,7 @@ class UserService(
     tosService: TosService,
     azureConfig: Option[AzureServicesConfig] = None
 )(implicit
-    val executionContext: ExecutionContext,
-    val openTelemetry: OpenTelemetryMetrics[IO]
+    val executionContext: ExecutionContext
 ) extends LazyLogging {
   // this is what's currently called
   def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
@@ -51,52 +49,51 @@ class UserService(
       possibleNewUserMaybeWithEmail: SamUser,
       registrationRequest: Option[SamUserRegistrationRequest],
       samRequestContext: SamRequestContext
-  ): IO[UserStatus] =
-    openTelemetry.time("api.v1.user.create.time", API_TIMING_DURATION_BUCKET) {
-      val email =
-        if (shouldCreateUamiEmail(possibleNewUserMaybeWithEmail)) {
-          // If the email is missing but Azure B2C ID exist, this is a managed identity. If the config allows it, create an
-          // email address for the user.  This is because the email address is used as the unique identifier for the user.
-          WorkbenchEmail(s"${possibleNewUserMaybeWithEmail.azureB2CId.get.value}@uami.terra.bio")
-        } else {
-          possibleNewUserMaybeWithEmail.email
-        }
-      val possibleNewUser = possibleNewUserMaybeWithEmail.copy(email = email)
+  ): IO[UserStatus] = {
+    val email =
+      if (shouldCreateUamiEmail(possibleNewUserMaybeWithEmail)) {
+        // If the email is missing but Azure B2C ID exist, this is a managed identity. If the config allows it, create an
+        // email address for the user.  This is because the email address is used as the unique identifier for the user.
+        WorkbenchEmail(s"${possibleNewUserMaybeWithEmail.azureB2CId.get.value}@uami.terra.bio")
+      } else {
+        possibleNewUserMaybeWithEmail.email
+      }
+    val possibleNewUser = possibleNewUserMaybeWithEmail.copy(email = email)
 
-      // Validate the values set on the possible new user, short circuit if there's a problem
-      val validationErrors = validateUser(possibleNewUser)
-      if (validationErrors.nonEmpty) {
-        return IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors.get)))
-      }
-      val registrationRequestErrors = registrationRequest.flatMap(_.validateForNewUser)
-      if (registrationRequestErrors.nonEmpty) {
-        return IO.raiseError(
-          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid registration request", registrationRequestErrors.get))
-        )
-      }
-      for {
-        newUser <- assertUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext)
-        maybeWorkbenchSubject <- directoryDAO.loadSubjectFromEmail(newUser.email, samRequestContext)
-        registeredUser <- attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject, newUser, samRequestContext)
-        _ <- maybeAcceptTermsOfService(registeredUser.id, registrationRequest, samRequestContext)
-        _ <- registerNewUserAttributes(registeredUser.id, registrationRequest, samRequestContext)
-        registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
-        _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
-      } yield
-      // We should only make it this far if we successfully perform all of the above steps to set all of the
-      // UserStatus.enabled fields to true, with the exception of ToS.  So we should be able to safely just return true
-      // for all of these things without needing to go recalculate them.
-      UserStatus(
-        UserStatusDetails(registeredAndEnabledUser.id, registeredAndEnabledUser.email),
-        Map(
-          "ldap" -> true,
-          "allUsersGroup" -> true,
-          "google" -> true,
-          "adminEnabled" -> true,
-          "tosAccepted" -> registrationRequest.exists(_.acceptsTermsOfService)
-        )
+    // Validate the values set on the possible new user, short circuit if there's a problem
+    val validationErrors = validateUser(possibleNewUser)
+    if (validationErrors.nonEmpty) {
+      return IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user", validationErrors.get)))
+    }
+    val registrationRequestErrors = registrationRequest.flatMap(_.validateForNewUser)
+    if (registrationRequestErrors.nonEmpty) {
+      return IO.raiseError(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid registration request", registrationRequestErrors.get))
       )
     }
+    for {
+      newUser <- assertUserIsNotAlreadyRegistered(possibleNewUser, samRequestContext)
+      maybeWorkbenchSubject <- directoryDAO.loadSubjectFromEmail(newUser.email, samRequestContext)
+      registeredUser <- attemptToRegisterSubjectAsAUser(maybeWorkbenchSubject, newUser, samRequestContext)
+      _ <- maybeAcceptTermsOfService(registeredUser.id, registrationRequest, samRequestContext)
+      _ <- registerNewUserAttributes(registeredUser.id, registrationRequest, samRequestContext)
+      registeredAndEnabledUser <- makeUserEnabled(registeredUser, samRequestContext)
+      _ <- addToAllUsersGroup(registeredAndEnabledUser.id, samRequestContext)
+    } yield
+    // We should only make it this far if we successfully perform all of the above steps to set all of the
+    // UserStatus.enabled fields to true, with the exception of ToS.  So we should be able to safely just return true
+    // for all of these things without needing to go recalculate them.
+    UserStatus(
+      UserStatusDetails(registeredAndEnabledUser.id, registeredAndEnabledUser.email),
+      Map(
+        "ldap" -> true,
+        "allUsersGroup" -> true,
+        "google" -> true,
+        "adminEnabled" -> true,
+        "tosAccepted" -> registrationRequest.exists(_.acceptsTermsOfService)
+      )
+    )
+  }
 
   private def shouldCreateUamiEmail(possibleNewUserMaybeWithEmail: SamUser) =
     possibleNewUserMaybeWithEmail.email.value.isEmpty && possibleNewUserMaybeWithEmail.azureB2CId.nonEmpty && azureConfig.exists(
@@ -164,15 +161,13 @@ class UserService(
   // Try to find user by GoogleSubject, AzureB2CId
   // A registered user is one that has a record in the database and has a Cloud Identifier specified
   private def tryToFindUserByCloudId(user: SamUser, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
-    openTelemetry.time("api.v1.user.tryToFindUserByCloudId.time", API_TIMING_DURATION_BUCKET) {
-      // running these IOs sequentially.  Could be parallelized but I can't imagine the performance hit here is all that
-      // bad.  If we wanted to optimize it, the better thing to do would be to write a single query that searches via
-      // either cloud ID
-      for {
-        maybeGoogleUser <- user.googleSubjectId.map(directoryDAO.loadUserByGoogleSubjectId(_, samRequestContext)).getOrElse(IO(None))
-        maybeAzureUser <- user.azureB2CId.map(directoryDAO.loadUserByAzureB2CId(_, samRequestContext)).getOrElse(IO(None))
-      } yield maybeGoogleUser.orElse(maybeAzureUser)
-    }
+    // running these IOs sequentially.  Could be parallelized but I can't imagine the performance hit here is all that
+    // bad.  If we wanted to optimize it, the better thing to do would be to write a single query that searches via
+    // either cloud ID
+    for {
+      maybeGoogleUser <- user.googleSubjectId.map(directoryDAO.loadUserByGoogleSubjectId(_, samRequestContext)).getOrElse(IO(None))
+      maybeAzureUser <- user.azureB2CId.map(directoryDAO.loadUserByAzureB2CId(_, samRequestContext)).getOrElse(IO(None))
+    } yield maybeGoogleUser.orElse(maybeAzureUser)
 
   private def assertUserIsNotAlreadyRegistered(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
     tryToFindUserByCloudId(user, samRequestContext).flatMap {
@@ -182,9 +177,7 @@ class UserService(
     }
 
   def getUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
-    openTelemetry.time("api.v2.user.getUser.time", API_TIMING_DURATION_BUCKET) {
-      directoryDAO.loadUser(userId, samRequestContext)
-    }
+    directoryDAO.loadUser(userId, samRequestContext)
 
   def getUsersByQuery(
       userId: Option[WorkbenchUserId],
@@ -192,35 +185,31 @@ class UserService(
       azureB2CId: Option[AzureB2CId],
       limit: Option[Int],
       samRequestContext: SamRequestContext
-  ): IO[Set[SamUser]] =
-    openTelemetry.time("api.v2.user.getUsersByQuery.time", API_TIMING_DURATION_BUCKET) {
-      val defaultLimit = 10
-      val maximumLimit = 1000
-      // This constrains the maximum results to be within the range [1,1000]
-      val maxResults = limit.getOrElse(defaultLimit).min(maximumLimit).max(1)
-      directoryDAO.loadUsersByQuery(userId, googleSubjectId, azureB2CId, maxResults, samRequestContext)
-    }
+  ): IO[Set[SamUser]] = {
+    val defaultLimit = 10
+    val maximumLimit = 1000
+    // This constrains the maximum results to be within the range [1,1000]
+    val maxResults = limit.getOrElse(defaultLimit).min(maximumLimit).max(1)
+    directoryDAO.loadUsersByQuery(userId, googleSubjectId, azureB2CId, maxResults, samRequestContext)
+  }
 
   def updateUserCrud(userId: WorkbenchUserId, request: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
-    openTelemetry.time("api.v1.user.updateUserCrud.time", API_TIMING_DURATION_BUCKET) {
-      directoryDAO.loadUser(userId, samRequestContext).flatMap {
-        case Some(user) =>
-          // validate all fields to be updated
-          var errorReports = Seq[ErrorReport]()
-          request.email.foreach(email => errorReports = errorReports ++ validateEmail(email, blockedEmailDomains))
-          if (errorReports.nonEmpty) {
-            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
-          } else { // apply all updates
-            var updatedUser = user
-            request.email.foreach { email =>
-              directoryDAO.updateUserEmail(userId, email, samRequestContext)
-              updatedUser = user.copy(email = email)
-            }
-            IO(Some(updatedUser))
+    directoryDAO.loadUser(userId, samRequestContext).flatMap {
+      case Some(user) =>
+        // validate all fields to be updated
+        var errorReports = Seq[ErrorReport]()
+        request.email.foreach(email => errorReports = errorReports ++ validateEmail(email, blockedEmailDomains))
+        if (errorReports.nonEmpty) {
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
+        } else { // apply all updates
+          var updatedUser = user
+          request.email.foreach { email =>
+            directoryDAO.updateUserEmail(userId, email, samRequestContext)
+            updatedUser = user.copy(email = email)
           }
-        case None => IO(None)
-      }
-
+          IO(Some(updatedUser))
+        }
+      case None => IO(None)
     }
 
   // In most cases when this is called we will have a scenario where 1 or more Cloud Ids are set.  For any Cloud Ids
@@ -233,27 +222,24 @@ class UserService(
   // that succeeded are invalid.  Similarly, if there are additional updates that failed to run due to the exception
   // that is OK.
   private def updateInvitedUser(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.user.updateUser.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        _ <- user.googleSubjectId
-          .map(directoryDAO.setGoogleSubjectId(user.id, _, samRequestContext))
-          .getOrElse(IO.unit)
-        _ <- user.azureB2CId
-          .map(directoryDAO.setUserAzureB2CId(user.id, _, samRequestContext))
-          .getOrElse(IO.unit)
-        _ <- directoryDAO.setUserRegisteredAt(user.id, Instant.now(), samRequestContext)
-      } yield ()
-    }
+    for {
+      _ <- user.googleSubjectId
+        .map(directoryDAO.setGoogleSubjectId(user.id, _, samRequestContext))
+        .getOrElse(IO.unit)
+      _ <- user.azureB2CId
+        .map(directoryDAO.setUserAzureB2CId(user.id, _, samRequestContext))
+        .getOrElse(IO.unit)
+      _ <- directoryDAO.setUserRegisteredAt(user.id, Instant.now(), samRequestContext)
+    } yield ()
 
-  private def registerInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
-    openTelemetry.time("api.v1.user.registerInvitedUser.time", API_TIMING_DURATION_BUCKET) {
-      val userToRegister = invitedUser.copy(id = invitedUserId)
-      for {
-        _ <- updateInvitedUser(userToRegister, samRequestContext)
-        groups <- directoryDAO.listUserDirectMemberships(userToRegister.id, samRequestContext)
-        _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
-      } yield userToRegister
-    }
+  private def registerInvitedUser(invitedUser: SamUser, invitedUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] = {
+    val userToRegister = invitedUser.copy(id = invitedUserId)
+    for {
+      _ <- updateInvitedUser(userToRegister, samRequestContext)
+      groups <- directoryDAO.listUserDirectMemberships(userToRegister.id, samRequestContext)
+      _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
+    } yield userToRegister
+  }
 
   // For now, it looks like createUserInternal does what we need here, but added a new alias method here for naming
   // consistency and just in case things change more as we are refactoring
@@ -265,34 +251,28 @@ class UserService(
     enableUserInternal(user, samRequestContext).map(_ => user.copy(enabled = true))
 
   def addToAllUsersGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.user.addToAllUsersGroup.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-        _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext)
-      } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
-    }
+    for {
+      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
+      _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext)
+    } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
 
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
-    openTelemetry.time("api.v1.user.invite.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains)
-        existingSubject <- directoryDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext)
-        createdUser <- existingSubject match {
-          case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false), samRequestContext)
-          case Some(_) =>
-            IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${inviteeEmail} already exists")))
-        }
-        _ <- setUserAttributes(SamUserAttributes(createdUser.id, marketingConsent = false), samRequestContext)
-      } yield UserStatusDetails(createdUser.id, createdUser.email)
-    }
+    for {
+      _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains)
+      existingSubject <- directoryDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext)
+      createdUser <- existingSubject match {
+        case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false), samRequestContext)
+        case Some(_) =>
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${inviteeEmail} already exists")))
+      }
+      _ <- setUserAttributes(SamUserAttributes(createdUser.id, marketingConsent = false), samRequestContext)
+    } yield UserStatusDetails(createdUser.id, createdUser.email)
 
   private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
-    openTelemetry.time("api.v1.createUserInternal.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        createdUser <- directoryDAO.createUser(user, samRequestContext)
-        _ <- cloudExtensions.onUserCreate(createdUser, samRequestContext)
-      } yield createdUser
-    }
+    for {
+      createdUser <- directoryDAO.createUser(user, samRequestContext)
+      _ <- cloudExtensions.onUserCreate(createdUser, samRequestContext)
+    } yield createdUser
 
   def getUserFromGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     directoryDAO.loadUserByGoogleSubjectId(userId, samRequestContext)
@@ -327,37 +307,35 @@ class UserService(
   //     Google
   //   - "adminEnabled" - boolean value read directly from the Sam User table
   def getUserStatus(userId: WorkbenchUserId, userDetailsOnly: Boolean = false, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
-    openTelemetry.time("api.v1.user.getStatus.time", API_TIMING_DURATION_BUCKET) {
-      directoryDAO.loadUser(userId, samRequestContext).flatMap {
-        case Some(user) =>
-          if (userDetailsOnly)
-            IO.pure(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
-          else
-            for {
-              googleStatus <- cloudExtensions.getUserStatus(user)
-              allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-              allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case _: NameNotFoundException =>
-                false
-              }
-              tosComplianceStatus <- tosService.getTermsOfServiceComplianceStatus(user, samRequestContext)
-              adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
-            } yield {
-              // We are removing references to LDAP but this will require an API version change here, so we are leaving
-              // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
-              // leaving that logic unchanged for now.
-              // ticket: https://broadworkbench.atlassian.net/browse/ID-266
-              val enabledMap = Map(
-                "ldap" -> adminEnabled,
-                "allUsersGroup" -> allUsersStatus,
-                "google" -> googleStatus,
-                "adminEnabled" -> adminEnabled,
-                "tosAccepted" -> tosComplianceStatus.permitsSystemUsage
-              )
-              val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledMap))
-              res
+    directoryDAO.loadUser(userId, samRequestContext).flatMap {
+      case Some(user) =>
+        if (userDetailsOnly)
+          IO.pure(Option(UserStatus(UserStatusDetails(user.id, user.email), Map.empty)))
+        else
+          for {
+            googleStatus <- cloudExtensions.getUserStatus(user)
+            allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
+            allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case _: NameNotFoundException =>
+              false
             }
-        case None => IO.pure(None)
-      }
+            tosComplianceStatus <- tosService.getTosComplianceStatus(user, samRequestContext)
+            adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
+          } yield {
+            // We are removing references to LDAP but this will require an API version change here, so we are leaving
+            // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
+            // leaving that logic unchanged for now.
+            // ticket: https://broadworkbench.atlassian.net/browse/ID-266
+            val enabledMap = Map(
+              "ldap" -> adminEnabled,
+              "allUsersGroup" -> allUsersStatus,
+              "google" -> googleStatus,
+              "adminEnabled" -> adminEnabled,
+              "tosAccepted" -> tosComplianceStatus.permitsSystemUsage
+            )
+            val res = Option(UserStatus(UserStatusDetails(user.id, user.email), enabledMap))
+            res
+          }
+      case None => IO.pure(None)
     }
 
   def acceptTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
@@ -386,45 +364,41 @@ class UserService(
     } yield UserStatusInfo(user.id.value, user.email.value, tosAcceptanceDetails.permitsSystemUsage && user.enabled, user.enabled)
 
   def getUserStatusDiagnostics(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatusDiagnostics]] =
-    openTelemetry.time("api.v1.user.statusDiagnostics.time", API_TIMING_DURATION_BUCKET) {
-      directoryDAO.loadUser(userId, samRequestContext).flatMap {
-        case Some(user) =>
-          // pulled out of for comprehension to allow concurrent execution
-          val tosAcceptanceStatus = tosService.getTermsOfServiceComplianceStatus(user, samRequestContext)
-          val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext)
-          val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
-            directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case e: NameNotFoundException => false }
-          }
-          val googleStatus = cloudExtensions.getUserStatus(user)
+    directoryDAO.loadUser(userId, samRequestContext).flatMap {
+      case Some(user) =>
+        // pulled out of for comprehension to allow concurrent execution
+        val tosAcceptanceStatus = tosService.getTosComplianceStatus(user, samRequestContext)
+        val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext)
+        val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
+          directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case e: NameNotFoundException => false }
+        }
+        val googleStatus = cloudExtensions.getUserStatus(user)
 
-          for {
-            // We are removing references to LDAP but this will require an API version change here, so we are leaving
-            // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
-            // leaving that logic unchanged for now.
-            // ticket: https://broadworkbench.atlassian.net/browse/ID-266
-            ldap <- adminEnabledStatus
-            allUsers <- allUsersStatus
-            tosAccepted <- tosAcceptanceStatus
-            google <- googleStatus
-            adminEnabled <- adminEnabledStatus
-          } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted.permitsSystemUsage, adminEnabled))
-        case None => IO.pure(None)
-      }
+        for {
+          // We are removing references to LDAP but this will require an API version change here, so we are leaving
+          // it for the moment.  The "ldap" status was previously returning the same "adminEnabled" value, so we are
+          // leaving that logic unchanged for now.
+          // ticket: https://broadworkbench.atlassian.net/browse/ID-266
+          ldap <- adminEnabledStatus
+          allUsers <- allUsersStatus
+          tosAccepted <- tosAcceptanceStatus
+          google <- googleStatus
+          adminEnabled <- adminEnabledStatus
+        } yield Option(UserStatusDiagnostics(ldap, allUsers, google, tosAccepted.permitsSystemUsage, adminEnabled))
+      case None => IO.pure(None)
     }
 
   // TODO: return type should be refactored into ADT for easier read
   def getUserIdInfoFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Either[Unit, Option[UserIdInfo]]] =
-    openTelemetry.time("api.v1.user.idInfoFromEmail.time", API_TIMING_DURATION_BUCKET) {
-      directoryDAO.loadSubjectFromEmail(email, samRequestContext).flatMap {
-        // don't attempt to handle groups or service accounts - just users
-        case Some(user: WorkbenchUserId) =>
-          directoryDAO.loadUser(user, samRequestContext).map {
-            case Some(loadedUser) => Right(Option(UserIdInfo(loadedUser.id, loadedUser.email, loadedUser.googleSubjectId)))
-            case _ => Left(())
-          }
-        case Some(_: WorkbenchGroupName) => IO.pure(Right(None))
-        case _ => IO.pure(Left(()))
-      }
+    directoryDAO.loadSubjectFromEmail(email, samRequestContext).flatMap {
+      // don't attempt to handle groups or service accounts - just users
+      case Some(user: WorkbenchUserId) =>
+        directoryDAO.loadUser(user, samRequestContext).map {
+          case Some(loadedUser) => Right(Option(UserIdInfo(loadedUser.id, loadedUser.email, loadedUser.googleSubjectId)))
+          case _ => Left(())
+        }
+      case Some(_: WorkbenchGroupName) => IO.pure(Right(None))
+      case _ => IO.pure(Left(()))
     }
 
   def getUserStatusFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
@@ -435,54 +409,41 @@ class UserService(
     }
 
   def enableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
-    openTelemetry.time("api.v1.user.enable.time", API_TIMING_DURATION_BUCKET) {
-      directoryDAO.loadUser(userId, samRequestContext).flatMap {
-        case Some(user) =>
-          for {
-            _ <- enableUserInternal(user, samRequestContext)
-            userStatus <- getUserStatus(userId, samRequestContext = samRequestContext)
-          } yield userStatus
-        case None => IO.pure(None)
-      }
+    directoryDAO.loadUser(userId, samRequestContext).flatMap {
+      case Some(user) =>
+        for {
+          _ <- enableUserInternal(user, samRequestContext)
+          userStatus <- getUserStatus(userId, samRequestContext = samRequestContext)
+        } yield userStatus
+      case None => IO.pure(None)
     }
 
   private def enableUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.user.enableUserInternal.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        _ <- directoryDAO.enableIdentity(user.id, samRequestContext)
-        _ <- cloudExtensions.onUserEnable(user, samRequestContext)
-      } yield logger.info(s"Enabled user ${user.toUserIdInfo}")
-    }
-
-  val serviceAccountDomain = "\\S+@\\S+\\.gserviceaccount\\.com".r
-
-  private def isServiceAccount(email: String) =
-    serviceAccountDomain.pattern.matcher(email).matches
+    for {
+      _ <- directoryDAO.enableIdentity(user.id, samRequestContext)
+      _ <- cloudExtensions.onUserEnable(user, samRequestContext)
+    } yield logger.info(s"Enabled user ${user.toUserIdInfo}")
 
   def disableUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
-    openTelemetry.time("api.v1.user.disable.time", API_TIMING_DURATION_BUCKET) {
-      directoryDAO.loadUser(userId, samRequestContext).flatMap {
-        case Some(user) =>
-          for {
-            _ <- directoryDAO.disableIdentity(user.id, samRequestContext)
-            _ <- cloudExtensions.onUserDisable(user, samRequestContext)
-            userStatus <- getUserStatus(user.id, samRequestContext = samRequestContext)
-          } yield userStatus
-        case None => IO.pure(None)
-      }
+    directoryDAO.loadUser(userId, samRequestContext).flatMap {
+      case Some(user) =>
+        for {
+          _ <- directoryDAO.disableIdentity(user.id, samRequestContext)
+          _ <- cloudExtensions.onUserDisable(user, samRequestContext)
+          userStatus <- getUserStatus(user.id, samRequestContext = samRequestContext)
+        } yield userStatus
+      case None => IO.pure(None)
     }
 
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
-    openTelemetry.time("api.v1.user.delete.time", API_TIMING_DURATION_BUCKET) {
-      for {
-        allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
-        _ <- directoryDAO
-          .removeGroupMember(allUsersGroup.id, userId, samRequestContext)
-          .withInfoLogMessage(s"Removed $userId from the All Users group")
-        _ <- cloudExtensions.onUserDelete(userId, samRequestContext)
-        _ <- directoryDAO.deleteUser(userId, samRequestContext)
-      } yield logger.info(s"Deleted user $userId")
-    }
+    for {
+      allUsersGroup <- cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
+      _ <- directoryDAO
+        .removeGroupMember(allUsersGroup.id, userId, samRequestContext)
+        .withInfoLogMessage(s"Removed $userId from the All Users group")
+      _ <- cloudExtensions.onUserDelete(userId, samRequestContext)
+      _ <- directoryDAO.deleteUser(userId, samRequestContext)
+    } yield logger.info(s"Deleted user $userId")
 
   // moved this method from the UserService companion object into this class
   // because Mockito would not let us spy/mock the static method
