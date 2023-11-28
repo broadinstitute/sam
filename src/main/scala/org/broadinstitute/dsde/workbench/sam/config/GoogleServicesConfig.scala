@@ -32,7 +32,8 @@ final case class GoogleServicesConfig(
     resourceNamePrefix: Option[String],
     adminSdkServiceAccountPaths: Option[NonEmptyList[String]],
     googleKms: GoogleKmsConfig,
-    terraGoogleOrgNumber: String
+    terraGoogleOrgNumber: String,
+    traceExporter: TraceExporterConfig
 )
 
 object GoogleServicesConfig {
@@ -63,6 +64,14 @@ object GoogleServicesConfig {
     )
   }
 
+  implicit val traceExporterConfigReader: ValueReader[TraceExporterConfig] = ValueReader.relative { config =>
+    TraceExporterConfig(
+      config.getBoolean("enabled"),
+      config.getString("projectId"),
+      config.getDouble("samplingProbability")
+    )
+  }
+
   implicit val googleServicesConfigReader: ValueReader[GoogleServicesConfig] = ValueReader.relative { config =>
     val jsonCredentials = ServiceAccountCredentialJson(
       DefaultServiceAccountJsonPath(config.getString("pathToDefaultCredentialJson"))
@@ -88,7 +97,8 @@ object GoogleServicesConfig {
       config.as[Option[String]]("resourceNamePrefix"),
       config.as[Option[NonEmptyList[String]]]("adminSdkServiceAccountPaths"),
       config.as[GoogleKmsConfig]("kms"),
-      config.getString("terraGoogleOrgNumber")
+      config.getString("terraGoogleOrgNumber"),
+      config.as[TraceExporterConfig]("traceExporter")
     )
   }
 }

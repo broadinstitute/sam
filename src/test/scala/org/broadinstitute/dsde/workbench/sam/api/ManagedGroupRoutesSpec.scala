@@ -6,11 +6,9 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.stream.Materializer
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.openTelemetry.{FakeOpenTelemetryMetricsInterpreter, OpenTelemetryMetrics}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.api.ManagedGroupRoutesSpec._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
@@ -746,7 +744,6 @@ object ManagedGroupRoutesSpec {
   ): TestSamRoutes = {
     val directoryDAO = new MockDirectoryDAO()
     val policyDao = new MockAccessPolicyDAO(resourceTypeMap, directoryDAO)
-    implicit val openTelemetry: OpenTelemetryMetrics[IO] = FakeOpenTelemetryMetricsInterpreter
     val samRoutes = TestSamRoutes(resourceTypeMap, policyAccessDAO = Some(policyDao), maybeDirectoryDAO = Some(directoryDAO))
 
     policyDao.createResource(resource, samRequestContext).unsafeRunSync()
