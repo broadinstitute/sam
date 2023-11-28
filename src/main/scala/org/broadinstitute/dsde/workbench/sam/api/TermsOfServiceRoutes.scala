@@ -126,7 +126,8 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
                     getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
                       parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
                         complete(tosService.getTermsOfServiceHistoryForUser(requestUserId, samRequestContext, limit))
-                      }                    }
+                      }
+                    }
                   }
                 }
               }

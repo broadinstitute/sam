@@ -318,7 +318,7 @@ class UserService(
             allUsersStatus <- directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case _: NameNotFoundException =>
               false
             }
-            tosComplianceStatus <- tosService.getTosComplianceStatus(user, samRequestContext)
+            tosComplianceStatus <- tosService.getTermsOfServiceComplianceStatus(user, samRequestContext)
             adminEnabled <- directoryDAO.isEnabled(user.id, samRequestContext)
           } yield {
             // We are removing references to LDAP but this will require an API version change here, so we are leaving
@@ -367,7 +367,7 @@ class UserService(
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         // pulled out of for comprehension to allow concurrent execution
-        val tosAcceptanceStatus = tosService.getTosComplianceStatus(user, samRequestContext)
+        val tosAcceptanceStatus = tosService.getTermsOfServiceComplianceStatus(user, samRequestContext)
         val adminEnabledStatus = directoryDAO.isEnabled(user.id, samRequestContext)
         val allUsersStatus = cloudExtensions.getOrCreateAllUsersGroup(directoryDAO, samRequestContext).flatMap { allUsersGroup =>
           directoryDAO.isGroupMember(allUsersGroup.id, user.id, samRequestContext) recover { case e: NameNotFoundException => false }
