@@ -97,3 +97,19 @@ jobs:
         id: publishJavaClientSnapshot
         if: ${{ github.ref_name != 'develop' }}
         run: sbt "+ publish" -Dproject.isSnapshot=true
+
+      - name: Generate old javax java client
+        id: generateOldJavaClient
+        run: bash scripts/gen_java_client_old.sh
+
+      - name: Publish old javax java client for merge to develop branch
+        working-directory: codegen_java_old
+        id: publishOldJavaClient
+        if: ${{ github.ref_name == 'develop' }}
+        run: sbt "+ publish" -Dproject.isSnapshot=false
+
+      - name: Publish old javax java client as snapshot for PRs
+        working-directory: codegen_java_old
+        id: publishOldJavaClientSnapshot
+        if: ${{ github.ref_name != 'develop' }}
+        run: sbt "+ publish" -Dproject.isSnapshot=true
