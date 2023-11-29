@@ -137,7 +137,7 @@ class OldUserServiceMockSpec(_system: ActorSystem)
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
-    when(mockTosService.getTosComplianceStatus(any[SamUser], any[SamRequestContext]))
+    when(mockTosService.getTermsOfServiceComplianceStatus(any[SamUser], any[SamRequestContext]))
       .thenAnswer((i: InvocationOnMock) => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, true, true)))
 
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
@@ -168,7 +168,7 @@ class OldUserServiceMockSpec(_system: ActorSystem)
   }
 
   it should "return UserStatusDiagnostics.tosAccepted as false if user's TOS status is false" in {
-    when(mockTosService.getTosComplianceStatus(enabledUser, samRequestContext))
+    when(mockTosService.getTermsOfServiceComplianceStatus(enabledUser, samRequestContext))
       .thenReturn(IO.pure(TermsOfServiceComplianceStatus(enabledUser.id, false, false)))
     val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).unsafeRunSync()
     status.value.tosAccepted shouldBe false

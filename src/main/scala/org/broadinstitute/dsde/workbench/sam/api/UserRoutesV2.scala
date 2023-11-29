@@ -46,27 +46,24 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
       pathPrefix("users") {
         pathPrefix("v2") {
           pathPrefix("self") {
-            // api/users/v2/self
-            pathEndOrSingleSlash {
-              withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
-                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-                getSamUserResponse(samUser, samRequestContext)
-              }
-            } ~
-            // api/users/v2/self/allowed
-            pathPrefix("allowed") {
+            withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+              val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+              // api/users/v2/self
               pathEndOrSingleSlash {
-                withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
-                  val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+                getSamUserResponse(samUser, samRequestContext)
+              } ~
+              // api/users/v2/self/allowed
+              pathPrefix("allowed") {
+                pathEndOrSingleSlash {
                   getSamUserAllowances(samUser, samRequestContext)
                 }
               }
             } ~
             // api/user/v2/self/attributes
             pathPrefix("attributes") {
-              pathEndOrSingleSlash {
-                withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
-                  val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+              withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+                pathEndOrSingleSlash {
                   getSamUserAttributes(samUser, samRequestContext) ~
                   patchSamUserAttributes(samUser, samRequestContext)
                 }
@@ -75,19 +72,18 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
           } ~
           pathPrefix(Segment) { samUserId =>
             val workbenchUserId = WorkbenchUserId(samUserId)
-            // api/users/v2/{sam_user_id}
-            pathEndOrSingleSlash {
-              withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
-                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-                regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
-              }
-            } ~
-            // api/users/v2/{sam_user_id}/allowed
-            pathPrefix("allowed") {
-              pathEndOrSingleSlash {
-                withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
-                  val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+            withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+              val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+              addTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+                // api/users/v2/{sam_user_id}
+                pathEndOrSingleSlash {
+                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+                } ~
+                // api/users/v2/{sam_user_id}/allowed
+                pathPrefix("allowed") {
+                  pathEndOrSingleSlash {
+                    regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                  }
                 }
               }
             }
