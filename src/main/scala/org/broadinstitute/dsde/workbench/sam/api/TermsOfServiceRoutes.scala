@@ -71,12 +71,12 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
     }
 
   def userTermsOfServiceRoutes(samRequestContextWithoutUser: SamRequestContext): server.Route =
-    withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
-      val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-      pathPrefix("termsOfService") {
-        pathPrefix("v1") {
-          pathPrefix("user") { // api/termsOfService/v1/user
-            pathPrefix("self") { // api/termsOfService/v1/user/self
+    pathPrefix("termsOfService") {
+      pathPrefix("v1") {
+        pathPrefix("user") { // api/termsOfService/v1/user
+          pathPrefix("self") { // api/termsOfService/v1/user/self
+            withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+              val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
               pathEndOrSingleSlash {
                 get {
                   complete {
@@ -98,9 +98,12 @@ trait TermsOfServiceRoutes extends SamUserDirectives {
                   }
                 }
               }
-            } ~
-            // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
-            pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
+            }
+          } ~
+          // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
+          pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
+            withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+              val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
               validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
                 val requestUserId = WorkbenchUserId(userId)
                 pathEndOrSingleSlash {

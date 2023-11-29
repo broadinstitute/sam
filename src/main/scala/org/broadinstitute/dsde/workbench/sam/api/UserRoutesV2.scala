@@ -31,8 +31,8 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
 
   def userRegistrationRoutes(samRequestContextWithoutUser: SamRequestContext): Route =
     pathPrefix("users" / "v2" / "self" / "register") {
-      withNewUser(samRequestContextWithoutUser) { createUser =>
-        pathEndOrSingleSlash {
+      pathEndOrSingleSlash {
+        withNewUser(samRequestContextWithoutUser) { createUser =>
           postUserRegistration(createUser, samRequestContextWithoutUser)
         }
       }
@@ -43,38 +43,50 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
   // that the user is allowed to use the system.
   def userRoutesV2(samRequestContextWithoutUser: SamRequestContext): Route =
     userRegistrationRoutes(samRequestContextWithoutUser) ~
-      withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
-        val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-        pathPrefix("users") {
-          pathPrefix("v2") {
-            pathPrefix("self") {
-              // api/users/v2/self
-              pathEndOrSingleSlash {
+      pathPrefix("users") {
+        pathPrefix("v2") {
+          pathPrefix("self") {
+            // api/users/v2/self
+            pathEndOrSingleSlash {
+              withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                 getSamUserResponse(samUser, samRequestContext)
-              } ~
-              // api/users/v2/self/allowed
-              pathPrefix("allowed") {
-                pathEndOrSingleSlash {
+              }
+            } ~
+            // api/users/v2/self/allowed
+            pathPrefix("allowed") {
+              pathEndOrSingleSlash {
+                withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+                  val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                   getSamUserAllowances(samUser, samRequestContext)
                 }
-              } ~
-              // api/user/v2/self/attributes
-              pathPrefix("attributes") {
-                pathEndOrSingleSlash {
+              }
+            } ~
+            // api/user/v2/self/attributes
+            pathPrefix("attributes") {
+              pathEndOrSingleSlash {
+                withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+                  val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                   getSamUserAttributes(samUser, samRequestContext) ~
                   patchSamUserAttributes(samUser, samRequestContext)
                 }
               }
-            } ~
-            pathPrefix(Segment) { samUserId =>
-              val workbenchUserId = WorkbenchUserId(samUserId)
-              // api/users/v2/{sam_user_id}
-              pathEndOrSingleSlash {
+            }
+          } ~
+          pathPrefix(Segment) { samUserId =>
+            val workbenchUserId = WorkbenchUserId(samUserId)
+            // api/users/v2/{sam_user_id}
+            pathEndOrSingleSlash {
+              withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                 regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
-              } ~
-              // api/users/v2/{sam_user_id}/allowed
-              pathPrefix("allowed") {
-                pathEndOrSingleSlash {
+              }
+            } ~
+            // api/users/v2/{sam_user_id}/allowed
+            pathPrefix("allowed") {
+              pathEndOrSingleSlash {
+                withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+                  val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                   regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
                 }
               }
