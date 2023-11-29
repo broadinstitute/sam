@@ -96,17 +96,18 @@ class TosService(
   ): IO[TermsOfServiceDetails] =
     ensureAdminIfNeeded[TermsOfServiceDetails](userId, samRequestContext) {
       for {
-        currentTos <- ensureLatestTermsOfService(userId, samRequestContext)
+        latestTermsOfServiceAcceptance <- getLatestTermsOfServiceAcceptance(userId, samRequestContext)
+        latestTermsOfServiceAction <- directoryDao.getUserTermsOfService(userId, samRequestContext)
         requestedUser <- loadUser(userId, samRequestContext)
       } yield TermsOfServiceDetails(
-        currentTos.version,
-        currentTos.createdAt,
-        tosAcceptancePermitsSystemUsage(requestedUser, Option(currentTos)),
-        currentTos.version.equals(tosConfig.version)
+        latestTermsOfServiceAcceptance.version,
+        latestTermsOfServiceAcceptance.createdAt,
+        tosAcceptancePermitsSystemUsage(requestedUser, latestTermsOfServiceAction),
+        latestTermsOfServiceAcceptance.version.equals(tosConfig.version)
       )
     }
 
-  private def ensureLatestTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
+  private def getLatestTermsOfServiceAcceptance(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
     maybeTermsOfServiceRecord <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
     latestUserTermsOfService <- maybeTermsOfServiceRecord
       .map(IO.pure)
