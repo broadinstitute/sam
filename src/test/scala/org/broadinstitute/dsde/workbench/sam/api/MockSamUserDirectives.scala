@@ -29,4 +29,5 @@ trait MockSamUserDirectives extends SamUserDirectives {
     case None => failWith(new Exception("samUser not specified"))
     case Some(u) => provide(u)
   }
+
 }

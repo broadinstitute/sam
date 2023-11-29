@@ -4,9 +4,8 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.server.Directives.{onSuccess, reject}
 import akka.http.scaladsl.server._
 import akka.stream.Materializer
-import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReportSource, WorkbenchGroup}
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
+import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceHistory
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -17,11 +16,15 @@ import scala.concurrent.Future
 
 // Don't like having any required parameters in the constructor, but alas, they're needed to be able to finally
 // build the routes.  *sniff sniff* I smell potential refactoring.
-class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetrics[IO]) {
+//
+// NOTE: In order to use the Routes from this builder to make an authenticated request, you must have either an
+// AdminUser, an EnabledUser, or a DisabledUser specified - this is due to how SamRoutes works with Akka directives
+// to make sure that the calling user is a valid user.
+class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: ActorSystem, materializer: Materializer) {
 
-  private val cloudExtensionsBuilder: MockCloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup)
-  cloudExtensionsBuilder.withNonAdminUser()
+  private val cloudExtensionsBuilder: MockCloudExtensionsBuilder = MockCloudExtensionsBuilder(allUsersGroup).withNonAdminUser()
   private val userServiceBuilder: MockUserServiceBuilder = MockUserServiceBuilder()
+  private val mockTosServiceBuilder = MockTosServiceBuilder()
 
   // Needing to keep track of the enabled user is kind of gross.  But this is a single user that exists in the DB.  This
   // is used when we need to test admin routes that look up stuff about _another_ user (the `enabledUser`) when called
@@ -39,6 +42,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     enabledUser = Option(samUser)
     userServiceBuilder.withEnabledUser(samUser)
     cloudExtensionsBuilder.withEnabledUser(samUser)
+    mockTosServiceBuilder.withAcceptedStateForUser(samUser, isAccepted = true)
     this
   }
 
@@ -46,6 +50,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     enabledUser = Option(samUsers.head)
     userServiceBuilder.withEnabledUsers(samUsers)
     cloudExtensionsBuilder.withEnabledUsers(samUsers)
+    mockTosServiceBuilder.withAllAccepted()
     this
   }
 
@@ -62,6 +67,16 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   }
   def withAllowedUsers(samUsers: Iterable[SamUser]): MockSamRoutesBuilder = {
     userServiceBuilder.withAllowedUsers(samUsers)
+    this
+  }
+
+  def withTosStateForUser(samUser: SamUser, isAccepted: Boolean, version: String = "0"): MockSamRoutesBuilder = {
+    mockTosServiceBuilder.withAcceptedStateForUser(samUser, isAccepted, version)
+    this
+  }
+
+  def withTermsOfServiceHistoryForUser(samUser: SamUser, tosHistory: TermsOfServiceHistory): MockSamRoutesBuilder = {
+    mockTosServiceBuilder.withTermsOfServiceHistoryForUser(samUser, tosHistory)
     this
   }
 
@@ -109,7 +124,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     val mockResourceService = mock[ResourceService]
     val mockUserService = userServiceBuilder.build
     val mockCloudExtensions = cloudExtensionsBuilder.build
-    val mockTosService = MockTosServiceBuilder().withAllAccepted().build
+    val mockTosService = mockTosServiceBuilder.build
 
     new SamRoutes(
       mockResourceService,
@@ -141,9 +156,11 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       }
 
       override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route = reject
+
       implicit val errorReportSource: ErrorReportSource = ErrorReportSource("test")
-      override def asAdminServiceUser: Directive0 = if (asServiceAdminUser) Directive.Empty
-      else reject(AuthorizationFailedRejection)
+
+      override def asAdminServiceUser: Directive0 =
+        if (asServiceAdminUser) Directive.Empty else reject(AuthorizationFailedRejection)
     }
   }
 }

@@ -38,7 +38,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
       .build
 
     // Act and Assert
-    Post(s"/api/users/v2/self/register", SamUserRegistrationRequest(userAttributesRequest)) ~> samRoutes.route ~> check {
+    Post(s"/api/users/v2/self/register", SamUserRegistrationRequest(true, userAttributesRequest)) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
       responseAs[SamUserResponse] should beForUser(defaultUser)
     }

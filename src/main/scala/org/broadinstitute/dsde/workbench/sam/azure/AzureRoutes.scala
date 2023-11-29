@@ -17,7 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsString
 
-trait AzureRoutes extends SecurityDirectives with LazyLogging {
+trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestContextDirectives {
   val azureService: Option[AzureService]
 
   def azureRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
@@ -39,9 +39,10 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
             }
           } ~
             path("petManagedIdentity" / Segment) { userEmail =>
-              post {
+              val workbenchEmail = WorkbenchEmail(userEmail)
+              postWithTelemetry(samRequestContext, "userEmail" -> workbenchEmail) {
                 requireCloudExtensionCreatePetAction(samUser, samRequestContext) {
-                  loadSamUser(WorkbenchEmail(userEmail), samRequestContext) { targetSamUser =>
+                  loadSamUser(workbenchEmail, samRequestContext) { targetSamUser =>
                     entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
                       requireUserCreatePetAction(request, targetSamUser, samRequestContext) {
                         complete {
@@ -57,10 +58,12 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
               }
             } ~
             path("billingProfile" / Segment / "managedResourceGroup") { billingProfileId =>
-              post {
+              val billingProfileResourceId = ResourceId(billingProfileId)
+              val billingProfileIdParam = "billingProfileId" -> billingProfileResourceId
+              postWithTelemetry(samRequestContext, billingProfileIdParam) {
                 entity(as[ManagedResourceGroupCoordinates]) { mrgCoords =>
                   requireAction(
-                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, billingProfileResourceId),
                     SamResourceActions.setManagedResourceGroup,
                     samUser.id,
                     samRequestContext
@@ -73,9 +76,9 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
                   }
                 }
               } ~
-                delete {
+                deleteWithTelemetry(samRequestContext, billingProfileIdParam) {
                   requireAction(
-                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, billingProfileResourceId),
                     SamResourceActions.delete,
                     samUser.id,
                     samRequestContext

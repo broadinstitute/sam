@@ -1,16 +1,22 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
-import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Directives.{pathPrefix, _}
+import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.TosService
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
+import scala.util.matching.Regex
 
-trait TermsOfServiceRoutes {
+trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirectives {
   val tosService: TosService
   implicit val executionContext: ExecutionContext
+  private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
 
   @deprecated("Being replaced by REST-ful termsOfService routes")
   def oldTermsOfServiceRoutes: server.Route =
@@ -33,61 +39,96 @@ trait TermsOfServiceRoutes {
         }
       }
 
-  def termsOfServiceRoutes: server.Route =
+  def publicTermsOfServiceRoutes: server.Route =
     pathPrefix("termsOfService") {
-      pathPrefix("v1") { // api/termsOfService/v1
+      pathPrefix("v1") { // /termsOfService/v1
         pathEndOrSingleSlash {
           get {
-            complete(tosService.getTosConfig())
+            complete(tosService.getTermsOfServiceConfig())
           }
         } ~
-        pathPrefix("docs") { // api/termsOfService/v1/docs
+        pathPrefix("docs") { // /termsOfService/v1/docs
           pathEndOrSingleSlash {
             get {
-              complete(StatusCodes.NotImplemented)
+              parameters("doc".as[String].?) { (doc: Option[String]) =>
+                val docSet = doc.map(_.split(",").toSet).getOrElse(Set.empty)
+                if (docSet.subsetOf(Set(tosService.termsOfServiceTextKey, tosService.privacyPolicyTextKey)))
+                  complete(tosService.getTermsOfServiceTexts(docSet))
+                else
+                  complete(StatusCodes.BadRequest)
+              }
             }
           } ~
-          pathPrefix("redirect") { // api/termsOfService/v1/docs/redirect
+          pathPrefix("redirect") { // /termsOfService/v1/docs/redirect
             pathEndOrSingleSlash {
               get {
                 complete(StatusCodes.NotImplemented)
               }
             }
           }
-        } ~
-        pathPrefix("user") { // api/termsOfService/v1/user
-          pathPrefix("self") { // api/termsOfService/v1/user/self
-            pathEndOrSingleSlash {
-              get {
-                complete(StatusCodes.NotImplemented)
-              }
-            } ~
-            pathPrefix("accept") { // api/termsOfService/v1/user/accept
-              pathEndOrSingleSlash {
-                put {
-                  complete(StatusCodes.NotImplemented)
-                }
-              }
-            } ~
-            pathPrefix("reject") { // api/termsOfService/v1/user/reject
-              pathEndOrSingleSlash {
-                put {
-                  complete(StatusCodes.NotImplemented)
-                }
-              }
-            }
-          } ~
-          // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
-          pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
-            pathEndOrSingleSlash {
-              get {
-                complete(StatusCodes.NotImplemented)
-              }
-            } ~
-            pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
+        }
+      }
+    }
+
+  def userTermsOfServiceRoutes(samRequestContextWithoutUser: SamRequestContext): server.Route =
+    withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+      val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+      pathPrefix("termsOfService") {
+        pathPrefix("v1") {
+          pathPrefix("user") { // api/termsOfService/v1/user
+            pathPrefix("self") { // api/termsOfService/v1/user/self
               pathEndOrSingleSlash {
                 get {
-                  complete(StatusCodes.NotImplemented)
+                  complete {
+                    tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
+                  }
+                }
+              } ~
+              pathPrefix("accept") { // api/termsOfService/v1/user/accept
+                pathEndOrSingleSlash {
+                  put {
+                    complete(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
+                  }
+                }
+              } ~
+              pathPrefix("reject") { // api/termsOfService/v1/user/reject
+                pathEndOrSingleSlash {
+                  put {
+                    complete(tosService.rejectCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
+                  }
+                }
+              } ~
+              pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
+                pathEndOrSingleSlash {
+                  get {
+                    parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
+                      complete {
+                        tosService.getTermsOfServiceHistoryForUser(samUser.id, samRequestContext, limit)
+                      }
+                    }
+                  }
+                }
+              }
+            } ~
+            // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
+            pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
+              validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
+                val requestUserId = WorkbenchUserId(userId)
+                pathEndOrSingleSlash {
+                  getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
+                    complete {
+                      tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
+                    }
+                  }
+                } ~
+                pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
+                  pathEndOrSingleSlash {
+                    getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
+                      parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
+                        complete(tosService.getTermsOfServiceHistoryForUser(requestUserId, samRequestContext, limit))
+                      }
+                    }
+                  }
                 }
               }
             }

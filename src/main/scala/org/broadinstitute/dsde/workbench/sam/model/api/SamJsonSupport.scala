@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{
   GroupSyncResponse,
   ManagedGroupAccessInstructions,
   ManagedGroupMembershipEntry,
+  OldTermsOfServiceDetails,
   PolicyIdentifiers,
   RequesterPaysSignedUrlRequest,
   ResourceAction,
@@ -23,10 +24,13 @@ import org.broadinstitute.dsde.workbench.sam.model.{
   ResourceType,
   ResourceTypeName,
   RolesAndActions,
+  SamUserTos,
   SignedUrlRequest,
   TermsOfServiceAcceptance,
   TermsOfServiceComplianceStatus,
   TermsOfServiceDetails,
+  TermsOfServiceHistory,
+  TermsOfServiceHistoryRecord,
   UserIdInfo,
   UserPolicyResponse,
   UserResourcesResponse,
@@ -67,7 +71,15 @@ object SamJsonSupport {
 
   implicit val TermsOfServiceAcceptanceFormat = ValueObjectFormat(TermsOfServiceAcceptance.apply)
 
-  implicit val termsOfServiceDetailsFormat = jsonFormat4(TermsOfServiceDetails.apply)
+  implicit val oldTermsOfServiceDetailsFormat = jsonFormat4(OldTermsOfServiceDetails.apply)
+
+  implicit val TermsOfServiceDetailsFormat = jsonFormat4(TermsOfServiceDetails.apply)
+
+  implicit val termsOfServiceHistoryRecordFormat = jsonFormat3(TermsOfServiceHistoryRecord.apply)
+
+  implicit val termsOfServiceHistory = jsonFormat1(TermsOfServiceHistory.apply)
+
+  implicit val SamUserTosFormat = jsonFormat4(SamUserTos.apply)
 
   implicit val termsOfAcceptanceStatusFormat = jsonFormat3(TermsOfServiceComplianceStatus.apply)
 

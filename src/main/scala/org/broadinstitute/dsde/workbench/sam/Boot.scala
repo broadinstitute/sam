@@ -5,8 +5,20 @@ import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
+import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.cloud.opentelemetry.trace.{TraceConfiguration, TraceExporter}
 import com.typesafe.scalalogging.LazyLogging
-import io.prometheus.client.CollectorRegistry
+import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
+import io.opentelemetry.context.propagation.{ContextPropagators, TextMapPropagator}
+import io.opentelemetry.exporter.prometheus.PrometheusHttpServer
+import io.opentelemetry.sdk.metrics.SdkMeterProvider
+import io.opentelemetry.sdk.{OpenTelemetrySdk, resources}
+import io.opentelemetry.sdk.trace.SdkTracerProvider
+import io.opentelemetry.sdk.trace.`export`.BatchSpanProcessor
+import io.opentelemetry.sdk.trace.samplers.Sampler
+import io.opentelemetry.semconv.ResourceAttributes
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{
@@ -22,7 +34,6 @@ import org.broadinstitute.dsde.workbench.google.{
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -37,7 +48,7 @@ import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-import java.io.File
+import java.io.{File, FileInputStream}
 import java.nio.file.{Files, Paths}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -56,8 +67,6 @@ object Boot extends IOApp with LazyLogging {
 
       // Shutdown all akka http connection pools/servers so we can re-bind to the ports
       Http().shutdownAllConnectionPools() *> system.terminate()
-      // Clean up prometheus registry so it will be fresh on reboot
-      CollectorRegistry.defaultRegistry.clear()
 
       IO.sleep(5 seconds) *> run(args)
     }
@@ -65,6 +74,7 @@ object Boot extends IOApp with LazyLogging {
 
   private def startup()(implicit system: ActorSystem): IO[Unit] = {
     val appConfig = AppConfig.load
+    instantiateOpenTelemetry(appConfig)
     val appDependencies = createAppDependencies(appConfig)
 
     appDependencies.use { dependencies => // this is where the resource is used
@@ -122,11 +132,6 @@ object Boot extends IOApp with LazyLogging {
         appConfig.samDatabaseConfig.samBackground
       )
 
-      // This is for sending custom metrics to stackdriver. all custom metrics starts with `OpenCensus/sam/`.
-      // Typing in `sam` in metrics explorer will show all sam custom metrics.
-      // As best practice, we should have all related metrics under same prefix separated by `/`
-      implicit0(openTelemetry: OpenTelemetryMetrics[IO]) <- OpenTelemetryMetrics.resource[IO]("sam", appConfig.prometheusConfig.endpointPort)
-
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
         foregroundDirectoryDAO,
@@ -154,8 +159,7 @@ object Boot extends IOApp with LazyLogging {
       azureManagedResourceGroupDAO,
       oauth2Config
     )(
-      actorSystem,
-      openTelemetry
+      actorSystem
     )
 
   private def cloudExtensionsInitializerResource(
@@ -353,6 +357,53 @@ object Boot extends IOApp with LazyLogging {
     )
   }
 
+  private def instantiateOpenTelemetry(appConfig: AppConfig): OpenTelemetry = {
+    val maybeVersion = Option(getClass.getPackage.getImplementationVersion)
+    val resourceBuilder =
+      resources.Resource.getDefault.toBuilder
+        .put(ResourceAttributes.SERVICE_NAME, "sam")
+    maybeVersion.foreach(version => resourceBuilder.put(ResourceAttributes.SERVICE_VERSION, version))
+    val resource = resourceBuilder.build
+
+    val maybeTracerProvider = appConfig.googleConfig.flatMap { googleConfig =>
+      if (googleConfig.googleServicesConfig.traceExporter.enabled) {
+        val traceProviderBuilder = SdkTracerProvider.builder
+        val googleTraceExporter = TraceExporter.createWithConfiguration(
+          TraceConfiguration
+            .builder()
+            .setProjectId(googleConfig.googleServicesConfig.traceExporter.projectId)
+            .setCredentials(
+              ServiceAccountCredentials.fromStream(
+                new FileInputStream(googleConfig.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
+              )
+            )
+            .build()
+        )
+        traceProviderBuilder.addSpanProcessor(BatchSpanProcessor.builder(googleTraceExporter).build())
+        val probabilitySampler = Sampler.traceIdRatioBased(googleConfig.googleServicesConfig.traceExporter.samplingProbability)
+        val sdkTracerProvider = traceProviderBuilder
+          .setResource(resource)
+          .setSampler(Sampler.parentBased(probabilitySampler))
+          .build
+        Option(sdkTracerProvider)
+      } else {
+        None
+      }
+    }
+
+    val sdkMeterProvider =
+      SdkMeterProvider.builder
+        .registerMetricReader(PrometheusHttpServer.builder().setPort(appConfig.prometheusConfig.endpointPort).build())
+        .setResource(resource)
+        .build
+
+    val otelBuilder = OpenTelemetrySdk.builder
+    maybeTracerProvider.foreach(otelBuilder.setTracerProvider)
+    otelBuilder.setMeterProvider(sdkMeterProvider)
+    otelBuilder.setPropagators(ContextPropagators.create(TextMapPropagator.composite(W3CTraceContextPropagator.getInstance, W3CBaggagePropagator.getInstance)))
+    otelBuilder.buildAndRegisterGlobal
+  }
+
   private[sam] def createAppDependenciesWithSamRoutes(
       config: AppConfig,
       cloudExtensionsInitializer: CloudExtensionsInitializer,
@@ -360,7 +411,7 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO: PostgresDirectoryDAO,
       azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO,
       oauth2Config: OpenIDConnectConfiguration
-  )(implicit actorSystem: ActorSystem, openTelemetry: OpenTelemetryMetrics[IO]): AppDependencies = {
+  )(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val resourceService = new ResourceService(
@@ -372,8 +423,9 @@ object Boot extends IOApp with LazyLogging {
       config.emailDomain,
       config.adminConfig.allowedEmailDomains
     )
-    val tosService = new TosService(directoryDAO, config.termsOfServiceConfig)
-    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService)
+    val tosService = new TosService(cloudExtensionsInitializer.cloudExtensions, directoryDAO, config.termsOfServiceConfig)
+    val userService =
+      new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService, config.azureServicesConfig)
     val statusService =
       new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds, 1 minute)
     val managedGroupService =

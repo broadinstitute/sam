@@ -11,15 +11,14 @@ object Dependencies {
   val postgresDriverVersion = "42.5.0"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "32f499b"
-  val workbenchUtilV = s"0.9-$workbenchLibV"
-  val workbenchUtil2V = s"0.4-$workbenchLibV"
-  val workbenchModelV = s"0.18-$workbenchLibV"
-  val workbenchGoogleV = s"0.27-$workbenchLibV"
-  val workbenchGoogle2V = s"0.30-$workbenchLibV"
-  val workbenchNotificationsV = s"0.5-$workbenchLibV"
-  val workbenchOauth2V = s"0.4-$workbenchLibV"
-  val workbenchOpenTelemetryV = s"0.5-$workbenchLibV"
+  val workbenchLibV = "a0519cb" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchUtilV = s"0.10-$workbenchLibV"
+  val workbenchUtil2V = s"0.7-$workbenchLibV"
+  val workbenchModelV = s"0.19-$workbenchLibV"
+  val workbenchGoogleV = s"0.30-$workbenchLibV"
+  val workbenchGoogle2V = s"0.34-$workbenchLibV"
+  val workbenchNotificationsV = s"0.6-$workbenchLibV"
+  val workbenchOauth2V = s"0.5-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.12-SNAPSHOT"
   val slf4jVersion = "2.0.6"
@@ -86,9 +85,6 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil)
   val workbenchOauth2: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V
   val workbenchOauth2Tests: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V % "test" classifier "tests"
-  val workbenchOpenTelemetry: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-opentelemetry" % workbenchOpenTelemetryV
-  val workbenchOpenTelemetryTest: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-opentelemetry" % workbenchOpenTelemetryV % "test" classifier "tests"
   // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted
   // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
   // workbench-libs dependency so exclude auto-value from there
@@ -103,7 +99,7 @@ object Dependencies {
   val workbenchGoogle2Tests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.126.10" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.6" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
@@ -115,13 +111,6 @@ object Dependencies {
   val scalikeCoreTest = "org.scalikejdbc" %% "scalikejdbc-test" % scalikejdbcVersion % "test"
   val postgres = "org.postgresql" % "postgresql" % postgresDriverVersion
 
-  val excludeScalaCllectionCompat = ExclusionRule(organization = "org.scala-lang.modules", name = "scala-collection-compat_2.12")
-  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.2" // excludeAll(excludIoGrpc, excludeCatsEffect )
-  val opencensusAkkaHttp: ModuleID =
-    "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.2" excludeAll (excludeAkkaProtobufV3, excludeAkkaStream) // excludeAll(excludIoGrpc, excludeCatsEffect)
-  val opencensusStackDriverExporter: ModuleID =
-    "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
-  val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
@@ -131,11 +120,34 @@ object Dependencies {
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
   val circeCore = "io.circe" %% "circe-core" % "0.14.4"
 
-  val openCensusDependencies = Seq(
-    opencensusScalaCode,
-    opencensusAkkaHttp,
-    opencensusStackDriverExporter,
-    opencensusLoggingExporter
+  // OpenTelemetry
+  val openTelemetryVersion = "1.31.0"
+  val otelApi: ModuleID = "io.opentelemetry" % "opentelemetry-api" % openTelemetryVersion
+  val otelSdk: ModuleID = "io.opentelemetry" % "opentelemetry-sdk" % openTelemetryVersion
+  val otelSdkMetrics: ModuleID = "io.opentelemetry" % "opentelemetry-sdk-metrics" % openTelemetryVersion
+  val otelExporterLogging: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-logging" % openTelemetryVersion
+  val otelSemconv: ModuleID = "io.opentelemetry.semconv" % "opentelemetry-semconv" % "1.21.0-alpha"
+  val otelAnnotation: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-annotations" % openTelemetryVersion
+  val otelInstrumentationApi: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api" % openTelemetryVersion
+  val otelInstrumentationApiSemconv: ModuleID =
+    "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-semconv" % (openTelemetryVersion + "-alpha")
+  val otelPrometheusExporter: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-prometheus" % (openTelemetryVersion + "-alpha")
+
+  // Google cloud open telemetry exporters
+  var gcpOpenTelemetryExporterVersion = "0.25.2"
+  var googleTraceExporter: ModuleID = "com.google.cloud.opentelemetry" % "exporter-trace" % gcpOpenTelemetryExporterVersion
+
+  val openTelemetryDependencies = Seq(
+    otelApi,
+    otelSdk,
+    otelSdkMetrics,
+    otelExporterLogging,
+    otelSemconv,
+    otelAnnotation,
+    otelInstrumentationApi,
+    otelInstrumentationApiSemconv,
+    otelPrometheusExporter,
+    googleTraceExporter
   )
 
   val pact4sDependencies = Seq(
@@ -190,8 +202,6 @@ object Dependencies {
     googleStorageLocal,
     workbenchOauth2,
     workbenchOauth2Tests,
-    workbenchOpenTelemetry,
-    workbenchOpenTelemetryTest,
     commonsCodec,
     liquibaseCore,
     circeYAML,
@@ -205,5 +215,5 @@ object Dependencies {
     azureManagedApplications,
     sentry,
     sentryLogback
-  ) ++ openCensusDependencies
+  ) ++ openTelemetryDependencies
 }

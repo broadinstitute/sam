@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
-import java.util.Date
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
@@ -14,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbench
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
+import java.util.Date
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 
@@ -22,7 +22,8 @@ import scala.collection.mutable
 class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap(), passStatusCheck: Boolean = true) extends DirectoryDAO {
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
-  private val userTos: mutable.Map[WorkbenchUserId, SamUserTos] = new TrieMap()
+  private val userTermsOfService: mutable.Map[WorkbenchUserId, SamUserTos] = new TrieMap()
+  private val userTermsOfServiceHistory: mutable.Map[WorkbenchUserId, List[SamUserTos]] = new TrieMap()
   private val userAttributes: mutable.Map[WorkbenchUserId, SamUserAttributes] = new TrieMap()
 
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
@@ -312,7 +313,9 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case None => false
       case Some(user) =>
         users.put(userId, user)
-        userTos.put(userId, SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
+        userTermsOfService.put(userId, SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
+        val userHistory = userTermsOfServiceHistory.getOrElse(userId, List.empty)
+        userTermsOfServiceHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
         true
     }
 
@@ -321,25 +324,41 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case None => false
       case Some(user) =>
         users.put(userId, user)
-        userTos.put(userId, SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
+        userTermsOfService.put(userId, SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
+        val userHistory = userTermsOfServiceHistory.getOrElse(userId, List.empty)
+        userTermsOfServiceHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
         true
     }
 
-  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext, action: Option[String]): IO[Option[SamUserTos]] =
     loadUser(userId, samRequestContext).map {
       case None => None
       case Some(_) =>
-        userTos.get(userId)
+        if (action.isDefined) {
+          userTermsOfService.get(userId).filter(_.action == action.get)
+        } else
+          userTermsOfService.get(userId)
     }
 
-  override def getUserTosVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
+  override def getUserTermsOfServiceVersion(
+      userId: WorkbenchUserId,
+      tosVersion: Option[String],
+      samRequestContext: SamRequestContext,
+      action: Option[String]
+  ): IO[Option[SamUserTos]] =
     loadUser(userId, samRequestContext).map {
       case None => None
       case Some(_) =>
         tosVersion match {
-          case Some(_) => userTos.get(userId)
+          case Some(_) => userTermsOfService.get(userId)
           case None => None
         }
+    }
+
+  override def getUserTermsOfServiceHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
+    loadUser(userId, samRequestContext).map {
+      case None => List.empty
+      case Some(_) => userTermsOfServiceHistory.getOrElse(userId, List.empty)
     }
 
   override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {

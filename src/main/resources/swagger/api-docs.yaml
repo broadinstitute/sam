@@ -2991,6 +2991,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+    patch:
+      tags:
+        - Users
+      summary: patch the user's attributes
+      operationId: patchSamUserAttributes
+      requestBody:
+        description: User attributes to patch
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/SamUserAttributes'
+      responses:
+        200:
+          description: attributes set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAttributes'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/users/v2/{sam_user_id}:
     get:
       tags:
@@ -3159,6 +3183,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets terms of service details, including user's accepted version
       operationId: getTermsOfServiceDetails
       responses:
@@ -3172,6 +3197,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets info on whether the user has accepted the latest terms of service and if they can use the system based on that
       operationId: getTermsOfServiceComplianceStatus
       responses:
@@ -3213,6 +3239,7 @@ paths:
     post:
       tags:
         - Terms of Service
+      deprecated: true
       summary: accepts terms of service
       operationId: acceptTermsOfService
       requestBody:
@@ -3238,6 +3265,7 @@ paths:
     delete:
       tags:
         - Terms of Service
+      deprecated: true
       summary: rejects terms of service
       operationId: rejectTermsOfService
       responses:
@@ -3257,6 +3285,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: returns whether or not the user has accepted the current terms of service.
       operationId: getUserTermsOfServiceStatus
       responses:
@@ -3278,6 +3307,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets terms of service text
       operationId: getTermsOfServiceText
       responses:
@@ -3291,6 +3321,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets privacy policy text
       operationId: getPrivacyPolicyText
       responses:
@@ -3313,6 +3344,142 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermsOfServiceConfigResponse'
+  /termsOfService/v1/docs:
+    get:
+      tags:
+        - TermsOfService
+      summary: Gets terms of service text and/or privacy policy text depending on query parameters.
+      operationId: getTermsOfServiceDocs
+      parameters:
+        - name: doc
+          in: query
+          description: Array of strings containing 'termsOfService' and/or 'privacyPolicy'.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        200:
+          description: success
+          content:
+            text/plain:
+              schema:
+                type: string
+  /api/termsOfService/v1/user/self:
+    get:
+      tags:
+        - TermsOfService
+      summary: Returns details about the requesting user's terms of service status.
+      operationId: userTermsOfServiceGetSelf
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        403:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/termsOfService/v1/user/self/accept:
+    put:
+      tags:
+        - TermsOfService
+      summary: Accepts the current terms of service for the requesting user.
+      operationId: userTermsOfServiceAcceptSelf
+      responses:
+        204:
+          description: OK
+  /api/termsOfService/v1/user/self/reject:
+    put:
+      tags:
+        - TermsOfService
+      summary: Rejects the current terms of service for the requesting user.
+      operationId: userTermsOfServiceRejectSelf
+      responses:
+        204:
+          description: OK
+  /api/termsOfService/v1/user/{sam_user_id}:
+    get:
+      tags:
+        - TermsOfService
+      summary: gets a user's terms of service status, can only get another user's status if the requester is an admin.
+      operationId: userTermsOfServiceGet
+      parameters:
+        - name: sam_user_id
+          in: path
+          description: the id of the sam user to get terms of service status for
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/termsOfService/v1/user/self/history:
+    get:
+      tags:
+        - TermsOfService
+      summary: gets a user's own terms of service acceptance/rejection action history
+      operationId: userTermsOfServiceSelfGetHistory
+      parameters:
+        - name: limit
+          in: query
+          description: limit on how many records to return, defaults to 100
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: user has a history of terms of service actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceHistory'
+        404:
+          description: user has no history of terms of service actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/termsOfService/v1/user/{sam_user_id}/history:
+    get:
+      tags:
+        - TermsOfService
+      summary: gets a user's terms of service acceptance/rejection action history, can only get another user's history if the requester is an admin.
+      operationId: userTermsOfServiceGetUserHistory
+      parameters:
+        - name: sam_user_id
+          in: path
+          description: the id of the sam user to get terms of service status for
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: limit on how many records to return, defaults to 100
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: user has a history of terms of service actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceHistory'
   /version:
     get:
       tags:
@@ -3974,6 +4141,28 @@ components:
             means that users who have not accepted the latest terms of service
             version (and who have accepted the previous version) will be allowed to use the system 
             for a period of time after the terms of service have been updated.
+    UserTermsOfServiceDetails:
+      required:
+        - latestAcceptedVersion
+        - acceptedOn
+        - permitsSystemUsage
+        - isCurrentVersion
+      type: object
+      properties:
+        latestAcceptedVersion:
+          type: string
+          description: The latest version of the terms of service that the requesting user has accepted.
+        acceptedOn:
+          type: string
+          format: date-time
+          description: The timestamp marking when the user accepted the terms of service matching latestAcceptedVersion.
+        permitsSystemUsage:
+          type: boolean
+          description: based on the user's currently accepted terms of service version and when the terms of service were last changed,
+            should the user still be permitted to use the system?
+        isCurrentVersion:
+          type: boolean
+          description: Is the Terms of Service version the user has accepted the current Terms of Service version of the system.
     TermsOfServiceDetails:
       required:
         - isEnabled
@@ -4012,6 +4201,33 @@ components:
           type: boolean
           description: based on the user's currently accepted terms of service version and when the terms of service were last changed,
             should the user still be permitted to use the system?
+    UserTermsOfServiceHistory:
+      required:
+        - history
+      type: object
+      description: a user's terms of service action history
+      properties:
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserTermsOfServiceHistoryRecord'
+    UserTermsOfServiceHistoryRecord:
+      required:
+        - action
+        - version
+        - timestamp
+      type: object
+      properties:
+        action:
+          type: string
+          description: the terms of service action the user took
+        version:
+          type: string
+          description: the version of the terms of service the user accepted/rejected
+        timestamp:
+          type: string
+          format: date-time
+          description: the timestamp of the action
     ManagedResourceGroupCoordinates:
       required:
         - tenantId
@@ -4148,6 +4364,9 @@ components:
     SamUserRegistrationRequest:
       type: object
       properties:
+        acceptsTermsOfService:
+          type: boolean
+          description: does the user accept the terms of service
         userAttributes:
           $ref: '#/components/schemas/SamUserAttributes'
     UpdateUserRequest:

@@ -86,6 +86,16 @@ object Generator {
     userId <- genWorkbenchUserId
   } yield SamUser(userId, None, email, Option(azureB2CId), false)
 
+  val genNewWorkbenchUserAzureUami = for {
+    azureB2CId <- genAzureB2CId
+    userId <- genWorkbenchUserId
+  } yield SamUser(userId, None, WorkbenchEmail(""), Option(azureB2CId), false)
+
+  val genWorkbenchUserAzureUami = for {
+    azureB2CId <- genAzureB2CId
+    userId <- genWorkbenchUserId
+  } yield SamUser(userId, None, WorkbenchEmail(s"${azureB2CId.value}@uami.terra.bio"), Option(azureB2CId), false)
+
   val genWorkbenchUserBoth = for {
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId

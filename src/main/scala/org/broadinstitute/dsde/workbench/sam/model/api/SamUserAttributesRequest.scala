@@ -21,6 +21,6 @@ case class SamUserAttributesRequest(
 
   private def validateMarketingConsentExists: Option[ErrorReport] =
     if (marketingConsent.isEmpty) {
-      Option(ErrorReport("A new user MUST provide a acceptance or denial to marketing consent"))
+      Option(ErrorReport("A new user must provide a acceptance or denial to marketing consent"))
     } else None
 }

@@ -1,12 +1,6 @@
 ENV=${1:-dev}
-VAULT_TOKEN=${2:-$(cat "$HOME"/.vault-token)}
-
-VAULT_ADDR="https://clotho.broadinstitute.org:8200"
-SAM_VAULT_PATH="secret/dsde/firecloud/$ENV/sam"
 SERVICE_OUTPUT_LOCATION="$(dirname "$0")/src/main/resources/rendered"
 SECRET_ENV_VARS_LOCATION="${SERVICE_OUTPUT_LOCATION}/secrets.env"
-
-USE_GKE_GCLOUD_AUTH_PLUGIN=True # https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke
 
 gcloud container clusters get-credentials --zone us-central1-a --project broad-dsde-dev terra-dev
 
