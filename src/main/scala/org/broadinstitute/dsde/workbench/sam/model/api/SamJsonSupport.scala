@@ -29,6 +29,8 @@ import org.broadinstitute.dsde.workbench.sam.model.{
   TermsOfServiceAcceptance,
   TermsOfServiceComplianceStatus,
   TermsOfServiceDetails,
+  TermsOfServiceHistory,
+  TermsOfServiceHistoryRecord,
   UserIdInfo,
   UserPolicyResponse,
   UserResourcesResponse,
@@ -72,6 +74,10 @@ object SamJsonSupport {
   implicit val oldTermsOfServiceDetailsFormat = jsonFormat4(OldTermsOfServiceDetails.apply)
 
   implicit val TermsOfServiceDetailsFormat = jsonFormat4(TermsOfServiceDetails.apply)
+
+  implicit val termsOfServiceHistoryRecordFormat = jsonFormat3(TermsOfServiceHistoryRecord.apply)
+
+  implicit val termsOfServiceHistory = jsonFormat1(TermsOfServiceHistory.apply)
 
   implicit val SamUserTosFormat = jsonFormat4(SamUserTos.apply)
 

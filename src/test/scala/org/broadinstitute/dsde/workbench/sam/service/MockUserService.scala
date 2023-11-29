@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.service
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
@@ -18,7 +17,7 @@ class MockUserService(
     cloudExtensions: CloudExtensions = null,
     blockedEmailDomains: Seq[String] = Seq(),
     tosService: TosService = null
-)(implicit executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetrics[IO])
+)(implicit executionContext: ExecutionContext)
     extends UserService(directoryDAO, cloudExtensions, blockedEmailDomains, tosService) {
 
   def createGroup(

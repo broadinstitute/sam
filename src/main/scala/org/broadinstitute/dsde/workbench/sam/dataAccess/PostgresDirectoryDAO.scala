@@ -649,24 +649,48 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   }
 
   // When no tosVersion is specified, return the latest TosRecord for the user
-  override def getUserTos(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
-    getUserTosVersion(userId, None, samRequestContext)
+  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext, action: Option[String] = None): IO[Option[SamUserTos]] =
+    getUserTermsOfServiceVersion(userId, None, samRequestContext, action)
 
-  override def getUserTosVersion(userId: WorkbenchUserId, tosVersion: Option[String], samRequestContext: SamRequestContext): IO[Option[SamUserTos]] =
-    readOnlyTransaction("getUserTos", samRequestContext) { implicit session =>
+  override def getUserTermsOfServiceVersion(
+      userId: WorkbenchUserId,
+      tosVersion: Option[String],
+      samRequestContext: SamRequestContext,
+      action: Option[String] = None
+  ): IO[Option[SamUserTos]] =
+    readOnlyTransaction("getUserTermsOfService", samRequestContext) { implicit session =>
       val tosTable = TosTable.syntax
       val column = TosTable.column
 
-      val versionConstraint = if (tosVersion.isDefined) samsqls"and ${column.version} = ${tosVersion.get}" else samsqls""
+      val versionConstraint = tosVersion.map(v => samsqls"and ${column.version} = $v").getOrElse(samsqls"")
+      val actionConstraint = action.map(a => samsqls"and ${column.action} = $a").getOrElse(samsqls"")
 
       val loadUserTosQuery =
         samsql"""select ${tosTable.resultAll}
               from ${TosTable as tosTable}
-              where ${column.samUserId} = $userId $versionConstraint
+              where ${column.samUserId} = $userId
+                $versionConstraint
+                $actionConstraint
               order by ${column.createdAt} desc
               limit 1"""
 
       val userTosRecordOpt: Option[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).first().apply()
+      userTosRecordOpt.map(TosTable.unmarshalUserRecord)
+    }
+
+  override def getUserTermsOfServiceHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
+    readOnlyTransaction("getUserTermsOfServiceHistory", samRequestContext) { implicit session =>
+      val tosTable = TosTable.syntax
+      val column = TosTable.column
+
+      val loadUserTosQuery =
+        samsql"""select ${tosTable.resultAll}
+              from ${TosTable as tosTable}
+              where ${column.samUserId} = ${userId}
+              order by ${column.createdAt} desc
+              limit ${limit}"""
+
+      val userTosRecordOpt: List[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).list().apply()
       userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
 

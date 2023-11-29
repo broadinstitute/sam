@@ -30,42 +30,41 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
     (pathPrefix("groups" / "v1") | pathPrefix("group")) {
       pathPrefix(Segment) { groupId =>
         val managedGroup = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-
         pathEndOrSingleSlash {
-          get {
+          getWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleGetGroup(managedGroup.resourceId, samRequestContext)
-          } ~ post {
+          } ~ postWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleCreateGroup(managedGroup.resourceId, samUser, samRequestContext)
-          } ~ delete {
+          } ~ deleteWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleDeleteGroup(managedGroup, samUser, samRequestContext)
           }
         } ~ pathPrefix("requestAccess") {
-          post {
+          postWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleRequestAccess(managedGroup, samUser, samRequestContext)
           }
         } ~ path("accessInstructions") {
-          put {
+          putWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
               handleSetAccessInstructions(managedGroup, accessInstructions, samUser, samRequestContext)
             }
-          } ~ get {
+          } ~ getWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleGetAccessInstructions(managedGroup, samRequestContext)
           }
         } ~ pathPrefix(Segment) { policyName =>
           val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
-
           pathEndOrSingleSlash {
-            get {
+            getWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName)) {
               handleListEmails(managedGroup, accessPolicyName, samUser, samRequestContext)
-            } ~ put {
+            } ~ putWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName)) {
               handleOverwriteEmails(managedGroup, accessPolicyName, samUser, samRequestContext)
             }
           } ~ pathPrefix(Segment) { email =>
+            val workbenchEmail = WorkbenchEmail(email)
             pathEndOrSingleSlash {
-              put {
-                handleAddEmailToPolicy(managedGroup, accessPolicyName, email, samUser, samRequestContext)
-              } ~ delete {
-                handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, email, samUser, samRequestContext)
+              putWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName), emailParam(workbenchEmail)) {
+                handleAddEmailToPolicy(managedGroup, accessPolicyName, workbenchEmail, samUser, samRequestContext)
+              } ~ deleteWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName), emailParam(workbenchEmail)) {
+                handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, workbenchEmail, samUser, samRequestContext)
               }
             }
           }
@@ -123,12 +122,12 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
   private def handleAddEmailToPolicy(
       managedGroup: FullyQualifiedResourceId,
       accessPolicyName: ManagedGroupPolicyName,
-      email: String,
+      email: WorkbenchEmail,
       samUser: SamUser,
       samRequestContext: SamRequestContext
   ): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), samUser.id, samRequestContext) {
-      withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+      withSubject(email, samRequestContext) { subject =>
         complete(
           managedGroupService
             .addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext)
@@ -140,12 +139,12 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
   private def handleDeleteEmailFromPolicy(
       managedGroup: FullyQualifiedResourceId,
       accessPolicyName: ManagedGroupPolicyName,
-      email: String,
+      email: WorkbenchEmail,
       samUser: SamUser,
       samRequestContext: SamRequestContext
   ): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), samUser.id, samRequestContext) {
-      withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+      withSubject(email, samRequestContext) { subject =>
         complete(
           managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext).map(_ => StatusCodes.NoContent)
         )
