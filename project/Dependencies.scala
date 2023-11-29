@@ -134,7 +134,7 @@ object Dependencies {
   val otelPrometheusExporter: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-prometheus" % (openTelemetryVersion + "-alpha")
 
   // Google cloud open telemetry exporters
-  var gcpOpenTelemetryExporterVersion = "0.25.2"
+  var gcpOpenTelemetryExporterVersion = "0.26.0"
   var googleTraceExporter: ModuleID = "com.google.cloud.opentelemetry" % "exporter-trace" % gcpOpenTelemetryExporterVersion
 
   val openTelemetryDependencies = Seq(
