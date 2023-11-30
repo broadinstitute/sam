@@ -499,6 +499,26 @@ class TosServiceSpec(_system: ActorSystem)
           }
         }
       }
+      // Checking that Sam does not say a user can use the system if they have rejected the latest ToS version
+      withGracePeriod - {
+        withRollingAcceptanceWindow - {
+          cannotUseTheSystem + " according to their ToS details" in {
+            val requestContextWithUser = samRequestContext.copy(samUser = Some(defaultUser))
+            when(dirDAO.loadUser(defaultUser.id, requestContextWithUser))
+              .thenReturn(IO.pure(Option(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, requestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, Instant.now()))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, requestContextWithUser, Some(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+            when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, requestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+
+            val complianceStatus =
+              tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, requestContextWithUser).unsafeRunSync()
+            complianceStatus.permitsSystemUsage shouldBe false
+          }
+        }
+      }
     }
 
     "when a service account is using the api" - {
