@@ -306,7 +306,7 @@ jobs:
                           -e PACT_PUBLISH_RESULTS=true \
                           -e PROVIDER_BRANCH=${{ env.PROVIDER_BRANCH }} \
                           -e PROVIDER_VERSION=${{ env.PROVIDER_VERSION }} \
-                          -e CONSUMER_NAME=${{ env.CONSUMER_NAME}} \
+                          -e CONSUMER_NAME=${{ env.CONSUMER_NAME }} \
                           -e CONSUMER_BRANCH=${{ env.CONSUMER_BRANCH }} \
                           -e CONSUMER_VERSION=${{ env.CONSUMER_VERSION }} \
                           -e PACT_BROKER_URL=${{ env.PACT_BROKER_URL }} \
