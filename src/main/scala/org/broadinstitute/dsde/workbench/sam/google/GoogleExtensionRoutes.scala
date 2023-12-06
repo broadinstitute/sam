@@ -9,7 +9,14 @@ import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
-import org.broadinstitute.dsde.workbench.sam.api.{ExtensionRoutes, SamModelDirectives, SamRequestContextDirectives, SamUserDirectives, SecurityDirectives, ioMarshaller}
+import org.broadinstitute.dsde.workbench.sam.api.{
+  ExtensionRoutes,
+  SamModelDirectives,
+  SamRequestContextDirectives,
+  SamUserDirectives,
+  SecurityDirectives,
+  ioMarshaller
+}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
