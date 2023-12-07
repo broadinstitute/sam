@@ -18,6 +18,11 @@ on:
         default: "true"
         required: false
         type: string
+      release-branches:
+        description: "Default branch (main, develop, etc)"
+        default: 'main'
+        required: false
+        type: string
     outputs:
       tag:
         description: "The value of the latest tag after running this action"
@@ -47,13 +52,13 @@ jobs:
           token: ${{ secrets.BROADBOT_TOKEN }} # this allows the push to succeed later
       - name: Bump the tag to a new version
         # https://github.com/DataBiosphere/github-actions/tree/master/actions/bumper
-        uses: databiosphere/github-actions/actions/bumper@bumper-0.1.0
+        uses: databiosphere/github-actions/actions/bumper@bumper-0.3.0
         id: tag
         env:
           DEFAULT_BUMP: patch
           GITHUB_TOKEN: ${{ secrets.BROADBOT_TOKEN }}
           DRY_RUN: ${{ inputs.dry-run }}
-          RELEASE_BRANCHES: develop
+          RELEASE_BRANCHES: ${{ inputs.release-branches }}
           WITH_V: true
       - name: Echo generated tag to console
         if: ${{ inputs.print-tag == 'true' }}
