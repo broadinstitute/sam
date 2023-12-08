@@ -125,10 +125,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
   private def getSamUserAllowances(samUser: SamUser, samRequestContext: SamRequestContext): Route =
     get {
       complete {
-        userService.getUserAllowances(samUser, samRequestContext).map { r =>
-          Thread.sleep(30000)
-          StatusCodes.OK -> r
-        }
+        userService.getUserAllowances(samUser, samRequestContext).map(StatusCodes.OK -> _)
       }
     }
 
