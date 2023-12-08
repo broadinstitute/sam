@@ -11,12 +11,12 @@ object Dependencies {
   val postgresDriverVersion = "42.5.0"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "a0519cb" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchLibV = "5781917" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
-  val workbenchUtil2V = s"0.7-$workbenchLibV"
+  val workbenchUtil2V = s"0.8-$workbenchLibV"
   val workbenchModelV = s"0.19-$workbenchLibV"
   val workbenchGoogleV = s"0.30-$workbenchLibV"
-  val workbenchGoogle2V = s"0.34-$workbenchLibV"
+  val workbenchGoogle2V = s"0.35-$workbenchLibV"
   val workbenchNotificationsV = s"0.6-$workbenchLibV"
   val workbenchOauth2V = s"0.5-$workbenchLibV"
   val monocleVersion = "2.0.5"
@@ -99,7 +99,7 @@ object Dependencies {
   val workbenchGoogle2Tests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.127.6" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.7" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 

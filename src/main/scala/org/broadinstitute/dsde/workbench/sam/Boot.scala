@@ -7,6 +7,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.opentelemetry.trace.{TraceConfiguration, TraceExporter}
+import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator
@@ -53,23 +54,16 @@ import java.nio.file.{Files, Paths}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
 
   def run(args: List[String]): IO[ExitCode] = {
     // Init sentry always should be the first thing we do
     initSentry()
-    implicit val system = ActorSystem("sam")
+    val akkaConfig = ConfigFactory.parseResourcesAnySyntax("sam").withOnlyPath("akka").resolve()
+    implicit val system = ActorSystem("sam", akkaConfig)
 
-    (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
-      logger.error("sam failed to start, trying again in 5s", t)
-
-      // Shutdown all akka http connection pools/servers so we can re-bind to the ports
-      Http().shutdownAllConnectionPools() *> system.terminate()
-
-      IO.sleep(5 seconds) *> run(args)
-    }
+    startup() *> ExitCode.Success.pure[IO]
   }
 
   private def startup()(implicit system: ActorSystem): IO[Unit] = {
@@ -357,7 +351,7 @@ object Boot extends IOApp with LazyLogging {
     )
   }
 
-  private def instantiateOpenTelemetry(appConfig: AppConfig): OpenTelemetry = {
+  private def instantiateOpenTelemetry(appConfig: AppConfig)(implicit system: ActorSystem): OpenTelemetry = {
     val maybeVersion = Option(getClass.getPackage.getImplementationVersion)
     val resourceBuilder =
       resources.Resource.getDefault.toBuilder
@@ -391,9 +385,11 @@ object Boot extends IOApp with LazyLogging {
       }
     }
 
+    val prometheusHttpServer = PrometheusHttpServer.builder().setPort(appConfig.prometheusConfig.endpointPort).build()
+    system.registerOnTermination(prometheusHttpServer.shutdown())
     val sdkMeterProvider =
       SdkMeterProvider.builder
-        .registerMetricReader(PrometheusHttpServer.builder().setPort(appConfig.prometheusConfig.endpointPort).build())
+        .registerMetricReader(prometheusHttpServer)
         .setResource(resource)
         .build
 

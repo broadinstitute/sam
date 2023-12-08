@@ -31,8 +31,8 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
 
   def userRegistrationRoutes(samRequestContextWithoutUser: SamRequestContext): Route =
     pathPrefix("users" / "v2" / "self" / "register") {
-      withNewUser(samRequestContextWithoutUser) { createUser =>
-        pathEndOrSingleSlash {
+      pathEndOrSingleSlash {
+        withNewUser(samRequestContextWithoutUser) { createUser =>
           postUserRegistration(createUser, samRequestContextWithoutUser)
         }
       }
@@ -43,11 +43,11 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
   // that the user is allowed to use the system.
   def userRoutesV2(samRequestContextWithoutUser: SamRequestContext): Route =
     userRegistrationRoutes(samRequestContextWithoutUser) ~
-      withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
-        val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-        pathPrefix("users") {
-          pathPrefix("v2") {
-            pathPrefix("self") {
+      pathPrefix("users") {
+        pathPrefix("v2") {
+          pathPrefix("self") {
+            withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+              val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
               // api/users/v2/self
               pathEndOrSingleSlash {
                 getSamUserResponse(samUser, samRequestContext)
@@ -57,17 +57,23 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
                 pathEndOrSingleSlash {
                   getSamUserAllowances(samUser, samRequestContext)
                 }
-              } ~
-              // api/user/v2/self/attributes
-              pathPrefix("attributes") {
+              }
+            } ~
+            // api/user/v2/self/attributes
+            pathPrefix("attributes") {
+              withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                 pathEndOrSingleSlash {
                   getSamUserAttributes(samUser, samRequestContext) ~
                   patchSamUserAttributes(samUser, samRequestContext)
                 }
               }
-            } ~
-            pathPrefix(Segment) { samUserId =>
-              val workbenchUserId = WorkbenchUserId(samUserId)
+            }
+          } ~
+          pathPrefix(Segment) { samUserId =>
+            val workbenchUserId = WorkbenchUserId(samUserId)
+            withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+              val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
               addTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
                 // api/users/v2/{sam_user_id}
                 pathEndOrSingleSlash {
