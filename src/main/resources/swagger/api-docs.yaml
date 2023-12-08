@@ -4017,6 +4017,7 @@ components:
         - enabled
         - userEmail
         - userSubjectId
+        - adminEnabled
       type: object
       properties:
         userSubjectId:
@@ -4027,7 +4028,10 @@ components:
           description: user email
         enabled:
           type: boolean
-          description: true if the user is enabled in ldap
+          description: True if the user is permitted to use terra. If false, all api requests should be rejected.
+        adminEnabled:
+            type: boolean
+            description: False when the user has been disabled by an admin. This is informational, only the enabled field should be used to determine if the user is permitted to use terra.
       description: ""
     UserStatusDetails:
       required:
