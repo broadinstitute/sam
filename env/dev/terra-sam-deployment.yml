@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: terra-sam
+  labels:
+    app: terra-sam
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: terra-sam
+  template:
+    metadata:
+      labels:
+        app: terra-sam
+    spec:
+      containers:
+        - name: terra-sam
+          image: potomacdev.azurecr.io/terra-sam:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: POSTGRES_URL
+              value: "jdbc:postgresql://potomacdev.postgres.database.azure.com:5432/samdb"
+            - name: POSTGRES_USERNAME
+              value: "azureuser@potomacdevdb"
+            - name: POSTGRES_WRITE_URL
+              value: "jdbc:postgresql://potomacdevdb.postgres.database.azure.com:5432/samdb"
+            - name: POSTGRES_READ_URL
+              value: "jdbc:postgresql://potomacdevdb.postgres.database.azure.com:5432/samdb"
+            - name: EMAIL_DOMAIN
+              value: "dev.test.firecloud.org"
+            - name: LANDINGZONES_REUSE_IDS
+              value: "false"
+            - name: INIT_WITH_LIQUIBASE
+              value: "true"
+            - name: OIDC_AUTHORITY_ENDPOINT
+              value: "https://terradevb2c.b2clogin.com/terradevb2c.onmicrosoft.com/v2.0?p=b2c_1a_signup_signin_dev"
+            - name: SUPER_ADMINS_GROUP
+              value: "sam-super-admins@test.firecloud.org"
+            - name: TOS_VERSION
+              value: "1.0"
+            - name: SAM_LOG_APPENDER
+              value: "Console-Standard"
+            - name: SERVICE_ACCOUNT_ADMINS
+              value: "service-admin@dev.test.firecloud.org, service-admin2@dev.test.firecloud.org"
+            - name: TOS_ENABLED
+              value: "true"
+            - name: TOS_GRACE_PERIOD_ENABLED
+              value: "true"
+            - name: TOS_BASE_URL
+              value: "https://raw.githubusercontent.com/broadinstitute/terra-terms-of-service/main/versions"
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: oidc-client-id
+                  key: oidc_client_id
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-password
+                  key: postgres_password
