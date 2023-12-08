@@ -17,6 +17,8 @@ env:
 jobs:
   tag:
     uses: ./.github/workflows/tag.yml
+    with:
+      release-branches: develop
     secrets: inherit
 
   sam-build-tag-publish-job:
@@ -214,12 +216,12 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{  
+          inputs: '{
             "additional-args": "{\"logging\":\"true\",\"java-version\":\"17\",\"billing-project\":\"\"}",
-            "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", 
-            "ENV": "${{ matrix.testing-env }}", 
+            "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}",
+            "ENV": "${{ matrix.testing-env }}",
             "test-group-name": "${{ matrix.test-group.group_name }}",
-            "test-command": "${{ env.rawls_base_test_entrypoint }} ${{ matrix.test-group.tag }}", 
+            "test-command": "${{ env.rawls_base_test_entrypoint }} ${{ matrix.test-group.tag }}",
             "test-context": "${{ env.test-context }}"
           }'
 
@@ -233,7 +235,7 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-    steps:        
+    steps:
       - name: dispatch to terra-github-workflows
         uses: broadinstitute/workflow-dispatch@v3
         env:
@@ -244,9 +246,9 @@ jobs:
           ref: refs/heads/main
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ 
-            "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", 
-            "ENV": "${{ matrix.testing-env }}", 
+          inputs: '{
+            "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}",
+            "ENV": "${{ matrix.testing-env }}",
             "test-context": "${{ env.test-context }}"
           }'
 

@@ -53,7 +53,6 @@ import java.nio.file.{Files, Paths}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
 
@@ -62,14 +61,7 @@ object Boot extends IOApp with LazyLogging {
     initSentry()
     implicit val system = ActorSystem("sam")
 
-    (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
-      logger.error("sam failed to start, trying again in 5s", t)
-
-      // Shutdown all akka http connection pools/servers so we can re-bind to the ports
-      Http().shutdownAllConnectionPools() *> system.terminate()
-
-      IO.sleep(5 seconds) *> run(args)
-    }
+    startup() *> ExitCode.Success.pure[IO]
   }
 
   private def startup()(implicit system: ActorSystem): IO[Unit] = {
@@ -357,7 +349,7 @@ object Boot extends IOApp with LazyLogging {
     )
   }
 
-  private def instantiateOpenTelemetry(appConfig: AppConfig): OpenTelemetry = {
+  private def instantiateOpenTelemetry(appConfig: AppConfig)(implicit system: ActorSystem): OpenTelemetry = {
     val maybeVersion = Option(getClass.getPackage.getImplementationVersion)
     val resourceBuilder =
       resources.Resource.getDefault.toBuilder
@@ -391,9 +383,11 @@ object Boot extends IOApp with LazyLogging {
       }
     }
 
+    val prometheusHttpServer = PrometheusHttpServer.builder().setPort(appConfig.prometheusConfig.endpointPort).build()
+    system.registerOnTermination(prometheusHttpServer.shutdown())
     val sdkMeterProvider =
       SdkMeterProvider.builder
-        .registerMetricReader(PrometheusHttpServer.builder().setPort(appConfig.prometheusConfig.endpointPort).build())
+        .registerMetricReader(prometheusHttpServer)
         .setResource(resource)
         .build
 
