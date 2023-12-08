@@ -59,6 +59,7 @@ object Boot extends IOApp with LazyLogging {
   def run(args: List[String]): IO[ExitCode] = {
     // Init sentry always should be the first thing we do
     initSentry()
+//    val akkaConfig = ConfigFactory.parseResourcesAnySyntax("sam").withOnlyPath("akka").resolve()
     implicit val system = ActorSystem("sam")
 
     startup() *> ExitCode.Success.pure[IO]
