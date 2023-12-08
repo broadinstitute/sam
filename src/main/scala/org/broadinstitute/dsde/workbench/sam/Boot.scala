@@ -7,6 +7,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.opentelemetry.trace.{TraceConfiguration, TraceExporter}
+import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator
@@ -59,8 +60,8 @@ object Boot extends IOApp with LazyLogging {
   def run(args: List[String]): IO[ExitCode] = {
     // Init sentry always should be the first thing we do
     initSentry()
-//    val akkaConfig = ConfigFactory.parseResourcesAnySyntax("sam").withOnlyPath("akka").resolve()
-    implicit val system = ActorSystem("sam")
+    val akkaConfig = ConfigFactory.parseResourcesAnySyntax("sam").withOnlyPath("akka").resolve()
+    implicit val system = ActorSystem("sam", akkaConfig)
 
     startup() *> ExitCode.Success.pure[IO]
   }
