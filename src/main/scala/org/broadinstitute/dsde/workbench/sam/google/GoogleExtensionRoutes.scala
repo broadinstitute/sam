@@ -26,7 +26,6 @@ import spray.json.DefaultJsonProtocol._
 import spray.json.JsString
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.DurationInt
 
 trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with SecurityDirectives with SamModelDirectives with SamRequestContextDirectives {
   implicit val executionContext: ExecutionContext
@@ -244,13 +243,10 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               Seq("resourceTypeName" -> resource.resourceTypeName, "resourceId" -> resource.resourceId, "accessPolicyName" -> policyId.accessPolicyName)
             pathEndOrSingleSlash {
               postWithTelemetry(samRequestContext, params: _*) {
-                // This should not be necessary, but it appears that the akka config in sam.conf is not being respected.
-                withRequestTimeout(60.seconds) {
-                  complete {
-                    import SamGoogleModelJsonSupport._
-                    googleGroupSynchronizer.synchronizeGroupMembers(policyId, samRequestContext = samRequestContext).map { syncReport =>
-                      StatusCodes.OK -> syncReport
-                    }
+                complete {
+                  import SamGoogleModelJsonSupport._
+                  googleGroupSynchronizer.synchronizeGroupMembers(policyId, samRequestContext = samRequestContext).map { syncReport =>
+                    StatusCodes.OK -> syncReport
                   }
                 }
               } ~
