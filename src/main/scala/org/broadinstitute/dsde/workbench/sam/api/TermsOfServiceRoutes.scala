@@ -71,12 +71,12 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
     }
 
   def userTermsOfServiceRoutes(samRequestContextWithoutUser: SamRequestContext): server.Route =
-    withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
-      val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-      pathPrefix("termsOfService") {
-        pathPrefix("v1") {
-          pathPrefix("user") { // api/termsOfService/v1/user
-            pathPrefix("self") { // api/termsOfService/v1/user/self
+    pathPrefix("termsOfService") {
+      pathPrefix("v1") {
+        pathPrefix("user") { // api/termsOfService/v1/user
+          pathPrefix("self") { // api/termsOfService/v1/user/self
+            withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+              val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
               pathEndOrSingleSlash {
                 get {
                   complete {
@@ -84,21 +84,21 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
                   }
                 }
               } ~
-              pathPrefix("accept") { // api/termsOfService/v1/user/accept
+              pathPrefix("accept") { // api/termsOfService/v1/user/self/accept
                 pathEndOrSingleSlash {
                   put {
                     complete(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
                   }
                 }
               } ~
-              pathPrefix("reject") { // api/termsOfService/v1/user/reject
+              pathPrefix("reject") { // api/termsOfService/v1/user/self/reject
                 pathEndOrSingleSlash {
                   put {
                     complete(tosService.rejectCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
                   }
                 }
               } ~
-              pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
+              pathPrefix("history") { // api/termsOfService/v1/user/self/history
                 pathEndOrSingleSlash {
                   get {
                     parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
@@ -109,9 +109,12 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
                   }
                 }
               }
-            } ~
-            // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
-            pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
+            }
+          } ~
+          // The {user_id} route must be last otherwise it will try to parse the other routes incorrectly as user id's
+          pathPrefix(Segment) { userId => // api/termsOfService/v1/user/{userId}
+            withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+              val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
               validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
                 val requestUserId = WorkbenchUserId(userId)
                 pathEndOrSingleSlash {
