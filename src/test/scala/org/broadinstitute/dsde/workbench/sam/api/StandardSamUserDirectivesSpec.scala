@@ -173,7 +173,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
       }
   }
 
-  it should "fail if with a good message if user needs to accept the terms of service" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
+  it should "fail with a good message if user needs to accept the terms of service" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
     val services = directives(tosConfig = TestSupport.tosConfig)
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
