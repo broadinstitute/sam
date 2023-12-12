@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
+import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
@@ -27,7 +28,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getActiveSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
+      getActiveSamUser(oidcHeaders, userService, termsOfServiceConfig, samRequestContext).unsafeToFuture()
     }.tmap { samUser =>
       logger.debug(s"Handling request for active Sam User: $samUser")
       samUser
@@ -120,13 +121,19 @@ object StandardSamUserDirectives {
         loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, userService, samRequestContext)
     }
 
-  def getActiveSamUser(oidcHeaders: OIDCHeaders, userService: UserService, samRequestContext: SamRequestContext): IO[SamUser] =
+  def getActiveSamUser(
+      oidcHeaders: OIDCHeaders,
+      userService: UserService,
+      termsOfServiceConfig: TermsOfServiceConfig,
+      samRequestContext: SamRequestContext
+  ): IO[SamUser] =
     for {
       user <- getSamUser(oidcHeaders, userService, samRequestContext)
       allowances <- userService.getUserAllowances(user, samRequestContext)
     } yield {
       if (!allowances.getTermsOfServiceCompliance) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User must accept the latest terms of service."))
+        val goToUrl = termsOfServiceConfig.acceptanceUrl.map(url => s" Please go to $url to accept the latest terms of service.").getOrElse("")
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, s"User must accept the latest terms of service.$goToUrl"))
       }
       if (!allowances.getEnabled) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
