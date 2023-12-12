@@ -23,5 +23,6 @@ case class TermsOfServiceConfig(
     version: String,
     baseUrl: String,
     rollingAcceptanceWindowExpiration: Option[Instant],
-    previousVersion: Option[String]
+    previousVersion: Option[String],
+    acceptanceUrl: Option[String]
 )
