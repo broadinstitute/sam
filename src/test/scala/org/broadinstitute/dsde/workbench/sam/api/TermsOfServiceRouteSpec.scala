@@ -128,6 +128,7 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
         .withEnabledUser(defaultUser)
+        .withAllowedUser(defaultUser)
         .withTosStateForUser(defaultUser, isAccepted = true, "0")
 
       Get(s"/api/termsOfService/v1/user/${defaultUser.id}") ~> mockSamRoutesBuilder.build.route ~> check {
@@ -139,9 +140,11 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
     }
 
     it("should return 404 when USER_ID is does not exist") {
+      val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
       val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
-        .withEnabledUser(Generator.genWorkbenchUserGoogle.sample.get)
+        .withEnabledUser(defaultUser)
+        .withAllowedUser(defaultUser)
 
       Get("/api/termsOfService/v1/user/12345abc") ~> mockSamRoutesBuilder.build.route ~> check {
         status shouldEqual StatusCodes.NotFound
@@ -164,6 +167,7 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       val record2 = TermsOfServiceHistoryRecord(TosTable.REJECT, "0", Instant.now.minusSeconds(5))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
         .withEnabledUser(defaultUser)
+        .withAllowedUser(defaultUser)
         .withTermsOfServiceHistoryForUser(defaultUser, TermsOfServiceHistory(List(record1, record2)))
 
       Get(s"/api/termsOfService/v1/user/${defaultUser.id}/history") ~> mockSamRoutesBuilder.build.route ~> check {
@@ -178,9 +182,11 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
     }
 
     it("should return 404 when user has no acceptance history") {
+      val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
       val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
-        .withEnabledUser(Generator.genWorkbenchUserGoogle.sample.get)
+        .withEnabledUser(defaultUser)
+        .withAllowedUser(defaultUser)
 
       Get("/api/termsOfService/v1/user/12345abc/history") ~> mockSamRoutesBuilder.build.route ~> check {
         status shouldEqual StatusCodes.NotFound

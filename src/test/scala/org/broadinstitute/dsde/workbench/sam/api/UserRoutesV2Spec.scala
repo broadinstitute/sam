@@ -162,7 +162,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUsers(Seq(defaultUser, otherUser, thirdUser))
-      .withAllowedUser(otherUser)
+      .withAllowedUsers(Seq(defaultUser, otherUser))
       .callAsAdminUser(Some(defaultUser))
       .build
 
@@ -185,6 +185,24 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
       .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .withUserAttributes(defaultUser, userAttributes)
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/attributes") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[SamUserAttributes] should be(userAttributes)
+    }
+  }
+
+  "GET /api/users/v2/self/attributes" should "get the user attributes of the calling disallowed user" in {
+    // Arrange
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
+
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withDisabledUser(defaultUser)
+      .withDisallowedUser(defaultUser)
       .withUserAttributes(defaultUser, userAttributes)
       .callAsNonAdminUser()
       .build

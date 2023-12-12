@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server.Directives.{onSuccess, reject}
 import akka.http.scaladsl.server._
 import akka.stream.Materializer
@@ -67,6 +68,16 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   }
   def withAllowedUsers(samUsers: Iterable[SamUser]): MockSamRoutesBuilder = {
     userServiceBuilder.withAllowedUsers(samUsers)
+    this
+  }
+
+  def withDisallowedUser(samUser: SamUser): MockSamRoutesBuilder = {
+    userServiceBuilder.withDisallowedUser(samUser)
+    this
+  }
+
+  def withDisallowedUsers(samUsers: Iterable[SamUser]): MockSamRoutesBuilder = {
+    userServiceBuilder.withDisallowedUsers(samUsers)
     this
   }
 
@@ -139,14 +150,25 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       null,
       None
     ) {
+      import cats.effect.unsafe.implicits.global
+
       override val cloudExtensions: CloudExtensions = mockCloudExtensions
 
       override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-        Future.successful(getActiveUser)
+        val user = samRequestContext.samUser.getOrElse(getActiveUser)
+
+        val fakeOidcHeaders =
+          OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
+
+        StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
       }
 
       override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-        Future.successful(getActiveUser)
+        val user = samRequestContext.samUser.getOrElse(getActiveUser)
+        val fakeOidcHeaders =
+          OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
+
+        StandardSamUserDirectives.getSamUser(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
       }
 
       // We should really not be testing this, the routes should work identically whether the user

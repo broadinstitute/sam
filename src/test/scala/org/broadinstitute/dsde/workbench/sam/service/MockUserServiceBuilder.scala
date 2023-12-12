@@ -26,6 +26,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
   private val enabledUsers: mutable.Set[SamUser] = mutable.Set.empty
   private val disabledUsers: mutable.Set[SamUser] = mutable.Set.empty
   private val allowedUsers: mutable.Set[SamUser] = mutable.Set.empty
+  private val disallowedUsers: mutable.Set[SamUser] = mutable.Set.empty
   private val userAttributesSet: mutable.Set[(WorkbenchUserId, SamUserAttributes)] = mutable.Set.empty
   private var isBadEmail = false
 
@@ -50,6 +51,13 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
 
   def withAllowedUsers(samUsers: Iterable[SamUser]): MockUserServiceBuilder = {
     allowedUsers.addAll(samUsers)
+    this
+  }
+
+  def withDisallowedUser(samUser: SamUser): MockUserServiceBuilder = withDisallowedUsers(Set(samUser))
+
+  def withDisallowedUsers(samUsers: Iterable[SamUser]): MockUserServiceBuilder = {
+    disallowedUsers.addAll(samUsers)
     this
   }
 
@@ -137,6 +145,9 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
   }
 
   private def makeUsers(samUsers: Iterable[SamUser], mockUserService: UserService): Unit = {
+    mockUserService.getUserFromGoogleSubjectId(any[GoogleSubjectId], any[SamRequestContext]) answers ((googleSubjectId: GoogleSubjectId) =>
+      IO(samUsers.find(_.googleSubjectId.contains(googleSubjectId)))
+    )
     samUsers.foreach(u => makeUser(u, mockUserService))
     mockUserService.getUsersByQuery(
       any[Option[WorkbenchUserId]],
@@ -187,6 +198,11 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
       SamUserAllowances(allowed = true, enabled = true, termsOfService = true)
     )
 
+  private def makeUserAppearDisallowed(samUser: SamUser, mockUserService: UserService): Unit =
+    mockUserService.getUserAllowances(any[SamUser], any[SamRequestContext]) returns IO(
+      SamUserAllowances(allowed = false, enabled = false, termsOfService = false)
+    )
+
   private def makeUserAttributesAppear(userId: WorkbenchUserId, userAttributes: SamUserAttributes, mockUserService: UserService): Unit = {
     mockUserService.getUserAttributes(eqTo(userId), any[SamRequestContext]) returns IO(Some(userAttributes))
     mockUserService.setUserAttributes(argThat((attr: SamUserAttributes) => attr.userId.equals(userId)), any[SamRequestContext]) returns IO(userAttributes)
@@ -214,6 +230,7 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     enabledUsers.foreach(u => makeUserAppearEnabled(u, mockUserService))
     disabledUsers.foreach(u => makeUserAppearDisabled(u, mockUserService))
     allowedUsers.foreach(u => makeUserAppearAllowed(u, mockUserService))
+    disallowedUsers.foreach(u => makeUserAppearDisallowed(u, mockUserService))
     userAttributesSet.foreach(tup => makeUserAttributesAppear(tup._1, tup._2, mockUserService))
     handleMalformedEmail(mockUserService)
     mockUserService
