@@ -34,7 +34,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     new StandardSamUserDirectives {
       override implicit val executionContext: ExecutionContext = null
       override val cloudExtensions: CloudExtensions = null
-      override val termsOfServiceConfig: TermsOfServiceConfig = null
+      override val termsOfServiceConfig: TermsOfServiceConfig = tosConfig
       override val tosService: TosService = new TosService(cloudExtensions, dirDAO, tosConfig)
       override val userService: UserService = new MockUserService(directoryDAO = dirDAO, tosService = tosService)
       override val adminConfig: AppConfig.AdminConfig = testAdminConfig
@@ -170,6 +170,19 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.Unauthorized
+      }
+  }
+
+  it should "fail if with a good message if user needs to accept the terms of service" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
+    val services = directives(tosConfig = TestSupport.tosConfig)
+    val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
+    val userService = services.userService.asInstanceOf[MockUserService]
+    userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
+    services.tosService.rejectCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
+        status shouldBe StatusCodes.Unauthorized
+        responseAs[String] should include("sam.testUrl.mock")
       }
   }
 
