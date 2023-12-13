@@ -160,7 +160,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
         val fakeOidcHeaders =
           OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
 
-        StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, userService, samRequestContext).unsafeToFuture()
+        StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, userService, termsOfServiceConfig, samRequestContext).unsafeToFuture()
       }
 
       override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
