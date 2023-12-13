@@ -61,7 +61,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
             } ~
             // api/user/v2/self/attributes
             pathPrefix("attributes") {
-              withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+              withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
                 val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                 pathEndOrSingleSlash {
                   getSamUserAttributes(samUser, samRequestContext) ~
