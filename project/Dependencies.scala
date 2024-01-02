@@ -27,6 +27,7 @@ object Dependencies {
   val excludeAkkaProtobufV3 = ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
   val excludeAkkaStream = ExclusionRule(organization = "com.typesafe.akka", name = "akka-stream_2.12")
   val excludeWorkbenchUtil = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
+  val excludeWorkbenchUtil2 = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util2_2.12")
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
@@ -44,7 +45,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.5"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.14"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
@@ -113,6 +114,8 @@ object Dependencies {
 
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
+
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.4.0" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
@@ -214,6 +217,7 @@ object Dependencies {
     nettyAll,
     azureManagedApplications,
     sentry,
-    sentryLogback
+    sentryLogback,
+    okio
   ) ++ openTelemetryDependencies
 }
