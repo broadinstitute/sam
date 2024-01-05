@@ -319,7 +319,7 @@ object Boot extends IOApp with LazyLogging {
             directoryApiAccounts.map(directoryApiAccount => Json(samSaJson, Some(directoryApiAccount)))
           case None =>
             logger.info(
-              s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API without impersonation"
+              s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API"
             )
             NonEmptyList.one(Json(samSaJson, Some(config.googleServicesConfig.subEmail)))
         }
