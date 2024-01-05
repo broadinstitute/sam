@@ -29,6 +29,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
 
     // Act and Assert
@@ -43,6 +44,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
 
     // Act
@@ -57,6 +59,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act and Assert
     Get(s"/api/admin/v1/user/$badUserId") ~> samRoutes.route ~> check {
@@ -69,6 +72,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None)
     // Act
@@ -85,6 +89,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .withBadEmail()
       .build
     val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None)
@@ -101,6 +106,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None)
 
@@ -116,6 +122,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None)
 
@@ -131,6 +138,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     val requestBody = AdminUpdateUserRequest(None, Some(newUserEmail), None)
 
@@ -146,6 +154,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
 
     // Act
@@ -161,6 +170,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Get(s"/api/admin/v1/user/email/$newUserEmail") ~> samRoutes.route ~> check {
@@ -174,6 +184,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser)
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Get(s"/api/admin/v1/user/email/$adminGroupEmail") ~> samRoutes.route ~> check {
@@ -186,6 +197,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Get(s"/api/admin/v1/user/email/$defaultUserEmail") ~> samRoutes.route ~> check {
@@ -198,6 +210,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Put(s"/api/admin/v1/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
@@ -215,6 +228,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Put(s"/api/admin/v1/user/$badUserId/disable") ~> samRoutes.route ~> check {
@@ -228,6 +242,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Put(s"/api/admin/v1/user/$defaultUserId/disable") ~> samRoutes.route ~> check {
@@ -241,6 +256,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withDisabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Put(s"/api/admin/v1/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
@@ -258,6 +274,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser()
       .withDisabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Put(s"/api/admin/v1/user/$badUserId/enable") ~> samRoutes.route ~> check {
@@ -271,6 +288,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withDisabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Put(s"/api/admin/v1/user/$defaultUserId/enable") ~> samRoutes.route ~> check {
@@ -284,6 +302,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Delete(s"/api/admin/v1/user/$defaultUserId") ~> samRoutes.route ~> check {
@@ -297,6 +316,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Delete(s"/api/admin/v1/user/$defaultUserId") ~> samRoutes.route ~> check {
@@ -310,6 +330,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Delete(s"/api/admin/v1/user/$defaultUserId/petServiceAccount/myproject") ~> samRoutes.route ~> check {
@@ -322,6 +343,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     // Act
     Delete(s"/api/admin/v1/user/$defaultUserId/petServiceAccount/myproject") ~> samRoutes.route ~> check {
@@ -334,6 +356,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
 
     // Act and Assert
@@ -348,6 +371,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsNonAdminUser()
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
 
     // Act and Assert
@@ -360,6 +384,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .callAsNonAdminUser()
       .build
 
@@ -373,6 +398,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .callAsAdminUser()
       .build
 
