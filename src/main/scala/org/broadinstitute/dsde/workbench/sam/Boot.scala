@@ -228,6 +228,7 @@ object Boot extends IOApp with LazyLogging {
       adminConfig: AdminConfig
   )(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
+
     val googleDirDaos = createGoogleDirDaos(config, workspaceMetricBaseName, lastQuotaErrorDAO)
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
     val googleIamDAO = new HttpGoogleIamDAO(
@@ -307,23 +308,20 @@ object Boot extends IOApp with LazyLogging {
       actorSystem: ActorSystem
   ): NonEmptyList[HttpGoogleDirectoryDAO] = {
     val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
-
-    def makePem = (directoryApiAccount: WorkbenchEmail) =>
-      Pem(
-        WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
-        new File(config.googleServicesConfig.pemFile),
-        Option(directoryApiAccount)
-      )
+    val samSaJson =
+      Files.readAllLines(Paths.get(config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)).asScala.mkString
 
     val googleCredentials = serviceAccountJsons match {
       case None =>
         config.googleServicesConfig.directoryApiAccounts match {
           case Some(directoryApiAccounts) =>
-            logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
-            directoryApiAccounts.map(makePem)
+            logger.info(s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate $directoryApiAccounts to talk to Google Directory API")
+            directoryApiAccounts.map(directoryApiAccount => Json(samSaJson, Some(directoryApiAccount)))
           case None =>
-            logger.info(s"Using ${config.googleServicesConfig.subEmail} to talk to Google Directory API without impersonation")
-            NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
+            logger.info(
+              s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API without impersonation"
+            )
+            NonEmptyList.one(Json(samSaJson, Some(config.googleServicesConfig.subEmail)))
         }
       case Some(accounts) =>
         config.googleServicesConfig.directoryApiAccounts match {
