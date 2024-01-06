@@ -60,6 +60,10 @@ jobs:
           ./minnie-kenny.sh --force
           git secrets --scan-history
 
+      - name: Write configuration
+        run: ./render-test-config.sh
+        shell: bash
+
       - name: Run Scalafmt Check
         id: scalafmtCheck
         run: sbt scalafmtCheckAll scalafmtSbtCheck

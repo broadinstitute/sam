@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# TODO: Add Janitor secrets here
-# https://broadworkbench.atlassian.net/browse/ID-96
-# Call from GitHub actions once Janitor is integrated
+# Render Azure test configs
 
 VAULT_TOKEN=${1:-$(cat $HOME/.vault-token)}
 DSDE_TOOLBOX_DOCKER_IMAGE=broadinstitute/dsde-toolbox:consul-0.20.0
@@ -31,3 +29,14 @@ azureServices.managedAppPlanId=terra-workspace-dev-plan
 EOF
 
 rm $AZURE_MANAGED_APP_CLIENT_OUTPUT_FILE_PATH
+
+# Render Janitor test configs
+
+VAULT_JANITOR_CLIENT_SA_PATH=secret/dsde/terra/kernel/integration/tools/crl_janitor/client-sa
+JANITOR_CLIENT_SA_OUTPUT_FILE_PATH="$(dirname $0)"/src/test/resources/janitor_client_sa.json
+
+docker run --rm --cap-add IPC_LOCK \
+            -e VAULT_TOKEN=$VAULT_TOKEN \
+            ${DSDE_TOOLBOX_DOCKER_IMAGE} \
+            vault read -format json ${VAULT_JANITOR_CLIENT_SA_PATH} \
+            | jq -r .data.key | base64 -d > ${JANITOR_CLIENT_SA_OUTPUT_FILE_PATH}

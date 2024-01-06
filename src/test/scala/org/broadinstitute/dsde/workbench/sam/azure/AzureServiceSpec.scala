@@ -35,12 +35,13 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
 
   "AzureService" should "create a pet managed identity" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
+    val janitorConfig = appConfig.janitorConfig
 
-    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
+    assume(azureServicesConfig.isDefined && janitorConfig.enabled, "-- skipping Azure test")
 
     // create dependencies
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
-    val crlService = new CrlService(azureServicesConfig.get)
+    val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
     val tosService = new TosService(NoExtensions, directoryDAO, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
@@ -120,11 +121,12 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
 
   it should "create a managed resource group IN AZURE" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
+    val janitorConfig = appConfig.janitorConfig
 
-    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
+    assume(azureServicesConfig.isDefined && janitorConfig.enabled, "-- skipping Azure test")
 
     // create dependencies
-    val crlService = new CrlService(azureServicesConfig.get)
+    val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val azureService = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
 

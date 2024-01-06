@@ -29,7 +29,8 @@ final case class AppConfig(
     oidcConfig: OidcConfig,
     adminConfig: AdminConfig,
     azureServicesConfig: Option[AzureServicesConfig],
-    prometheusConfig: PrometheusConfig
+    prometheusConfig: PrometheusConfig,
+    janitorConfig: JanitorConfig
 )
 
 object AppConfig {
@@ -192,6 +193,17 @@ object AppConfig {
     PrometheusConfig(config.getInt("endpointPort"))
   }
 
+  implicit val janitorConfig: ValueReader[JanitorConfig] = ValueReader.relative { config =>
+    JanitorConfig(
+      config.getBoolean("enabled"),
+      ServiceAccountCredentialJson(
+        DefaultServiceAccountJsonPath(config.getString("clientCredentialFilePath"))
+      ),
+      GoogleProject(config.getString("trackResourceProjectId")),
+      config.getString("trackResourceTopicId")
+    )
+  }
+
   /** Loads all the configs for the Sam App. All values defined in `src/main/resources/sam.conf` will take precedence over any other configs. In this way, we
     * can still use configs rendered by `firecloud-develop` that render to `config/sam.conf` if we want. To do so, you must render `config/sam.conf` and then do
     * not populate ENV variables for `src/main/resources/sam.conf`.
@@ -241,7 +253,8 @@ object AppConfig {
       oidcConfig = config.as[OidcConfig]("oidc"),
       adminConfig = config.as[AdminConfig]("admin"),
       azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
-      prometheusConfig = config.as[PrometheusConfig]("prometheus")
+      prometheusConfig = config.as[PrometheusConfig]("prometheus"),
+      janitorConfig = config.as[JanitorConfig]("janitor")
     )
   }
 }
