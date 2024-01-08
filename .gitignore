@@ -25,7 +25,7 @@ sam-assembly-*-SNAPSHOT.jar
 smoke_test/.python-version
 src/test/resources/application.conf
 src/test/resources/azure_managed_app_client.json
-src/test/resources/janitor_client_sa.json
+src/test/resources/janitor-client-sa.json
 
 # Scala-IDE specific
 .scala_dependencies
