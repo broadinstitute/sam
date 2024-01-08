@@ -33,7 +33,7 @@ rm $AZURE_MANAGED_APP_CLIENT_OUTPUT_FILE_PATH
 # Render Janitor test configs
 
 VAULT_JANITOR_CLIENT_SA_PATH=secret/dsde/terra/kernel/integration/tools/crl_janitor/client-sa
-JANITOR_CLIENT_SA_OUTPUT_FILE_PATH="$(dirname $0)"/src/test/resources/janitor_client_sa.json
+JANITOR_CLIENT_SA_OUTPUT_FILE_PATH="$(dirname $0)"/src/test/resources/janitor-client-sa.json
 
 docker run --rm --cap-add IPC_LOCK \
             -e VAULT_TOKEN=$VAULT_TOKEN \
