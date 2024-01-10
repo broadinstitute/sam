@@ -1558,7 +1558,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/resources/v2/list:
+  /api/resources/v2:
     get:
       tags:
         - Resources
@@ -1567,8 +1567,19 @@ paths:
         for determining the state of the user's permissions. It does not take into account Auth Domains.
         To check if a user is allowed to execute an action on a resource, use /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}
         By default, public resources are not included. Including public resources incurs a 3x cost of DB performance.
-      operationId: listResourceFlatV2
+      operationId: listResourcesV2
       parameters:
+        - name: format
+          in: query
+          description: Format of the response. If not specified, the response will be
+            a hierarchical list of resources.
+          required: false
+          schema:
+            type: string
+            enum:
+              - flat
+              - hierarchical
+            default: hierarchical
         - name: resourceTypes
           in: query
           description: Types of resources to filter on
@@ -1617,71 +1628,9 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FilteredResourcesFlatResponse'
-  /api/resources/v2/list/hierarchical:
-    get:
-      tags:
-        - Resources
-      summary: List resources the calling user has been granted policies/roles/actions on.
-        This endpoint MUST NOT be used to determine if a user has an action on a resource. This endpoint is ONLY
-        for determining the state of the user's permissions. It does not take into account Auth Domains.
-        To check if a user is allowed to execute an action on a resource, use /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}
-        By default, public resources are not included. Including public resources incurs a 3x cost of DB performance.
-      operationId: listResourcesHierarchicalV2
-      parameters:
-        - name: resourceTypes
-          in: query
-          description: Types of resources to filter on
-          required: false
-          explode: false
-          schema:
-            type: array
-            items:
-              type: string
-        - name: policies
-          in: query
-          description: Names of policies to filter on
-          required: false
-          explode: false
-          schema:
-            type: array
-            items:
-              type: string
-        - name: roles
-          in: query
-          description: Names of roles to filter on
-          required: false
-          explode: false
-          schema:
-            type: array
-            items:
-              type: string
-        - name: actions
-          in: query
-          description: Names of actions to filter on
-          required: false
-          explode: false
-          schema:
-            type: array
-            items:
-              type: string
-        - name: includePublic
-          in: query
-          description: Include public resources in the response
-          required: false
-          schema:
-            type: boolean
-      responses:
-        200:
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FilteredResourcesFlatResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/FilteredResourcesFlatResponse'
+                  - $ref: '#/components/schemas/FilteredResourcesHierarchicalResponse'
   /api/resources/v2/{resourceTypeName}:
     get:
       tags:
@@ -4395,13 +4344,35 @@ components:
           type: boolean
           description: Whether or not the user is enabled
       description: specification of a UpdateUserRequest
-    FilteredResourcesFlatResponse:
+    FilteredResourceResponse:
       type: object
+      required: format
       properties:
-        resources:
-          type: array
-          items:
-            $ref: '#/components/schemas/FilteredFlatResource'
+        format:
+          type: string
+      discriminator:
+        propertyName: format
+        mapping:
+          flat: FilteredResourcesFlatResponse
+          hierarchical: FilteredResourcesHierarchicalResponse
+    FilteredResourcesFlatResponse:
+      allOf:
+        - $ref: '#/components/schemas/FilteredResourceResponse'
+        - type: object
+          properties:
+            resources:
+              type: array
+              items:
+                $ref: '#/components/schemas/FilteredFlatResource'
+    FilteredResourcesHierarchicalResponse:
+      allOf:
+        - $ref: '#/components/schemas/FilteredResourceResponse'
+        - type: object
+          properties:
+            resources:
+              type: array
+              items:
+                $ref: '#/components/schemas/FilteredHierarchicalResource'
     FilteredFlatResource:
       type: object
       properties:
@@ -4423,6 +4394,50 @@ components:
         isPublic:
           type: string
           description: isPublic is the resource public or not
+    FilteredHierarchicalResource:
+      type: object
+      properties:
+        resourceType:
+          type: string
+          description: resourceType of the resource
+        resourceId:
+          type: string
+          description: resourceType of the resource
+        policies:
+          type: array
+          description: Policies on the resource
+          items:
+            $ref: '#/components/schemas/FilteredHierarchicalResourcePolicy'
+    FilteredHierarchicalResourcePolicy:
+      type: object
+      properties:
+        policy:
+          type: string
+          description: The policy name
+        roles:
+          type: array
+          description: Roles on the policy
+          items:
+            $ref: '#/components/schemas/FilteredHierarchicalResourceRole'
+        actions:
+          type: array
+          description: Actions on the role
+          items:
+            type: string
+        isPublic:
+          type: boolean
+          description: Is this policy on the resource a public policy?
+    FilteredHierarchicalResourceRole:
+      type: object
+      properties:
+        role:
+          type: string
+          description: The role name
+        actions:
+          type: array
+          description: Actions on the role
+          items:
+            type: string
   securitySchemes:
     googleoauth:
       type: oauth2

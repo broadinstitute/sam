@@ -9,7 +9,9 @@ object FilteredResourcesHierarchical {
   implicit val FilteredResourcesHierarchicalFormat: RootJsonFormat[FilteredResourcesHierarchical] = jsonFormat1(FilteredResourcesHierarchical.apply)
 
 }
-case class FilteredResourcesHierarchical(resources: Set[FilteredResourceHierarchical]) extends FilteredResources
+case class FilteredResourcesHierarchical(resources: Set[FilteredResourceHierarchical]) extends FilteredResources {
+    override def format: String = "hierarchical"
+}
 case object FilteredResourceHierarchicalPolicy {
   implicit val filteredResourceHierarchicalPolicyFormat: RootJsonFormat[FilteredResourceHierarchicalPolicy] = jsonFormat4(
     FilteredResourceHierarchicalPolicy.apply

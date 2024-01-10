@@ -11,7 +11,6 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
-import org.broadinstitute.dsde.workbench.sam.model.FilterResourcesResponseFormat.FilterResourcesResponseFormat
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -127,22 +126,9 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         }
       } ~
       pathPrefix("resources" / "v2") {
-        pathPrefix("list") {
-          // Needing to break out "flat" and "hierarchical" is a result of Swagger's inability to handle union types.
-          // Different types need to be returned from different endpoints in order for the auto-generated client to work.
-          (pathPrefix("flat") | pathEndOrSingleSlash) {
-            pathEndOrSingleSlash {
-              get {
-                filterUserResources(samUser, FilterResourcesResponseFormat.Flat, samRequestContext)
-              }
-            }
-          } ~
-          pathPrefix("hierarchical") {
-            pathEndOrSingleSlash {
-              get {
-                filterUserResources(samUser, FilterResourcesResponseFormat.Hierarchical, samRequestContext)
-              }
-            }
+        pathEndOrSingleSlash {
+          get {
+            filterUserResources(samUser, samRequestContext)
           }
         } ~
         pathPrefix(Segment) { resourceTypeName =>
@@ -613,11 +599,11 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     }
 
-  private def filterUserResources(samUser: SamUser, format: FilterResourcesResponseFormat, samRequestContext: SamRequestContext): Route =
-    parameters("resourceTypes".as[String].?, "policies".as[String].?, "roles".as[String].?, "actions".as[String].?, "includePublic" ? false) {
-      (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean) =>
+  private def filterUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    parameters("resourceTypes".as[String].?, "policies".as[String].?, "roles".as[String].?, "actions".as[String].?, "includePublic" ? false, "format".as[String] ? "hierarchical") {
+      (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean, format: String) =>
         format match {
-          case org.broadinstitute.dsde.workbench.sam.model.FilterResourcesResponseFormat.Flat =>
+          case "flat" =>
             complete {
               resourceService
                 .filterResourcesFlat(
@@ -631,7 +617,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                 )
                 .map(StatusCodes.OK -> _)
             }
-          case org.broadinstitute.dsde.workbench.sam.model.FilterResourcesResponseFormat.Hierarchical =>
+          case "hierarchical" =>
             complete {
               resourceService
                 .filterResourcesHierarchical(

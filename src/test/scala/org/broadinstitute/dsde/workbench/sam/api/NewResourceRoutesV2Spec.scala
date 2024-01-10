@@ -9,7 +9,6 @@ import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
-import org.mockito.internal.verification.AtLeast
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -23,7 +22,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
   val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
-  "GET /api/resources/v2/list/flat|hierarchical" should "correctly parse query parameters" in {
+  "GET /api/resources/v2" should "correctly parse query parameters" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser)
@@ -81,14 +80,14 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     )
 
     // Act and Assert
-    Get(s"/api/resources/v2/list") ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
 
-    Get(s"/api/resources/v2/list/flat") ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2?format=flat") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
-    verify(samRoutes.resourceService, new AtLeast(2)).filterResourcesFlat(
+    verify(samRoutes.resourceService).filterResourcesFlat(
       any[SamUser],
       eqTo(Set.empty),
       eqTo(Set.empty),
@@ -99,7 +98,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     )
 
     Get(
-      s"/api/resources/v2/list/flat?resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true"
+      s"/api/resources/v2?format=flat&resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true"
     ) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
@@ -114,7 +113,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     )
 
     Get(
-      s"/api/resources/v2/list/hierarchical?resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true"
+      s"/api/resources/v2?format=hierarchical&resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true"
     ) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }

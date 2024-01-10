@@ -10,7 +10,9 @@ object FilteredResourcesFlat {
   implicit val FilteredResourcesFlatFormat: RootJsonFormat[FilteredResourcesFlat] = jsonFormat1(FilteredResourcesFlat.apply)
 
 }
-case class FilteredResourcesFlat(resources: Set[FilteredResourceFlat]) extends FilteredResources
+case class FilteredResourcesFlat(resources: Set[FilteredResourceFlat]) extends FilteredResources {
+    override def format: String = "flat"
+}
 
 object FilteredResourceFlat {
   implicit val FilteredResourceFlatFormat: RootJsonFormat[FilteredResourceFlat] = jsonFormat6(FilteredResourceFlat.apply)

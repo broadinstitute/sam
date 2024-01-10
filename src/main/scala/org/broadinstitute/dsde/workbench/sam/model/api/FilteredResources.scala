@@ -1,3 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.model.api
 
-trait FilteredResources
+trait FilteredResources {
+  def format: String
+}
