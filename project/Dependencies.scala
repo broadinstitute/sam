@@ -20,7 +20,7 @@ object Dependencies {
   val workbenchNotificationsV = s"0.6-$workbenchLibV"
   val workbenchOauth2V = s"0.5-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.12-SNAPSHOT"
+  val crlVersion = "1.2.30-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -36,6 +36,7 @@ object Dependencies {
   val excludeSLF4J = ExclusionRule(organization = "org.slf4j")
   val excludeJerseyCore = ExclusionRule(organization = "org.glassfish.jersey.core", name = "*")
   val excludeJerseyMedia = ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
+  val excludeAwsSdk = ExclusionRule(organization = "software.amazon.awssdk", name = "*")
 
   val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
   val sentryLogback: ModuleID = "io.sentry" % "sentry-logback" % sentryVersion
@@ -162,7 +163,7 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J, excludeAwsSdk)
   val azureManagedApplications: ModuleID =
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 

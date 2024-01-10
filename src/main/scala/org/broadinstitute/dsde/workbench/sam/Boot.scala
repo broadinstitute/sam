@@ -433,8 +433,8 @@ object Boot extends IOApp with LazyLogging {
         config.emailDomain
       )
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
-    val azureService = config.azureServicesConfig.map { config =>
-      new AzureService(new CrlService(config), directoryDAO, azureManagedResourceGroupDAO)
+    val azureService = config.azureServicesConfig.map { azureConfig =>
+      new AzureService(new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
     }
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
