@@ -11,7 +11,7 @@ object FilteredResourcesFlat {
 
 }
 case class FilteredResourcesFlat(resources: Set[FilteredResourceFlat]) extends FilteredResources {
-    override def format: String = "flat"
+  override def format: String = "flat"
 }
 
 object FilteredResourceFlat {

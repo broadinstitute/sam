@@ -600,37 +600,43 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   private def filterUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    parameters("resourceTypes".as[String].?, "policies".as[String].?, "roles".as[String].?, "actions".as[String].?, "includePublic" ? false, "format".as[String] ? "hierarchical") {
-      (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean, format: String) =>
-        format match {
-          case "flat" =>
-            complete {
-              resourceService
-                .filterResourcesFlat(
-                  samUser,
-                  resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
-                  policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
-                  roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
-                  actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
-                  includePublic,
-                  samRequestContext
-                )
-                .map(StatusCodes.OK -> _)
-            }
-          case "hierarchical" =>
-            complete {
-              resourceService
-                .filterResourcesHierarchical(
-                  samUser,
-                  resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
-                  policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
-                  roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
-                  actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
-                  includePublic,
-                  samRequestContext
-                )
-                .map(StatusCodes.OK -> _)
-            }
-        }
+    parameters(
+      "resourceTypes".as[String].?,
+      "policies".as[String].?,
+      "roles".as[String].?,
+      "actions".as[String].?,
+      "includePublic" ? false,
+      "format".as[String] ? "hierarchical"
+    ) { (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean, format: String) =>
+      format match {
+        case "flat" =>
+          complete {
+            resourceService
+              .filterResourcesFlat(
+                samUser,
+                resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
+                policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
+                roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
+                actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
+                includePublic,
+                samRequestContext
+              )
+              .map(StatusCodes.OK -> _)
+          }
+        case "hierarchical" =>
+          complete {
+            resourceService
+              .filterResourcesHierarchical(
+                samUser,
+                resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
+                policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
+                roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
+                actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
+                includePublic,
+                samRequestContext
+              )
+              .map(StatusCodes.OK -> _)
+          }
+      }
     }
 }

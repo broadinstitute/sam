@@ -1563,8 +1563,9 @@ paths:
       tags:
         - Resources
       summary: List resources the calling user has been granted policies/roles/actions on.
-        This endpoint MUST NOT be used to determine if a user has an action on a resource. This endpoint is ONLY
-        for determining the state of the user's permissions. It does not take into account Auth Domains.
+        This endpoint MUST NOT be used to determine if a user has an action on a resource. 
+        This endpoint is ONLY for determining the state of the user's permissions. 
+        It does not take into account enabled status, or Terms of Service Compliance, nor does it take into account Auth Domains.
         To check if a user is allowed to execute an action on a resource, use /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}
         By default, public resources are not included. Including public resources incurs a 3x cost of DB performance.
       operationId: listResourcesV2
