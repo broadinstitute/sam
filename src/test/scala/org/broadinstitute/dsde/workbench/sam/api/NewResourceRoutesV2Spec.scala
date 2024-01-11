@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
@@ -23,16 +22,15 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
   val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 
-  "GET /api/resources/v2/filter" should "correctly parse query parameters" in {
+  "GET /api/resources/v2" should "correctly parse query parameters" in {
     // Arrange
-    val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser)
       .withAllowedUser(defaultUser)
       .callAsNonAdminUser(Some(defaultUser))
       .build
     when(
-      samRoutes.resourceService.filterResources(
+      samRoutes.resourceService.listResourcesFlat(
         any[SamUser],
         any[Set[ResourceTypeName]],
         any[Set[AccessPolicyName]],
@@ -43,9 +41,9 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       )
     ).thenReturn(
       IO.pure(
-        FilteredResources(resources =
+        FilteredResourcesFlat(resources =
           Set(
-            FilteredResource(
+            FilteredResourceFlat(
               ResourceTypeName(UUID.randomUUID().toString),
               ResourceId(UUID.randomUUID().toString),
               Set.empty,
@@ -57,12 +55,39 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
         )
       )
     )
+    when(
+      samRoutes.resourceService.listResourcesHierarchical(
+        any[SamUser],
+        any[Set[ResourceTypeName]],
+        any[Set[AccessPolicyName]],
+        any[Set[ResourceRoleName]],
+        any[Set[ResourceAction]],
+        any[Boolean],
+        any[SamRequestContext]
+      )
+    ).thenReturn(
+      IO.pure(
+        FilteredResourcesHierarchical(resources =
+          Set(
+            FilteredResourceHierarchical(
+              ResourceTypeName(UUID.randomUUID().toString),
+              ResourceId(UUID.randomUUID().toString),
+              Set.empty
+            )
+          )
+        )
+      )
+    )
 
     // Act and Assert
-    Get(s"/api/resources/v2/filter", SamUserRegistrationRequest(true, userAttributesRequest)) ~> samRoutes.route ~> check {
+    Get(s"/api/resources/v2") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
-    verify(samRoutes.resourceService).filterResources(
+
+    Get(s"/api/resources/v2?format=flat") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+    verify(samRoutes.resourceService).listResourcesFlat(
       any[SamUser],
       eqTo(Set.empty),
       eqTo(Set.empty),
@@ -73,12 +98,26 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     )
 
     Get(
-      s"/api/resources/v2/filter?resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true",
-      SamUserRegistrationRequest(true, userAttributesRequest)
+      s"/api/resources/v2?format=flat&resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true"
     ) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
-    verify(samRoutes.resourceService).filterResources(
+    verify(samRoutes.resourceService).listResourcesFlat(
+      any[SamUser],
+      eqTo(Set(ResourceTypeName("fooType"), ResourceTypeName("barType"))),
+      eqTo(Set(AccessPolicyName("fooPolicy"))),
+      eqTo(Set(ResourceRoleName("fooRole"), ResourceRoleName("barRole"), ResourceRoleName("bazRole"))),
+      eqTo(Set(ResourceAction("fooAction"), ResourceAction("barAction"))),
+      eqTo(true),
+      any[SamRequestContext]
+    )
+
+    Get(
+      s"/api/resources/v2?format=hierarchical&resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true"
+    ) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+    verify(samRoutes.resourceService).listResourcesHierarchical(
       any[SamUser],
       eqTo(Set(ResourceTypeName("fooType"), ResourceTypeName("barType"))),
       eqTo(Set(AccessPolicyName("fooPolicy"))),

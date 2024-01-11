@@ -15,6 +15,8 @@ import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.FilteredResourcesHierarchical._
+import org.broadinstitute.dsde.workbench.sam.model.api.FilteredResourcesFlat._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -124,11 +126,9 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         }
       } ~
       pathPrefix("resources" / "v2") {
-        pathPrefix("filter") {
-          pathEndOrSingleSlash {
-            get {
-              filterUserResources(samUser, samRequestContext)
-            }
+        pathEnd {
+          get {
+            listUserResources(samUser, samRequestContext)
           }
         } ~
         pathPrefix(Segment) { resourceTypeName =>
@@ -599,19 +599,44 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     }
 
-  def filterUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    parameters("resourceTypes".as[String].?, "policies".as[String].?, "roles".as[String].?, "actions".as[String].?, "includePublic" ? false) {
-      (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean) =>
-        complete(
-          resourceService.filterResources(
-            samUser,
-            resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
-            policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
-            roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
-            actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
-            includePublic,
-            samRequestContext
-          )
-        )
+  private def listUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    parameters(
+      "resourceTypes".as[String].?,
+      "policies".as[String].?,
+      "roles".as[String].?,
+      "actions".as[String].?,
+      "includePublic" ? false,
+      "format".as[String] ? "hierarchical"
+    ) { (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean, format: String) =>
+      format match {
+        case "flat" =>
+          complete {
+            resourceService
+              .listResourcesFlat(
+                samUser,
+                resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
+                policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
+                roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
+                actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
+                includePublic,
+                samRequestContext
+              )
+              .map(StatusCodes.OK -> _)
+          }
+        case "hierarchical" =>
+          complete {
+            resourceService
+              .listResourcesHierarchical(
+                samUser,
+                resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
+                policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
+                roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
+                actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
+                includePublic,
+                samRequestContext
+              )
+              .map(StatusCodes.OK -> _)
+          }
+      }
     }
 }

@@ -16,8 +16,12 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{
   AccessPolicyMembershipRequest,
   AccessPolicyMembershipResponse,
-  FilteredResource,
-  FilteredResources,
+  FilteredResourceFlat,
+  FilteredResourceHierarchical,
+  FilteredResourceHierarchicalPolicy,
+  FilteredResourceHierarchicalRole,
+  FilteredResourcesFlat,
+  FilteredResourcesHierarchical,
   SamUser
 }
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -889,7 +893,56 @@ class ResourceService(
     addEventSet ++ removeEventSet
   }
 
-  def filterResources(
+  private def groupFlat(dbResult: Seq[FilterResourcesResult]): FilteredResourcesFlat = {
+    val groupedFilteredResource = dbResult
+      .groupBy(_.resourceId)
+      .map { tuple =>
+        val (k, v) = tuple
+        FilteredResourceFlat(
+          resourceId = k,
+          resourceType = v.map(_.resourceTypeName).head,
+          policies = v.flatMap(_.policy).toSet,
+          roles = v.flatMap(_.role).toSet,
+          actions = v.flatMap(_.action).toSet,
+          isPublic = v.map(_.isPublic).head
+        )
+      }
+      .toSet
+    FilteredResourcesFlat(resources = groupedFilteredResource)
+  }
+
+  private def groupHierarchical(dbResult: Seq[FilterResourcesResult]): FilteredResourcesHierarchical = {
+    val groupedFilteredResources = dbResult
+      .groupBy(_.resourceId)
+      .map { tuple =>
+        val (resourceId, resourceRows) = tuple
+        val policies = resourceRows
+          .groupBy(_.policy.get)
+          .map { policyTuple =>
+            val (policyName, policyRows) = policyTuple
+            val actionsWithoutRoles = policyRows.filter(_.role.isEmpty).flatMap(_.action).toSet
+            val actionsWithRoles = policyRows.filter(_.role.nonEmpty)
+            val roles = actionsWithRoles
+              .groupBy(_.role.get)
+              .map { roleTuple =>
+                val (roleName, roleRows) = roleTuple
+                FilteredResourceHierarchicalRole(roleName, roleRows.flatMap(_.action).toSet)
+              }
+              .toSet
+            FilteredResourceHierarchicalPolicy(policyName, roles, actionsWithoutRoles, policyRows.head.isPublic)
+          }
+          .toSet
+        FilteredResourceHierarchical(
+          resourceId = resourceId,
+          resourceType = resourceRows.head.resourceTypeName,
+          policies = policies
+        )
+      }
+      .toSet
+    FilteredResourcesHierarchical(resources = groupedFilteredResources)
+  }
+
+  def listResourcesFlat(
       samUser: SamUser,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
@@ -897,27 +950,17 @@ class ResourceService(
       actions: Set[ResourceAction],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
-  ): IO[FilteredResources] = {
-    val filterResourcesResult = accessPolicyDAO.filterResources(samUser, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+  ): IO[FilteredResourcesFlat] =
+    accessPolicyDAO.filterResources(samUser, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupFlat)
 
-    for {
-      dbResult <- filterResourcesResult
-    } yield {
-      val groupedFilteredResource = dbResult
-        .groupBy(_.resourceId)
-        .map { tuple =>
-          val (k, v) = tuple
-          FilteredResource(
-            resourceId = k,
-            resourceType = v.map(_.resourceTypeName).head,
-            policies = v.flatMap(_.policy).toSet,
-            roles = v.flatMap(_.role).toSet,
-            actions = v.flatMap(_.action).toSet,
-            isPublic = v.map(_.isPublic).head
-          )
-        }
-        .toSet
-      FilteredResources(resources = groupedFilteredResource)
-    }
-  }
+  def listResourcesHierarchical(
+      samUser: SamUser,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[FilteredResourcesHierarchical] =
+    accessPolicyDAO.filterResources(samUser, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupHierarchical)
 }

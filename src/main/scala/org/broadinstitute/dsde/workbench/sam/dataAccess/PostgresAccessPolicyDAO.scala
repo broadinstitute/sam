@@ -40,6 +40,7 @@ class PostgresAccessPolicyDAO(
     * serializable transactions would read all rows of the resource type table and thus always collide with each other).
     */
   private val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK] = new TrieMap()
+  private val resourceTypeNamesByPK: scala.collection.concurrent.Map[ResourceTypePK, ResourceTypeName] = new TrieMap()
 
   /** Creates or updates all given resource types.
     *
@@ -94,6 +95,9 @@ class PostgresAccessPolicyDAO(
       resourceTypePKsByName
         .addAll(results)
         .filterInPlace((k, v) => results.exists(loaded => (k, v) == loaded))
+      resourceTypeNamesByPK
+        .addAll(results.map(_.swap))
+        .filterInPlace((k, v) => results.map(_.swap).exists(loaded => (k, v) == loaded))
     }
 
   override def loadResourceTypes(resourceTypeNames: Set[ResourceTypeName], samRequestContext: SamRequestContext): IO[Set[ResourceType]] =
@@ -1701,15 +1705,12 @@ class PostgresAccessPolicyDAO(
     val resourceAction = ResourceActionTable.syntax("resourceAction")
     val resource = ResourceTable.syntax("resource")
 
-    val resourceTypePKsToName: Map[ResourceTypePK, ResourceTypeName] =
-      resourceTypeNames.flatMap(name => resourceTypePKsByName.get(name).map(pk => pk -> name)).toMap
-
     val resourceTypeConstraint =
-      if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in  (${resourceTypeNames.flatMap(resourceTypePKsByName.get).toSet})"
-      else samsqls""
-    val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in (${policies.toSet})" else samsqls""
-    val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in (${roles.toSet})" else samsqls""
-    val actionConstraint = if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions.toSet})" else samsqls""
+      if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in (${resourceTypeNames.flatMap(resourceTypePKsByName.get)})"
+      else samsqls"and ${resource.resourceTypeId} in (${resourceTypeNamesByPK.keys.map(_.value)})"
+    val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in (${policies})" else samsqls""
+    val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in (${roles})" else samsqls""
+    val actionConstraint = if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions})" else samsqls""
 
     val policyRoleActionQuery =
       samsqls"""
@@ -1783,7 +1784,7 @@ class PostgresAccessPolicyDAO(
         .map(rs =>
           FilterResourcesResult(
             rs.get[ResourceId](resource.resultName.name),
-            resourceTypePKsToName(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
+            resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
             rs.stringOpt(resourcePolicy.resultName.name).map(AccessPolicyName(_)),
             rs.stringOpt(resourceRole.resultName.role).map(ResourceRoleName(_)),
             rs.stringOpt(resourceAction.resultName.action).map(ResourceAction(_)),

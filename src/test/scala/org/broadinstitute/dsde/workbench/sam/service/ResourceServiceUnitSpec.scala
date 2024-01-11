@@ -28,67 +28,88 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   private val ownerRoleName = ResourceRoleName("owner")
   private val nothingRoleName = ResourceRoleName("cantDoNuthin")
 
-  "ResourceService" should "group filtered resources from the database appropriately" in {
-    val testResourceId = ResourceId(UUID.randomUUID().toString)
-    val testPolicy1 :: testPolicy2 :: testPolicy3 :: testPolicy4 :: testPolicy5 :: _ = (1 to 5).map(_ => AccessPolicyName(UUID.randomUUID().toString)).toList
-    val dbResult = Seq(
-      // Some things we don't care about
-      FilterResourcesResult(
-        ResourceId(UUID.randomUUID().toString),
-        resourceTypeName,
-        Some(AccessPolicyName(UUID.randomUUID().toString)),
-        Some(readerRoleName),
-        Some(readAction),
-        true
-      ),
-      FilterResourcesResult(ResourceId(UUID.randomUUID().toString), resourceTypeName, Some(AccessPolicyName(UUID.randomUUID().toString)), None, None, true),
-      FilterResourcesResult(
-        ResourceId(UUID.randomUUID().toString),
-        resourceTypeName,
-        Some(AccessPolicyName(UUID.randomUUID().toString)),
-        Some(readerRoleName),
-        Some(readAction),
-        false
-      ),
-      FilterResourcesResult(ResourceId(UUID.randomUUID().toString), resourceTypeName, Some(AccessPolicyName(UUID.randomUUID().toString)), None, None, false),
-      // Testable DB Results
-      FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), false),
-      FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, true),
-      FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, false),
-      FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false),
-      FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), Some(ownerRoleName), Some(writeAction), false)
-    )
+  val testResourceId = ResourceId(UUID.randomUUID().toString)
+  val testPolicy1 :: testPolicy2 :: testPolicy3 :: testPolicy4 :: testPolicy5 :: _ = (1 to 6).map(_ => AccessPolicyName(UUID.randomUUID().toString)).toList
+  val dbResult = Seq(
+    // Some things we don't care about
+    FilterResourcesResult(
+      ResourceId(UUID.randomUUID().toString),
+      resourceTypeName,
+      Some(AccessPolicyName(UUID.randomUUID().toString)),
+      Some(readerRoleName),
+      Some(readAction),
+      true
+    ),
+    FilterResourcesResult(ResourceId(UUID.randomUUID().toString), resourceTypeName, Some(AccessPolicyName(UUID.randomUUID().toString)), None, None, true),
+    FilterResourcesResult(
+      ResourceId(UUID.randomUUID().toString),
+      resourceTypeName,
+      Some(AccessPolicyName(UUID.randomUUID().toString)),
+      Some(readerRoleName),
+      Some(readAction),
+      false
+    ),
+    FilterResourcesResult(ResourceId(UUID.randomUUID().toString), resourceTypeName, Some(AccessPolicyName(UUID.randomUUID().toString)), None, None, false),
+    // Testable DB Results
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, true),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), None, Some(readAction), true)
+  )
 
-    val mockAccessPolicyDAO = mock[AccessPolicyDAO]
-    when(
-      mockAccessPolicyDAO.filterResources(
-        any[SamUser],
-        any[Set[ResourceTypeName]],
-        any[Set[AccessPolicyName]],
-        any[Set[ResourceRoleName]],
-        any[Set[ResourceAction]],
-        any[Boolean],
-        any[SamRequestContext]
-      )
+  val mockAccessPolicyDAO = mock[AccessPolicyDAO]
+  when(
+    mockAccessPolicyDAO.filterResources(
+      any[SamUser],
+      any[Set[ResourceTypeName]],
+      any[Set[AccessPolicyName]],
+      any[Set[ResourceRoleName]],
+      any[Set[ResourceAction]],
+      any[Boolean],
+      any[SamRequestContext]
     )
-      .thenReturn(IO.pure(dbResult))
+  )
+    .thenReturn(IO.pure(dbResult))
 
-    val resourceService = new ResourceService(
-      Map.empty,
-      mock[PolicyEvaluatorService],
-      mockAccessPolicyDAO,
-      mock[DirectoryDAO],
-      NoExtensions,
-      emailDomain,
-      Set("test.firecloud.org")
-    )
+  val resourceService = new ResourceService(
+    Map.empty,
+    mock[PolicyEvaluatorService],
+    mockAccessPolicyDAO,
+    mock[DirectoryDAO],
+    NoExtensions,
+    emailDomain,
+    Set("test.firecloud.org")
+  )
 
-    val filteredResources = resourceService.filterResources(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+  "ResourceService" should "group filtered resources from the database appropriately flatly" in {
+    val filteredResources = resourceService.listResourcesFlat(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
 
     val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
     oneResource.resourceType should be(resourceTypeName)
     oneResource.policies should be(Set(testPolicy1, testPolicy2, testPolicy3, testPolicy4, testPolicy5))
     oneResource.roles should be(Set(readerRoleName, ownerRoleName, nothingRoleName))
     oneResource.actions should be(Set(readAction, writeAction))
+  }
+
+  it should "group filtered resources from the database appropriately hierarchically" in {
+
+    val filteredResources =
+      resourceService.listResourcesHierarchical(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+
+    val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
+    oneResource.resourceType should be(resourceTypeName)
+
+    val policies = oneResource.policies
+    policies.map(_.policy) should be(Set(testPolicy1, testPolicy2, testPolicy3, testPolicy4, testPolicy5))
+    val policyWithAction = policies.filter(_.policy.equals(testPolicy5)).head
+    policyWithAction.roles should be(Set.empty)
+    policyWithAction.actions should be(Set(readAction))
+
+    val policyWithRoles = policies.filter(_.policy.equals(testPolicy4)).head
+    val role = policyWithRoles.roles.head
+    role.role should be(ownerRoleName)
+    role.actions should be(Set(readAction, writeAction))
   }
 }
