@@ -126,9 +126,9 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         }
       } ~
       pathPrefix("resources" / "v2") {
-        pathEndOrSingleSlash {
+        pathEnd {
           get {
-            filterUserResources(samUser, samRequestContext)
+            listUserResources(samUser, samRequestContext)
           }
         } ~
         pathPrefix(Segment) { resourceTypeName =>
@@ -599,7 +599,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     }
 
-  private def filterUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+  private def listUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
     parameters(
       "resourceTypes".as[String].?,
       "policies".as[String].?,
@@ -612,7 +612,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         case "flat" =>
           complete {
             resourceService
-              .filterResourcesFlat(
+              .listResourcesFlat(
                 samUser,
                 resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
                 policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
@@ -626,7 +626,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         case "hierarchical" =>
           complete {
             resourceService
-              .filterResourcesHierarchical(
+              .listResourcesHierarchical(
                 samUser,
                 resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
                 policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),

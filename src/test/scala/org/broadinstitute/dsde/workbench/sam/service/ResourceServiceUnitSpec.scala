@@ -84,7 +84,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   )
 
   "ResourceService" should "group filtered resources from the database appropriately flatly" in {
-    val filteredResources = resourceService.filterResourcesFlat(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+    val filteredResources = resourceService.listResourcesFlat(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
 
     val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
     oneResource.resourceType should be(resourceTypeName)
@@ -96,7 +96,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   it should "group filtered resources from the database appropriately hierarchically" in {
 
     val filteredResources =
-      resourceService.filterResourcesHierarchical(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+      resourceService.listResourcesHierarchical(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
 
     val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
     oneResource.resourceType should be(resourceTypeName)

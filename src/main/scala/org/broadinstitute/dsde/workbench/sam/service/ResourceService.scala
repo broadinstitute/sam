@@ -942,7 +942,7 @@ class ResourceService(
     FilteredResourcesHierarchical(resources = groupedFilteredResources)
   }
 
-  def filterResourcesFlat(
+  def listResourcesFlat(
       samUser: SamUser,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
@@ -953,7 +953,7 @@ class ResourceService(
   ): IO[FilteredResourcesFlat] =
     accessPolicyDAO.filterResources(samUser, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupFlat)
 
-  def filterResourcesHierarchical(
+  def listResourcesHierarchical(
       samUser: SamUser,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],

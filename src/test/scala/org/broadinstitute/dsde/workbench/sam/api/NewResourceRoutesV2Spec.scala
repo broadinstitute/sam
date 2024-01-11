@@ -30,7 +30,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       .callAsNonAdminUser(Some(defaultUser))
       .build
     when(
-      samRoutes.resourceService.filterResourcesFlat(
+      samRoutes.resourceService.listResourcesFlat(
         any[SamUser],
         any[Set[ResourceTypeName]],
         any[Set[AccessPolicyName]],
@@ -56,7 +56,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       )
     )
     when(
-      samRoutes.resourceService.filterResourcesHierarchical(
+      samRoutes.resourceService.listResourcesHierarchical(
         any[SamUser],
         any[Set[ResourceTypeName]],
         any[Set[AccessPolicyName]],
@@ -87,7 +87,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     Get(s"/api/resources/v2?format=flat") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
-    verify(samRoutes.resourceService).filterResourcesFlat(
+    verify(samRoutes.resourceService).listResourcesFlat(
       any[SamUser],
       eqTo(Set.empty),
       eqTo(Set.empty),
@@ -102,7 +102,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     ) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
-    verify(samRoutes.resourceService).filterResourcesFlat(
+    verify(samRoutes.resourceService).listResourcesFlat(
       any[SamUser],
       eqTo(Set(ResourceTypeName("fooType"), ResourceTypeName("barType"))),
       eqTo(Set(AccessPolicyName("fooPolicy"))),
@@ -117,7 +117,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     ) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
     }
-    verify(samRoutes.resourceService).filterResourcesHierarchical(
+    verify(samRoutes.resourceService).listResourcesHierarchical(
       any[SamUser],
       eqTo(Set(ResourceTypeName("fooType"), ResourceTypeName("barType"))),
       eqTo(Set(AccessPolicyName("fooPolicy"))),
