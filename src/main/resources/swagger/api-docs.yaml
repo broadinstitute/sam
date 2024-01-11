@@ -4347,7 +4347,8 @@ components:
       description: specification of a UpdateUserRequest
     FilteredResourceResponse:
       type: object
-      required: format
+      required:
+        - format
       properties:
         format:
           type: string
