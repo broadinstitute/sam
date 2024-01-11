@@ -165,7 +165,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     }
 
   private def postUserRegistration(newUser: SamUser, samRequestContext: SamRequestContext): Route =
-    post {
+    postWithTelemetry(samRequestContext) {
       entity(as[SamUserRegistrationRequest]) { userRegistrationRequest =>
         complete {
           for {

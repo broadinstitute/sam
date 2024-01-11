@@ -262,3 +262,7 @@ object SamLenses {
   val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource
   val resourceTypeNameInAccessPolicy = resourceIdentityAccessPolicy composeLens FullyQualifiedResourceId.resourceTypeName
 }
+
+final case class BooleanValue(bool: Boolean) extends ValueObject {
+  override val value: String = bool.toString
+}

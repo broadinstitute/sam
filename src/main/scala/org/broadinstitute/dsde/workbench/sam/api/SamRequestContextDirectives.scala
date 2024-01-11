@@ -25,6 +25,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{
   FullyQualifiedResourceId,
   ResourceAction,
   ResourceId,
+  ResourceRoleName,
   ResourceType,
   ResourceTypeName
 }
@@ -107,6 +108,9 @@ trait SamRequestContextDirectives {
   def resourceTypeParam(resourceType: ResourceType): (String, ValueObject) =
     resourceTypeParam(resourceType.name)
 
+  def resourceTypeNameParams(resourceTypes: Set[ResourceTypeName]): Seq[(String, ValueObject)] =
+    resourceTypes.map("ResourceType" -> _).toSeq
+
   def resourceIdParam(resourceId: ResourceId, prefix: String = ""): (String, ValueObject) =
     // the uncapitalize and prefix stuff is because some apis have 2 resource ids in the path, so we need to distinguish them
     StringUtils.uncapitalize(prefix + "ResourceId") -> resourceId
@@ -120,6 +124,9 @@ trait SamRequestContextDirectives {
   def actionParam(action: ResourceAction): (String, ValueObject) =
     "action" -> action
 
+  def actionNameParams(resourceActions: Set[ResourceAction]): Seq[(String, ValueObject)] =
+    resourceActions.map("Action" -> _).toSeq
+
   def userIdParam(workbenchUserId: WorkbenchUserId): (String, ValueObject) =
     "userId" -> workbenchUserId
 
@@ -130,8 +137,14 @@ trait SamRequestContextDirectives {
     // the uncapitalize and prefix stuff is because some apis have 2 policies in the path, so we need to distinguish them
     StringUtils.uncapitalize(prefix + "PolicyName") -> policyName
 
+  def policyNameParams(policyNames: Set[AccessPolicyName]): Seq[(String, ValueObject)] =
+    policyNames.map("PolicyName" -> _).toSeq
+
   def policyParams(policyId: FullyQualifiedPolicyId, prefix: String = ""): Seq[(String, ValueObject)] =
     resourceParams(policyId.resource, prefix).appended(policyNameParam(policyId.accessPolicyName, prefix))
+
+  def roleNameParams(roleNames: Set[ResourceRoleName]): Seq[(String, ValueObject)] =
+    roleNames.map("RoleName" -> _).toSeq
 
   def groupIdParam(managedGroup: FullyQualifiedResourceId): (String, ValueObject) =
     "groupId" -> managedGroup.resourceId

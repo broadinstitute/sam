@@ -127,9 +127,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       } ~
       pathPrefix("resources" / "v2") {
         pathEnd {
-          get {
-            listUserResources(samUser, samRequestContext)
-          }
+          getListUserResources(samUser, samRequestContext)
         } ~
         pathPrefix(Segment) { resourceTypeName =>
           withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
@@ -599,7 +597,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     }
 
-  private def listUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+  private def getListUserResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
     parameters(
       "resourceTypes".as[String].?,
       "policies".as[String].?,
@@ -608,35 +606,48 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       "includePublic" ? false,
       "format".as[String] ? "hierarchical"
     ) { (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean, format: String) =>
-      format match {
-        case "flat" =>
-          complete {
-            resourceService
-              .listResourcesFlat(
-                samUser,
-                resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
-                policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
-                roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
-                actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
-                includePublic,
-                samRequestContext
-              )
-              .map(StatusCodes.OK -> _)
-          }
-        case "hierarchical" =>
-          complete {
-            resourceService
-              .listResourcesHierarchical(
-                samUser,
-                resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
-                policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
-                roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
-                actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
-                includePublic,
-                samRequestContext
-              )
-              .map(StatusCodes.OK -> _)
-          }
+      val resourceTypeNames = resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty)
+      val accessPolicyNames = policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty)
+      val resourceRoleNames = roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty)
+      val resourceActions = actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty)
+      getWithTelemetry(
+        samRequestContext,
+        resourceTypeNameParams(resourceTypeNames) ++
+          policyNameParams(accessPolicyNames) ++
+          roleNameParams(resourceRoleNames) ++
+          actionNameParams(resourceActions) :+
+          ("includePublic" -> BooleanValue(includePublic)): _*
+      ) {
+        format match {
+          case "flat" =>
+            complete {
+              resourceService
+                .listResourcesFlat(
+                  samUser,
+                  resourceTypeNames,
+                  accessPolicyNames,
+                  resourceRoleNames,
+                  resourceActions,
+                  includePublic,
+                  samRequestContext
+                )
+                .map(StatusCodes.OK -> _)
+            }
+          case "hierarchical" =>
+            complete {
+              resourceService
+                .listResourcesHierarchical(
+                  samUser,
+                  resourceTypeNames,
+                  accessPolicyNames,
+                  resourceRoleNames,
+                  resourceActions,
+                  includePublic,
+                  samRequestContext
+                )
+                .map(StatusCodes.OK -> _)
+            }
+        }
       }
     }
 }
