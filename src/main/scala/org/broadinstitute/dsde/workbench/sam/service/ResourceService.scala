@@ -904,7 +904,10 @@ class ResourceService(
           policies = v.flatMap(_.policy).toSet,
           roles = v.flatMap(_.role).toSet,
           actions = v.flatMap(_.action).toSet,
-          isPublic = v.map(_.isPublic).head
+          isPublic = v.map(_.isPublic).head,
+          inherited = v.map(_.inherited).head,
+          authDomain = v.map(_.authDomain).head,
+          inAuthDomain = v.map(_.inAuthDomain).head
         )
       }
       .toSet
@@ -935,7 +938,9 @@ class ResourceService(
         FilteredResourceHierarchical(
           resourceId = resourceId,
           resourceType = resourceRows.head.resourceTypeName,
-          policies = policies
+          policies = policies,
+          authDomain = resourceRows.head.authDomain,
+          inAuthDomain = resourceRows.head.inAuthDomain
         )
       }
       .toSet

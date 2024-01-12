@@ -38,25 +38,51 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       Some(AccessPolicyName(UUID.randomUUID().toString)),
       Some(readerRoleName),
       Some(readAction),
-      true
+      true,
+      None,
+      false,
+      false
     ),
-    FilterResourcesResult(ResourceId(UUID.randomUUID().toString), resourceTypeName, Some(AccessPolicyName(UUID.randomUUID().toString)), None, None, true),
+    FilterResourcesResult(
+      ResourceId(UUID.randomUUID().toString),
+      resourceTypeName,
+      Some(AccessPolicyName(UUID.randomUUID().toString)),
+      None,
+      None,
+      true,
+      None,
+      false,
+      false
+    ),
     FilterResourcesResult(
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
       Some(AccessPolicyName(UUID.randomUUID().toString)),
       Some(readerRoleName),
       Some(readAction),
+      false,
+      None,
+      false,
       false
     ),
-    FilterResourcesResult(ResourceId(UUID.randomUUID().toString), resourceTypeName, Some(AccessPolicyName(UUID.randomUUID().toString)), None, None, false),
+    FilterResourcesResult(
+      ResourceId(UUID.randomUUID().toString),
+      resourceTypeName,
+      Some(AccessPolicyName(UUID.randomUUID().toString)),
+      None,
+      None,
+      false,
+      None,
+      false,
+      false
+    ),
     // Testable DB Results
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, true),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), None, Some(readAction), true)
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, true, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), None, Some(readAction), true, None, false, false)
   )
 
   val mockAccessPolicyDAO = mock[AccessPolicyDAO]
