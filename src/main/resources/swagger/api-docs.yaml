@@ -4385,17 +4385,32 @@ components:
           type: string
           description: resourceId of the resource
         policies:
-          type: string
+          type: array
+          items:
+            type: string
           description: policies the user is a part of on the resource
         roles:
-          type: string
+          type: array
+          items:
+            type: string
           description: roles the user has on the resource
         actions:
-          type: string
+          type: array
+          items:
+            type: string
           description: actions the user has on the resource
         isPublic:
           type: string
           description: isPublic is the resource public or not
+        inherited:
+          type: boolean
+          description: is this resource policy inherited from a parent resource
+        authDomain:
+          type: string
+          description: The auth domain of the policy
+        inAuthDomain:
+          type: boolean
+          description: Is the user in the auth domain of the policy
     FilteredHierarchicalResource:
       type: object
       properties:
@@ -4410,6 +4425,12 @@ components:
           description: Policies on the resource
           items:
             $ref: '#/components/schemas/FilteredHierarchicalResourcePolicy'
+        authDomain:
+          type: string
+          description: The auth domain of the policy
+        inAuthDomain:
+          type: boolean
+          description: Is the user in the auth domain of the policy
     FilteredHierarchicalResourcePolicy:
       type: object
       properties:
@@ -4429,6 +4450,9 @@ components:
         isPublic:
           type: boolean
           description: Is this policy on the resource a public policy?
+        inherited:
+          type: boolean
+          description: Is this policy inherited from an parent resource?
     FilteredHierarchicalResourceRole:
       type: object
       properties:

@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.model.api
 
+import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import spray.json.DefaultJsonProtocol._
@@ -13,7 +14,7 @@ case class FilteredResourcesHierarchical(resources: Set[FilteredResourceHierarch
   override def format: String = "hierarchical"
 }
 case object FilteredResourceHierarchicalPolicy {
-  implicit val filteredResourceHierarchicalPolicyFormat: RootJsonFormat[FilteredResourceHierarchicalPolicy] = jsonFormat4(
+  implicit val filteredResourceHierarchicalPolicyFormat: RootJsonFormat[FilteredResourceHierarchicalPolicy] = jsonFormat5(
     FilteredResourceHierarchicalPolicy.apply
   )
 }
@@ -21,7 +22,8 @@ case class FilteredResourceHierarchicalPolicy(
     policy: AccessPolicyName,
     roles: Set[FilteredResourceHierarchicalRole],
     actions: Set[ResourceAction],
-    isPublic: Boolean
+    isPublic: Boolean,
+    inherited: Boolean
 )
 
 case object FilteredResourceHierarchicalRole {
@@ -31,11 +33,13 @@ case object FilteredResourceHierarchicalRole {
 case class FilteredResourceHierarchicalRole(role: ResourceRoleName, actions: Set[ResourceAction])
 
 case object FilteredResourceHierarchical {
-  implicit val filteredResourceHierarchicalFormat: RootJsonFormat[FilteredResourceHierarchical] = jsonFormat3(FilteredResourceHierarchical.apply)
+  implicit val filteredResourceHierarchicalFormat: RootJsonFormat[FilteredResourceHierarchical] = jsonFormat5(FilteredResourceHierarchical.apply)
 
 }
 case class FilteredResourceHierarchical(
     resourceType: ResourceTypeName,
     resourceId: ResourceId,
-    policies: Set[FilteredResourceHierarchicalPolicy]
+    policies: Set[FilteredResourceHierarchicalPolicy],
+    authDomain: Option[WorkbenchGroupName],
+    inAuthDomain: Boolean
 )

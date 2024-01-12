@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.model.api
 
+import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicyName, ResourceAction, ResourceId, ResourceRoleName, ResourceTypeName}
 import spray.json.DefaultJsonProtocol.jsonFormat1
 import spray.json.RootJsonFormat
@@ -15,7 +16,7 @@ case class FilteredResourcesFlat(resources: Set[FilteredResourceFlat]) extends F
 }
 
 object FilteredResourceFlat {
-  implicit val FilteredResourceFlatFormat: RootJsonFormat[FilteredResourceFlat] = jsonFormat6(FilteredResourceFlat.apply)
+  implicit val FilteredResourceFlatFormat: RootJsonFormat[FilteredResourceFlat] = jsonFormat7(FilteredResourceFlat.apply)
 
 }
 case class FilteredResourceFlat(
@@ -24,5 +25,8 @@ case class FilteredResourceFlat(
     policies: Set[AccessPolicyName],
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
-    isPublic: Boolean
+    isPublic: Boolean,
+    inherited: Boolean,
+    authDomain: Option[WorkbenchGroupName],
+    inAuthDomain: Boolean
 )
