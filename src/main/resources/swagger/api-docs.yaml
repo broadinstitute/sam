@@ -4408,12 +4408,12 @@ components:
         authDomainGroups:
           type: array
           items:
-            - type: string
+            type: string
           description: The auth domain groups of the policy
         missingAuthDomainGroups:
           type: array
           items:
-            - type: string
+            type: string
           description: Auth Domain groups the user is not a member of
     FilteredHierarchicalResource:
       type: object
@@ -4432,12 +4432,12 @@ components:
         authDomainGroups:
           type: array
           items:
-            - type: string
+            type: string
           description: The auth domain groups of the policy
         missingAuthDomainGroups:
           type: array
           items:
-            - type: string
+            type: string
           description: Auth Domain groups the user is not a member of
     FilteredHierarchicalResourcePolicy:
       type: object
