@@ -142,13 +142,21 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
 
     val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
     oneResource.resourceType should be(resourceTypeName)
-    oneResource.policies should be(Set(testPolicy1, testPolicy2, testPolicy3, testPolicy4, testPolicy5))
+    oneResource.policies should be(
+      Set(
+        FilteredResourceFlatPolicy(testPolicy1, false, false),
+        FilteredResourceFlatPolicy(testPolicy2, true, false),
+        FilteredResourceFlatPolicy(testPolicy3, false, false),
+        FilteredResourceFlatPolicy(testPolicy4, false, false),
+        FilteredResourceFlatPolicy(testPolicy5, true, false)
+      )
+    )
     oneResource.roles should be(Set(readerRoleName, ownerRoleName, nothingRoleName))
     oneResource.actions should be(Set(readAction, writeAction))
 
     val authDomainResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId2)).head
     authDomainResource.resourceType should be(resourceTypeName)
-    authDomainResource.policies should be(Set(testPolicy6))
+    authDomainResource.policies should be(Set(FilteredResourceFlatPolicy(testPolicy6, false, false)))
     authDomainResource.roles should be(Set(readerRoleName))
     authDomainResource.actions should be(Set(readAction))
     authDomainResource.authDomainGroups should be(Set(authDomainGroup1, authDomainGroup2))

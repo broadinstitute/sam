@@ -17,17 +17,26 @@ case class FilteredResourcesFlat(resources: Set[FilteredResourceFlat]) extends F
 }
 
 object FilteredResourceFlat {
-  implicit val FilteredResourceFlatFormat: RootJsonFormat[FilteredResourceFlat] = jsonFormat9(FilteredResourceFlat.apply)
+  implicit val FilteredResourceFlatFormat: RootJsonFormat[FilteredResourceFlat] = jsonFormat7(FilteredResourceFlat.apply)
 
 }
 case class FilteredResourceFlat(
     resourceType: ResourceTypeName,
     resourceId: ResourceId,
-    policies: Set[AccessPolicyName],
+    policies: Set[FilteredResourceFlatPolicy],
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
-    isPublic: Boolean,
-    inherited: Boolean,
     authDomainGroups: Set[WorkbenchGroupName],
     missingAuthDomainGroups: Set[WorkbenchGroupName]
+)
+
+case object FilteredResourceFlatPolicy {
+  implicit val filteredResourceFlatPolicyFormat: RootJsonFormat[FilteredResourceFlatPolicy] = jsonFormat3(
+    FilteredResourceFlatPolicy.apply
+  )
+}
+case class FilteredResourceFlatPolicy(
+    policy: AccessPolicyName,
+    isPublic: Boolean,
+    inherited: Boolean
 )

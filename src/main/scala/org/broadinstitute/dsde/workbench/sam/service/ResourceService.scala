@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.{
   AccessPolicyMembershipRequest,
   AccessPolicyMembershipResponse,
   FilteredResourceFlat,
+  FilteredResourceFlatPolicy,
   FilteredResourceHierarchical,
   FilteredResourceHierarchicalPolicy,
   FilteredResourceHierarchicalRole,
@@ -897,16 +898,14 @@ class ResourceService(
       .groupBy(_.resourceId)
       .map { tuple =>
         val (k, v) = tuple
-        type Accumulated = (Set[AccessPolicyName], Set[ResourceRoleName], Set[ResourceAction], Boolean, Boolean, Map[WorkbenchGroupName, Boolean])
-        val base = (Set.empty[AccessPolicyName], Set.empty[ResourceRoleName], Set.empty[ResourceAction], false, false, Map.empty[WorkbenchGroupName, Boolean])
+        type Accumulated = (Set[FilteredResourceFlatPolicy], Set[ResourceRoleName], Set[ResourceAction], Map[WorkbenchGroupName, Boolean])
+        val base = (Set.empty[FilteredResourceFlatPolicy], Set.empty[ResourceRoleName], Set.empty[ResourceAction], Map.empty[WorkbenchGroupName, Boolean])
         val grouped = v.foldLeft(base)((acc: Accumulated, r: FilterResourcesResult) =>
           (
-            acc._1 ++ r.policy,
+            acc._1 ++ r.policy.map(p => FilteredResourceFlatPolicy(p, r.isPublic, r.inherited)),
             acc._2 ++ r.role,
             acc._3 ++ r.action,
-            acc._4 || r.isPublic,
-            acc._5 || r.inherited,
-            acc._6 ++ r.authDomain.map(_ -> r.inAuthDomain)
+            acc._4 ++ r.authDomain.map(_ -> r.inAuthDomain)
           )
         )
 
@@ -916,10 +915,8 @@ class ResourceService(
           policies = grouped._1,
           roles = grouped._2,
           actions = grouped._3,
-          isPublic = grouped._4,
-          inherited = grouped._5,
-          authDomainGroups = grouped._6.keySet,
-          missingAuthDomainGroups = grouped._6.filter(!_._2).keySet
+          authDomainGroups = grouped._4.keySet,
+          missingAuthDomainGroups = grouped._4.filter(!_._2).keySet
         )
       }
       .toSet

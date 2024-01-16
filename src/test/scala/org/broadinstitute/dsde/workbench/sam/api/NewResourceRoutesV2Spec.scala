@@ -49,8 +49,6 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
               Set.empty,
               Set.empty,
               Set.empty,
-              isPublic = false,
-              inherited = false,
               Set.empty,
               Set.empty
             )
