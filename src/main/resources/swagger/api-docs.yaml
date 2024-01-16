@@ -4405,12 +4405,16 @@ components:
         inherited:
           type: boolean
           description: is this resource policy inherited from a parent resource
-        authDomain:
-          type: string
-          description: The auth domain of the policy
-        inAuthDomain:
-          type: boolean
-          description: Is the user in the auth domain of the policy
+        authDomainGroups:
+          type: array
+          items:
+            - type: string
+          description: The auth domain groups of the policy
+        missingAuthDomainGroups:
+          type: array
+          items:
+            - type: string
+          description: Auth Domain groups the user is not a member of
     FilteredHierarchicalResource:
       type: object
       properties:
@@ -4425,12 +4429,16 @@ components:
           description: Policies on the resource
           items:
             $ref: '#/components/schemas/FilteredHierarchicalResourcePolicy'
-        authDomain:
-          type: string
-          description: The auth domain of the policy
-        inAuthDomain:
-          type: boolean
-          description: Is the user in the auth domain of the policy
+        authDomainGroups:
+          type: array
+          items:
+            - type: string
+          description: The auth domain groups of the policy
+        missingAuthDomainGroups:
+          type: array
+          items:
+            - type: string
+          description: Auth Domain groups the user is not a member of
     FilteredHierarchicalResourcePolicy:
       type: object
       properties:

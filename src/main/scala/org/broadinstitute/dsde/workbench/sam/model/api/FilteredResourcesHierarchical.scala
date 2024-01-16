@@ -5,6 +5,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import spray.json.DefaultJsonProtocol._
 import spray.json.RootJsonFormat
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 
 object FilteredResourcesHierarchical {
   implicit val FilteredResourcesHierarchicalFormat: RootJsonFormat[FilteredResourcesHierarchical] = jsonFormat1(FilteredResourcesHierarchical.apply)
@@ -40,6 +41,6 @@ case class FilteredResourceHierarchical(
     resourceType: ResourceTypeName,
     resourceId: ResourceId,
     policies: Set[FilteredResourceHierarchicalPolicy],
-    authDomain: Option[WorkbenchGroupName],
-    inAuthDomain: Boolean
+    authDomainGroups: Set[WorkbenchGroupName],
+    missingAuthDomainGroups: Set[WorkbenchGroupName]
 )
