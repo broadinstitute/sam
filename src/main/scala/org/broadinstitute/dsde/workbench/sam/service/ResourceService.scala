@@ -956,7 +956,7 @@ class ResourceService(
           resourceType = resourceRows.head.resourceTypeName,
           policies = policies,
           authDomainGroups = authDomainGroupMemberships.keySet,
-          missingAuthDomainGroups = authDomainGroupMemberships.filter(!_._2).keySet
+          missingAuthDomainGroups = authDomainGroupMemberships.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
         )
       }
       .toSet
