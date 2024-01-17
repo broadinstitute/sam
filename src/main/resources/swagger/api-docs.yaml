@@ -4385,17 +4385,42 @@ components:
           type: string
           description: resourceId of the resource
         policies:
-          type: string
+          type: array
+          items:
+            $ref: '#/components/schemas/FilteredFlatResourcePolicy'
           description: policies the user is a part of on the resource
         roles:
-          type: string
+          type: array
+          items:
+            type: string
           description: roles the user has on the resource
         actions:
-          type: string
+          type: array
+          items:
+            type: string
           description: actions the user has on the resource
-        isPublic:
+        authDomainGroups:
+          type: array
+          items:
+            type: string
+          description: The auth domain groups of the policy
+        missingAuthDomainGroups:
+          type: array
+          items:
+            type: string
+          description: Auth Domain groups the user is not a member of
+    FilteredFlatResourcePolicy:
+      type: object
+      properties:
+        policy:
           type: string
-          description: isPublic is the resource public or not
+          description: The policy name
+        isPublic:
+          type: boolean
+          description: Is this policy on the resource a public policy?
+        inherited:
+          type: boolean
+          description: Is this policy inherited from an parent resource?
     FilteredHierarchicalResource:
       type: object
       properties:
@@ -4410,6 +4435,16 @@ components:
           description: Policies on the resource
           items:
             $ref: '#/components/schemas/FilteredHierarchicalResourcePolicy'
+        authDomainGroups:
+          type: array
+          items:
+            type: string
+          description: The auth domain groups of the policy
+        missingAuthDomainGroups:
+          type: array
+          items:
+            type: string
+          description: Auth Domain groups the user is not a member of
     FilteredHierarchicalResourcePolicy:
       type: object
       properties:
@@ -4429,6 +4464,9 @@ components:
         isPublic:
           type: boolean
           description: Is this policy on the resource a public policy?
+        inherited:
+          type: boolean
+          description: Is this policy inherited from an parent resource?
     FilteredHierarchicalResourceRole:
       type: object
       properties:

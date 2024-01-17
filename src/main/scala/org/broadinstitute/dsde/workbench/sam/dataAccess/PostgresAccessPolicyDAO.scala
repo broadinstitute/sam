@@ -1704,6 +1704,9 @@ class PostgresAccessPolicyDAO(
     val roleAction = RoleActionTable.syntax("roleAction")
     val resourceAction = ResourceActionTable.syntax("resourceAction")
     val resource = ResourceTable.syntax("resource")
+    val authDomain = AuthDomainTable.syntax("authDomain")
+    val authDomainGroup = GroupTable.syntax("authDomainGroup")
+    val authDomainGroupMemberFlat = GroupMemberFlatTable.syntax("authDomainGroupMemberFlat")
 
     val resourceTypeConstraint =
       if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in (${resourceTypeNames.flatMap(resourceTypePKsByName.get)})"
@@ -1714,7 +1717,7 @@ class PostgresAccessPolicyDAO(
 
     val policyRoleActionQuery =
       samsqls"""
-        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, ${authDomainGroup.result.name}, ${authDomainGroupMemberFlat.memberUserId} is not null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
           from ${GroupMemberFlatTable as groupMemberFlat}
             left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
             left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
@@ -1723,6 +1726,9 @@ class PostgresAccessPolicyDAO(
             left join ${RoleActionTable as roleAction} on ${effectivePolicyRole.resourceRoleId} = ${roleAction.resourceRoleId}
             left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id}
             left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
+            left join ${AuthDomainTable as authDomain} on ${authDomain.resourceId} = ${resource.id}
+            left join ${GroupTable as authDomainGroup} on ${authDomainGroup.id} = ${authDomain.groupId}
+            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUser.id}
           where ${groupMemberFlat.memberUserId} = ${samUser.id}
             $resourceTypeConstraint
             $policyConstraint
@@ -1730,13 +1736,16 @@ class PostgresAccessPolicyDAO(
             $actionConstraint"""
     val policyActionQuery =
       samsqls"""
-        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, ${authDomainGroup.result.name}, ${authDomainGroupMemberFlat.memberUserId} is not null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
           from ${GroupMemberFlatTable as groupMemberFlat}
             left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
             left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
             left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
             left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
             left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
+            left join ${AuthDomainTable as authDomain} on ${authDomain.resourceId} = ${resource.id}
+            left join ${GroupTable as authDomainGroup} on ${authDomainGroup.id} = ${authDomain.groupId}
+            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUser.id}
           where ${groupMemberFlat.memberUserId} = ${samUser.id}
             $resourceTypeConstraint
             $policyConstraint
@@ -1744,7 +1753,7 @@ class PostgresAccessPolicyDAO(
 
     val publicRoleActionQuery =
       samsqls"""
-        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, null as ${authDomainGroup.resultName.name}, null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
         from ${PolicyTable as resourcePolicy}
           left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
           left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
@@ -1759,7 +1768,7 @@ class PostgresAccessPolicyDAO(
           $actionConstraint"""
     val publicPolicyActionQuery =
       samsqls"""
-        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, null as ${authDomainGroup.resultName.name}, null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
         from ${PolicyTable as resourcePolicy}
           left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
           left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
@@ -1788,7 +1797,10 @@ class PostgresAccessPolicyDAO(
             rs.stringOpt(resourcePolicy.resultName.name).map(AccessPolicyName(_)),
             rs.stringOpt(resourceRole.resultName.role).map(ResourceRoleName(_)),
             rs.stringOpt(resourceAction.resultName.action).map(ResourceAction(_)),
-            rs.get[Boolean](resourcePolicy.resultName.public)
+            rs.get[Boolean](resourcePolicy.resultName.public),
+            rs.stringOpt(authDomainGroup.resultName.name).map(WorkbenchGroupName(_)),
+            rs.booleanOpt("in_auth_domain").getOrElse(false),
+            rs.booleanOpt("inherited").getOrElse(false)
           )
         )
         .list()

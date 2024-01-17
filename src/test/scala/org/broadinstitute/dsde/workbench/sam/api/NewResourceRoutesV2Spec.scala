@@ -49,7 +49,8 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
               Set.empty,
               Set.empty,
               Set.empty,
-              isPublic = false
+              Set.empty,
+              Set.empty
             )
           )
         )
@@ -72,6 +73,8 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
             FilteredResourceHierarchical(
               ResourceTypeName(UUID.randomUUID().toString),
               ResourceId(UUID.randomUUID().toString),
+              Set.empty,
+              Set.empty,
               Set.empty
             )
           )

@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.{
   AccessPolicyMembershipRequest,
   AccessPolicyMembershipResponse,
   FilteredResourceFlat,
+  FilteredResourceFlatPolicy,
   FilteredResourceHierarchical,
   FilteredResourceHierarchicalPolicy,
   FilteredResourceHierarchicalRole,
@@ -893,18 +894,35 @@ class ResourceService(
     addEventSet ++ removeEventSet
   }
 
+  private case class GroupedDbRows(
+      policies: Set[FilteredResourceFlatPolicy] = Set.empty,
+      roles: Set[ResourceRoleName] = Set.empty,
+      actions: Set[ResourceAction] = Set.empty,
+      authDomainGroups: Map[WorkbenchGroupName, Boolean] = Map.empty
+  )
+
   private def groupFlat(dbResult: Seq[FilterResourcesResult]): FilteredResourcesFlat = {
     val groupedFilteredResource = dbResult
       .groupBy(_.resourceId)
       .map { tuple =>
         val (k, v) = tuple
+        val grouped = v.foldLeft(GroupedDbRows())((acc: GroupedDbRows, r: FilterResourcesResult) =>
+          acc.copy(
+            policies = acc.policies ++ r.policy.map(p => FilteredResourceFlatPolicy(p, r.isPublic, r.inherited)),
+            roles = acc.roles ++ r.role,
+            actions = acc.actions ++ r.action,
+            authDomainGroups = acc.authDomainGroups ++ r.authDomain.map(_ -> r.inAuthDomain)
+          )
+        )
+
         FilteredResourceFlat(
           resourceId = k,
-          resourceType = v.map(_.resourceTypeName).head,
-          policies = v.flatMap(_.policy).toSet,
-          roles = v.flatMap(_.role).toSet,
-          actions = v.flatMap(_.action).toSet,
-          isPublic = v.map(_.isPublic).head
+          resourceType = v.head.resourceTypeName,
+          policies = grouped.policies,
+          roles = grouped.roles,
+          actions = grouped.actions,
+          authDomainGroups = grouped.authDomainGroups.keySet,
+          missingAuthDomainGroups = grouped.authDomainGroups.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
         )
       }
       .toSet
@@ -929,13 +947,16 @@ class ResourceService(
                 FilteredResourceHierarchicalRole(roleName, roleRows.flatMap(_.action).toSet)
               }
               .toSet
-            FilteredResourceHierarchicalPolicy(policyName, roles, actionsWithoutRoles, policyRows.head.isPublic)
+            FilteredResourceHierarchicalPolicy(policyName, roles, actionsWithoutRoles, policyRows.head.isPublic, policyRows.head.inherited)
           }
           .toSet
+        val authDomainGroupMemberships = resourceRows.flatMap(r => r.authDomain.map(_ -> r.inAuthDomain)).toMap
         FilteredResourceHierarchical(
           resourceId = resourceId,
           resourceType = resourceRows.head.resourceTypeName,
-          policies = policies
+          policies = policies,
+          authDomainGroups = authDomainGroupMemberships.keySet,
+          missingAuthDomainGroups = authDomainGroupMemberships.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
         )
       }
       .toSet
