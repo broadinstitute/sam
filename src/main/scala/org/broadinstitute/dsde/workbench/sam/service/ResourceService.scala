@@ -893,30 +893,36 @@ class ResourceService(
     val addEventSet = if (addEvent.changeDetails.isEmpty) Set.empty else Set(addEvent)
     addEventSet ++ removeEventSet
   }
+
+  private case class GroupedDbRows(
+      policies: Set[FilteredResourceFlatPolicy] = Set.empty,
+      roles: Set[ResourceRoleName] = Set.empty,
+      actions: Set[ResourceAction] = Set.empty,
+      authDomainGroups: Map[WorkbenchGroupName, Boolean] = Map.empty
+  )
+
   private def groupFlat(dbResult: Seq[FilterResourcesResult]): FilteredResourcesFlat = {
     val groupedFilteredResource = dbResult
       .groupBy(_.resourceId)
       .map { tuple =>
         val (k, v) = tuple
-        type Accumulated = (Set[FilteredResourceFlatPolicy], Set[ResourceRoleName], Set[ResourceAction], Map[WorkbenchGroupName, Boolean])
-        val base = (Set.empty[FilteredResourceFlatPolicy], Set.empty[ResourceRoleName], Set.empty[ResourceAction], Map.empty[WorkbenchGroupName, Boolean])
-        val grouped = v.foldLeft(base)((acc: Accumulated, r: FilterResourcesResult) =>
-          (
-            acc._1 ++ r.policy.map(p => FilteredResourceFlatPolicy(p, r.isPublic, r.inherited)),
-            acc._2 ++ r.role,
-            acc._3 ++ r.action,
-            acc._4 ++ r.authDomain.map(_ -> r.inAuthDomain)
+        val grouped = v.foldLeft(GroupedDbRows())((acc: GroupedDbRows, r: FilterResourcesResult) =>
+          acc.copy(
+            policies = acc.policies ++ r.policy.map(p => FilteredResourceFlatPolicy(p, r.isPublic, r.inherited)),
+            roles = acc.roles ++ r.role,
+            actions = acc.actions ++ r.action,
+            authDomainGroups = acc.authDomainGroups ++ r.authDomain.map(_ -> r.inAuthDomain)
           )
         )
 
         FilteredResourceFlat(
           resourceId = k,
           resourceType = v.head.resourceTypeName,
-          policies = grouped._1,
-          roles = grouped._2,
-          actions = grouped._3,
-          authDomainGroups = grouped._4.keySet,
-          missingAuthDomainGroups = grouped._4.filter(!_._2).keySet
+          policies = grouped.policies,
+          roles = grouped.roles,
+          actions = grouped.actions,
+          authDomainGroups = grouped.authDomainGroups.keySet,
+          missingAuthDomainGroups = grouped.authDomainGroups.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
         )
       }
       .toSet
