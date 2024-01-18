@@ -125,7 +125,7 @@ object Dependencies {
   val circeCore = "io.circe" %% "circe-core" % "0.14.4"
 
   // OpenTelemetry
-  val openTelemetryVersion = "1.31.0"
+  val openTelemetryVersion = "1.32.0"
   val otelApi: ModuleID = "io.opentelemetry" % "opentelemetry-api" % openTelemetryVersion
   val otelSdk: ModuleID = "io.opentelemetry" % "opentelemetry-sdk" % openTelemetryVersion
   val otelSdkMetrics: ModuleID = "io.opentelemetry" % "opentelemetry-sdk-metrics" % openTelemetryVersion
@@ -135,6 +135,7 @@ object Dependencies {
   val otelInstrumentationApi: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api" % openTelemetryVersion
   val otelInstrumentationApiSemconv: ModuleID =
     "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-semconv" % (openTelemetryVersion + "-alpha")
+  val otelInstrumentationJdbc: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-jdbc" % (openTelemetryVersion + "-alpha")
   val otelPrometheusExporter: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-prometheus" % (openTelemetryVersion + "-alpha")
 
   // Google cloud open telemetry exporters
@@ -149,6 +150,7 @@ object Dependencies {
     otelSemconv,
     otelAnnotation,
     otelInstrumentationApi,
+    otelInstrumentationJdbc,
     otelInstrumentationApiSemconv,
     otelPrometheusExporter,
     googleTraceExporter

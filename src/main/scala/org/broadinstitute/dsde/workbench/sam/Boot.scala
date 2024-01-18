@@ -14,6 +14,7 @@ import io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.context.propagation.{ContextPropagators, TextMapPropagator}
 import io.opentelemetry.exporter.prometheus.PrometheusHttpServer
+import io.opentelemetry.instrumentation.jdbc.OpenTelemetryDriver
 import io.opentelemetry.sdk.metrics.SdkMeterProvider
 import io.opentelemetry.sdk.{OpenTelemetrySdk, resources}
 import io.opentelemetry.sdk.trace.SdkTracerProvider
@@ -395,7 +396,9 @@ object Boot extends IOApp with LazyLogging {
     maybeTracerProvider.foreach(otelBuilder.setTracerProvider)
     otelBuilder.setMeterProvider(sdkMeterProvider)
     otelBuilder.setPropagators(ContextPropagators.create(TextMapPropagator.composite(W3CTraceContextPropagator.getInstance, W3CBaggagePropagator.getInstance)))
-    otelBuilder.buildAndRegisterGlobal
+    val sdk = otelBuilder.buildAndRegisterGlobal
+    OpenTelemetryDriver.install(sdk)
+    sdk
   }
 
   private[sam] def createAppDependenciesWithSamRoutes(
