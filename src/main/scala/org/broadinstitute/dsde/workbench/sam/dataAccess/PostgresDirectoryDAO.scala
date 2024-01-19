@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.{IO, Temporal}
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
@@ -794,6 +794,120 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       ServiceAccount(petRecord.googleSubjectId, petRecord.email, petRecord.displayName)
     )
 
+  override def createActionServiceAccount(actionServiceAccount: ActionServiceAccount, samRequestContext: SamRequestContext): IO[ActionServiceAccount] =
+    serializableWriteTransaction("createActionServiceAccount", samRequestContext) { implicit session =>
+      val actionServiceAccountColumn = ActionServiceAccountTable.column
+
+      samsql"""insert into ${ActionServiceAccountTable.table}
+               (
+                 ${actionServiceAccountColumn.resourceId},
+                 ${actionServiceAccountColumn.resourceActionId},
+                 ${actionServiceAccountColumn.project},
+                 ${actionServiceAccountColumn.googleSubjectId},
+                 ${actionServiceAccountColumn.email},
+                 ${actionServiceAccountColumn.displayName}
+               )
+           values (
+                    (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionServiceAccount.id.resourceId}),
+                    (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionServiceAccount.id.action}),
+                    ${actionServiceAccount.id.project},
+                    ${actionServiceAccount.serviceAccount.subjectId},
+                    ${actionServiceAccount.serviceAccount.email},
+                    ${actionServiceAccount.serviceAccount.displayName}
+                  )"""
+        .update()
+        .apply()
+      actionServiceAccount
+    }
+
+  type TableSyntax[A] = scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[A], A]
+
+  override def loadActionServiceAccount(
+      actionServiceAccountId: ActionServiceAccountId,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionServiceAccount]] =
+    readOnlyTransaction("loadActionServiceAccount", samRequestContext) { implicit session =>
+      implicit val actionServiceAccountTable: TableSyntax[ActionServiceAccountRecord] = ActionServiceAccountTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+
+      val loadActionServiceAccountQuery =
+        samsql"""select ${resourceTable.result.name}, ${resourceActionTable.result.action}, ${actionServiceAccountTable.result.project}, ${actionServiceAccountTable.result.googleSubjectId}, ${actionServiceAccountTable.result.email}, ${actionServiceAccountTable.result.displayName}
+        from ${ActionServiceAccountTable as actionServiceAccountTable}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionServiceAccountTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionServiceAccountTable.resourceId} = ${resourceTable.id}
+        where ${resourceTable.name} = ${actionServiceAccountId.resourceId}
+          and ${actionServiceAccountTable.project} = ${actionServiceAccountId.project}
+          and ${resourceActionTable.action} = ${actionServiceAccountId.action}"""
+
+      loadActionServiceAccountQuery.map(unmarshalActionServiceAccount).single().apply()
+    }
+
+  override def deleteActionServiceAccount(actionServiceAccountId: ActionServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deleteActionServiceAccount", samRequestContext) { implicit session =>
+      val actionServiceAccountTable = ActionServiceAccountTable.syntax
+      val deleteActionServiceAccountQuery =
+        samsql"""delete from ${ActionServiceAccountTable.table}
+                 where ${actionServiceAccountTable.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionServiceAccountId.resourceId})
+                 and ${actionServiceAccountTable.project} = ${actionServiceAccountId.project}
+                 and ${actionServiceAccountTable.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionServiceAccountId.action})"""
+      if (deleteActionServiceAccountQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"${actionServiceAccountId} cannot be deleted because it already does not exist")
+      }
+    }
+
+  override def getAllActionServiceAccountsForResource(
+      resourceId: ResourceId,
+      googleProject: GoogleProject,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionServiceAccount]] =
+    readOnlyTransaction("loadActionServiceAccountsForResource", samRequestContext) { implicit session =>
+      implicit val actionServiceAccountTable: TableSyntax[ActionServiceAccountRecord] = ActionServiceAccountTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+
+      val listActionServiceAccountsQuery =
+        samsql"""select ${resourceTable.result.name}, ${resourceActionTable.result.action}, ${actionServiceAccountTable.result.project}, ${actionServiceAccountTable.result.googleSubjectId}, ${actionServiceAccountTable.result.email}, ${actionServiceAccountTable.result.displayName}
+        from ${ActionServiceAccountTable as actionServiceAccountTable}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionServiceAccountTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionServiceAccountTable.resourceId} = ${resourceTable.id}
+        where ${resourceTable.name} = ${resourceId}
+          and ${actionServiceAccountTable.project} = ${googleProject}"""
+
+      listActionServiceAccountsQuery.map(unmarshalActionServiceAccount).list().apply()
+    }
+
+  override def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, googleProject: GoogleProject, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deleteAllActionServiceAccountsForResource", samRequestContext) { implicit session =>
+      val actionServiceAccountTable = ActionServiceAccountTable.syntax
+      val deleteActionServiceAccountQuery =
+        samsql"""delete from ${ActionServiceAccountTable.table}
+                 where ${actionServiceAccountTable.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${resourceId})
+                 and ${actionServiceAccountTable.project} = ${googleProject}"""
+      deleteActionServiceAccountQuery.update().apply()
+    }
+
+  private def unmarshalActionServiceAccount(rs: WrappedResultSet)(implicit
+      resourceTable: TableSyntax[ResourceRecord],
+      resourceActionTable: TableSyntax[ResourceActionRecord],
+      actionServiceAccountTable: TableSyntax[ActionServiceAccountRecord]
+  ) =
+    ActionServiceAccount(
+      ActionServiceAccountId(
+        rs.get[ResourceId](resourceTable.resultName.name),
+        rs.get[ResourceAction](resourceActionTable.resultName.action),
+        rs.get[GoogleProject](actionServiceAccountTable.resultName.project)
+      ),
+      ServiceAccount(
+        rs.get[ServiceAccountSubjectId](actionServiceAccountTable.resultName.googleSubjectId),
+        rs.get[WorkbenchEmail](actionServiceAccountTable.resultName.email),
+        rs.get[ServiceAccountDisplayName](actionServiceAccountTable.resultName.displayName)
+      )
+    )
   case class SubjectConglomerate(
       userId: Option[WorkbenchUserId],
       groupName: Option[WorkbenchGroupName],

@@ -27,10 +27,11 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   val defaultGroupName: WorkbenchGroupName = WorkbenchGroupName("group")
+  val defaultGoogleProject: GoogleProject = GoogleProject("testProject")
   val defaultGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
   val defaultUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
   val defaultPetSA: PetServiceAccount = PetServiceAccount(
-    PetServiceAccountId(defaultUser.id, GoogleProject("testProject")),
+    PetServiceAccountId(defaultUser.id, defaultGoogleProject),
     ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares"))
   )
   val defaultPetMI: PetManagedIdentity = PetManagedIdentity(
@@ -63,6 +64,17 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
     Set(writeAction, readAction),
     Set.empty,
     public = false
+  )
+
+  val defaultActionServiceAccounts: Set[ActionServiceAccount] = Set(readAction, writeAction).map(action =>
+    ActionServiceAccount(
+      ActionServiceAccountId(defaultResource.resourceId, action, defaultGoogleProject),
+      ServiceAccount(
+        ServiceAccountSubjectId(s"testGoogleSubjectId-$action"),
+        WorkbenchEmail(s"test-$action@asa.co"),
+        ServiceAccountDisplayName(s"whoCares-$action")
+      )
+    )
   )
 
   override protected def beforeEach(): Unit =
@@ -1815,6 +1827,45 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         // Assert
         retrievedAttributes should be(Some(upsertedAttributes))
+      }
+    }
+    "Action Service Accounts" - {
+      "can be individually created, read, and deleted" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        defaultActionServiceAccounts.map(dao.createActionServiceAccount(_, samRequestContext).unsafeRunSync())
+
+        val readActionServiceAccount = defaultActionServiceAccounts.find(_.id.action == readAction)
+        val loadedReadActionServiceAccount = dao.loadActionServiceAccount(readActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
+        loadedReadActionServiceAccount should be(readActionServiceAccount)
+
+        val writeActionServiceAccount = defaultActionServiceAccounts.find(_.id.action == writeAction)
+        val loadedWriteActionServiceAccount = dao.loadActionServiceAccount(writeActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
+        loadedWriteActionServiceAccount should be(writeActionServiceAccount)
+
+        dao.deleteActionServiceAccount(readActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
+        dao.deleteActionServiceAccount(writeActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
+
+        dao.loadActionServiceAccount(readActionServiceAccount.get.id, samRequestContext).unsafeRunSync() should be(None)
+        dao.loadActionServiceAccount(writeActionServiceAccount.get.id, samRequestContext).unsafeRunSync() should be(None)
+      }
+
+      "can be read, and deleted en mass for a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        defaultActionServiceAccounts.map(dao.createActionServiceAccount(_, samRequestContext).unsafeRunSync())
+
+        val bothLoadedServiceAccounts =
+          dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, defaultGoogleProject, samRequestContext).unsafeRunSync().toSet
+        bothLoadedServiceAccounts should be(defaultActionServiceAccounts)
+
+        dao.deleteAllActionServiceAccountsForResource(defaultResource.resourceId, defaultGoogleProject, samRequestContext).unsafeRunSync()
+
+        dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, defaultGoogleProject, samRequestContext).unsafeRunSync() should be(Seq.empty)
       }
     }
   }
