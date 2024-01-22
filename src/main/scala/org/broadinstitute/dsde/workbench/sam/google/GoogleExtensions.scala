@@ -75,6 +75,8 @@ class GoogleExtensions(
 
   private val maxGroupEmailLength = 64
 
+  private val excludeFromPetSigningAccount: Set[WorkbenchEmail] = Set(googleServicesConfig.serviceAccountClientEmail)
+
   private[google] def toProxyFromUser(userId: WorkbenchUserId): WorkbenchEmail =
     WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsDomain}")
 
@@ -279,7 +281,7 @@ class GoogleExtensions(
       }
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)))
-      _ <- createUserPetSigningAccount(user, samRequestContext)
+      _ <- if (excludeFromPetSigningAccount.contains(user.email)) IO.none else createUserPetSigningAccount(user, samRequestContext)
     } yield ()
   }
 
