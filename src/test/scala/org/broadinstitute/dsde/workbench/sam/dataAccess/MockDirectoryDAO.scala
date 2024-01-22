@@ -280,6 +280,11 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, googleProject: GoogleProject, samRequestContext: SamRequestContext): IO[Unit] =
     ???
 
+  override def createPetSigningAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = ???
+
+  override def loadPetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = ???
+
+  override def deletePetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = ???
   override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]] =
     if (groups.contains(groupName))
       IO.pure(groupAccessInstructions.get(groupName))

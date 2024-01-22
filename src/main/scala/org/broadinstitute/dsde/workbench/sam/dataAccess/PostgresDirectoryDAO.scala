@@ -908,6 +908,46 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         rs.get[ServiceAccountDisplayName](actionServiceAccountTable.resultName.displayName)
       )
     )
+
+  override def createPetSigningAccount(petSigningAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] =
+    serializableWriteTransaction("createPetSigningAccount", samRequestContext) { implicit session =>
+      val petSigningAccountColumn = PetSigningAccountTable.column
+
+      samsql"""insert into ${PetSigningAccountTable.table} (${petSigningAccountColumn.samUserId}, ${petSigningAccountColumn.project}, ${petSigningAccountColumn.googleSubjectId}, ${petSigningAccountColumn.email}, ${petSigningAccountColumn.displayName})
+           values (${petSigningAccount.id.userId}, ${petSigningAccount.id.project}, ${petSigningAccount.serviceAccount.subjectId}, ${petSigningAccount.serviceAccount.email}, ${petSigningAccount.serviceAccount.displayName})"""
+        .update()
+        .apply()
+      petSigningAccount
+    }
+
+  override def loadPetSigningAccount(petSigningAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] =
+    readOnlyTransaction("loadPetSigningAccount", samRequestContext) { implicit session =>
+      val petSigningAccountTable = PetSigningAccountTable.syntax
+
+      val loadPetQuery =
+        samsql"""select ${petSigningAccountTable.resultAll}
+       from ${PetSigningAccountTable as petSigningAccountTable}
+       where ${petSigningAccountTable.samUserId} = ${petSigningAccountId.userId} and ${petSigningAccountTable.project} = ${petSigningAccountId.project}"""
+
+      val petRecordOpt = loadPetQuery.map(PetSigningAccountTable(petSigningAccountTable)).single().apply()
+      petRecordOpt.map(unmarshalPetSigningAccountRecord)
+    }
+
+  override def deletePetSigningAccount(petSigningAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deletePetSigningAccount", samRequestContext) { implicit session =>
+      val petSigningAccountTable = PetSigningAccountTable.syntax
+      val deletePetQuery =
+        samsql"delete from ${PetSigningAccountTable.table} where ${petSigningAccountTable.samUserId} = ${petSigningAccountId.userId} and ${petSigningAccountTable.project} = ${petSigningAccountId.project}"
+      if (deletePetQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"${petSigningAccountId} cannot be deleted because it already does not exist")
+      }
+    }
+
+  private def unmarshalPetSigningAccountRecord(petRecord: PetSigningAccountRecord): PetServiceAccount =
+    PetServiceAccount(
+      PetServiceAccountId(petRecord.samUserId, petRecord.project),
+      ServiceAccount(petRecord.googleSubjectId, petRecord.email, petRecord.displayName)
+    )
   case class SubjectConglomerate(
       userId: Option[WorkbenchUserId],
       groupName: Option[WorkbenchGroupName],

@@ -77,6 +77,12 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
     )
   )
 
+  val defaultUserGoogleAccount: GoogleProject = GoogleProject("testUserProject")
+  val defaultPetSigningAccount: PetServiceAccount = PetServiceAccount(
+    PetServiceAccountId(defaultUser.id, defaultUserGoogleAccount),
+    ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@petsigning.co"), ServiceAccountDisplayName("whoCares-signing"))
+  )
+
   override protected def beforeEach(): Unit =
     TestSupport.truncateAll
 
@@ -1866,6 +1872,37 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.deleteAllActionServiceAccountsForResource(defaultResource.resourceId, defaultGoogleProject, samRequestContext).unsafeRunSync()
 
         dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, defaultGoogleProject, samRequestContext).unsafeRunSync() should be(Seq.empty)
+      }
+    }
+    "Pet Signing Accounts" - {
+      "can be individually created, read, and deleted" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+        val createdPetSigningAccount = dao.createPetSigningAccount(defaultPetSigningAccount, samRequestContext).unsafeRunSync()
+
+        val loadedPetSigningAccount = dao.loadPetSigningAccount(defaultPetSigningAccount.id, samRequestContext).unsafeRunSync()
+        loadedPetSigningAccount should not be None
+        loadedPetSigningAccount should be(Some(createdPetSigningAccount))
+
+        dao.deletePetSigningAccount(defaultPetSigningAccount.id, samRequestContext).unsafeRunSync()
+
+        dao.loadPetSigningAccount(defaultPetSigningAccount.id, samRequestContext).unsafeRunSync() should be(None)
+      }
+
+      "are distinct from Pet Service Accounts" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+        dao.createPetSigningAccount(defaultPetSigningAccount, samRequestContext).unsafeRunSync()
+
+        val loadedPetServiceAccounts = dao.getAllPetServiceAccountsForUser(defaultUser.id, samRequestContext).unsafeRunSync()
+
+        loadedPetServiceAccounts should be(Seq(defaultPetSA))
       }
     }
   }

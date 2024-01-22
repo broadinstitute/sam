@@ -226,6 +226,7 @@ object TestSupport extends TestSupport {
       dbRef.inLocalTransaction { implicit session =>
         val tables = List(
           ActionServiceAccountTable,
+          PetSigningAccountTable,
           PolicyActionTable,
           PolicyRoleTable,
           PolicyTable,
