@@ -279,7 +279,7 @@ class GoogleExtensions(
       }
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)))
-
+      _ <- createUserPetSigningAccount(user, samRequestContext)
     } yield ()
   }
 
@@ -333,8 +333,13 @@ class GoogleExtensions(
       }
     } yield deletedSomething
 
-  def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
-    val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
+  private[google] def createUserServiceAccount(
+      user: SamUser,
+      petSaName: ServiceAccountName,
+      petSaDisplayName: ServiceAccountDisplayName,
+      project: GoogleProject,
+      samRequestContext: SamRequestContext
+  ): IO[PetServiceAccount] = {
     // The normal situation is that the pet either exists in both the database and google or neither.
     // Sometimes, especially in tests, the pet may be removed from the database, but not google or the other way around.
     // This code is a little extra complicated to detect the cases when a pet does not exist in google, the database or
@@ -382,6 +387,10 @@ class GoogleExtensions(
       shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
       p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
     } yield p
+  }
+  def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
+    val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
+    createUserServiceAccount(user, petSaName, petSaDisplayName, project, samRequestContext)
   }
 
   private def assertProjectInTerraOrg(project: GoogleProject): IO[Unit] = {
@@ -473,6 +482,42 @@ class GoogleExtensions(
       }
       key <- getPetServiceAccountKey(user, GoogleProject(projectName), samRequestContext).unsafeToFuture()
     } yield key
+  }
+
+  override def createUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = {
+    val projectName =
+      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
+    val (petSaName, petSaDisplayName) = toPetSigningAccountFromUser(user)
+
+    val keyFuture = for {
+      creationOperationId <- googleProjectDAO
+        .createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
+        .map(opId => Option(opId)) recover {
+        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
+      }
+      _ <- creationOperationId match {
+        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
+        case None => Future.successful(())
+      }
+      key <- createUserServiceAccount(user, petSaName, petSaDisplayName, GoogleProject(projectName), samRequestContext).unsafeToFuture()
+    } yield Some(key)
+    IO.fromFuture(IO(keyFuture))
+  }
+
+  private[google] def toPetSigningAccountFromUser(user: SamUser): (ServiceAccountName, ServiceAccountDisplayName) = {
+    /*
+     * Service account IDs must be:
+     * 1. between 6 and 30 characters
+     * 2. lower case alphanumeric separated by hyphens
+     * 3. must start with a lower case letter
+     *
+     * Subject IDs are 22 numeric characters, so "sign-${subjectId}" fulfills these requirements.
+     */
+    val serviceAccountName = s"sign-${user.id.value}"
+    val displayName = s"Pet Signing Account [${user.email.value}]"
+
+    // Display names have a max length of 100 characters
+    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName.take(100)))
   }
 
   private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
