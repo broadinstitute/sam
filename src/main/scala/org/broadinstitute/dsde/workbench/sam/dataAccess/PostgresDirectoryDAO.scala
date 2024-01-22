@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{ActionServiceAccount, ActionServiceAccountId, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -845,6 +845,28 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       loadActionServiceAccountQuery.map(unmarshalActionServiceAccount).single().apply()
     }
 
+  override def updateActionServiceAccount(actionServiceAccount: ActionServiceAccount, samRequestContext: SamRequestContext): IO[ActionServiceAccount] =
+    serializableWriteTransaction("updateActionServiceAccount", samRequestContext) { implicit session =>
+      val actionServiceAccountColumn = ActionServiceAccountTable.column
+      val updateAsaQuery =
+        samsql"""
+               update ${ActionServiceAccountTable.table}
+               set
+                 ${actionServiceAccountColumn.googleSubjectId} = ${actionServiceAccount.serviceAccount.subjectId},
+                 ${actionServiceAccountColumn.email} = ${actionServiceAccount.serviceAccount.email},
+                 ${actionServiceAccountColumn.displayName} = ${actionServiceAccount.serviceAccount.displayName}
+               where
+                 ${actionServiceAccountColumn.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionServiceAccount.id.resourceId})
+                 and ${actionServiceAccountColumn.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionServiceAccount.id.action})
+                 and ${actionServiceAccountColumn.project} = ${actionServiceAccountColumn.project}"""
+      val updated = updateAsaQuery.update().apply()
+      if (updated != 1) {
+        throw new WorkbenchException(s"Update cannot be applied because ${actionServiceAccount.id} does not exist")
+      }
+
+      actionServiceAccount
+    }
+
   override def deleteActionServiceAccount(actionServiceAccountId: ActionServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteActionServiceAccount", samRequestContext) { implicit session =>
       val actionServiceAccountTable = ActionServiceAccountTable.syntax
@@ -860,7 +882,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
   override def getAllActionServiceAccountsForResource(
       resourceId: ResourceId,
-      googleProject: GoogleProject,
       samRequestContext: SamRequestContext
   ): IO[Seq[ActionServiceAccount]] =
     readOnlyTransaction("loadActionServiceAccountsForResource", samRequestContext) { implicit session =>
@@ -875,19 +896,17 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
             on ${actionServiceAccountTable.resourceActionId} = ${resourceActionTable.id}
           left join ${ResourceTable as resourceTable}
             on ${actionServiceAccountTable.resourceId} = ${resourceTable.id}
-        where ${resourceTable.name} = ${resourceId}
-          and ${actionServiceAccountTable.project} = ${googleProject}"""
+        where ${resourceTable.name} = ${resourceId}"""
 
       listActionServiceAccountsQuery.map(unmarshalActionServiceAccount).list().apply()
     }
 
-  override def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, googleProject: GoogleProject, samRequestContext: SamRequestContext): IO[Unit] =
+  override def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteAllActionServiceAccountsForResource", samRequestContext) { implicit session =>
       val actionServiceAccountTable = ActionServiceAccountTable.syntax
       val deleteActionServiceAccountQuery =
         samsql"""delete from ${ActionServiceAccountTable.table}
-                 where ${actionServiceAccountTable.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${resourceId})
-                 and ${actionServiceAccountTable.project} = ${googleProject}"""
+                 where ${actionServiceAccountTable.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${resourceId})"""
       deleteActionServiceAccountQuery.update().apply()
     }
 

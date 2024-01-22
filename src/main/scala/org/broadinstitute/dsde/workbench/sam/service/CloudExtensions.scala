@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceId, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
@@ -46,6 +46,8 @@ trait CloudExtensions {
   def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean]
+
+  def onResourceDelete(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit]
 
   def createUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
   def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
@@ -92,6 +94,7 @@ trait NoExtensions extends CloudExtensions {
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
 
   def createUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = IO.none
+  def onResourceDelete(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
   override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     IO.pure(Option(userEmail))
 

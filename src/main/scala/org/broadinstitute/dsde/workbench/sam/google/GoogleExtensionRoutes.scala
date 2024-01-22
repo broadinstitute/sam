@@ -20,6 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.api.{
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.ActionServiceAccount._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -261,5 +262,36 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
             }
           }
         }
-    }
+    } ~
+      pathPrefix("google" / "v2") {
+        pathPrefix("actionServiceAccount") {
+          path(Segment / Segment / Segment / Segment) { (project, resourceTypeName, resourceId, action) =>
+            val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+            val googleProject = GoogleProject(project)
+            val resourceAction = ResourceAction(action)
+            val params =
+              Seq(
+                "googleProject" -> googleProject,
+                "resourceTypeName" -> resource.resourceTypeName,
+                "resourceId" -> resource.resourceId,
+                actionParam(resourceAction)
+              )
+            withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
+              pathEndOrSingleSlash {
+                postWithTelemetry(samRequestContext, params: _*) {
+                  complete {
+                    if (resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
+                      googleExtensions.createActionServiceAccount(resource, googleProject, resourceAction, samRequestContext).map {
+                        StatusCodes.OK -> _
+                      }
+                    } else {
+                      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
 }

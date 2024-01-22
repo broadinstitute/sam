@@ -4,12 +4,12 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, ActionServiceAccount, ActionServiceAccountId, BasicWorkbenchGroup, ResourceId, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.api.{ActionServiceAccount, ActionServiceAccountId, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, ResourceId, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -270,14 +270,14 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       samRequestContext: SamRequestContext
   ): IO[Option[ActionServiceAccount]] = ???
 
+  override def updateActionServiceAccount(actionServiceAccount: ActionServiceAccount, samRequestContext: SamRequestContext): IO[ActionServiceAccount] = ???
   override def deleteActionServiceAccount(actionServiceAccountId: ActionServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = ???
 
   override def getAllActionServiceAccountsForResource(
       resourceId: ResourceId,
-      googleProject: GoogleProject,
       samRequestContext: SamRequestContext
   ): IO[Seq[ActionServiceAccount]] = ???
-  override def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, googleProject: GoogleProject, samRequestContext: SamRequestContext): IO[Unit] =
+  override def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     ???
 
   override def createPetSigningAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = ???

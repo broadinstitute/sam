@@ -127,12 +127,14 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   )
     .thenReturn(IO.pure(dbResult))
 
+  val mockCloudExtensions = spy[CloudExtensions](NoExtensions, true)
+
   val resourceService = new ResourceService(
     Map.empty,
     mock[PolicyEvaluatorService],
     mockAccessPolicyDAO,
     mock[DirectoryDAO],
-    NoExtensions,
+    mockCloudExtensions,
     emailDomain,
     Set("test.firecloud.org")
   )
@@ -187,5 +189,23 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     authDomainResource.policies.map(_.policy) should be(Set(testPolicy6))
     authDomainResource.authDomainGroups should be(Set(authDomainGroup1, authDomainGroup2))
     authDomainResource.missingAuthDomainGroups should be(Set(authDomainGroup2))
+  }
+
+  it should "delete Action Service Accounts associated with a resource on resource delete" in {
+    when(mockAccessPolicyDAO.listResourceChildren(any[FullyQualifiedResourceId], any[SamRequestContext]))
+      .thenReturn(IO.pure(Set.empty))
+    when(mockAccessPolicyDAO.listAccessPolicies(any[FullyQualifiedResourceId], any[SamRequestContext]))
+      .thenReturn(IO.pure(LazyList.empty))
+    when(mockAccessPolicyDAO.deleteAllResourcePolicies(any[FullyQualifiedResourceId], any[SamRequestContext]))
+      .thenReturn(IO.unit)
+    when(mockAccessPolicyDAO.deleteResource(any[FullyQualifiedResourceId], any[SamRequestContext]))
+      .thenReturn(IO.unit)
+    when(mockAccessPolicyDAO.removeAuthDomainFromResource(any[FullyQualifiedResourceId], any[SamRequestContext]))
+      .thenReturn(IO.unit)
+    when(mockAccessPolicyDAO.deleteResourceParent(any[FullyQualifiedResourceId], any[SamRequestContext]))
+      .thenReturn(IO.pure(true))
+
+    resourceService.deleteResource(FullyQualifiedResourceId(resourceTypeName, testResourceId), samRequestContext).unsafeRunSync()
+    verify(mockCloudExtensions).onResourceDelete(testResourceId, samRequestContext)
   }
 }

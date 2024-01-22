@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{ActionServiceAccount, ActionServiceAccountId, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFreeSpec, TestSupport}
 import org.scalatest.Inside.inside
 import org.scalatest.matchers.should.Matchers
@@ -1836,7 +1836,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
     }
     "Action Service Accounts" - {
-      "can be individually created, read, and deleted" in {
+      "can be individually created, read, updated, and deleted" in {
         assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -1850,6 +1850,14 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val writeActionServiceAccount = defaultActionServiceAccounts.find(_.id.action == writeAction)
         val loadedWriteActionServiceAccount = dao.loadActionServiceAccount(writeActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
         loadedWriteActionServiceAccount should be(writeActionServiceAccount)
+
+        val updatedActionServiceAccount = writeActionServiceAccount.get.copy(serviceAccount =
+          writeActionServiceAccount.get.serviceAccount.copy(displayName = ServiceAccountDisplayName("new name"), email = WorkbenchEmail("newEmail@asa.co"))
+        )
+        dao.updateActionServiceAccount(updatedActionServiceAccount, samRequestContext).unsafeRunSync()
+
+        val loadedUpdatedActionServiceAccount = dao.loadActionServiceAccount(updatedActionServiceAccount.id, samRequestContext).unsafeRunSync()
+        loadedUpdatedActionServiceAccount should be(Some(updatedActionServiceAccount))
 
         dao.deleteActionServiceAccount(readActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
         dao.deleteActionServiceAccount(writeActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
@@ -1866,12 +1874,12 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         defaultActionServiceAccounts.map(dao.createActionServiceAccount(_, samRequestContext).unsafeRunSync())
 
         val bothLoadedServiceAccounts =
-          dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, defaultGoogleProject, samRequestContext).unsafeRunSync().toSet
+          dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync().toSet
         bothLoadedServiceAccounts should be(defaultActionServiceAccounts)
 
-        dao.deleteAllActionServiceAccountsForResource(defaultResource.resourceId, defaultGoogleProject, samRequestContext).unsafeRunSync()
+        dao.deleteAllActionServiceAccountsForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync()
 
-        dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, defaultGoogleProject, samRequestContext).unsafeRunSync() should be(Seq.empty)
+        dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync() should be(Seq.empty)
       }
     }
     "Pet Signing Accounts" - {

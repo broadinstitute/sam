@@ -1385,6 +1385,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v2/actionServiceAccount/{project}/{resourceTypeName}/{resourceId}/{action}:
+    post:
+      tags:
+        - Google
+      summary: Gets/creates an Action Service Account in a Google Project for an action on a resource
+      operationId: getActionServiceAccount
+      parameters:
+        - name: project
+          in: path
+          description: Google project of the the resource
+          required: true
+          schema:
+            type: string
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+        - name: action
+          in: path
+          description: Name of action to create an Action Service Account for
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
+      responses:
+        200:
+          description: Successfully created Action Service Account
+          content:
+            text/plain:
+              schema:
+                type: string
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/azure/v1/billingProfile/{billingProfileId}/managedResourceGroup:
     post:
       tags:

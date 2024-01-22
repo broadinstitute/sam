@@ -328,6 +328,7 @@ class ResourceService(
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
+      _ <- cloudExtensions.onResourceDelete(resource.resourceId, samRequestContext)
 
       _ <- accessPolicyDAO.deleteAllResourcePolicies(resource, samRequestContext)
       _ <- maybeDeleteResource(resource, samRequestContext)
