@@ -207,6 +207,14 @@ class UserService(
             directoryDAO.updateUserEmail(userId, email, samRequestContext)
             updatedUser = user.copy(email = email)
           }
+          request.googleSubjectId.foreach { googleSubjectId =>
+              directoryDAO.setGoogleSubjectId(userId, googleSubjectId, samRequestContext)
+              updatedUser = updatedUser.copy(googleSubjectId = Option(googleSubjectId))
+          }
+          request.azureB2CId.foreach { azureB2CId =>
+              directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
+              updatedUser = updatedUser.copy(azureB2CId = Option(azureB2CId))
+          }
           IO(Some(updatedUser))
         }
       case None => IO(None)

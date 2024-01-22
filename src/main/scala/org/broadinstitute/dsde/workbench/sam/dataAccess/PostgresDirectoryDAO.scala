@@ -448,10 +448,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("setUserAzureB2CId", samRequestContext) { implicit session =>
       val u = UserTable.column
+      val maybeNullB2CId = if (b2cId.value == "") "null" else b2cId.value
       val results =
         samsql"""update ${UserTable.table}
                  set (${u.azureB2cId}, ${u.updatedAt}) =
-                 ($b2cId,
+                 ($maybeNullB2CId,
                    ${Instant.now()}
                  )
                  where ${u.id} = $userId and (${u.azureB2cId} is null or ${u.azureB2cId} = $b2cId)"""
@@ -460,7 +461,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
       if (results != 1) {
         throw new WorkbenchException(
-          s"Cannot update azureB2cId for user ${userId} because user does not exist or the azureB2cId has already been set for this user"
+          s"Cannot update azureB2cId for user ${userId} because user does not exist"
         )
       } else {
         ()
@@ -856,17 +857,18 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("setGoogleSubjectId", samRequestContext) { implicit session =>
       val u = UserTable.column
+      val maybeNullGoogleSubjectId = if (googleSubjectId.value == "") "null" else googleSubjectId.value
       val updateGoogleSubjectIdQuery =
         samsql"""update ${UserTable.table}
                  set (${u.googleSubjectId}, ${u.updatedAt}) =
-                 (${googleSubjectId},
+                 (${maybeNullGoogleSubjectId},
                    ${Instant.now()}
                  )
-                 where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
+                 where ${u.id} = ${userId}"""
 
       if (updateGoogleSubjectIdQuery.update().apply() != 1) {
         throw new WorkbenchException(
-          s"Cannot update googleSubjectId for user ${userId} because user does not exist or the googleSubjectId has already been set for this user"
+          s"Cannot update googleSubjectId for user ${userId} because user does not exist"
         )
       }
     }

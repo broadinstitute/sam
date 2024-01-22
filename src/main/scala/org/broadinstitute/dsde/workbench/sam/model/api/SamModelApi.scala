@@ -5,6 +5,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import spray.json.{DefaultJsonProtocol, JsObject, JsString, JsValue, RootJsonFormat, deserializationError}
 @Lenses final case class AdminUpdateUserRequest(
+    azureB2CId: Option[AzureB2CId],
     googleSubjectId: Option[GoogleSubjectId],
     email: Option[WorkbenchEmail],
     enabled: Option[Boolean]
