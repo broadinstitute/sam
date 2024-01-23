@@ -277,19 +277,44 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 actionParam(resourceAction)
               )
             withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
+              if (!resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
+                throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+              }
               pathEndOrSingleSlash {
                 postWithTelemetry(samRequestContext, params: _*) {
                   complete {
-                    if (resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
-                      googleExtensions.createActionServiceAccount(resource, googleProject, resourceAction, samRequestContext).map {
-                        StatusCodes.OK -> _
-                      }
-                    } else {
-                      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+                    googleExtensions.createActionServiceAccount(resource, googleProject, resourceAction, samRequestContext).map {
+                      StatusCodes.OK -> _
                     }
                   }
                 }
-              }
+              } ~
+                pathPrefix("signedUrlForBlob") {
+                  pathEndOrSingleSlash {
+                    postWithTelemetry(samRequestContext, params: _*) {
+                      requireAction(resource, resourceAction, samUser.id, samRequestContext) {
+                        entity(as[RequesterPaysSignedUrlRequest]) { request =>
+                          complete {
+                            googleExtensions
+                              .getRequesterPaysSignedUrl(
+                                samUser,
+                                resource.resourceId,
+                                resourceAction,
+                                googleProject,
+                                request.gsPath,
+                                request.duration,
+                                request.requesterPaysProject.map(GoogleProject),
+                                samRequestContext
+                              )
+                              .map { signedUrl =>
+                                StatusCodes.OK -> JsString(signedUrl.toString)
+                              }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
             }
           }
         }

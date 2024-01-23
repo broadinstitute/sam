@@ -594,7 +594,7 @@ class GoogleExtensions(
     } yield key
   }
 
-  override def getUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = {
+  private[google] def getUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[String]] = {
     val projectName =
       s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
     val (petSaName, petSaDisplayName) = toPetSigningAccountFromUser(user)
@@ -609,7 +609,8 @@ class GoogleExtensions(
         case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
         case None => Future.successful(())
       }
-      key <- createUserServiceAccount(user, petSaName, petSaDisplayName, GoogleProject(projectName), samRequestContext).unsafeToFuture()
+      serviceAccount <- createUserServiceAccount(user, petSaName, petSaDisplayName, GoogleProject(projectName), samRequestContext).unsafeToFuture()
+      key <- googleKeyCache.getKey(serviceAccount).unsafeToFuture()
     } yield Some(key)
     IO.fromFuture(IO(keyFuture))
   }
@@ -842,6 +843,40 @@ class GoogleExtensions(
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
       url <- getSignedUrl(samUser, bucket, objectName, duration, urlParamsMap, serviceAccountCredentials)
     } yield url
+  }
+
+  def getRequesterPaysSignedUrl(
+      samUser: SamUser,
+      resourceId: ResourceId,
+      resourceAction: ResourceAction,
+      googleProject: GoogleProject,
+      gsPath: String,
+      duration: Option[Long],
+      requesterPaysProject: Option[GoogleProject],
+      samRequestContext: SamRequestContext
+  ): IO[URL] = {
+    val urlParamsMap: Map[String, String] = requesterPaysProject.map(p => Map(userProjectQueryParam -> p.value)).getOrElse(Map.empty)
+    val blobId = fromGsPath(gsPath)
+    val bucket = GcsBucketName(blobId.getBucket)
+    val objectName = GcsBlobName(blobId.getName)
+    directoryDAO
+      .loadActionServiceAccount(ActionServiceAccountId(resourceId, resourceAction, googleProject), samRequestContext)
+      .flatMap {
+        case Some(actionServiceAccount) =>
+          for {
+            petSigningAccountKey <- getUserPetSigningAccount(samUser, samRequestContext)
+          } yield petSigningAccountKey.map((actionServiceAccount, _))
+        case None => IO.none[(ActionServiceAccount, String)]
+      }
+      .flatMap {
+        case Some((actionServiceAccount, petSigningAccountKey)) =>
+          val serviceAccountCredentials = ServiceAccountCredentials
+            .fromStream(new ByteArrayInputStream(petSigningAccountKey.getBytes()))
+            .createDelegated(actionServiceAccount.serviceAccount.email.value)
+            .asInstanceOf[ServiceAccountCredentials]
+          getSignedUrl(samUser, bucket, objectName, duration, urlParamsMap, serviceAccountCredentials)
+        case None => getRequesterPaysSignedUrl(samUser, gsPath, duration, requesterPaysProject, samRequestContext)
+      }
   }
 
   def getSignedUrl(

@@ -48,8 +48,6 @@ trait CloudExtensions {
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean]
 
   def onResourceDelete(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit]
-
-  def getUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
   def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
 
   def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit
@@ -92,8 +90,6 @@ trait NoExtensions extends CloudExtensions {
   override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
-
-  def getUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = IO.none
   def onResourceDelete(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
   override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     IO.pure(Option(userEmail))
