@@ -283,7 +283,7 @@ class GoogleExtensions(
       _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)))
       _ <-
         if (excludeFromPetSigningAccount.contains(user.email) || !googleServicesConfig.petSigningAccountsEnabled) IO.none
-        else createUserPetSigningAccount(user, samRequestContext)
+        else getUserPetSigningAccount(user, samRequestContext)
     } yield ()
   }
 
@@ -331,6 +331,7 @@ class GoogleExtensions(
   override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- forAllPets(userId, samRequestContext)((petServiceAccount: PetServiceAccount) => removePetServiceAccount(petServiceAccount, samRequestContext))
+      _ <- removePetSigningAccount(userId, samRequestContext)
       _ <- withProxyEmail(userId)(email => IO.fromFuture(IO(googleDirectoryDAO.deleteGroup(email))))
     } yield ()
 
@@ -593,7 +594,7 @@ class GoogleExtensions(
     } yield key
   }
 
-  override def createUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = {
+  override def getUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = {
     val projectName =
       s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
     val (petSaName, petSaDisplayName) = toPetSigningAccountFromUser(user)
@@ -687,6 +688,19 @@ class GoogleExtensions(
       _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext)
       // remove the service account itself in Google
       _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))))
+    } yield ()
+
+  private def removePetSigningAccount(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
+    for {
+      petSigningAccount <- directoryDAO.loadUserPetSigningAccount(userId, samRequestContext)
+      _ <- petSigningAccount.map(account => directoryDAO.deletePetSigningAccount(account.id, samRequestContext)).getOrElse(IO.unit)
+      _ <- IO.fromFuture(
+        IO(
+          petSigningAccount
+            .map(account => googleIamDAO.removeServiceAccount(account.id.project, toAccountName(account.serviceAccount.email)))
+            .getOrElse(Future.successful(()))
+        )
+      )
     } yield ()
 
   def getSynchronizedState(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[GroupSyncResponse]] = {

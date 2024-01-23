@@ -81,6 +81,8 @@ trait DirectoryDAO {
   def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit]
   def createPetSigningAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
   def loadPetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
+
+  def loadUserPetSigningAccount(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
   def deletePetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
   def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]]
   def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String, samRequestContext: SamRequestContext): IO[Unit]

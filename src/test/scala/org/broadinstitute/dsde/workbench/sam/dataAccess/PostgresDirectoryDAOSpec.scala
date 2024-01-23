@@ -1912,6 +1912,17 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         loadedPetServiceAccounts should be(Seq(defaultPetSA))
       }
+
+      "can be loaded per-user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.createPetSigningAccount(defaultPetSigningAccount, samRequestContext).unsafeRunSync()
+
+        val userPetSigningAccount = dao.loadUserPetSigningAccount(defaultUser.id, samRequestContext).unsafeRunSync()
+        userPetSigningAccount should be(Some(defaultPetSigningAccount))
+      }
     }
   }
 }

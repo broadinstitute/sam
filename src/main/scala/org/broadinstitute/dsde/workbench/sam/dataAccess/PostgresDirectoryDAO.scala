@@ -952,6 +952,19 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       petRecordOpt.map(unmarshalPetSigningAccountRecord)
     }
 
+  def loadUserPetSigningAccount(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] =
+    readOnlyTransaction("loadUserPetSigningAccount", samRequestContext) { implicit session =>
+      val petSigningAccountTable = PetSigningAccountTable.syntax
+
+      val loadPetQuery =
+        samsql"""select ${petSigningAccountTable.resultAll}
+       from ${PetSigningAccountTable as petSigningAccountTable}
+       where ${petSigningAccountTable.samUserId} = ${userId}"""
+
+      val petRecordOpt = loadPetQuery.map(PetSigningAccountTable(petSigningAccountTable)).single().apply()
+      petRecordOpt.map(unmarshalPetSigningAccountRecord)
+    }
+
   override def deletePetSigningAccount(petSigningAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deletePetSigningAccount", samRequestContext) { implicit session =>
       val petSigningAccountTable = PetSigningAccountTable.syntax

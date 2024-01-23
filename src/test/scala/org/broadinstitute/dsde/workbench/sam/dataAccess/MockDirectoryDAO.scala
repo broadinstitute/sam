@@ -284,6 +284,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def loadPetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = ???
 
+  def loadUserPetSigningAccount(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = ???
+
   override def deletePetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = ???
   override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]] =
     if (groups.contains(groupName))
