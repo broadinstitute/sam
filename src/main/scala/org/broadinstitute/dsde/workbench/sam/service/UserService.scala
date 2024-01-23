@@ -25,6 +25,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.security.SecureRandom
 import java.time.Instant
+import java.util.regex.Pattern
 import javax.naming.NameNotFoundException
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
@@ -40,6 +41,8 @@ class UserService(
 )(implicit
     val executionContext: ExecutionContext
 ) extends LazyLogging {
+  val UUID_REGEX =
+    Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
   // this is what's currently called
   def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
     createUser(possibleNewUser, None, samRequestContext)
@@ -151,6 +154,11 @@ class UserService(
       Option(ErrorReport("cannot create user when neither google subject id nor azure b2c id exists"))
     } else None
 
+  private def validateAzureB2CId(azureB2CId: AzureB2CId): Option[ErrorReport] =
+    if (!UUID_REGEX.matcher(azureB2CId.value).matches() && !(azureB2CId.value == "")) {
+      Option(ErrorReport(s"invalid azureB2CId [${azureB2CId.value}]"))
+    } else None
+
   private def validateEmail(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): Option[ErrorReport] =
     if (!UserService.emailRegex.matches(email.value)) {
       Option(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]"))
@@ -199,8 +207,15 @@ class UserService(
         // validate all fields to be updated
         var errorReports = Seq[ErrorReport]()
         request.email.foreach(email => errorReports = errorReports ++ validateEmail(email, blockedEmailDomains))
+        request.azureB2CId.foreach(azureB2CId => errorReports = errorReports ++ validateAzureB2CId(azureB2CId))
         if (errorReports.nonEmpty) {
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
+        } else if (request.googleSubjectId.contains(GoogleSubjectId("")) && request.azureB2CId.contains(AzureB2CId(""))) {
+          IO.raiseError(
+            new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.BadRequest, "unable to null both azureB2CId and googleSubjectId in the same request", errorReports)
+            )
+          )
         } else { // apply all updates
           var updatedUser = user
           request.email.foreach { email =>
@@ -208,11 +223,17 @@ class UserService(
             updatedUser = user.copy(email = email)
           }
           request.googleSubjectId.foreach { googleSubjectId =>
-              directoryDAO.setGoogleSubjectId(userId, googleSubjectId, samRequestContext)
+            directoryDAO.setGoogleSubjectId(userId, googleSubjectId, samRequestContext)
+            if (request.googleSubjectId.contains(GoogleSubjectId(""))) {
+              updatedUser = updatedUser.copy(googleSubjectId = None)
+            } else
               updatedUser = updatedUser.copy(googleSubjectId = Option(googleSubjectId))
           }
           request.azureB2CId.foreach { azureB2CId =>
-              directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
+            directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
+            if (request.azureB2CId.contains(AzureB2CId(""))) {
+              updatedUser = updatedUser.copy(azureB2CId = None)
+            } else
               updatedUser = updatedUser.copy(azureB2CId = Option(azureB2CId))
           }
           IO(Some(updatedUser))

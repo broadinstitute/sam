@@ -4,6 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure._
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
@@ -1328,10 +1329,21 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
       }
 
-      "throw an exception when trying to overwrite an existing googleSubjectId" in {
+      "null the googleSubjectId for a user when provided googleSubjectId is empty string" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val newGoogleSubjectId = GoogleSubjectId("")
+        val user = genWorkbenchUserBoth.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe user.googleSubjectId
+        dao.setGoogleSubjectId(user.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
+
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+      }
+
+      "throw an exception when trying to update for a non-existing user" in {
         assume(databaseEnabled, databaseEnabledClue)
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         assertThrows[WorkbenchException] {
           dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
@@ -1517,10 +1529,21 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(defaultUser.azureB2CId.get)
       }
 
-      "throw an exception when trying to overwrite a azureB2CId with a different value" in {
+      "null the azureB2CId for a user when provided azureB2CId is empty string" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val newAzureB2CId = AzureB2CId("")
+        val user = genWorkbenchUserBoth.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe user.azureB2CId
+        dao.setUserAzureB2CId(user.id, newAzureB2CId, samRequestContext).unsafeRunSync()
+
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
+      }
+
+      "throw an exception when trying to set azureB2CId for a non-existing user" in {
         assume(databaseEnabled, databaseEnabledClue)
         val newAzureB2cId = AzureB2CId("newAzureB2cId")
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         assertThrows[WorkbenchException] {
           dao.setUserAzureB2CId(defaultUser.id, newAzureB2cId, samRequestContext).unsafeRunSync()

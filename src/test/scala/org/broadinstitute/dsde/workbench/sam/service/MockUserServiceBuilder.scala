@@ -107,7 +107,18 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     mockUserService.getUser(eqTo(samUser.id), any[SamRequestContext]) answers ((_: WorkbenchUserId) => IO(Option(samUser)))
     mockUserService.deleteUser(eqTo(samUser.id), any[SamRequestContext]) returns IO(())
     mockUserService.updateUserCrud(eqTo(samUser.id), any[AdminUpdateUserRequest], any[SamRequestContext]) answers (
-      (_: WorkbenchUserId, r: AdminUpdateUserRequest) => IO(Option(samUser.copy(email = r.email.get)))
+      (_: WorkbenchUserId, r: AdminUpdateUserRequest) => {
+        val newAzureB2CId = if (r.azureB2CId.contains(AzureB2CId(""))) None else if (r.azureB2CId.isDefined) r.azureB2CId else samUser.azureB2CId
+        val newGoogleSubjectId =
+          if (r.googleSubjectId.contains(GoogleSubjectId(""))) None else if (r.googleSubjectId.isDefined) r.googleSubjectId else samUser.googleSubjectId
+        val newUser = samUser.copy(
+          email = r.email.getOrElse(samUser.email),
+          enabled = r.enabled.getOrElse(samUser.enabled),
+          azureB2CId = newAzureB2CId,
+          googleSubjectId = newGoogleSubjectId
+        )
+        IO(Option(newUser))
+      }
     )
     mockUserService.enableUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
       IO(None)
