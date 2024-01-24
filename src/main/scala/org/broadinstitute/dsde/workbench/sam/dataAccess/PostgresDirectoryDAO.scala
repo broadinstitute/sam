@@ -965,6 +965,23 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       petRecordOpt.map(unmarshalPetSigningAccountRecord)
     }
 
+  override def updatePetSigningAccount(petSigningAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] =
+    serializableWriteTransaction("updatePetSigningAccount", samRequestContext) { implicit session =>
+      val petSigningAccountColumn = PetSigningAccountTable.column
+      val updatePetQuery =
+        samsql"""update ${PetServiceAccountTable.table} set
+        ${petSigningAccountColumn.googleSubjectId} = ${petSigningAccount.serviceAccount.subjectId},
+        ${petSigningAccountColumn.email} = ${petSigningAccount.serviceAccount.email},
+        ${petSigningAccountColumn.displayName} = ${petSigningAccount.serviceAccount.displayName}
+        where ${petSigningAccountColumn.samUserId} = ${petSigningAccount.id.userId} and ${petSigningAccountColumn.project} = ${petSigningAccount.id.project}"""
+
+      if (updatePetQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"Update cannot be applied because ${petSigningAccount.id} does not exist")
+      }
+
+      petSigningAccount
+    }
+
   override def deletePetSigningAccount(petSigningAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deletePetSigningAccount", samRequestContext) { implicit session =>
       val petSigningAccountTable = PetSigningAccountTable.syntax

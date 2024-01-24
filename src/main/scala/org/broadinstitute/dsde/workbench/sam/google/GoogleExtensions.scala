@@ -2,16 +2,13 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.unsafe.implicits.global
 import cats.effect.{Clock, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.client.http.HttpResponseException
 import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.storage.BlobId
 import com.google.protobuf.{Duration, Timestamp}
-import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
@@ -24,7 +21,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LockDetails, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{ActionServiceAccount, ActionServiceAccountId, SamUser}
@@ -39,7 +36,6 @@ import java.io.ByteArrayInputStream
 import java.net.URL
 import java.util.Date
 import java.util.concurrent.TimeUnit
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
 
@@ -68,17 +64,22 @@ class GoogleExtensions(
     val resourceTypes: Map[ResourceTypeName, ResourceType],
     val superAdminsGroup: WorkbenchEmail
 )(implicit val system: ActorSystem, executionContext: ExecutionContext, clock: Clock[IO])
-    extends LazyLogging
+    extends ProxyEmailSupport(googleServicesConfig)
+    with LazyLogging
     with FutureSupport
     with CloudExtensions
     with Retry {
 
+  val petServiceAccounts: PetServiceAccounts =
+    new PetServiceAccounts(distributedLock, googleIamDAO, googleDirectoryDAO, googleProjectDAO, googleKeyCache, directoryDAO, googleServicesConfig)
+  val petSigningAccounts: PetSigningAccounts =
+    new PetSigningAccounts(distributedLock, googleIamDAO, googleProjectDAO, googleKeyCache, directoryDAO, googleServicesConfig)
+  val actionServiceAccounts: ActionServiceAccounts =
+    new ActionServiceAccounts(distributedLock, googleIamDAO, googleProjectDAO, directoryDAO, googleServicesConfig)
+
   private val maxGroupEmailLength = 64
 
   private val excludeFromPetSigningAccount: Set[WorkbenchEmail] = Set(googleServicesConfig.serviceAccountClientEmail)
-
-  private[google] def toProxyFromUser(userId: WorkbenchUserId): WorkbenchEmail =
-    WorkbenchEmail(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${userId.value}@${googleServicesConfig.appsDomain}")
 
   override val emailDomain = googleServicesConfig.appsDomain
 
@@ -283,7 +284,7 @@ class GoogleExtensions(
       _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)))
       _ <-
         if (excludeFromPetSigningAccount.contains(user.email) || !googleServicesConfig.petSigningAccountsEnabled) IO.none
-        else getUserPetSigningAccount(user, samRequestContext)
+        else petSigningAccounts.getUserPetSigningAccount(user, samRequestContext)
     } yield ()
   }
 
@@ -293,36 +294,21 @@ class GoogleExtensions(
       case None => IO.pure(false)
     }
 
-  /** Evaluate a future for each pet in parallel.
-    */
-  private def forAllPets[T](userId: WorkbenchUserId, samRequestContext: SamRequestContext)(f: PetServiceAccount => IO[T]): IO[Seq[T]] =
-    for {
-      pets <- directoryDAO.getAllPetServiceAccountsForUser(userId, samRequestContext)
-      a <- pets.traverse { pet =>
-        f(pet)
-      }
-    } yield a
-
-  private def forAllActionServiceAccounts[T](resourceId: ResourceId, samRequestContext: SamRequestContext)(
-      f: ActionServiceAccount => IO[T]
-  ): IO[Seq[T]] =
-    for {
-      actionServiceAccounts <- directoryDAO.getAllActionServiceAccountsForResource(resourceId, samRequestContext)
-      a <- actionServiceAccounts.traverse { asa =>
-        f(asa)
-      }
-    } yield a
   override def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- withProxyEmail(user.id) { proxyEmail =>
         IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))))
       }
-      _ <- forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) => enablePetServiceAccount(petServiceAccount, samRequestContext))
+      _ <- petServiceAccounts.forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) =>
+        petServiceAccounts.enablePetServiceAccount(petServiceAccount, samRequestContext)
+      )
     } yield ()
 
   override def onUserDisable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] =
     for {
-      _ <- forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) => disablePetServiceAccount(petServiceAccount, samRequestContext))
+      _ <- petServiceAccounts.forAllPets(user.id, samRequestContext)((petServiceAccount: PetServiceAccount) =>
+        petServiceAccounts.disablePetServiceAccount(petServiceAccount, samRequestContext)
+      )
       _ <- withProxyEmail(user.id) { proxyEmail =>
         IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(proxyEmail, WorkbenchEmail(user.email.value))))
       }
@@ -330,377 +316,20 @@ class GoogleExtensions(
 
   override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
-      _ <- forAllPets(userId, samRequestContext)((petServiceAccount: PetServiceAccount) => removePetServiceAccount(petServiceAccount, samRequestContext))
-      _ <- removePetSigningAccount(userId, samRequestContext)
+      _ <- petServiceAccounts.forAllPets(userId, samRequestContext)((petServiceAccount: PetServiceAccount) =>
+        petServiceAccounts.removePetServiceAccount(petServiceAccount, samRequestContext)
+      )
+      _ <- petSigningAccounts.removePetSigningAccount(userId, samRequestContext)
       _ <- withProxyEmail(userId)(email => IO.fromFuture(IO(googleDirectoryDAO.deleteGroup(email))))
     } yield ()
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit] =
     IO.fromFuture(IO(googleDirectoryDAO.deleteGroup(groupEmail)))
 
-  def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] =
-    for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
-      deletedSomething <- maybePet match {
-        case Some(pet) => removePetServiceAccount(pet, samRequestContext).map(_ => true)
-        case None => IO.pure(false) // didn't find the pet, nothing to delete
-      }
-    } yield deletedSomething
-
   override def onResourceDelete(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
-      _ <- forAllActionServiceAccounts(resourceId, samRequestContext)((actionServiceAccount: ActionServiceAccount) =>
-        removeActionServiceAccount(actionServiceAccount, samRequestContext)
-      )
-    } yield ()
-  def createActionServiceAccount(
-      resource: FullyQualifiedResourceId,
-      project: GoogleProject,
-      action: ResourceAction,
-      samRequestContext: SamRequestContext
-  ): IO[ActionServiceAccount] = {
-    // The normal situation is that the pet either exists in both the database and google or neither.
-    // Sometimes, especially in tests, the asa may be removed from the database, but not google or the other way around.
-    // This code is a little extra complicated to detect the cases when a asa does not exist in google, the database or
-    // both and do the right thing.
-    val (asaName, asaDisplayName) = actionServiceAccountName(resource, action)
-    val createAsa = for {
-      (maybeAsa, maybeServiceAccount) <- retrieveAsaAndSa(resource, project, action, samRequestContext)
-      serviceAccount <- maybeServiceAccount match {
-        // SA does not exist in google, create it and add it to the proxy group
-        case None =>
-          for {
-            _ <- assertProjectInTerraOrg(project)
-            sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, asaName, asaDisplayName)))
-          } yield sa
-        // SA already exists in google, use it
-        case Some(sa) => IO.pure(sa)
-      }
-      pet <- (maybeAsa, maybeServiceAccount) match {
-        // pet does not exist in the database, create it and enable the identity
-        case (None, _) =>
-          for {
-            p <- directoryDAO.createActionServiceAccount(
-              ActionServiceAccount(ActionServiceAccountId(resource.resourceId, action, project), serviceAccount),
-              samRequestContext
-            )
-          } yield p
-        // pet already exists in the database, but a new SA was created so update the database with new SA info
-        case (Some(p), None) =>
-          for {
-            p <- directoryDAO.updateActionServiceAccount(p.copy(serviceAccount = serviceAccount), samRequestContext)
-          } yield p
-
-        // everything already existed
-        case (Some(p), Some(_)) => IO.pure(p)
-      }
-    } yield pet
-
-    val lock = LockDetails(s"${project.value}-createAsa", s"${resource.resourceId}-${action}", 30 seconds)
-
-    for {
-      (asa, sa) <- retrieveAsaAndSa(resource, project, action, samRequestContext) // I'm loving better-monadic-for
-      shouldLock = !(asa.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
-      p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createAsa) else asa.get.pure[IO]
-    } yield p
-  }
-
-  private[google] def createUserServiceAccount(
-      user: SamUser,
-      petSaName: ServiceAccountName,
-      petSaDisplayName: ServiceAccountDisplayName,
-      project: GoogleProject,
-      samRequestContext: SamRequestContext
-  ): IO[PetServiceAccount] = {
-    // The normal situation is that the pet either exists in both the database and google or neither.
-    // Sometimes, especially in tests, the pet may be removed from the database, but not google or the other way around.
-    // This code is a little extra complicated to detect the cases when a pet does not exist in google, the database or
-    // both and do the right thing.
-    val createPet = for {
-      (maybePet, maybeServiceAccount) <- retrievePetAndSA(user.id, petSaName, project, samRequestContext)
-      serviceAccount <- maybeServiceAccount match {
-        // SA does not exist in google, create it and add it to the proxy group
-        case None =>
-          for {
-            _ <- assertProjectInTerraOrg(project)
-            sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
-            _ <- withProxyEmail(user.id) { proxyEmail =>
-              // Add group member by uniqueId instead of email to avoid race condition
-              // See: https://broadworkbench.atlassian.net/browse/CA-1005
-              IO.fromFuture(IO(googleDirectoryDAO.addServiceAccountToGroup(proxyEmail, sa)))
-            }
-            _ <- IO.fromFuture(IO(googleIamDAO.addServiceAccountUserRoleForUser(project, sa.email, sa.email)))
-          } yield sa
-        // SA already exists in google, use it
-        case Some(sa) => IO.pure(sa)
-      }
-      pet <- (maybePet, maybeServiceAccount) match {
-        // pet does not exist in the database, create it and enable the identity
-        case (None, _) =>
-          for {
-            p <- directoryDAO.createPetServiceAccount(PetServiceAccount(PetServiceAccountId(user.id, project), serviceAccount), samRequestContext)
-            _ <- directoryDAO.enableIdentity(p.id, samRequestContext)
-          } yield p
-        // pet already exists in the database, but a new SA was created so update the database with new SA info
-        case (Some(p), None) =>
-          for {
-            p <- directoryDAO.updatePetServiceAccount(p.copy(serviceAccount = serviceAccount), samRequestContext)
-          } yield p
-
-        // everything already existed
-        case (Some(p), Some(_)) => IO.pure(p)
-      }
-    } yield pet
-
-    val lock = LockDetails(s"${project.value}-createPet", user.id.value, 30 seconds)
-
-    for {
-      (pet, sa) <- retrievePetAndSA(user.id, petSaName, project, samRequestContext) // I'm loving better-monadic-for
-      shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
-      p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
-    } yield p
-  }
-  def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
-    val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
-    createUserServiceAccount(user, petSaName, petSaDisplayName, project, samRequestContext)
-  }
-
-  private def assertProjectInTerraOrg(project: GoogleProject): IO[Unit] = {
-    val validOrg = IO
-      .fromFuture(IO(googleProjectDAO.getAncestry(project.value).map { ancestry =>
-        ancestry.exists { ancestor =>
-          ancestor.getResourceId.getType == GoogleResourceTypes.Organization.value && ancestor.getResourceId.getId == googleServicesConfig.terraGoogleOrgNumber
-        }
-      }))
-      .recoverWith {
-        // if the getAncestry call results in a 403 error the project can't be in the right org
-        case e: HttpResponseException if e.getStatusCode == StatusCodes.Forbidden.intValue =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.BadRequest, s"Access denied from google accessing project ${project.value}, is it a Terra project?", e)
-            )
-          )
-      }
-
-    validOrg.flatMap {
-      case true => IO.unit
-      case false =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
-    }
-  }
-
-  private def retrievePetAndSA(
-      userId: WorkbenchUserId,
-      petServiceAccountName: ServiceAccountName,
-      project: GoogleProject,
-      samRequestContext: SamRequestContext
-  ): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
-    val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petServiceAccountName)))
-    val pet = directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
-    (pet, serviceAccount).parTupled
-  }
-
-  private def actionServiceAccountName(resource: FullyQualifiedResourceId, action: ResourceAction) = {
-    /*
-     * Service account IDs must be:
-     * 1. between 6 and 30 characters
-     * 2. lower case alphanumeric separated by hyphens
-     * 3. must start with a lower case letter
-     *
-     *
-     * So, the Action name, truncated to 9 chars, prepended to the Resource Id truncated to 20 chars, with "-" is 30 chars.
-     */
-
-    val serviceAccountName = s"${action.value.take(9)}-${resource.resourceId.value.take(20)}"
-    val displayName = s"ASA [${action.value} on ${resource.resourceTypeName} ${resource.resourceId.value}]"
-
-    // Display names have a max length of 100 characters
-    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName.take(100)))
-  }
-
-  private def retrieveAsaAndSa(
-      resource: FullyQualifiedResourceId,
-      project: GoogleProject,
-      action: ResourceAction,
-      samRequestContext: SamRequestContext
-  ): IO[(Option[ActionServiceAccount], Option[ServiceAccount])] = {
-    val asaName = actionServiceAccountName(resource, action)._1
-    val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, asaName)))
-    val asaId = ActionServiceAccountId(resource.resourceId, action, project)
-    val asa = directoryDAO.loadActionServiceAccount(asaId, samRequestContext)
-    (asa, serviceAccount).parTupled
-  }
-
-  private def removeActionServiceAccount(actionServiceAccount: ActionServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      // remove the record for the pet service account
-      _ <- directoryDAO.deleteActionServiceAccount(actionServiceAccount.id, samRequestContext)
-      // remove the service account itself in Google
-      _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccount(actionServiceAccount.id.project, toAccountName(actionServiceAccount.serviceAccount.email))))
-    } yield ()
-  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject, samRequestContext: SamRequestContext): IO[Option[String]] =
-    for {
-      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
-      key <- subject match {
-        case Some(userId: WorkbenchUserId) =>
-          getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), project, samRequestContext).map(Option(_))
-        case _ => IO.pure(None)
-      }
-    } yield key
-
-  def getPetServiceAccountKey(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[String] =
-    for {
-      pet <- createUserPetServiceAccount(user, project, samRequestContext)
-      key <- googleKeyCache.getKey(pet)
-    } yield key
-
-  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
-    getPetServiceAccountKey(user, project, samRequestContext).unsafeToFuture().flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
-    }
-
-  def getArbitraryPetServiceAccountKey(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[String]] =
-    for {
-      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
-      key <- subject match {
-        case Some(userId: WorkbenchUserId) =>
-          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), samRequestContext))).map(Option(_))
-        case _ => IO.none
-      }
-    } yield key
-
-  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): Future[String] =
-    getDefaultServiceAccountForShellProject(user, samRequestContext)
-
-  def getArbitraryPetServiceAccountToken(user: SamUser, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
-    getArbitraryPetServiceAccountKey(user, samRequestContext).flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
-    }
-
-  private def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
-    val projectName =
-      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
-    for {
-      creationOperationId <- googleProjectDAO
-        .createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
-        .map(opId => Option(opId)) recover {
-        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
-      }
-      _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
-        case None => Future.successful(())
-      }
-      key <- getPetServiceAccountKey(user, GoogleProject(projectName), samRequestContext).unsafeToFuture()
-    } yield key
-  }
-
-  private[google] def getUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[String]] = {
-    val projectName =
-      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
-    val (petSaName, petSaDisplayName) = toPetSigningAccountFromUser(user)
-
-    val keyFuture = for {
-      creationOperationId <- googleProjectDAO
-        .createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
-        .map(opId => Option(opId)) recover {
-        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
-      }
-      _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
-        case None => Future.successful(())
-      }
-      serviceAccount <- createUserServiceAccount(user, petSaName, petSaDisplayName, GoogleProject(projectName), samRequestContext).unsafeToFuture()
-      key <- googleKeyCache.getKey(serviceAccount).unsafeToFuture()
-    } yield Some(key)
-    IO.fromFuture(IO(keyFuture))
-  }
-
-  private[google] def toPetSigningAccountFromUser(user: SamUser): (ServiceAccountName, ServiceAccountDisplayName) = {
-    /*
-     * Service account IDs must be:
-     * 1. between 6 and 30 characters
-     * 2. lower case alphanumeric separated by hyphens
-     * 3. must start with a lower case letter
-     *
-     * Subject IDs are 22 numeric characters, so "sign-${subjectId}" fulfills these requirements.
-     */
-    val serviceAccountName = s"sign-${user.id.value}"
-    val displayName = s"Pet Signing Account [${user.email.value}]"
-
-    // Display names have a max length of 100 characters
-    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName.take(100)))
-  }
-
-  private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
-    def whenCreating(throwable: Throwable): Boolean =
-      throwable match {
-        case t: WorkbenchException => throw t
-        case t: Exception => true
-        case _ => false
-      }
-
-    retryExponentially(whenCreating) { () =>
-      googleProjectDAO.pollOperation(operationId).map { operation =>
-        if (operation.getDone && Option(operation.getError).exists(_.getCode.intValue() == Code.ALREADY_EXISTS.getNumber)) true
-        else if (operation.getDone && Option(operation.getError).isEmpty) true
-        else if (operation.getDone && Option(operation.getError).isDefined)
-          throw new WorkbenchException(s"project creation failed with error ${operation.getError.getMessage}")
-        else throw new Exception("project still creating...")
-      }
-    }
-  }
-
-  def getAccessTokenUsingJson(saKey: String, desiredScopes: Set[String]): Future[String] = Future {
-    val keyStream = new ByteArrayInputStream(saKey.getBytes)
-    val credential = ServiceAccountCredentials.fromStream(keyStream).createScoped(desiredScopes.asJava)
-    credential.refreshAccessToken.getTokenValue
-  }
-
-  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
-      result <- maybePet match {
-        case Some(pet) => googleKeyCache.removeKey(pet, keyId)
-        case None => IO.unit
-      }
-    } yield result
-
-  private def enablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      _ <- directoryDAO.enableIdentity(petServiceAccount.id, samRequestContext)
-      _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
-        IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(proxyEmail, petServiceAccount.serviceAccount.email)))
-      }
-    } yield ()
-
-  private def disablePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      _ <- directoryDAO.disableIdentity(petServiceAccount.id, samRequestContext)
-      _ <- withProxyEmail(petServiceAccount.id.userId) { proxyEmail =>
-        IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(proxyEmail, petServiceAccount.serviceAccount.email)))
-      }
-    } yield ()
-
-  private def removePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      // disable the pet service account
-      _ <- disablePetServiceAccount(petServiceAccount, samRequestContext)
-      // remove the record for the pet service account
-      _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext)
-      // remove the service account itself in Google
-      _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))))
-    } yield ()
-
-  private def removePetSigningAccount(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      petSigningAccount <- directoryDAO.loadUserPetSigningAccount(userId, samRequestContext)
-      _ <- petSigningAccount.map(account => directoryDAO.deletePetSigningAccount(account.id, samRequestContext)).getOrElse(IO.unit)
-      _ <- IO.fromFuture(
-        IO(
-          petSigningAccount
-            .map(account => googleIamDAO.removeServiceAccount(account.id.project, toAccountName(account.serviceAccount.email)))
-            .getOrElse(Future.successful(()))
-        )
+      _ <- actionServiceAccounts.forAllActionServiceAccounts(resourceId, samRequestContext)((actionServiceAccount: ActionServiceAccount) =>
+        actionServiceAccounts.removeActionServiceAccount(actionServiceAccount, samRequestContext)
       )
     } yield ()
 
@@ -723,22 +352,6 @@ class GoogleExtensions(
   def getSynchronizedEmail(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     directoryDAO.getSynchronizedEmail(groupId, samRequestContext)
 
-  private[google] def toPetSAFromUser(user: SamUser): (ServiceAccountName, ServiceAccountDisplayName) = {
-    /*
-     * Service account IDs must be:
-     * 1. between 6 and 30 characters
-     * 2. lower case alphanumeric separated by hyphens
-     * 3. must start with a lower case letter
-     *
-     * Subject IDs are 22 numeric characters, so "pet-${subjectId}" fulfills these requirements.
-     */
-    val serviceAccountName = s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}pet-${user.id.value}"
-    val displayName = s"Pet Service Account for user [${user.email.value}]"
-
-    // Display names have a max length of 100 characters
-    (ServiceAccountName(serviceAccountName), ServiceAccountDisplayName(displayName.take(100)))
-  }
-
   override def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit =
     notificationDAO.fireAndForgetNotifications(notifications)
 
@@ -747,16 +360,6 @@ class GoogleExtensions(
       case Some(user: WorkbenchUserId) => getUserProxy(user)
       case Some(pet: PetServiceAccountId) => getUserProxy(pet.userId)
       case _ => IO.pure(None)
-    }
-
-  private[google] def getUserProxy(userId: WorkbenchUserId): IO[Option[WorkbenchEmail]] =
-    IO.pure(Some(toProxyFromUser(userId)))
-
-  private def withProxyEmail[T](userId: WorkbenchUserId)(f: WorkbenchEmail => IO[T]): IO[T] =
-    getUserProxy(userId) flatMap {
-      case Some(e) => f(e)
-      case None =>
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.InternalServerError, s"Proxy group does not exist for subject ID: $userId"))
     }
 
   override def checkStatus: Map[Subsystems.Subsystem, Future[SubsystemStatus]] = {
@@ -839,7 +442,7 @@ class GoogleExtensions(
     val bucket = GcsBucketName(blobId.getBucket)
     val objectName = GcsBlobName(blobId.getName)
     for {
-      petKey <- IO.fromFuture(IO(getArbitraryPetServiceAccountKey(samUser, samRequestContext)))
+      petKey <- IO.fromFuture(IO(petServiceAccounts.getArbitraryPetServiceAccountKey(samUser, samRequestContext)))
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
       url <- getSignedUrl(samUser, bucket, objectName, duration, urlParamsMap, serviceAccountCredentials)
     } yield url
@@ -864,7 +467,7 @@ class GoogleExtensions(
       .flatMap {
         case Some(actionServiceAccount) =>
           for {
-            petSigningAccountKey <- getUserPetSigningAccount(samUser, samRequestContext)
+            petSigningAccountKey <- petSigningAccounts.getUserPetSigningAccount(samUser, samRequestContext)
           } yield petSigningAccountKey.map((actionServiceAccount, _))
         case None => IO.none[(ActionServiceAccount, String)]
       }
@@ -890,7 +493,7 @@ class GoogleExtensions(
   ): IO[URL] = {
     val urlParamsMap: Map[String, String] = if (requesterPays) Map(userProjectQueryParam -> project.value) else Map.empty
     for {
-      petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
+      petServiceAccount <- petServiceAccounts.createUserPetServiceAccount(samUser, project, samRequestContext)
       petKey <- googleKeyCache.getKey(petServiceAccount)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
       url <- getSignedUrl(samUser, bucket, name, duration, urlParamsMap, serviceAccountCredentials)
@@ -921,6 +524,10 @@ class GoogleExtensions(
   }
 
   override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
+
+  override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] =
+    petServiceAccounts.deleteUserPetServiceAccount(userId, project, samRequestContext)
+
 }
 
 case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {
