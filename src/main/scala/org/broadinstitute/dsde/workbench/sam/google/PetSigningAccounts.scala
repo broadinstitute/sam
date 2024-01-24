@@ -6,12 +6,13 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.IO
 import cats.implicits.{catsSyntaxApplicativeId, catsSyntaxTuple2Parallel}
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleProjectDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO}
 import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.model.{PetServiceAccount, PetServiceAccountId, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{PetServiceAccount, PetServiceAccountId, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LockDetails, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.duration._
@@ -20,6 +21,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class PetSigningAccounts(
     distributedLock: PostgresDistributedLockDAO[IO],
     googleIamDAO: GoogleIamDAO,
+    googleDirectoryDAO: GoogleDirectoryDAO,
     googleProjectDAO: GoogleProjectDAO,
     googleKeyCache: GoogleKeyCache,
     directoryDAO: DirectoryDAO,
@@ -27,6 +29,11 @@ class PetSigningAccounts(
 )(implicit override val system: ActorSystem, executionContext: ExecutionContext)
     extends ServiceAccounts(googleProjectDAO, googleServicesConfig) {
 
+  private val emailDomain = googleServicesConfig.appsDomain
+
+  private[google] val allPetSigningAccountsGroupEmail = WorkbenchEmail(
+    s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allPetSingingAccountsGroupName.value}@$emailDomain"
+  )
   private[google] def createPetSigningAccount(
       user: SamUser,
       petSaName: ServiceAccountName,
@@ -46,6 +53,7 @@ class PetSigningAccounts(
           for {
             _ <- assertProjectInTerraOrg(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
+            _ <- IO.fromFuture(IO(googleDirectoryDAO.addServiceAccountToGroup(allPetSigningAccountsGroupEmail, sa)))
             _ <- IO.fromFuture(IO(googleIamDAO.addServiceAccountUserRoleForUser(project, sa.email, sa.email)))
           } yield sa
         // SA already exists in google, use it

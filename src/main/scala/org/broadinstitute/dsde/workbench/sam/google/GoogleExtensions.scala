@@ -73,7 +73,7 @@ class GoogleExtensions(
   val petServiceAccounts: PetServiceAccounts =
     new PetServiceAccounts(distributedLock, googleIamDAO, googleDirectoryDAO, googleProjectDAO, googleKeyCache, directoryDAO, googleServicesConfig)
   val petSigningAccounts: PetSigningAccounts =
-    new PetSigningAccounts(distributedLock, googleIamDAO, googleProjectDAO, googleKeyCache, directoryDAO, googleServicesConfig)
+    new PetSigningAccounts(distributedLock, googleIamDAO, googleDirectoryDAO, googleProjectDAO, googleKeyCache, directoryDAO, googleServicesConfig)
   val actionServiceAccounts: ActionServiceAccounts =
     new ActionServiceAccounts(distributedLock, googleIamDAO, googleProjectDAO, directoryDAO, googleServicesConfig)
 
@@ -115,6 +115,33 @@ class GoogleExtensions(
     } yield allUsersGroup
   }
 
+  def getOrCreateAllPetSigningAccountsGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+      executionContext: ExecutionContext
+  ): IO[WorkbenchGroup] = {
+    val allPetSigningAccountsGroupStub = BasicWorkbenchGroup(CloudExtensions.allPetSingingAccountsGroupName, Set.empty, allUsersGroupEmail)
+    for {
+      existingGroup <- directoryDAO.loadGroup(allPetSigningAccountsGroupStub.id, samRequestContext = samRequestContext)
+      allPetSigningAccountsGroup <- existingGroup match {
+        case None => directoryDAO.createGroup(allPetSigningAccountsGroupStub, samRequestContext = samRequestContext)
+        case Some(group) => IO.pure(group)
+      }
+      existingGoogleGroup <- IO.fromFuture(IO(googleDirectoryDAO.getGoogleGroup(allPetSigningAccountsGroup.email)))
+      _ <- existingGoogleGroup match {
+        case None =>
+          IO.fromFuture(
+            IO(
+              googleDirectoryDAO
+                .createGroup(allPetSigningAccountsGroup.id.toString, allPetSigningAccountsGroup.email, Option(googleDirectoryDAO.lockedDownGroupSettings))
+            )
+          ) recover {
+            case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
+          }
+        case Some(_) => IO.unit
+      }
+
+    } yield allPetSigningAccountsGroup
+  }
+
   override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] =
     googleDirectoryDAO.isGroupMember(WorkbenchEmail(s"fc-admins@${googleServicesConfig.appsDomain}"), memberEmail) recoverWith { case t =>
       throw new WorkbenchException("Unable to query for admin status.", t)
@@ -149,6 +176,8 @@ class GoogleExtensions(
               samApplication.userService.createUser(newUser, samRequestContext).map(_ => newUser)
           }
       }
+
+      _ <- getOrCreateAllPetSigningAccountsGroup(directoryDAO, samRequestContext)
 
       _ <- googleKms.createKeyRing(
         googleServicesConfig.googleKms.project,

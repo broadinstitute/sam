@@ -21,6 +21,7 @@ import scala.concurrent.{ExecutionContext, Future}
 object CloudExtensions {
   val resourceTypeName = ResourceTypeName("cloud-extension")
   val allUsersGroupName = WorkbenchGroupName("All_Users")
+  val allPetSingingAccountsGroupName = WorkbenchGroupName("All_Signing_Accounts")
 }
 
 trait CloudExtensions {
