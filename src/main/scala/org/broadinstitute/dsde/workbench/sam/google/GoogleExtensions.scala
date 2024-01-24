@@ -115,9 +115,7 @@ class GoogleExtensions(
     } yield allUsersGroup
   }
 
-  def getOrCreateAllPetSigningAccountsGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
-      executionContext: ExecutionContext
-  ): IO[WorkbenchGroup] = {
+  def getOrCreateAllPetSigningAccountsGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[WorkbenchGroup] = {
     val allPetSigningAccountsGroupStub = BasicWorkbenchGroup(CloudExtensions.allPetSingingAccountsGroupName, Set.empty, allUsersGroupEmail)
     for {
       existingGroup <- directoryDAO.loadGroup(allPetSigningAccountsGroupStub.id, samRequestContext = samRequestContext)
