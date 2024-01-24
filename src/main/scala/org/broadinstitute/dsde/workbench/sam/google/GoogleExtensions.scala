@@ -87,6 +87,10 @@ class GoogleExtensions(
     s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"
   )
 
+  private[google] val allPetSigningAccountsGroupEmail = WorkbenchEmail(
+    s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}GROUP_${CloudExtensions.allPetSingingAccountsGroupName.value}@$emailDomain"
+  )
+
   private val userProjectQueryParam = "userProject"
   private val requestedByQueryParam = "requestedBy"
   private val defaultSignedUrlDuration = 60L
@@ -116,7 +120,7 @@ class GoogleExtensions(
   }
 
   def getOrCreateAllPetSigningAccountsGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext): IO[WorkbenchGroup] = {
-    val allPetSigningAccountsGroupStub = BasicWorkbenchGroup(CloudExtensions.allPetSingingAccountsGroupName, Set.empty, allUsersGroupEmail)
+    val allPetSigningAccountsGroupStub = BasicWorkbenchGroup(CloudExtensions.allPetSingingAccountsGroupName, Set.empty, allPetSigningAccountsGroupEmail)
     for {
       existingGroup <- directoryDAO.loadGroup(allPetSigningAccountsGroupStub.id, samRequestContext = samRequestContext)
       allPetSigningAccountsGroup <- existingGroup match {
