@@ -43,7 +43,43 @@ class PetSigningAccounts(
     } yield account.getOrElse(throw new WorkbenchException(s"Failed to create Pet Signing Account for ${user}"))
   }
 
-  private[google] def createPetSigningAccount(
+  private[google] def retrievePetSigningAccountAndSA(
+      userId: WorkbenchUserId,
+      petServiceAccountName: ServiceAccountName,
+      project: GoogleProject,
+      samRequestContext: SamRequestContext
+  ): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
+    val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petServiceAccountName)))
+    val pet = directoryDAO.loadPetSigningAccount(PetServiceAccountId(userId, project), samRequestContext)
+    (pet, serviceAccount).parTupled
+  }
+
+  private[google] def petServiceAccountProject(samUser: SamUser): GoogleProject =
+    GoogleProject(
+      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${samUser.id}"
+    ) // max 30 characters. subject ID is 21
+
+  private[google] def getUserPetSigningAccountKey(user: SamUser, samRequestContext: SamRequestContext): IO[String] = {
+    val googleProject = petServiceAccountProject(user)
+    val (petSaName, petSaDisplayName) = toPetSigningAccountFromUser(user)
+
+    val keyFuture = for {
+      creationOperationId <- googleProjectDAO
+        .createProject(googleProject.value, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
+        .map(opId => Option(opId)) recover {
+        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
+      }
+      _ <- creationOperationId match {
+        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
+        case None => Future.successful(())
+      }
+      serviceAccount <- createPetSigningAccount(user, petSaName, petSaDisplayName, googleProject, samRequestContext).unsafeToFuture()
+      key <- googleKeyCache.getKey(serviceAccount).unsafeToFuture()
+    } yield key
+    IO.fromFuture(IO(keyFuture))
+  }
+
+  private def createPetSigningAccount(
       user: SamUser,
       petSaName: ServiceAccountName,
       petSaDisplayName: ServiceAccountDisplayName,
@@ -92,42 +128,6 @@ class PetSigningAccounts(
       shouldLock = !(pet.isDefined && sa.isDefined) // if either is not defined, we need to lock and potentially create them; else we return the pet
       p <- if (shouldLock) distributedLock.withLock(lock).use(_ => createPet) else pet.get.pure[IO]
     } yield p
-  }
-
-  private[google] def retrievePetSigningAccountAndSA(
-      userId: WorkbenchUserId,
-      petServiceAccountName: ServiceAccountName,
-      project: GoogleProject,
-      samRequestContext: SamRequestContext
-  ): IO[(Option[PetServiceAccount], Option[ServiceAccount])] = {
-    val serviceAccount = IO.fromFuture(IO(googleIamDAO.findServiceAccount(project, petServiceAccountName)))
-    val pet = directoryDAO.loadPetSigningAccount(PetServiceAccountId(userId, project), samRequestContext)
-    (pet, serviceAccount).parTupled
-  }
-
-  private[google] def petServiceAccountProject(samUser: SamUser): GoogleProject =
-    GoogleProject(
-      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${samUser.id}"
-    ) // max 30 characters. subject ID is 21
-
-  private[google] def getUserPetSigningAccountKey(user: SamUser, samRequestContext: SamRequestContext): IO[String] = {
-    val googleProject = petServiceAccountProject(user)
-    val (petSaName, petSaDisplayName) = toPetSigningAccountFromUser(user)
-
-    val keyFuture = for {
-      creationOperationId <- googleProjectDAO
-        .createProject(googleProject.value, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
-        .map(opId => Option(opId)) recover {
-        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
-      }
-      _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
-        case None => Future.successful(())
-      }
-      serviceAccount <- createPetSigningAccount(user, petSaName, petSaDisplayName, googleProject, samRequestContext).unsafeToFuture()
-      key <- googleKeyCache.getKey(serviceAccount).unsafeToFuture()
-    } yield key
-    IO.fromFuture(IO(keyFuture))
   }
 
   private[google] def toPetSigningAccountFromUser(user: SamUser): (ServiceAccountName, ServiceAccountDisplayName) = {
