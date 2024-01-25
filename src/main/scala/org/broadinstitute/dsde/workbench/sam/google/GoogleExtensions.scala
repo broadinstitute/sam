@@ -318,7 +318,8 @@ class GoogleExtensions(
         else
           for {
             petSigningAccount <- petSigningAccounts.createPetSigningAccountForUser(user, samRequestContext)
-            _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allPetSigningAccountsGroupEmail, petSigningAccount.serviceAccount.email)))
+            allPetSigningAccountsGroup <- getOrCreateAllPetSigningAccountsGroup(directoryDAO, samRequestContext)
+            _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allPetSigningAccountsGroup.email, petSigningAccount.serviceAccount.email)))
           } yield ()
     } yield ()
   }
@@ -503,7 +504,7 @@ class GoogleExtensions(
         case Some(actionServiceAccount) =>
           for {
             petSigningAccountKey <- petSigningAccounts.getUserPetSigningAccountKey(samUser, samRequestContext)
-          } yield petSigningAccountKey.map((actionServiceAccount, _))
+          } yield Some((actionServiceAccount, petSigningAccountKey))
         case None => IO.none[(ActionServiceAccount, String)]
       }
       .flatMap {
