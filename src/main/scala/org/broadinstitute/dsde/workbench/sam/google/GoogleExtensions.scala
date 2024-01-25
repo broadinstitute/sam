@@ -315,7 +315,11 @@ class GoogleExtensions(
       _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)))
       _ <-
         if (excludeFromPetSigningAccount.contains(user.email) || !googleServicesConfig.petSigningAccountsEnabled) IO.none
-        else petSigningAccounts.getUserPetSigningAccount(user, samRequestContext)
+        else
+          for {
+            petSigningAccount <- petSigningAccounts.createPetSigningAccountForUser(user, samRequestContext)
+            _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allPetSigningAccountsGroupEmail, petSigningAccount.serviceAccount.email)))
+          } yield ()
     } yield ()
   }
 
