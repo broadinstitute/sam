@@ -502,7 +502,7 @@ class GoogleExtensions(
       .flatMap {
         case Some(actionServiceAccount) =>
           for {
-            petSigningAccountKey <- petSigningAccounts.getUserPetSigningAccount(samUser, samRequestContext)
+            petSigningAccountKey <- petSigningAccounts.getUserPetSigningAccountKey(samUser, samRequestContext)
           } yield petSigningAccountKey.map((actionServiceAccount, _))
         case None => IO.none[(ActionServiceAccount, String)]
       }

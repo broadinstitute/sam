@@ -8,7 +8,7 @@ import cats.implicits.{catsSyntaxApplicativeId, catsSyntaxTuple2Parallel}
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO}
 import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.model.{PetServiceAccount, PetServiceAccountId, WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{PetServiceAccount, PetServiceAccountId, WorkbenchEmail, WorkbenchException, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, LockDetails, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
@@ -37,8 +37,10 @@ class PetSigningAccounts(
 
   private[google] def createPetSigningAccountForUser(user: SamUser, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val googleProject = petServiceAccountProject(user)
-    val (petSaName, petSaDisplayName) = toPetSigningAccountFromUser(user)
-    createPetSigningAccount(user, petSaName, petSaDisplayName, googleProject, samRequestContext)
+    for {
+      _ <- getUserPetSigningAccountKey(user, samRequestContext)
+      account <- directoryDAO.loadPetSigningAccount(PetServiceAccountId(user.id, googleProject), samRequestContext)
+    } yield account.getOrElse(throw new WorkbenchException(s"Failed to create Pet Signing Account for ${user}"))
   }
 
   private[google] def createPetSigningAccount(
@@ -108,7 +110,7 @@ class PetSigningAccounts(
       s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${samUser.id}"
     ) // max 30 characters. subject ID is 21
 
-  private[google] def getUserPetSigningAccount(user: SamUser, samRequestContext: SamRequestContext): IO[Option[String]] = {
+  private[google] def getUserPetSigningAccountKey(user: SamUser, samRequestContext: SamRequestContext): IO[String] = {
     val googleProject = petServiceAccountProject(user)
     val (petSaName, petSaDisplayName) = toPetSigningAccountFromUser(user)
 
@@ -124,7 +126,7 @@ class PetSigningAccounts(
       }
       serviceAccount <- createPetSigningAccount(user, petSaName, petSaDisplayName, googleProject, samRequestContext).unsafeToFuture()
       key <- googleKeyCache.getKey(serviceAccount).unsafeToFuture()
-    } yield Some(key)
+    } yield key
     IO.fromFuture(IO(keyFuture))
   }
 
