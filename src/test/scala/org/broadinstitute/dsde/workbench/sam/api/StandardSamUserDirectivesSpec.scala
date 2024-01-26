@@ -182,7 +182,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.Unauthorized
-        responseAs[String] should include("sam.testUrl.mock")
+        responseAs[String] should include("terms of service")
       }
   }
 
