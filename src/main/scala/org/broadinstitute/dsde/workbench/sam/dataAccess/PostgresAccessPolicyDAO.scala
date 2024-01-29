@@ -1687,7 +1687,7 @@ class PostgresAccessPolicyDAO(
     }
   }
   override def filterResources(
-      samUser: SamUser,
+      samUserId: WorkbenchUserId,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
@@ -1713,7 +1713,9 @@ class PostgresAccessPolicyDAO(
       else samsqls"and ${resource.resourceTypeId} in (${resourceTypeNamesByPK.keys.map(_.value)})"
     val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in (${policies})" else samsqls""
     val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in (${roles})" else samsqls""
-    val actionConstraint = if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions})" else samsqls""
+    val actionConstraint =
+      if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions}) and ${resourceAction.action} is not null"
+      else samsqls"and ${resourceAction.action} is not null"
 
     val policyRoleActionQuery =
       samsqls"""
@@ -1728,8 +1730,8 @@ class PostgresAccessPolicyDAO(
             left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
             left join ${AuthDomainTable as authDomain} on ${authDomain.resourceId} = ${resource.id}
             left join ${GroupTable as authDomainGroup} on ${authDomainGroup.id} = ${authDomain.groupId}
-            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUser.id}
-          where ${groupMemberFlat.memberUserId} = ${samUser.id}
+            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUserId}
+          where ${groupMemberFlat.memberUserId} = ${samUserId}
             $resourceTypeConstraint
             $policyConstraint
             $roleConstraint
@@ -1741,12 +1743,12 @@ class PostgresAccessPolicyDAO(
             left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
             left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
             left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
-            left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
+            left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id} and ${resourceAction.action} is not null
             left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
             left join ${AuthDomainTable as authDomain} on ${authDomain.resourceId} = ${resource.id}
             left join ${GroupTable as authDomainGroup} on ${authDomainGroup.id} = ${authDomain.groupId}
-            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUser.id}
-          where ${groupMemberFlat.memberUserId} = ${samUser.id}
+            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUserId}
+          where ${groupMemberFlat.memberUserId} = ${samUserId}
             $resourceTypeConstraint
             $policyConstraint
             $actionConstraint"""
@@ -1759,7 +1761,7 @@ class PostgresAccessPolicyDAO(
           left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
           left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
           left join ${RoleActionTable as roleAction} on ${effectivePolicyRole.resourceRoleId} = ${roleAction.resourceRoleId}
-          left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id}
+          left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id} and ${resourceAction.action} is not null
           left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
         where ${resourcePolicy.public}
           $resourceTypeConstraint
@@ -1772,7 +1774,7 @@ class PostgresAccessPolicyDAO(
         from ${PolicyTable as resourcePolicy}
           left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
           left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
-          left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
+          left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id} and ${resourceAction.action} is not null
           left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
         where ${resourcePolicy.public}
           $resourceTypeConstraint
