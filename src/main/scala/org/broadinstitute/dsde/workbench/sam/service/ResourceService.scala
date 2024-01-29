@@ -893,6 +893,41 @@ class ResourceService(
     val addEventSet = if (addEvent.changeDetails.isEmpty) Set.empty else Set(addEvent)
     addEventSet ++ removeEventSet
   }
+  def listUserResources(
+      resourceTypeName: ResourceTypeName,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[Iterable[UserResourcesResponse]] =
+    for {
+      resources <- listResourcesHierarchical(userId, Set(resourceTypeName), Set.empty, Set.empty, Set.empty, true, samRequestContext)
+    } yield resources.resources.map(ResourceService.toUserResourcesResponse)
+
+  def listResourcesFlat(
+      samUserId: WorkbenchUserId,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[FilteredResourcesFlat] =
+    accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(ResourceService.groupFlat)
+
+  def listResourcesHierarchical(
+      samUserId: WorkbenchUserId,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[FilteredResourcesHierarchical] =
+    accessPolicyDAO
+      .filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+      .map(ResourceService.groupHierarchical)
+}
+
+object ResourceService {
 
   private case class GroupedDbRows(
       policies: Set[FilteredResourceFlatPolicy] = Set.empty,
@@ -901,7 +936,7 @@ class ResourceService(
       authDomainGroups: Map[WorkbenchGroupName, Boolean] = Map.empty
   )
 
-  private def groupFlat(dbResult: Seq[FilterResourcesResult]): FilteredResourcesFlat = {
+  def groupFlat(dbResult: Seq[FilterResourcesResult]): FilteredResourcesFlat = {
     val groupedFilteredResource = dbResult
       .groupBy(_.resourceId)
       .map { tuple =>
@@ -928,8 +963,7 @@ class ResourceService(
       .toSet
     FilteredResourcesFlat(resources = groupedFilteredResource)
   }
-
-  private def groupHierarchical(dbResult: Seq[FilterResourcesResult]): FilteredResourcesHierarchical = {
+  def groupHierarchical(dbResult: Seq[FilterResourcesResult]): FilteredResourcesHierarchical = {
     val groupedFilteredResources = dbResult
       .groupBy(_.resourceId)
       .map { tuple =>
@@ -963,9 +997,9 @@ class ResourceService(
     FilteredResourcesHierarchical(resources = groupedFilteredResources)
   }
 
-  private def toUserResourcesResponse(hierarchicalResource: FilteredResourceHierarchical): UserResourcesResponse = {
-    val directPolicies = hierarchicalResource.policies.filter(p => !p.isPublic && !p.inherited)
-    val inheritedPolicies = hierarchicalResource.policies.filter(p => !p.isPublic && p.inherited)
+  def toUserResourcesResponse(hierarchicalResource: FilteredResourceHierarchical): UserResourcesResponse = {
+    val directPolicies = hierarchicalResource.policies.filter(p => !p.inherited)
+    val inheritedPolicies = hierarchicalResource.policies.filter(p => p.inherited)
     val publicPolicies = hierarchicalResource.policies.filter(p => p.isPublic)
 
     def policiesToRolesAndActions(policies: Set[FilteredResourceHierarchicalPolicy]) =
@@ -980,34 +1014,4 @@ class ResourceService(
       hierarchicalResource.missingAuthDomainGroups
     )
   }
-  def listUserResources(
-      resourceTypeName: ResourceTypeName,
-      userId: WorkbenchUserId,
-      samRequestContext: SamRequestContext
-  ): IO[Iterable[UserResourcesResponse]] =
-    for {
-      resources <- listResourcesHierarchical(userId, Set(resourceTypeName), Set.empty, Set.empty, Set.empty, true, samRequestContext)
-    } yield resources.resources.map(toUserResourcesResponse)
-
-  def listResourcesFlat(
-      samUserId: WorkbenchUserId,
-      resourceTypeNames: Set[ResourceTypeName],
-      policies: Set[AccessPolicyName],
-      roles: Set[ResourceRoleName],
-      actions: Set[ResourceAction],
-      includePublic: Boolean,
-      samRequestContext: SamRequestContext
-  ): IO[FilteredResourcesFlat] =
-    accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupFlat)
-
-  def listResourcesHierarchical(
-      samUserId: WorkbenchUserId,
-      resourceTypeNames: Set[ResourceTypeName],
-      policies: Set[AccessPolicyName],
-      roles: Set[ResourceRoleName],
-      actions: Set[ResourceAction],
-      includePublic: Boolean,
-      samRequestContext: SamRequestContext
-  ): IO[FilteredResourcesHierarchical] =
-    accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupHierarchical)
 }

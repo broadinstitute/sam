@@ -22,6 +22,10 @@ import scalikejdbc._
 import scala.collection.concurrent.TrieMap
 import scala.util.{Failure, Try}
 import cats.effect.Temporal
+import org.apache.commons.collections4.map.PassiveExpiringMap
+
+import java.util.Collections
+import java.util.concurrent.TimeUnit
 
 class PostgresAccessPolicyDAO(
     protected val writeDbRef: DbReference,
@@ -1686,7 +1690,82 @@ class PostgresAccessPolicyDAO(
         .toSet
     }
   }
-  override def filterResources(
+
+  private val publicResourcesCache: java.util.Map[ResourceTypeName, Seq[FilterResourcesResult]] =
+    Collections.synchronizedMap(new PassiveExpiringMap(15, TimeUnit.MINUTES))
+
+  private def getPublicResourcesOfType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Seq[FilterResourcesResult]] = {
+    val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
+    val resourcePolicy = PolicyTable.syntax("resourcePolicy")
+    val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
+    val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
+    val effectivePolicyAction = EffectivePolicyActionTable.syntax("effectivePolicyAction")
+    val resourceRole = ResourceRoleTable.syntax("resourceRole")
+    val roleAction = RoleActionTable.syntax("roleAction")
+    val resourceAction = ResourceActionTable.syntax("resourceAction")
+    val resource = ResourceTable.syntax("resource")
+
+    val resourceTypeConstraint =
+      samsqls"and ${resource.resourceTypeId} = ${resourceTypePKsByName.get(resourceTypeName)}"
+    val notNullConstraintRoleAction =
+      samsqls"and not (${resourceRole.role} is null and ${resourceAction.action} is null)"
+    val notNullConstraintPolicyAction = samsqls"and not (${resourceAction.action} is null)"
+
+    val publicRoleActionQuery =
+      samsqls"""
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, ${resourcePolicy.resourceId} != ${resource.id} as inherited
+        from ${PolicyTable as resourcePolicy}
+          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
+          left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
+          left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
+          left join ${RoleActionTable as roleAction} on ${effectivePolicyRole.resourceRoleId} = ${roleAction.resourceRoleId}
+          left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id}
+          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
+        where ${resourcePolicy.public}
+          $resourceTypeConstraint
+          $notNullConstraintRoleAction
+          """
+
+    val publicPolicyActionQuery =
+      samsqls"""
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, ${resourcePolicy.resourceId} != ${resource.id} as inherited
+        from ${PolicyTable as resourcePolicy}
+          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
+          left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
+          left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
+          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
+        where ${resourcePolicy.public}
+          $resourceTypeConstraint
+          $notNullConstraintPolicyAction
+                """
+
+    val includePublicPolicyActionQuery = samsqls"union $publicPolicyActionQuery"
+    val publicResourcesQuery = samsql"$publicRoleActionQuery $includePublicPolicyActionQuery"
+
+    readOnlyTransaction("filterResourcesPublic", samRequestContext) { implicit session =>
+      publicResourcesCache.computeIfAbsent(
+        resourceTypeName,
+        resourceTypeName =>
+          publicResourcesQuery
+            .map(rs =>
+              FilterResourcesResult(
+                rs.get[ResourceId](resource.resultName.name),
+                resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
+                rs.stringOpt(resourcePolicy.resultName.name).map(AccessPolicyName(_)),
+                rs.stringOpt(resourceRole.resultName.role).map(ResourceRoleName(_)),
+                rs.stringOpt(resourceAction.resultName.action).map(ResourceAction(_)),
+                rs.get[Boolean](resourcePolicy.resultName.public),
+                None,
+                false,
+                rs.booleanOpt("inherited").getOrElse(false)
+              )
+            )
+            .list()
+            .apply()
+      )
+    }
+  }
+  private def filterPrivateResources(
       samUserId: WorkbenchUserId,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
@@ -1713,9 +1792,10 @@ class PostgresAccessPolicyDAO(
       else samsqls"and ${resource.resourceTypeId} in (${resourceTypeNamesByPK.keys.map(_.value)})"
     val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in (${policies})" else samsqls""
     val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in (${roles})" else samsqls""
-    val actionConstraint =
-      if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions}) and ${resourceAction.action} is not null"
-      else samsqls"and ${resourceAction.action} is not null"
+    val actionConstraint = if (actions.nonEmpty) samsqls"and ${resourceAction.action} in (${actions})" else samsqls""
+    val notNullConstraintRoleAction =
+      samsqls"and not (${resourceRole.role} is null and ${resourceAction.action} is null)"
+    val notNullConstraintPolicyAction = samsqls"and not (${resourceAction.action} is null)"
 
     val policyRoleActionQuery =
       samsqls"""
@@ -1735,7 +1815,10 @@ class PostgresAccessPolicyDAO(
             $resourceTypeConstraint
             $policyConstraint
             $roleConstraint
-            $actionConstraint"""
+            $actionConstraint
+            $notNullConstraintRoleAction
+            """
+
     val policyActionQuery =
       samsqls"""
         select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, ${authDomainGroup.result.name}, ${authDomainGroupMemberFlat.memberUserId} is not null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
@@ -1743,7 +1826,7 @@ class PostgresAccessPolicyDAO(
             left join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
             left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
             left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
-            left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id} and ${resourceAction.action} is not null
+            left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
             left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
             left join ${AuthDomainTable as authDomain} on ${authDomain.resourceId} = ${resource.id}
             left join ${GroupTable as authDomainGroup} on ${authDomainGroup.id} = ${authDomain.groupId}
@@ -1751,44 +1834,15 @@ class PostgresAccessPolicyDAO(
           where ${groupMemberFlat.memberUserId} = ${samUserId}
             $resourceTypeConstraint
             $policyConstraint
-            $actionConstraint"""
+            $actionConstraint
+            $notNullConstraintPolicyAction
+            """
 
-    val publicRoleActionQuery =
-      samsqls"""
-        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, null as ${authDomainGroup.resultName.name}, null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
-        from ${PolicyTable as resourcePolicy}
-          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
-          left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
-          left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
-          left join ${RoleActionTable as roleAction} on ${effectivePolicyRole.resourceRoleId} = ${roleAction.resourceRoleId}
-          left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id} and ${resourceAction.action} is not null
-          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
-        where ${resourcePolicy.public}
-          $resourceTypeConstraint
-          $policyConstraint
-          $roleConstraint
-          $actionConstraint"""
-    val publicPolicyActionQuery =
-      samsqls"""
-        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, null as ${authDomainGroup.resultName.name}, null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
-        from ${PolicyTable as resourcePolicy}
-          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
-          left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
-          left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id} and ${resourceAction.action} is not null
-          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
-        where ${resourcePolicy.public}
-          $resourceTypeConstraint
-          $policyConstraint
-          $actionConstraint"""
-
-    val includePolicyActionQuery = if (policies.nonEmpty || actions.nonEmpty) samsqls"union $policyActionQuery" else samsqls""
-    val includePublicPolicyActionQuery = if ((policies.nonEmpty || actions.nonEmpty) && includePublic) samsqls"union $publicPolicyActionQuery" else samsqls""
-    val includePublicQuery = if (includePublic) samsqls"union $publicRoleActionQuery $includePublicPolicyActionQuery" else samsqls""
+    val includePolicyActionQuery = samsqls"union $policyActionQuery"
 
     val query =
       samsqls"""$policyRoleActionQuery
-                            $includePolicyActionQuery
-                            $includePublicQuery"""
+                            $includePolicyActionQuery"""
 
     readOnlyTransaction("filterResources", samRequestContext) { implicit session =>
       samsql"$query"
@@ -1809,6 +1863,29 @@ class PostgresAccessPolicyDAO(
         .apply()
     }
   }
+
+  override def filterResources(
+      samUserId: WorkbenchUserId,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[FilterResourcesResult]] =
+    for {
+      publicResources <-
+        if (includePublic) {
+          (if (resourceTypeNames.isEmpty) resourceTypePKsByName.keys.toList else resourceTypeNames.toList)
+            .map(resourceTypeName => getPublicResourcesOfType(resourceTypeName, samRequestContext))
+            .sequence
+            .map(_.flatten)
+        } else IO.pure(List.empty)
+      privateResources <- filterPrivateResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+    } yield publicResources
+      .filter(r => policies.isEmpty || r.policy.exists(p => policies.contains(p)))
+      .filter(r => roles.isEmpty || r.role.exists(role => roles.contains(role)))
+      .filter(r => actions.isEmpty || r.action.exists(action => actions.contains(action))) ++ privateResources
 
   private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName])(implicit session: DBSession): Int = {
     val resource = ResourceTable.syntax("resource")
@@ -1858,6 +1935,93 @@ class PostgresAccessPolicyDAO(
                or ${roleResourceType.name} IN (${resourceTypeNames})))
               on conflict do nothing
           """.update().apply()
+  }
+
+  private case class GroupedDbRows(
+      policies: Set[FilteredResourceFlatPolicy] = Set.empty,
+      roles: Set[ResourceRoleName] = Set.empty,
+      actions: Set[ResourceAction] = Set.empty,
+      authDomainGroups: Map[WorkbenchGroupName, Boolean] = Map.empty
+  )
+
+  private def groupFlat(dbResult: Seq[FilterResourcesResult]): FilteredResourcesFlat = {
+    val groupedFilteredResource = dbResult
+      .groupBy(_.resourceId)
+      .map { tuple =>
+        val (k, v) = tuple
+        val grouped = v.foldLeft(GroupedDbRows())((acc: GroupedDbRows, r: FilterResourcesResult) =>
+          acc.copy(
+            policies = acc.policies ++ r.policy.map(p => FilteredResourceFlatPolicy(p, r.isPublic, r.inherited)),
+            roles = acc.roles ++ r.role,
+            actions = acc.actions ++ r.action,
+            authDomainGroups = acc.authDomainGroups ++ r.authDomain.map(_ -> r.inAuthDomain)
+          )
+        )
+
+        FilteredResourceFlat(
+          resourceId = k,
+          resourceType = v.head.resourceTypeName,
+          policies = grouped.policies,
+          roles = grouped.roles,
+          actions = grouped.actions,
+          authDomainGroups = grouped.authDomainGroups.keySet,
+          missingAuthDomainGroups = grouped.authDomainGroups.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
+        )
+      }
+      .toSet
+    FilteredResourcesFlat(resources = groupedFilteredResource)
+  }
+
+  private def groupHierarchical(dbResult: Seq[FilterResourcesResult]): FilteredResourcesHierarchical = {
+    val groupedFilteredResources = dbResult
+      .groupBy(_.resourceId)
+      .map { tuple =>
+        val (resourceId, resourceRows) = tuple
+        val policies = resourceRows
+          .groupBy(_.policy.get)
+          .map { policyTuple =>
+            val (policyName, policyRows) = policyTuple
+            val actionsWithoutRoles = policyRows.filter(_.role.isEmpty).flatMap(_.action).toSet
+            val actionsWithRoles = policyRows.filter(_.role.nonEmpty)
+            val roles = actionsWithRoles
+              .groupBy(_.role.get)
+              .map { roleTuple =>
+                val (roleName, roleRows) = roleTuple
+                FilteredResourceHierarchicalRole(roleName, roleRows.flatMap(_.action).toSet)
+              }
+              .toSet
+            FilteredResourceHierarchicalPolicy(policyName, roles, actionsWithoutRoles, policyRows.head.isPublic, policyRows.head.inherited)
+          }
+          .toSet
+        val authDomainGroupMemberships = resourceRows.flatMap(r => r.authDomain.map(_ -> r.inAuthDomain)).toMap
+        FilteredResourceHierarchical(
+          resourceId = resourceId,
+          resourceType = resourceRows.head.resourceTypeName,
+          policies = policies,
+          authDomainGroups = authDomainGroupMemberships.keySet,
+          missingAuthDomainGroups = authDomainGroupMemberships.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
+        )
+      }
+      .toSet
+    FilteredResourcesHierarchical(resources = groupedFilteredResources)
+  }
+
+  private def toUserResourcesResponse(hierarchicalResource: FilteredResourceHierarchical): UserResourcesResponse = {
+    val directPolicies = hierarchicalResource.policies.filter(p => !p.isPublic && !p.inherited)
+    val inheritedPolicies = hierarchicalResource.policies.filter(p => !p.isPublic && p.inherited)
+    val publicPolicies = hierarchicalResource.policies.filter(p => p.isPublic)
+
+    def policiesToRolesAndActions(policies: Set[FilteredResourceHierarchicalPolicy]) =
+      RolesAndActions(policies.flatMap(_.roles.map(_.role)), policies.flatMap(p => p.roles.flatMap(_.actions)) ++ policies.flatMap(_.actions))
+
+    UserResourcesResponse(
+      hierarchicalResource.resourceId,
+      policiesToRolesAndActions(directPolicies),
+      policiesToRolesAndActions(inheritedPolicies),
+      policiesToRolesAndActions(publicPolicies),
+      hierarchicalResource.authDomainGroups,
+      hierarchicalResource.missingAuthDomainGroups
+    )
   }
 
   private def setPolicyIsPublicInternal(policyPK: PolicyPK, isPublic: Boolean)(implicit session: DBSession): Int = {
