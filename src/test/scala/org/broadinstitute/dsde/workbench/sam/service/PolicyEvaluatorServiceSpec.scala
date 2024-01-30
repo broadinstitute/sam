@@ -517,24 +517,28 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
         samRequestContext
       )
       r <- service.policyEvaluatorService.listUserResources(defaultResourceType.name, dummyUser.id, samRequestContext)
-    } yield r should contain theSameElementsAs Set(
-      UserResourcesResponse(
-        resource1.resourceId,
-        RolesAndActions(Set(defaultResourceType.ownerRoleName), Set(ResourceAction("alter_policies"))),
-        RolesAndActions.empty,
-        RolesAndActions.empty,
-        Set.empty,
-        Set.empty
-      ),
-      UserResourcesResponse(
-        resource2.resourceId,
-        RolesAndActions.fromRoles(Set(defaultResourceType.ownerRoleName)),
-        RolesAndActions.empty,
-        RolesAndActions.empty,
-        Set.empty,
-        Set.empty
+      filtered <- service.listUserResources(defaultResourceType.name, dummyUser.id, samRequestContext)
+    } yield {
+      r should contain theSameElementsAs Set(
+        UserResourcesResponse(
+          resource1.resourceId,
+          RolesAndActions(Set(defaultResourceType.ownerRoleName), Set(ResourceAction("alter_policies"))),
+          RolesAndActions.empty,
+          RolesAndActions.empty,
+          Set.empty,
+          Set.empty
+        ),
+        UserResourcesResponse(
+          resource2.resourceId,
+          RolesAndActions.fromRoles(Set(defaultResourceType.ownerRoleName)),
+          RolesAndActions.empty,
+          RolesAndActions.empty,
+          Set.empty,
+          Set.empty
+        )
       )
-    )
+      r should contain theSameElementsAs filtered
+    }
 
     test.unsafeRunSync()
   }
@@ -566,6 +570,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
         samRequestContext
       )
       r <- constrainableService.policyEvaluatorService.listUserResources(constrainableResourceType.name, dummyUser.id, samRequestContext)
+      filtered <- constrainableService.listUserResources(constrainableResourceType.name, dummyUser.id, samRequestContext)
     } yield {
       val expected = Set(
         UserResourcesResponse(
@@ -578,6 +583,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
         )
       )
       r should contain theSameElementsAs expected
+      r should contain theSameElementsAs filtered
     }
 
     res.unsafeRunSync()
@@ -609,6 +615,8 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
         samRequestContext
       )
       r <- constrainableService.policyEvaluatorService.listUserResources(constrainableResourceType.name, dummyUser.id, samRequestContext)
+      filtered <- constrainableService.listUserResources(constrainableResourceType.name, dummyUser.id, samRequestContext)
+
     } yield {
       val expected = Set(
         UserResourcesResponse(
@@ -621,6 +629,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
         )
       )
       r should contain theSameElementsAs expected
+      r should contain theSameElementsAs filtered
     }
 
     res.unsafeRunSync()
@@ -654,6 +663,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
       _ <- dirDAO.createUser(user, samRequestContext)
       _ <- constrainableService.createPolicy(policy.id, policy.members + user.id, policy.roles, policy.actions, Set.empty, samRequestContext)
       r <- constrainableService.policyEvaluatorService.listUserResources(constrainableResourceType.name, user.id, samRequestContext)
+      filtered <- constrainableService.listUserResources(constrainableResourceType.name, user.id, samRequestContext)
     } yield {
       val expected = Set(
         UserResourcesResponse(
@@ -666,6 +676,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
         )
       )
       r should contain theSameElementsAs expected
+      r should contain theSameElementsAs filtered
     }
 
     res.unsafeRunSync()

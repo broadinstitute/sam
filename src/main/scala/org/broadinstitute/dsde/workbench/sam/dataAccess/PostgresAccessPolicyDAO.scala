@@ -1692,7 +1692,7 @@ class PostgresAccessPolicyDAO(
   }
 
   private val publicResourcesCache: java.util.Map[ResourceTypeName, Seq[FilterResourcesResult]] =
-    Collections.synchronizedMap(new PassiveExpiringMap(15, TimeUnit.MINUTES))
+    Collections.synchronizedMap(new PassiveExpiringMap(1, TimeUnit.HOURS))
 
   private def getPublicResourcesOfType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Seq[FilterResourcesResult]] = {
     val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
@@ -1838,7 +1838,7 @@ class PostgresAccessPolicyDAO(
             $notNullConstraintPolicyAction
             """
 
-    val includePolicyActionQuery = if (policies.nonEmpty || actions.nonEmpty) samsqls"union $policyActionQuery" else samsqls""
+    val includePolicyActionQuery = if (roles.isEmpty) samsqls"union $policyActionQuery" else samsqls""
     val query =
       samsqls"""$policyRoleActionQuery
                             $includePolicyActionQuery"""
@@ -1934,93 +1934,6 @@ class PostgresAccessPolicyDAO(
                or ${roleResourceType.name} IN (${resourceTypeNames})))
               on conflict do nothing
           """.update().apply()
-  }
-
-  private case class GroupedDbRows(
-      policies: Set[FilteredResourceFlatPolicy] = Set.empty,
-      roles: Set[ResourceRoleName] = Set.empty,
-      actions: Set[ResourceAction] = Set.empty,
-      authDomainGroups: Map[WorkbenchGroupName, Boolean] = Map.empty
-  )
-
-  private def groupFlat(dbResult: Seq[FilterResourcesResult]): FilteredResourcesFlat = {
-    val groupedFilteredResource = dbResult
-      .groupBy(_.resourceId)
-      .map { tuple =>
-        val (k, v) = tuple
-        val grouped = v.foldLeft(GroupedDbRows())((acc: GroupedDbRows, r: FilterResourcesResult) =>
-          acc.copy(
-            policies = acc.policies ++ r.policy.map(p => FilteredResourceFlatPolicy(p, r.isPublic, r.inherited)),
-            roles = acc.roles ++ r.role,
-            actions = acc.actions ++ r.action,
-            authDomainGroups = acc.authDomainGroups ++ r.authDomain.map(_ -> r.inAuthDomain)
-          )
-        )
-
-        FilteredResourceFlat(
-          resourceId = k,
-          resourceType = v.head.resourceTypeName,
-          policies = grouped.policies,
-          roles = grouped.roles,
-          actions = grouped.actions,
-          authDomainGroups = grouped.authDomainGroups.keySet,
-          missingAuthDomainGroups = grouped.authDomainGroups.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
-        )
-      }
-      .toSet
-    FilteredResourcesFlat(resources = groupedFilteredResource)
-  }
-
-  private def groupHierarchical(dbResult: Seq[FilterResourcesResult]): FilteredResourcesHierarchical = {
-    val groupedFilteredResources = dbResult
-      .groupBy(_.resourceId)
-      .map { tuple =>
-        val (resourceId, resourceRows) = tuple
-        val policies = resourceRows
-          .groupBy(_.policy.get)
-          .map { policyTuple =>
-            val (policyName, policyRows) = policyTuple
-            val actionsWithoutRoles = policyRows.filter(_.role.isEmpty).flatMap(_.action).toSet
-            val actionsWithRoles = policyRows.filter(_.role.nonEmpty)
-            val roles = actionsWithRoles
-              .groupBy(_.role.get)
-              .map { roleTuple =>
-                val (roleName, roleRows) = roleTuple
-                FilteredResourceHierarchicalRole(roleName, roleRows.flatMap(_.action).toSet)
-              }
-              .toSet
-            FilteredResourceHierarchicalPolicy(policyName, roles, actionsWithoutRoles, policyRows.head.isPublic, policyRows.head.inherited)
-          }
-          .toSet
-        val authDomainGroupMemberships = resourceRows.flatMap(r => r.authDomain.map(_ -> r.inAuthDomain)).toMap
-        FilteredResourceHierarchical(
-          resourceId = resourceId,
-          resourceType = resourceRows.head.resourceTypeName,
-          policies = policies,
-          authDomainGroups = authDomainGroupMemberships.keySet,
-          missingAuthDomainGroups = authDomainGroupMemberships.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
-        )
-      }
-      .toSet
-    FilteredResourcesHierarchical(resources = groupedFilteredResources)
-  }
-
-  private def toUserResourcesResponse(hierarchicalResource: FilteredResourceHierarchical): UserResourcesResponse = {
-    val directPolicies = hierarchicalResource.policies.filter(p => !p.isPublic && !p.inherited)
-    val inheritedPolicies = hierarchicalResource.policies.filter(p => !p.isPublic && p.inherited)
-    val publicPolicies = hierarchicalResource.policies.filter(p => p.isPublic)
-
-    def policiesToRolesAndActions(policies: Set[FilteredResourceHierarchicalPolicy]) =
-      RolesAndActions(policies.flatMap(_.roles.map(_.role)), policies.flatMap(p => p.roles.flatMap(_.actions)) ++ policies.flatMap(_.actions))
-
-    UserResourcesResponse(
-      hierarchicalResource.resourceId,
-      policiesToRolesAndActions(directPolicies),
-      policiesToRolesAndActions(inheritedPolicies),
-      policiesToRolesAndActions(publicPolicies),
-      hierarchicalResource.authDomainGroups,
-      hierarchicalResource.missingAuthDomainGroups
-    )
   }
 
   private def setPolicyIsPublicInternal(policyPK: PolicyPK, isPublic: Boolean)(implicit session: DBSession): Int = {

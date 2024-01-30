@@ -3106,6 +3106,22 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
     }
 
     "filterResources" - {
+
+      def verify(
+          dbResultRows: Seq[FilterResourcesResult],
+          roles: Set[ResourceRoleName],
+          roleActions: Set[ResourceAction],
+          policyActions: Set[ResourceAction]
+      ) = {
+        val testRoles: Set[ResourceRoleName] = dbResultRows.flatMap(_.role).toSet
+        val testRoleActions: Set[ResourceAction] = dbResultRows.filter(_.role.isDefined).flatMap(_.action).toSet
+        val testPolicyActions: Set[ResourceAction] = dbResultRows.filter(_.role.isEmpty).flatMap(_.action).toSet
+
+        testRoles should be(roles)
+        testRoleActions should be(roleActions)
+        testPolicyActions should be(policyActions)
+      }
+
       "filters the user's resources by policy, action, and role" in {
         assume(databaseEnabled, databaseEnabledClue)
 
@@ -3123,9 +3139,9 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
 
         // 1 reader role, 1 write action on policy
-        createResource(Option(user.id), Set(writeAction), Set(readerRole.roleName), false)
+        val userReadRoleWriteAction = createResource(Option(user.id), Set(writeAction), Set(readerRole.roleName), false)
         // 1 reader role, 1 write action on policy
-        createResource(Option(parentGroup.id), Set(writeAction), Set(readerRole.roleName), false)
+        val groupReadRoleWriteAction = createResource(Option(parentGroup.id), Set(writeAction), Set(readerRole.roleName), false)
         // 1 reader role, 1 write action on policy
         val childResource1 = createResourceHierarchy(Option(user.id), Set(writeAction), Set(readerRole.roleName), false)
         // 1 reader role, 1 write action on policy
@@ -3208,10 +3224,25 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         )
 
         val filtered = dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
-        val listed = dao.listUserResourcesWithRolesAndActions(resourceTypeName, user.id, samRequestContext).unsafeRunSync()
 
-        filtered.map(_.resourceId).toSet should be(listed.map(_.resourceId).toSet)
+        val readRoleWriteActionResources =
+          Seq(userReadRoleWriteAction, groupReadRoleWriteAction, childResource1, childResource2, publicResource, publicChildResource)
 
+        readRoleWriteActionResources
+          .map(resource =>
+            verify(
+              filtered.filter(_.resourceId.equals(resource.resourceId)),
+              roles = Set(readerRole.roleName),
+              roleActions = Set(readAction),
+              policyActions = Set(writeAction)
+            )
+          )
+        verify(
+          filtered.filter(_.resourceId.equals(kitchenSink.resourceId)),
+          roles = Set(readerRole.roleName, ownerRole.roleName, actionlessRole.roleName),
+          roleActions = Set(readAction, writeAction),
+          policyActions = Set.empty
+        )
       }
 
       "filters on the user's policies, roles, and actions when using nested roles" in {
