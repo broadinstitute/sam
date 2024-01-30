@@ -479,6 +479,37 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
+  override def updateUser(userId: WorkbenchUserId, userUpdate: UserUpdate, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    serializableWriteTransaction("updateUser", samRequestContext) { implicit session =>
+      val u = UserTable.column
+      val setColumnsClause = userUpdate match {
+        case UserUpdate(None, None) => throw new WorkbenchException("Cannot update user with no values.")
+        case UserUpdate(Some(newGoogleSubjectId), None) =>
+          s"set (${u.googleSubjectId}, ${u.updatedAt})"
+        case UserUpdate(None, Some(newAzureB2CId)) =>
+          s"set (${u.azureB2cId}, ${u.updatedAt})"
+        case UserUpdate(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
+          s"set (${u.googleSubjectId}, ${u.azureB2cId}, ${u.updatedAt})"
+      }
+
+      val updateGoogleSubjectIdClause = if (userUpdate.newGoogleSubjectId.isDefined) s"${userUpdate.newGoogleSubjectId}," else ""
+      val updateAzureB2CIDClause = if (userUpdate.newAzureB2CId.isDefined) s"${userUpdate.newAzureB2CId}," else ""
+
+      samsql"""update ${UserTable.table}
+                     ${setColumnsClause} =
+                     (
+                     ${updateGoogleSubjectIdClause}
+                     ${updateAzureB2CIDClause}
+                     ${Instant.now()}
+                     )
+                     where ${u.id} = $userId
+                     returning ${u.id}, ${u.googleSubjectId}, ${u.email}, ${u.azureB2cId}, ${u.enabled}, ${u.createdAt}, ${u.registeredAt}, ${u.updatedAt}"""
+        .map(r => UserTable.unmarshalUserRecord(UserTable(UserTable.syntax)(r)))
+        .single()
+        .apply()
+
+    }
+
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteUser", samRequestContext) { implicit session =>
       val userTable = UserTable.syntax

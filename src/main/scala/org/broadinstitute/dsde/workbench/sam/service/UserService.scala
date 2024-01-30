@@ -155,7 +155,7 @@ class UserService(
     } else None
 
   private def validateAzureB2CId(azureB2CId: AzureB2CId): Option[ErrorReport] =
-    if (!UUID_REGEX.matcher(azureB2CId.value).matches() && !(azureB2CId.value == "")) {
+    if (!UUID_REGEX.matcher(azureB2CId.value).matches() && !(azureB2CId.value == "null")) {
       Option(ErrorReport(s"invalid azureB2CId [${azureB2CId.value}]"))
     } else None
 
@@ -210,7 +210,7 @@ class UserService(
         request.azureB2CId.foreach(azureB2CId => errorReports = errorReports ++ validateAzureB2CId(azureB2CId))
         if (errorReports.nonEmpty) {
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
-        } else if (request.googleSubjectId.contains(GoogleSubjectId("")) && request.azureB2CId.contains(AzureB2CId(""))) {
+        } else if (request.googleSubjectId.contains(GoogleSubjectId("null")) && request.azureB2CId.contains(AzureB2CId("null"))) {
           IO.raiseError(
             new WorkbenchExceptionWithErrorReport(
               ErrorReport(StatusCodes.BadRequest, "unable to null both azureB2CId and googleSubjectId in the same request", errorReports)
@@ -222,21 +222,8 @@ class UserService(
             directoryDAO.updateUserEmail(userId, email, samRequestContext)
             updatedUser = user.copy(email = email)
           }
-          request.googleSubjectId.foreach { googleSubjectId =>
-            directoryDAO.setGoogleSubjectId(userId, googleSubjectId, samRequestContext)
-            if (request.googleSubjectId.contains(GoogleSubjectId(""))) {
-              updatedUser = updatedUser.copy(googleSubjectId = None)
-            } else
-              updatedUser = updatedUser.copy(googleSubjectId = Option(googleSubjectId))
-          }
-          request.azureB2CId.foreach { azureB2CId =>
-            directoryDAO.setUserAzureB2CId(userId, azureB2CId, samRequestContext)
-            if (request.azureB2CId.contains(AzureB2CId(""))) {
-              updatedUser = updatedUser.copy(azureB2CId = None)
-            } else
-              updatedUser = updatedUser.copy(azureB2CId = Option(azureB2CId))
-          }
-          IO(Some(updatedUser))
+          val userUpdate = UserUpdate(request.azureB2CId.map(_.value), request.googleSubjectId.map(_.value))
+          directoryDAO.updateUser(userId, userUpdate, samRequestContext)
         }
       case None => IO(None)
     }
