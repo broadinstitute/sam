@@ -1695,7 +1695,6 @@ class PostgresAccessPolicyDAO(
     Collections.synchronizedMap(new PassiveExpiringMap(1, TimeUnit.HOURS))
 
   private def getPublicResourcesOfType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Seq[FilterResourcesResult]] = {
-    val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
     val resourcePolicy = PolicyTable.syntax("resourcePolicy")
     val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
     val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
@@ -1771,7 +1770,6 @@ class PostgresAccessPolicyDAO(
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
-      includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]] = {
     val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
@@ -1880,7 +1878,7 @@ class PostgresAccessPolicyDAO(
             .sequence
             .map(_.flatten)
         } else IO.pure(List.empty)
-      privateResources <- filterPrivateResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+      privateResources <- filterPrivateResources(samUserId, resourceTypeNames, policies, roles, actions, samRequestContext)
     } yield publicResources
       .filter(r => policies.isEmpty || r.policy.exists(p => policies.contains(p)))
       .filter(r => roles.isEmpty || r.role.exists(role => roles.contains(role)))
