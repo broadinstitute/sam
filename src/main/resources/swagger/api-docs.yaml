@@ -4357,24 +4357,31 @@ components:
         mapping:
           flat: FilteredResourcesFlatResponse
           hierarchical: FilteredResourcesHierarchicalResponse
+      oneOf:
+        - $ref: '#/components/schemas/FilteredResourcesFlatResponse'
+        - $ref: '#/components/schemas/FilteredResourcesHierarchicalResponse'
     FilteredResourcesFlatResponse:
-      allOf:
-        - $ref: '#/components/schemas/FilteredResourceResponse'
-        - type: object
-          properties:
-            resources:
-              type: array
-              items:
-                $ref: '#/components/schemas/FilteredFlatResource'
+        type: object
+        properties:
+          format:
+            type: string
+            enum:
+              - flat
+          resources:
+            type: array
+            items:
+              $ref: '#/components/schemas/FilteredFlatResource'
     FilteredResourcesHierarchicalResponse:
-      allOf:
-        - $ref: '#/components/schemas/FilteredResourceResponse'
-        - type: object
-          properties:
-            resources:
-              type: array
-              items:
-                $ref: '#/components/schemas/FilteredHierarchicalResource'
+        type: object
+        properties:
+          format:
+            type: string
+            enum:
+              - hierarchical
+          resources:
+            type: array
+            items:
+              $ref: '#/components/schemas/FilteredHierarchicalResource'
     FilteredFlatResource:
       type: object
       properties:

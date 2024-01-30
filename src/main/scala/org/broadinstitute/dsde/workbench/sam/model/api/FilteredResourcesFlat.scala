@@ -2,19 +2,17 @@ package org.broadinstitute.dsde.workbench.sam.model.api
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicyName, ResourceAction, ResourceId, ResourceRoleName, ResourceTypeName}
-import spray.json.DefaultJsonProtocol.jsonFormat1
+import spray.json.DefaultJsonProtocol.jsonFormat2
 import spray.json.RootJsonFormat
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import spray.json.DefaultJsonProtocol._
 
 object FilteredResourcesFlat {
-  implicit val FilteredResourcesFlatFormat: RootJsonFormat[FilteredResourcesFlat] = jsonFormat1(FilteredResourcesFlat.apply)
+  implicit val FilteredResourcesFlatFormat: RootJsonFormat[FilteredResourcesFlat] = jsonFormat2(FilteredResourcesFlat.apply)
 
 }
-case class FilteredResourcesFlat(resources: Set[FilteredResourceFlat]) extends FilteredResources {
-  override def format: String = "flat"
-}
+case class FilteredResourcesFlat(resources: Set[FilteredResourceFlat], format: String = "flat") extends FilteredResources
 
 object FilteredResourceFlat {
   implicit val FilteredResourceFlatFormat: RootJsonFormat[FilteredResourceFlat] = jsonFormat7(FilteredResourceFlat.apply)
