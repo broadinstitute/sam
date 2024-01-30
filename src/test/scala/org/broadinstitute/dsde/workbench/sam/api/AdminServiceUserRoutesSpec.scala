@@ -118,6 +118,7 @@ class AdminServiceUserRoutesSpec extends AnyFlatSpec with Matchers with Scalates
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser)
+      .withAllowedUser(defaultUser)
       .build
 
     // Act and Assert

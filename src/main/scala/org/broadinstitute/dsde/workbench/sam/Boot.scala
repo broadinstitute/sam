@@ -7,6 +7,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.opentelemetry.trace.{TraceConfiguration, TraceExporter}
+import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator
@@ -59,7 +60,8 @@ object Boot extends IOApp with LazyLogging {
   def run(args: List[String]): IO[ExitCode] = {
     // Init sentry always should be the first thing we do
     initSentry()
-    implicit val system = ActorSystem("sam")
+    val akkaConfig = ConfigFactory.parseResourcesAnySyntax("sam").withOnlyPath("akka").resolve()
+    implicit val system = ActorSystem("sam", akkaConfig)
 
     startup() *> ExitCode.Success.pure[IO]
   }
@@ -226,6 +228,7 @@ object Boot extends IOApp with LazyLogging {
       adminConfig: AdminConfig
   )(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
+
     val googleDirDaos = createGoogleDirDaos(config, workspaceMetricBaseName, lastQuotaErrorDAO)
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
     val googleIamDAO = new HttpGoogleIamDAO(
@@ -305,23 +308,20 @@ object Boot extends IOApp with LazyLogging {
       actorSystem: ActorSystem
   ): NonEmptyList[HttpGoogleDirectoryDAO] = {
     val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
-
-    def makePem = (directoryApiAccount: WorkbenchEmail) =>
-      Pem(
-        WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
-        new File(config.googleServicesConfig.pemFile),
-        Option(directoryApiAccount)
-      )
+    val samSaJson =
+      Files.readAllLines(Paths.get(config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)).asScala.mkString
 
     val googleCredentials = serviceAccountJsons match {
       case None =>
         config.googleServicesConfig.directoryApiAccounts match {
           case Some(directoryApiAccounts) =>
-            logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
-            directoryApiAccounts.map(makePem)
+            logger.info(s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate $directoryApiAccounts to talk to Google Directory API")
+            directoryApiAccounts.map(directoryApiAccount => Json(samSaJson, Some(directoryApiAccount)))
           case None =>
-            logger.info(s"Using ${config.googleServicesConfig.subEmail} to talk to Google Directory API without impersonation")
-            NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
+            logger.info(
+              s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API"
+            )
+            NonEmptyList.one(Json(samSaJson, Some(config.googleServicesConfig.subEmail)))
         }
       case Some(accounts) =>
         config.googleServicesConfig.directoryApiAccounts match {
@@ -433,8 +433,8 @@ object Boot extends IOApp with LazyLogging {
         config.emailDomain
       )
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
-    val azureService = config.azureServicesConfig.map { config =>
-      new AzureService(new CrlService(config), directoryDAO, azureManagedResourceGroupDAO)
+    val azureService = config.azureServicesConfig.map { azureConfig =>
+      new AzureService(new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
     }
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
