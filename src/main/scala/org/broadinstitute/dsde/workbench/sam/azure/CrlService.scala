@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.azure
 
 import bio.terra.cloudres.azure.resourcemanager.common.Defaults
 import bio.terra.cloudres.common.ClientConfig
+import bio.terra.cloudres.common.cleanup.CleanupConfig
 import cats.effect.IO
 import com.azure.core.management.AzureEnvironment
 import com.azure.core.management.profile.AzureProfile
@@ -9,16 +10,37 @@ import com.azure.identity.{ClientSecretCredential, ClientSecretCredentialBuilder
 import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
-import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, ManagedAppPlan}
+import com.google.auth.oauth2.ServiceAccountCredentials
+import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, JanitorConfig, ManagedAppPlan}
+
+import java.io.FileInputStream
+import scala.concurrent.duration._
+import scala.jdk.DurationConverters._
 
 /** Service class for interacting with Terra Cloud Resource Library (CRL). See: https://github.com/DataBiosphere/terra-cloud-resource-lib
   *
   * Note: this class is Azure-specific for now because Sam uses workbench-libs for Google Cloud calls.
   */
-class CrlService(config: AzureServicesConfig) {
-  // TODO: Update Sam tests to talk to Janitor service:
-  // https://broadworkbench.atlassian.net/browse/ID-96
-  val clientConfig = ClientConfig.Builder.newBuilder().setClient("sam").build()
+class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
+  val clientId = "sam"
+  val testResourceTimeToLive = 1 hour
+  val clientConfigBase = ClientConfig.Builder.newBuilder().setClient("sam")
+  val clientConfig = if (janitorConfig.enabled) {
+    clientConfigBase
+      .setCleanupConfig(
+        CleanupConfig
+          .builder()
+          .setCleanupId(s"$clientId-test")
+          .setTimeToLive(testResourceTimeToLive.toJava)
+          .setJanitorProjectId(janitorConfig.trackResourceProjectId.value)
+          .setJanitorTopicName(janitorConfig.trackResourceTopicName)
+          .setCredentials(ServiceAccountCredentials.fromStream(new FileInputStream(janitorConfig.clientCredential.defaultServiceAccountJsonPath.asString)))
+          .build()
+      )
+      .build()
+  } else {
+    clientConfigBase.build()
+  }
 
   def buildMsiManager(tenantId: TenantId, subscriptionId: SubscriptionId): IO[MsiManager] = {
     val (credential, profile) = getCredentialAndProfile(tenantId, subscriptionId)

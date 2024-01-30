@@ -7,11 +7,11 @@ gcloud container clusters get-credentials --zone us-central1-a --project broad-d
 kubectl -n terra-dev get secret sam-sa-secret -o 'go-template={{index .data "sam-account.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/sam-account.json
 kubectl -n terra-dev get secret sam-sa-secret -o 'go-template={{index .data "sam-account.pem"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/sam-account.pem
 
-kubectl -n terra-dev get secret admin-sa-secret -o 'go-template={{index .data "admin-service-account-0.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-0.json
 kubectl -n terra-dev get secret admin-one-sa-secret -o 'go-template={{index .data "admin-service-account-1.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-1.json
 kubectl -n terra-dev get secret admin-two-sa-secret -o 'go-template={{index .data "admin-service-account-2.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-2.json
 kubectl -n terra-dev get secret admin-three-sa-secret -o 'go-template={{index .data "admin-service-account-3.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-3.json
 kubectl -n terra-dev get secret admin-four-sa-secret -o 'go-template={{index .data "admin-service-account-4.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-4.json
+kubectl -n terra-dev get secret admin-five-sa-secret -o 'go-template={{index .data "admin-service-account-5.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-5.json
 
 kubectl -n terra-dev get configmap sam-oauth2-configmap -o 'go-template={{index .data "oauth2-config"}}' > ${SERVICE_OUTPUT_LOCATION}/oauth2.conf
 # Local dev uses a macOS-specific docker replacement hostname for locahost, so replace all instances in the proxy config.
