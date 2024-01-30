@@ -1838,8 +1838,7 @@ class PostgresAccessPolicyDAO(
             $notNullConstraintPolicyAction
             """
 
-    val includePolicyActionQuery = samsqls"union $policyActionQuery"
-
+    val includePolicyActionQuery = if (policies.nonEmpty || actions.nonEmpty) samsqls"union $policyActionQuery" else samsqls""
     val query =
       samsqls"""$policyRoleActionQuery
                             $includePolicyActionQuery"""

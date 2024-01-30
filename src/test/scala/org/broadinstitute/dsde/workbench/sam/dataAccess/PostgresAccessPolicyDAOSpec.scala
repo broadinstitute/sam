@@ -11,7 +11,6 @@ import org.broadinstitute.dsde.workbench.sam.config.AppConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LoadResourceAuthDomainResult.{Constrained, NotConstrained, ResourceNotFound}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
-import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.postgresql.util.PSQLException
 import org.scalatest.BeforeAndAfterEach
 
@@ -3207,6 +3206,12 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         inheritedPolicies.map(_.resourceId).toSet should be(
           Set(childResource1.resourceId, childResource2.resourceId, publicChildResource.resourceId, kitchenSink.resourceId)
         )
+
+        val filtered = dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+        val listed = dao.listUserResourcesWithRolesAndActions(resourceTypeName, user.id, samRequestContext).unsafeRunSync()
+
+        filtered.map(_.resourceId).toSet should be(listed.map(_.resourceId).toSet)
+
       }
 
       "filters on the user's policies, roles, and actions when using nested roles" in {
@@ -3296,70 +3301,6 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         resource2Results.map(_.inAuthDomain).toSet should be(Set(true, false))
         resource2Results.filter(_.inAuthDomain).head.authDomain should be(Some(authDomainGroup1.id))
         resource2Results.filter(!_.inAuthDomain).head.authDomain should be(Some(authDomainGroup2.id))
-      }
-
-      "returns the same resources as listUserResourcesWithRolesAndActions" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
-        val user = Generator.genWorkbenchUserGoogle.sample.get
-
-        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
-        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
-
-        dirDao.createUser(user, samRequestContext).unsafeRunSync()
-        dirDao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.addGroupMember(subGroup.id, user.id, samRequestContext).unsafeRunSync()
-        dirDao.addGroupMember(parentGroup.id, subGroup.id, samRequestContext).unsafeRunSync()
-        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-        dao.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
-
-        // 1 reader role, 1 write action on policy
-        val writePolicyActionReadRoleAction = createResource(Option(user.id), Set(writeAction), Set(readerRole.roleName), false)
-        // 1 reader role, 1 write action on policy
-        val groupWritePolicyActionReadRoleAction = createResource(Option(parentGroup.id), Set(writeAction), Set(readerRole.roleName), false)
-        // 1 reader role, 1 write action on policy
-        val childResource1 = createResourceHierarchy(Option(user.id), Set(writeAction), Set(readerRole.roleName), false)
-        // 1 reader role, 1 write action on policy
-        val childResource2 = createResourceHierarchy(Option(parentGroup.id), Set(writeAction), Set(readerRole.roleName), false)
-
-        // 1 public reader role, 1 public write action on policy
-        val publicResource = createResource(None, Set(writeAction), Set(readerRole.roleName), true)
-        // 1 public reader role, 1 public write action on policy
-        val publicChildResource = createResourceHierarchy(None, Set(writeAction), Set(readerRole.roleName), true)
-
-        // 1 reader role
-        val kitchenSink = createResourceHierarchy(Option(user.id), Set.empty, Set(readerRole.roleName), false)
-        // 1 owner role (1 read action, 1 write action)
-        val directProbePolicy = AccessPolicy(
-          FullyQualifiedPolicyId(kitchenSink.fullyQualifiedId, AccessPolicyName(uuid)),
-          Set(user.id),
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          Set(ownerRole.roleName),
-          Set.empty,
-          Set.empty,
-          false
-        )
-        // No roles available
-        val publicProbePolicy = AccessPolicy(
-          FullyQualifiedPolicyId(kitchenSink.fullyQualifiedId, AccessPolicyName(uuid)),
-          Set.empty,
-          WorkbenchEmail(s"${uuid}@policy.com"),
-          Set(actionlessRole.roleName),
-          Set.empty,
-          Set.empty,
-          true
-        )
-        dao.createPolicy(directProbePolicy, samRequestContext).unsafeRunSync()
-        dao.createPolicy(publicProbePolicy, samRequestContext).unsafeRunSync()
-
-        val filteredResources = dao.filterResources(user.id, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
-        val listedResources = dao.listUserResourcesWithRolesAndActions(resourceTypeName, user.id, samRequestContext).unsafeRunSync()
-        val filteredAndGrouped = ResourceService.groupHierarchical(filteredResources)
-
-        println(filteredResources)
-
-        listedResources.map(_.resourceId) should contain theSameElementsAs (filteredAndGrouped.resources.map(_.resourceId))
       }
     }
   }
