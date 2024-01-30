@@ -288,6 +288,11 @@ class ResourceService(
     for {
       resourceType <- getResourceType(resource.resourceTypeName)
       _ <- validateAuthDomain(resourceType.get, authDomains, userId, samRequestContext)
+      accessPolicies <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
+      _ <-
+        if (accessPolicies.exists(_.public)) {
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot add an auth domain group to a public resource")))
+        } else IO.unit
       policies <- listResourcePolicies(resource, samRequestContext)
       _ <- accessPolicyDAO.addResourceAuthDomain(resource, authDomains, samRequestContext)
       _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), samRequestContext)
