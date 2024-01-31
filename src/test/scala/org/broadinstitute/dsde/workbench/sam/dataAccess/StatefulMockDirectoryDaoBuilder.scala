@@ -221,7 +221,7 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
 
     // A user that only "exists" but isn't enabled or anything also does not have a Cloud Identifier
     lenient()
-      .doReturn(IO(Option(samUser)))
+      .doReturn(IO(Option(samUser.copy(googleSubjectId = None, azureB2CId = None))))
       .when(mockedDirectoryDAO)
       .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 

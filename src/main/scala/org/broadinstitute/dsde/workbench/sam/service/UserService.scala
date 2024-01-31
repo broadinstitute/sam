@@ -214,8 +214,18 @@ class UserService(
           val userUpdate = UserUpdate(request.azureB2CId.map(_.value), request.googleSubjectId.map(_.value))
 
           userUpdate match {
-            case UserUpdate(Some("null"), None) if user.googleSubjectId.isEmpty => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot null a user's azureB2CId when the user has no googleSubjectId")))
-            case UserUpdate(None, Some("null")) if user.azureB2CId.isEmpty => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot null a user's googleSubjectId when the user has no azureB2CId")))
+            case UserUpdate(Some("null"), None) if user.googleSubjectId.isEmpty =>
+              IO.raiseError(
+                new WorkbenchExceptionWithErrorReport(
+                  ErrorReport(StatusCodes.BadRequest, "Cannot null a user's azureB2CId when the user has no googleSubjectId")
+                )
+              )
+            case UserUpdate(None, Some("null")) if user.azureB2CId.isEmpty =>
+              IO.raiseError(
+                new WorkbenchExceptionWithErrorReport(
+                  ErrorReport(StatusCodes.BadRequest, "Cannot null a user's googleSubjectId when the user has no azureB2CId")
+                )
+              )
             case _ =>
               val updatedUser = if (request.azureB2CId.isDefined || request.googleSubjectId.isDefined) {
                 directoryDAO.updateUser(user, userUpdate, samRequestContext)
