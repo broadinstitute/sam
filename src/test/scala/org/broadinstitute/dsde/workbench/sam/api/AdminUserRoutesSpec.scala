@@ -167,14 +167,14 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  "PATCH /admin/v1/user/{userSubjectId}" should "null a user's googleSubjectId if it is set to empty string" in {
+  "PATCH /admin/v1/user/{userSubjectId}" should "null a user's googleSubjectId if it is set to 'null'" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
       .withAllowedUser(defaultUser)
       .build
-    val requestBody = AdminUpdateUserRequest(None, Some(GoogleSubjectId("")), None, None)
+    val requestBody = AdminUpdateUserRequest(None, Some(GoogleSubjectId("null")), None, None)
     // Act
     Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
       // Assert
@@ -202,14 +202,14 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  "PATCH /admin/v1/user/{userSubjectId}" should "null a user's azureB2CId if it is set to empty string" in {
+  "PATCH /admin/v1/user/{userSubjectId}" should "null a user's azureB2CId if it is set to 'null'" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
       .withAllowedUser(defaultUser)
       .build
-    val requestBody = AdminUpdateUserRequest(Some(AzureB2CId("")), None, None, None)
+    val requestBody = AdminUpdateUserRequest(Some(AzureB2CId("null")), None, None, None)
     // Act
     Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
       // Assert

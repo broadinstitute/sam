@@ -210,20 +210,24 @@ class UserService(
         request.azureB2CId.foreach(azureB2CId => errorReports = errorReports ++ validateAzureB2CId(azureB2CId))
         if (errorReports.nonEmpty) {
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
-        } else if (request.googleSubjectId.contains(GoogleSubjectId("null")) && request.azureB2CId.contains(AzureB2CId("null"))) {
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.BadRequest, "unable to null both azureB2CId and googleSubjectId in the same request", errorReports)
-            )
-          )
         } else { // apply all updates
-          var updatedUser = user
-          request.email.foreach { email =>
-            directoryDAO.updateUserEmail(userId, email, samRequestContext)
-            updatedUser = user.copy(email = email)
-          }
           val userUpdate = UserUpdate(request.azureB2CId.map(_.value), request.googleSubjectId.map(_.value))
-          directoryDAO.updateUser(userId, userUpdate, samRequestContext)
+
+          userUpdate match {
+            case UserUpdate(Some("null"), None) if user.googleSubjectId.isEmpty => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot null a user's azureB2CId when the user has no googleSubjectId")))
+            case UserUpdate(None, Some("null")) if user.azureB2CId.isEmpty => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot null a user's googleSubjectId when the user has no azureB2CId")))
+            case _ =>
+              val updatedUser = if (request.azureB2CId.isDefined || request.googleSubjectId.isDefined) {
+                directoryDAO.updateUser(user, userUpdate, samRequestContext)
+              } else IO(Option(user))
+
+              if (request.email.isDefined) {
+                updatedUser.map { u =>
+                  directoryDAO.updateUserEmail(userId, request.email.get, samRequestContext)
+                  u.map(_.copy(email = request.email.get))
+                }
+              } else updatedUser
+          }
         }
       case None => IO(None)
     }

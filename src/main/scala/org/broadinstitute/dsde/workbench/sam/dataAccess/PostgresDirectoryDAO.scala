@@ -449,28 +449,18 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     serializableWriteTransaction("setUserAzureB2CId", samRequestContext) { implicit session =>
       val u = UserTable.column
       val results =
-        if (b2cId.value == "")
-          samsql"""update ${UserTable.table}
-                 set (${u.azureB2cId}, ${u.updatedAt}) =
-                 (null,
-                   ${Instant.now()}
-                 )
-                 where ${u.id} = $userId and ${u.googleSubjectId} is not null"""
-            .update()
-            .apply()
-        else
-          samsql"""update ${UserTable.table}
+        samsql"""update ${UserTable.table}
                  set (${u.azureB2cId}, ${u.updatedAt}) =
                  ($b2cId,
                    ${Instant.now()}
                  )
-                 where ${u.id} = $userId"""
-            .update()
-            .apply()
+                 where ${u.id} = $userId and (${u.azureB2cId} is null or ${u.azureB2cId} = $b2cId)"""
+          .update()
+          .apply()
 
       if (results != 1) {
         throw new WorkbenchException(
-          s"Cannot update azureB2cId for user ${userId} because user does not exist, or user has a null googleSubjectId."
+          s"Cannot update azureB2cId for user ${userId} because user does not exist or the azureB2cId has already been set for this user"
         )
       } else {
         ()
@@ -479,35 +469,55 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
-  override def updateUser(userId: WorkbenchUserId, userUpdate: UserUpdate, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+  override def updateUser(samUser: SamUser, userUpdate: UserUpdate, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     serializableWriteTransaction("updateUser", samRequestContext) { implicit session =>
       val u = UserTable.column
+
       val setColumnsClause = userUpdate match {
         case UserUpdate(None, None) => throw new WorkbenchException("Cannot update user with no values.")
-        case UserUpdate(Some(newGoogleSubjectId), None) =>
-          s"set (${u.googleSubjectId}, ${u.updatedAt})"
-        case UserUpdate(None, Some(newAzureB2CId)) =>
-          s"set (${u.azureB2cId}, ${u.updatedAt})"
+        case UserUpdate(Some(newAzureB2CId), None) =>
+          samsqls"(${u.azureB2cId}, ${u.updatedAt})"
+        case UserUpdate(None, Some(newGoogleSubjectId)) =>
+          samsqls"(${u.googleSubjectId}, ${u.updatedAt})"
         case UserUpdate(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
-          s"set (${u.googleSubjectId}, ${u.azureB2cId}, ${u.updatedAt})"
+          samsqls"(${u.googleSubjectId}, ${u.azureB2cId}, ${u.updatedAt})"
       }
 
-      val updateGoogleSubjectIdClause = if (userUpdate.newGoogleSubjectId.isDefined) s"${userUpdate.newGoogleSubjectId}," else ""
-      val updateAzureB2CIDClause = if (userUpdate.newAzureB2CId.isDefined) s"${userUpdate.newAzureB2CId}," else ""
+      var updatedUser =
+        samUser.copy(
+          googleSubjectId = userUpdate.newGoogleSubjectId.map(GoogleSubjectId).orElse(samUser.googleSubjectId),
+          azureB2CId = userUpdate.newAzureB2CId.map(AzureB2CId).orElse(samUser.azureB2CId),
+          updatedAt = Instant.now()
+        )
+      val setColumnValuesClause = userUpdate match {
+        case UserUpdate(None, None) => throw new WorkbenchException("Cannot update user with no values.")
+        case UserUpdate(Some("null"), None) =>
+          updatedUser = updatedUser.copy(azureB2CId = None)
+          // string interpolation adds quotes around null so we have to special case it here
+          samsqls"(null, ${Instant.now()})"
+        case UserUpdate(None, Some("null")) =>
+          updatedUser = updatedUser.copy(googleSubjectId = None)
+          // string interpolation adds quotes around null so we have to special case it here
+          samsqls"(null, ${Instant.now()})"
+        case UserUpdate(Some(newGoogleSubjectId), None) =>
+          samsqls"($newGoogleSubjectId, ${Instant.now()})"
+        case UserUpdate(None, Some(newAzureB2CId)) =>
+          samsqls"($newAzureB2CId, ${Instant.now()})"
+        case UserUpdate(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
+          samsqls"($newGoogleSubjectId, $newAzureB2CId, ${Instant.now()})"
+      }
 
-      samsql"""update ${UserTable.table}
-                     ${setColumnsClause} =
-                     (
-                     ${updateGoogleSubjectIdClause}
-                     ${updateAzureB2CIDClause}
-                     ${Instant.now()}
-                     )
-                     where ${u.id} = $userId
-                     returning ${u.id}, ${u.googleSubjectId}, ${u.email}, ${u.azureB2cId}, ${u.enabled}, ${u.createdAt}, ${u.registeredAt}, ${u.updatedAt}"""
-        .map(r => UserTable.unmarshalUserRecord(UserTable(UserTable.syntax)(r)))
-        .single()
+      val results = samsql"""update ${UserTable.table}
+               set ${setColumnsClause} = ${setColumnValuesClause}
+               where ${u.id} = ${samUser.id}"""
+        .update()
         .apply()
 
+      if (results != 1) {
+        None
+      } else {
+        Option(updatedUser)
+      }
     }
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
@@ -898,24 +908,16 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     serializableWriteTransaction("setGoogleSubjectId", samRequestContext) { implicit session =>
       val u = UserTable.column
       val updateGoogleSubjectIdQuery =
-        if (googleSubjectId.value == "")
-          samsql"""update ${UserTable.table}
-                 set (${u.googleSubjectId}, ${u.updatedAt}) =
-                 (null,
-                   ${Instant.now()}
-                 )
-                 where ${u.id} = ${userId} and ${u.azureB2cId} is not null"""
-        else
-          samsql"""update ${UserTable.table}
+        samsql"""update ${UserTable.table}
                  set (${u.googleSubjectId}, ${u.updatedAt}) =
                  (${googleSubjectId},
                    ${Instant.now()}
                  )
-                 where ${u.id} = ${userId}"""
+                 where ${u.id} = ${userId} and ${u.googleSubjectId} is null"""
 
       if (updateGoogleSubjectIdQuery.update().apply() != 1) {
         throw new WorkbenchException(
-          s"Cannot update googleSubjectId for user ${userId} because user does not exist, or user has a null azureB2cId"
+          s"Cannot update googleSubjectId for user ${userId} because user does not exist or the googleSubjectId has already been set for this user"
         )
       }
     }

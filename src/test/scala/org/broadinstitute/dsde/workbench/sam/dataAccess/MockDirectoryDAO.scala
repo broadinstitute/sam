@@ -129,18 +129,24 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     users -= userId
   }
 
-  override def updateUser(userId: WorkbenchUserId, userUpdate: UserUpdate, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
-  val updatedUser = for {
-      user <- users.get(userId)
+  override def updateUser(samUser: SamUser, userUpdate: UserUpdate, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
+    val updatedUser = for {
+      user <- users.get(samUser.id)
       updatedUser = user.copy(
-        googleSubjectId = if (userUpdate.newGoogleSubjectId.isDefined) userUpdate.newGoogleSubjectId.map(GoogleSubjectId) else user.googleSubjectId,
-        azureB2CId = if (userUpdate.newAzureB2CId.isDefined) userUpdate.newAzureB2CId.map(AzureB2CId) else user.azureB2CId,
+        googleSubjectId =
+          if (userUpdate.newGoogleSubjectId.contains("null")) None
+          else if (userUpdate.newGoogleSubjectId.isDefined) userUpdate.newGoogleSubjectId.map(GoogleSubjectId)
+          else user.googleSubjectId,
+        azureB2CId =
+          if (userUpdate.newAzureB2CId.contains("null")) None
+          else if (userUpdate.newAzureB2CId.isDefined) userUpdate.newAzureB2CId.map(AzureB2CId)
+          else user.azureB2CId,
         updatedAt = Instant.now()
       )
     } yield updatedUser
 
     IO.pure(updatedUser.map { user =>
-      users.put(userId, user)
+      users.put(samUser.id, user)
       user
     })
   }

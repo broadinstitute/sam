@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserUpdate}
 import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
@@ -221,7 +221,7 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
 
     // A user that only "exists" but isn't enabled or anything also does not have a Cloud Identifier
     lenient()
-      .doReturn(IO(Option(samUser.copy(googleSubjectId = None, azureB2CId = None))))
+      .doReturn(IO(Option(samUser)))
       .when(mockedDirectoryDAO)
       .loadUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 
@@ -229,6 +229,12 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
       .doReturn(IO(Option(samUser.id)))
       .when(mockedDirectoryDAO)
       .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
+
+    lenient()
+      .doReturn(IO(Option(samUser)))
+      .when(mockedDirectoryDAO)
+      .updateUser(ArgumentMatchers.eq(samUser), any[UserUpdate], any[SamRequestContext])
+
   }
 
   private def makeUserEnabled(samUser: SamUser): Unit = {

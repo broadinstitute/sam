@@ -53,7 +53,7 @@ trait DirectoryDAO {
   def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit]
   def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit]
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
-  def updateUser(userId: WorkbenchUserId, userUpdate: UserUpdate, samRequestContext: SamRequestContext): IO[Option[SamUser]]
+  def updateUser(samUser: SamUser, userUpdate: UserUpdate, samRequestContext: SamRequestContext): IO[Option[SamUser]]
 
   def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]
   def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchGroupIdentity]]
