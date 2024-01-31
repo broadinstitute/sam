@@ -67,97 +67,14 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  "PATCH /admin/v1/user/{userSubjectId}" should "update a user if the requesting user is an admin" in {
-    // Arrange
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .callAsAdminUser() // enabled "admin" user who is making the http request
-      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
-      .withAllowedUser(defaultUser)
-      .build
-    val requestBody = AdminUpdateUserRequest(None, None, Some(newUserEmail), None)
-    // Act
-    Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
-      // Assert
-      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.OK)
-      // Enabled in particular since we cant directly extract the user from the builder
-      responseAs[SamUser] shouldEqual defaultUser.copy(email = newUserEmail)
-    }
-  }
-
-  it should "report an error when updating a user if the request email is invalid and the requesting user is an admin" in {
-    // Arrange
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .callAsAdminUser()
-      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
-      .withAllowedUser(defaultUser)
-      .withBadEmail()
-      .build
-    val requestBody = AdminUpdateUserRequest(None, None, Some(newUserEmail), None)
-
-    // Act
-    Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
-      // Assert
-      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.BadRequest)
-    }
-  }
-
-  it should "not find a user when trying to update a user if the user does not exist and the requesting user is an admin" in {
-    // Arrange
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .callAsAdminUser()
-      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
-      .withAllowedUser(defaultUser)
-      .build
-    val requestBody = AdminUpdateUserRequest(None, None, Some(newUserEmail), None)
-
-    // Act
-    Patch(s"/api/admin/v1/user/$badUserId", requestBody) ~> samRoutes.route ~> check {
-      // Assert
-      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.NotFound)
-    }
-  }
-
-  it should "forbid updating a user if the requesting user is a non admin" in {
-    // Arrange
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .callAsNonAdminUser()
-      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
-      .withAllowedUser(defaultUser)
-      .build
-    val requestBody = AdminUpdateUserRequest(None, None, Some(newUserEmail), None)
-
-    // Act
-    Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
-      // Assert
-      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.Forbidden)
-    }
-  }
-
-  it should "forbid updating a user for a user if the user does not exist and the requesting user is a non admin" in {
-    // Arrange
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .callAsNonAdminUser()
-      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
-      .withAllowedUser(defaultUser)
-      .build
-    val requestBody = AdminUpdateUserRequest(None, None, Some(newUserEmail), None)
-
-    // Act
-    Patch(s"/api/admin/v1/user/$badUserId", requestBody) ~> samRoutes.route ~> check {
-      // Assert
-      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.Forbidden)
-    }
-  }
-
   "PATCH /admin/v1/user/{userSubjectId}" should "update a user's googleSubjectId" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
-      .withAllowedUser(defaultUser)
       .build
     val newGoogleSubjectId = Some(GoogleSubjectId("newGoogleSubjectId"))
-    val requestBody = AdminUpdateUserRequest(None, newGoogleSubjectId, None, None)
+    val requestBody = AdminUpdateUserRequest(None, newGoogleSubjectId)
     // Act
     Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
       // Assert
@@ -174,7 +91,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
       .withAllowedUser(defaultUser)
       .build
-    val requestBody = AdminUpdateUserRequest(None, Some(GoogleSubjectId("null")), None, None)
+    val requestBody = AdminUpdateUserRequest(None, Some(GoogleSubjectId("null")))
     // Act
     Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
       // Assert
@@ -192,7 +109,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withAllowedUser(defaultUser)
       .build
     val newAzureB2CId = Some(AzureB2CId("0000-0000-0000-0000"))
-    val requestBody = AdminUpdateUserRequest(newAzureB2CId, None, None, None)
+    val requestBody = AdminUpdateUserRequest(newAzureB2CId, None)
     // Act
     Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
       // Assert
@@ -209,7 +126,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
       .withAllowedUser(defaultUser)
       .build
-    val requestBody = AdminUpdateUserRequest(Some(AzureB2CId("null")), None, None, None)
+    val requestBody = AdminUpdateUserRequest(Some(AzureB2CId("null")), None)
     // Act
     Patch(s"/api/admin/v1/user/$defaultUserId", requestBody) ~> samRoutes.route ~> check {
       // Assert

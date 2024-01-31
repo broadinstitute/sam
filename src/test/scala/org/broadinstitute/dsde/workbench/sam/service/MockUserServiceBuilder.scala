@@ -112,8 +112,6 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
         val newGoogleSubjectId =
           if (r.googleSubjectId.contains(GoogleSubjectId("null"))) None else if (r.googleSubjectId.isDefined) r.googleSubjectId else samUser.googleSubjectId
         val newUser = samUser.copy(
-          email = r.email.getOrElse(samUser.email),
-          enabled = r.enabled.getOrElse(samUser.enabled),
           azureB2CId = newAzureB2CId,
           googleSubjectId = newGoogleSubjectId
         )

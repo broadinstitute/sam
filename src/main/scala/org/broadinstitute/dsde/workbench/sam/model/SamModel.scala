@@ -72,11 +72,6 @@ object UserStatusDetails {
     tosAccepted: Boolean,
     adminEnabled: Boolean
 )
-
-@Lenses final case class UserUpdate(
-    newAzureB2CId: Option[String],
-    newGoogleSubjectId: Option[String]
-)
 @Lenses final case class TermsOfServiceAcceptance(value: String) extends ValueObject
 
 @Lenses final case class TermsOfServiceComplianceStatus(userId: WorkbenchUserId, userHasAcceptedLatestTos: Boolean, permitsSystemUsage: Boolean)

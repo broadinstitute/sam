@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, UserUpdate}
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.IdiomaticMockito.StubbingOps
@@ -233,7 +233,7 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     lenient()
       .doReturn(IO(Option(samUser)))
       .when(mockedDirectoryDAO)
-      .updateUser(ArgumentMatchers.eq(samUser), any[UserUpdate], any[SamRequestContext])
+      .updateUser(ArgumentMatchers.eq(samUser), any[AdminUpdateUserRequest], any[SamRequestContext])
 
   }
 

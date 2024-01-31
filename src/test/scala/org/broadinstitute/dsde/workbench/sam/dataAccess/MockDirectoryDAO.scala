@@ -8,8 +8,8 @@ import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUserTos, UserUpdate}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -129,17 +129,17 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     users -= userId
   }
 
-  override def updateUser(samUser: SamUser, userUpdate: UserUpdate, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
+  override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
     val updatedUser = for {
       user <- users.get(samUser.id)
       updatedUser = user.copy(
         googleSubjectId =
-          if (userUpdate.newGoogleSubjectId.contains("null")) None
-          else if (userUpdate.newGoogleSubjectId.isDefined) userUpdate.newGoogleSubjectId.map(GoogleSubjectId)
+          if (userUpdate.googleSubjectId.contains(GoogleSubjectId("null"))) None
+          else if (userUpdate.googleSubjectId.isDefined) userUpdate.googleSubjectId
           else user.googleSubjectId,
         azureB2CId =
-          if (userUpdate.newAzureB2CId.contains("null")) None
-          else if (userUpdate.newAzureB2CId.isDefined) userUpdate.newAzureB2CId.map(AzureB2CId)
+          if (userUpdate.azureB2CId.contains(AzureB2CId("null"))) None
+          else if (userUpdate.azureB2CId.isDefined) userUpdate.azureB2CId
           else user.azureB2CId,
         updatedAt = Instant.now()
       )

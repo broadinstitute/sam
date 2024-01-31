@@ -206,38 +206,14 @@ class UserService(
       case Some(user) =>
         // validate all fields to be updated
         var errorReports = Seq[ErrorReport]()
-        request.email.foreach(email => errorReports = errorReports ++ validateEmail(email, blockedEmailDomains))
         request.azureB2CId.foreach(azureB2CId => errorReports = errorReports ++ validateAzureB2CId(azureB2CId))
+        errorReports = errorReports ++ request.isValid(user)
         if (errorReports.nonEmpty) {
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
         } else { // apply all updates
-          val userUpdate = UserUpdate(request.azureB2CId.map(_.value), request.googleSubjectId.map(_.value))
-
-          userUpdate match {
-            case UserUpdate(Some("null"), None) if user.googleSubjectId.isEmpty =>
-              IO.raiseError(
-                new WorkbenchExceptionWithErrorReport(
-                  ErrorReport(StatusCodes.BadRequest, "Cannot null a user's azureB2CId when the user has no googleSubjectId")
-                )
-              )
-            case UserUpdate(None, Some("null")) if user.azureB2CId.isEmpty =>
-              IO.raiseError(
-                new WorkbenchExceptionWithErrorReport(
-                  ErrorReport(StatusCodes.BadRequest, "Cannot null a user's googleSubjectId when the user has no azureB2CId")
-                )
-              )
-            case _ =>
-              val updatedUser = if (request.azureB2CId.isDefined || request.googleSubjectId.isDefined) {
-                directoryDAO.updateUser(user, userUpdate, samRequestContext)
-              } else IO(Option(user))
-
-              if (request.email.isDefined) {
-                updatedUser.map { u =>
-                  directoryDAO.updateUserEmail(userId, request.email.get, samRequestContext)
-                  u.map(_.copy(email = request.email.get))
-                }
-              } else updatedUser
-          }
+          if (request.azureB2CId.isDefined || request.googleSubjectId.isDefined) {
+            directoryDAO.updateUser(user, request, samRequestContext)
+          } else IO(Option(user))
         }
       case None => IO(None)
     }
