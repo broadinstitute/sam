@@ -11,21 +11,13 @@ import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{
-  AdminUpdateUserRequest,
-  SamUser,
-  SamUserAllowances,
-  SamUserAttributes,
-  SamUserAttributesRequest,
-  SamUserRegistrationRequest
-}
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.security.SecureRandom
 import java.time.Instant
-import java.util.regex.Pattern
 import javax.naming.NameNotFoundException
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
@@ -41,8 +33,6 @@ class UserService(
 )(implicit
     val executionContext: ExecutionContext
 ) extends LazyLogging {
-  val UUID_REGEX =
-    Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
   // this is what's currently called
   def createUser(possibleNewUser: SamUser, samRequestContext: SamRequestContext): IO[UserStatus] =
     createUser(possibleNewUser, None, samRequestContext)
@@ -154,11 +144,6 @@ class UserService(
       Option(ErrorReport("cannot create user when neither google subject id nor azure b2c id exists"))
     } else None
 
-  private def validateAzureB2CId(azureB2CId: AzureB2CId): Option[ErrorReport] =
-    if (!UUID_REGEX.matcher(azureB2CId.value).matches() && !(azureB2CId.value == "null")) {
-      Option(ErrorReport(s"invalid azureB2CId [${azureB2CId.value}]"))
-    } else None
-
   private def validateEmail(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): Option[ErrorReport] =
     if (!UserService.emailRegex.matches(email.value)) {
       Option(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]"))
@@ -205,9 +190,7 @@ class UserService(
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         // validate all fields to be updated
-        var errorReports = Seq[ErrorReport]()
-        request.azureB2CId.foreach(azureB2CId => errorReports = errorReports ++ validateAzureB2CId(azureB2CId))
-        errorReports = errorReports ++ request.isValid(user)
+        val errorReports = request.isValid(user)
         if (errorReports.nonEmpty) {
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
         } else { // apply all updates

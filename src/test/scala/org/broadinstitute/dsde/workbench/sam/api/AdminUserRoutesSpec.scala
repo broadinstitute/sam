@@ -72,6 +72,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser() // enabled "admin" user who is making the http request
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
       .build
     val newGoogleSubjectId = Some(GoogleSubjectId("newGoogleSubjectId"))
     val requestBody = AdminUpdateUserRequest(None, newGoogleSubjectId)
