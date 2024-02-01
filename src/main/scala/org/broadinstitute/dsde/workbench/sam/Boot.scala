@@ -354,7 +354,7 @@ object Boot extends IOApp with LazyLogging {
     val maybeVersion = Option(getClass.getPackage.getImplementationVersion)
     val resourceBuilder =
       resources.Resource.getDefault.toBuilder
-        .put(ResourceAttributes.SERVICE_NAME, "rawls")
+        .put(ResourceAttributes.SERVICE_NAME, "sam")
     maybeVersion.foreach(version => resourceBuilder.put(ResourceAttributes.SERVICE_VERSION, version))
     val resource = HostResource
       .get()
