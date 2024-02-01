@@ -363,14 +363,55 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     }
 
   override def filterResources(
-      samUser: SamUser,
+      samUserId: WorkbenchUserId,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
-  ): IO[Seq[FilterResourcesResult]] =
-    IO.pure(Seq.empty)
+  ): IO[Seq[FilterResourcesResult]] = IO {
+    resourceTypeNames
+      .flatMap { resourceTypeName =>
+        this.policies.collect {
+          case (fqPolicyId @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
+              if accessPolicy.members.contains(samUserId) || accessPolicy.public =>
+            val rolesAndActions = RolesAndActions.fromPolicy(accessPolicy)
+            rolesAndActions.roles.flatMap { role =>
+              if (actions.isEmpty) {
+                Set(
+                  FilterResourcesResult(
+                    fqPolicyId.resource.resourceId,
+                    fqPolicyId.resource.resourceTypeName,
+                    Some(fqPolicyId.accessPolicyName),
+                    Some(role),
+                    None,
+                    accessPolicy.public,
+                    None,
+                    false,
+                    false
+                  )
+                )
+              } else {
+                rolesAndActions.actions.map { action =>
+                  FilterResourcesResult(
+                    fqPolicyId.resource.resourceId,
+                    fqPolicyId.resource.resourceTypeName,
+                    Some(fqPolicyId.accessPolicyName),
+                    Some(role),
+                    Some(action),
+                    accessPolicy.public,
+                    None,
+                    false,
+                    false
+                  )
+                }
+              }
+            }
+        }
+      }
+      .flatten
+      .toSeq
+  }
 
 }

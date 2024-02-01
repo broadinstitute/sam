@@ -927,7 +927,8 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     // Read the policies
     Get(s"/api/resources/v2/${resourceType.name}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[List[UserResourcesResponse]].size should equal(1)
+      val response = responseAs[List[UserResourcesResponse]]
+      response.size should equal(1)
     }
   }
 

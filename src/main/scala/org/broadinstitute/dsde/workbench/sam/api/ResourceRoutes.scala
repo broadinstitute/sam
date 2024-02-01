@@ -259,7 +259,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
 
   def getUserResourcesOfType(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     get {
-      complete(policyEvaluatorService.listUserResources(resourceType.name, samUser.id, samRequestContext))
+      complete(resourceService.listUserResources(resourceType.name, samUser.id, samRequestContext))
     }
 
   def postResource(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
@@ -590,7 +590,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
           complete {
             resourceService
               .listResourcesFlat(
-                samUser,
+                samUser.id,
                 resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
                 policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
                 roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
@@ -604,7 +604,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
           complete {
             resourceService
               .listResourcesHierarchical(
-                samUser,
+                samUser.id,
                 resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
                 policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
                 roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),

@@ -108,7 +108,7 @@ trait AccessPolicyDAO {
       }
     }
   def filterResources(
-      samUser: SamUser,
+      samUserId: WorkbenchUserId,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
