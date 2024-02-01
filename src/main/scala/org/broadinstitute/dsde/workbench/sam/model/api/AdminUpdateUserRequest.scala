@@ -18,13 +18,13 @@ object AdminUpdateUserRequest {
       azureB2CId: Option[AzureB2CId],
       googleSubjectId: Option[GoogleSubjectId]
   ): AdminUpdateUserRequest =
-    AdminUpdateUserRequest(azureB2CId, googleSubjectId)
+    new AdminUpdateUserRequest(azureB2CId, googleSubjectId)
 }
 @Lenses final case class AdminUpdateUserRequest(
     azureB2CId: Option[AzureB2CId],
     googleSubjectId: Option[GoogleSubjectId]
 ) {
-  val UUID_REGEX =
+  private val UUID_REGEX =
     Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
   private def validateAzureB2CId(azureB2CId: AzureB2CId): Option[ErrorReport] =
     if (!UUID_REGEX.matcher(azureB2CId.value).matches() && !(azureB2CId.value == "null")) {
@@ -35,9 +35,9 @@ object AdminUpdateUserRequest {
     var errorReports = Seq[ErrorReport]()
     azureB2CId.foreach(azureB2CId => errorReports = errorReports ++ validateAzureB2CId(azureB2CId))
     if (azureB2CId.contains(AzureB2CId("null")) && user.googleSubjectId.isEmpty)
-      errorReports = errorReports ++ Seq(ErrorReport(StatusCodes.BadRequest, "Unable to null azureB2CId when the user's googleSubjectId is already null"))
+      errorReports = errorReports ++ Seq(ErrorReport(StatusCodes.BadRequest, "Unable to null azureB2CId when the user's googleSubjectId is already null."))
     else if (googleSubjectId.contains(GoogleSubjectId("null")) && user.azureB2CId.isEmpty)
-      errorReports = errorReports ++ Seq(ErrorReport(StatusCodes.BadRequest, "Unable to null googleSubjectId when the user's azureB2CId is already null"))
+      errorReports = errorReports ++ Seq(ErrorReport(StatusCodes.BadRequest, "Unable to null googleSubjectId when the user's azureB2CId is already null."))
     errorReports
   }
 }
