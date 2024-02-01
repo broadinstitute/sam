@@ -136,6 +136,8 @@ object Dependencies {
   val otelInstrumentationApiSemconv: ModuleID =
     "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-semconv" % (openTelemetryVersion + "-alpha")
   val otelPrometheusExporter: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-prometheus" % (openTelemetryVersion + "-alpha")
+  val otelInstrumentationResources: ModuleID =
+    "io.opentelemetry.instrumentation" % "opentelemetry-resources" % (openTelemetryVersion + "-alpha")
 
   // Google cloud open telemetry exporters
   var gcpOpenTelemetryExporterVersion = "0.25.2"
@@ -151,7 +153,8 @@ object Dependencies {
     otelInstrumentationApi,
     otelInstrumentationApiSemconv,
     otelPrometheusExporter,
-    googleTraceExporter
+    googleTraceExporter,
+    otelInstrumentationResources
   )
 
   val pact4sDependencies = Seq(
@@ -169,6 +172,8 @@ object Dependencies {
 
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
+
+  val openApiParser: ModuleID = "io.swagger.parser.v3" % "swagger-parser-v3" % "2.1.20"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -219,6 +224,7 @@ object Dependencies {
     azureManagedApplications,
     sentry,
     sentryLogback,
-    okio
+    okio,
+    openApiParser
   ) ++ openTelemetryDependencies
 }
