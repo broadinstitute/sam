@@ -153,7 +153,7 @@ class UpdateUserSpec extends UserServiceTestTraits {
           "Nulling a user's googleSubjectId when the user has no azureB2CId should have a Bad Request status"
         )
         assert(
-          error.errorReport.causes.head.message  equals "Unable to null googleSubjectId when the user's azureB2CId is already null.",
+          error.errorReport.causes.head.message equals "Unable to null googleSubjectId when the user's azureB2CId is already null.",
           "Nulling a user's azureB2CId when the user has no googleSubjectId should send back a invalid update message"
         )
       }
