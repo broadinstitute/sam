@@ -4,11 +4,6 @@ import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model._
 import spray.json.{DefaultJsonProtocol, JsObject, JsString, JsValue, RootJsonFormat, deserializationError}
-@Lenses final case class AdminUpdateUserRequest(
-    googleSubjectId: Option[GoogleSubjectId],
-    email: Option[WorkbenchEmail],
-    enabled: Option[Boolean]
-)
 
 // AccessPolicyMembership.memberPolicies is logically read-only; at some point in the future it could be lazy-loaded
 // (via extra queries) based on the contents of memberEmails.

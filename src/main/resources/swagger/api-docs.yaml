@@ -43,7 +43,8 @@ paths:
     patch:
       tags:
         - Admin
-      summary: Updates given fields on a user, by user id
+      summary: Updates given fields on a user record in the database. Ids can be nulled by sending 'null' as the value of the id in the request.
+        An azureB2CId cannot be set to null if the user already has a null googleSubjectId and vice versa.
       operationId: adminUpdateUser
       parameters:
         - name: userId
@@ -4334,16 +4335,12 @@ components:
     UpdateUserRequest:
       type: object
       properties:
+        azureB2CId:
+          type: string
+          description: User's Azure B2C Id, can be set to null
         googleSubjectId:
           type: string
-          description: User's Google subject Id
-        email:
-          type: string
-          description: User's email address
-          format: email
-        enabled:
-          type: boolean
-          description: Whether or not the user is enabled
+          description: User's Google subject Id, can be set to null
       description: specification of a UpdateUserRequest
     FilteredResourceResponse:
       type: object

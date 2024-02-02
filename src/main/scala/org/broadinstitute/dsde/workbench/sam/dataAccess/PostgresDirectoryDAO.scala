@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -468,6 +468,58 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+
+  override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    serializableWriteTransaction("updateUser", samRequestContext) { implicit session =>
+      val u = UserTable.column
+
+      // NOTE updating emails and 'enabled' status is currently not supported by this method
+      val setColumnsClause = userUpdate match {
+        case AdminUpdateUserRequest(None, None) => throw new WorkbenchException("Cannot update user with no values.")
+        case AdminUpdateUserRequest(Some(newAzureB2CId), None) =>
+          samsqls"(${u.azureB2cId}, ${u.updatedAt})"
+        case AdminUpdateUserRequest(None, Some(newGoogleSubjectId)) =>
+          samsqls"(${u.googleSubjectId}, ${u.updatedAt})"
+        case AdminUpdateUserRequest(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
+          samsqls"(${u.googleSubjectId}, ${u.azureB2cId}, ${u.updatedAt})"
+      }
+
+      var updatedUser =
+        samUser.copy(
+          googleSubjectId = userUpdate.googleSubjectId.orElse(samUser.googleSubjectId),
+          azureB2CId = userUpdate.azureB2CId.orElse(samUser.azureB2CId),
+          updatedAt = Instant.now()
+        )
+      val setColumnValuesClause = userUpdate match {
+        case AdminUpdateUserRequest(None, None) => throw new WorkbenchException("Cannot update user with no values.")
+        case AdminUpdateUserRequest(Some(AzureB2CId("null")), None) =>
+          updatedUser = updatedUser.copy(azureB2CId = None)
+          // string interpolation adds quotes around null so we have to special case it here
+          samsqls"(null, ${Instant.now()})"
+        case AdminUpdateUserRequest(None, Some(GoogleSubjectId("null"))) =>
+          updatedUser = updatedUser.copy(googleSubjectId = None)
+          // string interpolation adds quotes around null so we have to special case it here
+          samsqls"(null, ${Instant.now()})"
+        case AdminUpdateUserRequest(Some(newGoogleSubjectId), None) =>
+          samsqls"($newGoogleSubjectId, ${Instant.now()})"
+        case AdminUpdateUserRequest(None, Some(newAzureB2CId)) =>
+          samsqls"($newAzureB2CId, ${Instant.now()})"
+        case AdminUpdateUserRequest(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
+          samsqls"($newGoogleSubjectId, $newAzureB2CId, ${Instant.now()})"
+      }
+
+      val results = samsql"""update ${UserTable.table}
+               set ${setColumnsClause} = ${setColumnValuesClause}
+               where ${u.id} = ${samUser.id}"""
+        .update()
+        .apply()
+
+      if (results != 1) {
+        None
+      } else {
+        Option(updatedUser)
+      }
+    }
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteUser", samRequestContext) { implicit session =>
