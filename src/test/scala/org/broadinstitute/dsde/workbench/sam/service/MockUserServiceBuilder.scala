@@ -1,18 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.google.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
-import org.broadinstitute.dsde.workbench.sam.model.api.{
-  AdminUpdateUserRequest,
-  SamUser,
-  SamUserAllowances,
-  SamUserAttributes,
-  SamUserAttributesRequest,
-  SamUserRegistrationRequest
-}
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, argThat, eqTo}
@@ -107,7 +98,16 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     mockUserService.getUser(eqTo(samUser.id), any[SamRequestContext]) answers ((_: WorkbenchUserId) => IO(Option(samUser)))
     mockUserService.deleteUser(eqTo(samUser.id), any[SamRequestContext]) returns IO(())
     mockUserService.updateUserCrud(eqTo(samUser.id), any[AdminUpdateUserRequest], any[SamRequestContext]) answers (
-      (_: WorkbenchUserId, r: AdminUpdateUserRequest) => IO(Option(samUser.copy(email = r.email.get)))
+      (_: WorkbenchUserId, r: AdminUpdateUserRequest, _: SamRequestContext) => {
+        val newAzureB2CId = if (r.azureB2CId.contains(AzureB2CId("null"))) None else if (r.azureB2CId.isDefined) r.azureB2CId else samUser.azureB2CId
+        val newGoogleSubjectId =
+          if (r.googleSubjectId.contains(GoogleSubjectId("null"))) None else if (r.googleSubjectId.isDefined) r.googleSubjectId else samUser.googleSubjectId
+        val newUser = samUser.copy(
+          azureB2CId = newAzureB2CId,
+          googleSubjectId = newGoogleSubjectId
+        )
+        IO(Option(newUser))
+      }
     )
     mockUserService.enableUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
       IO(None)
@@ -213,13 +213,6 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     ) returns IO(userAttributes)
   }
 
-  private def handleMalformedEmail(mockUserService: UserService): Unit =
-    if (isBadEmail) {
-      mockUserService.updateUserCrud(any[WorkbenchUserId], any[AdminUpdateUserRequest], any[SamRequestContext]) returns {
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", Seq())))
-      }
-    } else ()
-
   // The order that dictates the priority of the mocks should be handled in this build method
   // so that individual tests do not need to be concerned about what order the builder methods are called
   // the more specific the matcher, the later it should be defined as the priority of mock invokes are last in first out
@@ -232,7 +225,6 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     allowedUsers.foreach(u => makeUserAppearAllowed(u, mockUserService))
     disallowedUsers.foreach(u => makeUserAppearDisallowed(u, mockUserService))
     userAttributesSet.foreach(tup => makeUserAttributesAppear(tup._1, tup._2, mockUserService))
-    handleMalformedEmail(mockUserService)
     mockUserService
   }
 }

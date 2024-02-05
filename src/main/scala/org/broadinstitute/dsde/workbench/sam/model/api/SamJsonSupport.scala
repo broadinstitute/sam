@@ -101,8 +101,6 @@ object SamJsonSupport {
 
   implicit val UserPolicyResponseFormat = jsonFormat5(UserPolicyResponse.apply)
 
-  implicit val UserUpdateRequestFormat = jsonFormat3(AdminUpdateUserRequest.apply)
-
   implicit val RolesAndActionsFormat = jsonFormat2(RolesAndActions.apply)
 
   implicit val UserResourcesResponseFormat = jsonFormat6(UserResourcesResponse.apply)
