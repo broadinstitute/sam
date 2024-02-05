@@ -1,4 +1,4 @@
-FROM us.gcr.io/broad-dsp-gcr-public/base/jre:17-debian
+FROM mcr.microsoft.com/devcontainers/java:dev-17-buster
 
 # To run, build jar using ./docker/build.sh
 
