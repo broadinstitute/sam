@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/java:dev-17-buster
+FROM mcr.microsoft.com/devcontainers/java:dev-17-jdk-bullseye
 
 # To run, build jar using ./docker/build.sh
 
