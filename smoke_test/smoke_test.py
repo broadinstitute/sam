@@ -49,7 +49,11 @@ def main(main_args):
     test_suite = gather_tests(main_args.user_token)
 
     runner = unittest.TextTestRunner(verbosity=main_args.verbosity)
-    runner.run(test_suite)
+    result = runner.run(test_suite)
+
+    # system exit if any tests fail
+    if result.failures or result.errors:
+        sys.exit(1)
 
 
 def verify_user_token(user_token: str) -> bool:
