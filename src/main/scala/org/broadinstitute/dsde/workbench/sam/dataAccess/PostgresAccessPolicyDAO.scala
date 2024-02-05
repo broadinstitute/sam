@@ -1738,7 +1738,7 @@ class PostgresAccessPolicyDAO(
           $notNullConstraintPolicyAction
                 """
 
-    val includePublicPolicyActionQuery = samsqls"union $publicPolicyActionQuery"
+    val includePublicPolicyActionQuery = samsqls"union all $publicPolicyActionQuery"
     val publicResourcesQuery = samsql"$publicRoleActionQuery $includePublicPolicyActionQuery"
 
     readOnlyTransaction("filterResourcesPublic", samRequestContext) { implicit session =>
@@ -1836,7 +1836,7 @@ class PostgresAccessPolicyDAO(
             $notNullConstraintPolicyAction
             """
 
-    val includePolicyActionQuery = if (roles.isEmpty) samsqls"union $policyActionQuery" else samsqls""
+    val includePolicyActionQuery = if (roles.isEmpty) samsqls"union all $policyActionQuery" else samsqls""
     val query =
       samsqls"""$policyRoleActionQuery
                             $includePolicyActionQuery"""
