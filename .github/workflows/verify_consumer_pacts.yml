@@ -78,6 +78,7 @@ jobs:
   # When triggered by a Pact Broker webhook, the provider version (GIT hash or release tag)
   # is already included in the payload, then a new version tag wouldn't be needed.
   #
+  #
   regulated-tag-job:
     uses: ./.github/workflows/tag.yml
     with:
