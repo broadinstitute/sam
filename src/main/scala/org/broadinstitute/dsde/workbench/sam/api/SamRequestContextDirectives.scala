@@ -3,19 +3,19 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, Directive1, ExceptionHandler}
+import bio.terra.common.opentelemetry.HttpServerMetrics
 import io.opentelemetry.api.GlobalOpenTelemetry
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.context.Context
 import io.opentelemetry.context.propagation.TextMapGetter
-import io.opentelemetry.instrumentation.api.instrumenter.http.{
+import io.opentelemetry.instrumentation.api.instrumenter.Instrumenter
+import io.opentelemetry.instrumentation.api.semconv.http.{
   HttpServerAttributesExtractor,
   HttpServerAttributesGetter,
-  HttpServerMetrics,
   HttpServerRoute,
   HttpServerRouteSource,
   HttpSpanStatusExtractor
 }
-import io.opentelemetry.instrumentation.api.instrumenter.Instrumenter
 import org.apache.commons.lang3.StringUtils
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.model.{ValueObject, WorkbenchEmail, WorkbenchUserId}
