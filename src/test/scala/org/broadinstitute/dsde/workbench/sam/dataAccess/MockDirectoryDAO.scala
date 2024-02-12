@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -127,6 +127,28 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     users -= userId
+  }
+
+  override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
+    val updatedUser = for {
+      user <- users.get(samUser.id)
+      updatedUser = user.copy(
+        googleSubjectId =
+          if (userUpdate.googleSubjectId.contains(GoogleSubjectId("null"))) None
+          else if (userUpdate.googleSubjectId.isDefined) userUpdate.googleSubjectId
+          else user.googleSubjectId,
+        azureB2CId =
+          if (userUpdate.azureB2CId.contains(AzureB2CId("null"))) None
+          else if (userUpdate.azureB2CId.isDefined) userUpdate.azureB2CId
+          else user.azureB2CId,
+        updatedAt = Instant.now()
+      )
+    } yield updatedUser
+
+    IO.pure(updatedUser.map { user =>
+      users.put(samUser.id, user)
+      user
+    })
   }
 
   override def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = IO {

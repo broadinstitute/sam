@@ -3,11 +3,12 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive1, ExceptionHandler}
+import bio.terra.common.opentelemetry.HttpServerMetrics
 import io.opentelemetry.api.GlobalOpenTelemetry
 import io.opentelemetry.context.Context
 import io.opentelemetry.context.propagation.TextMapGetter
 import io.opentelemetry.instrumentation.api.instrumenter.Instrumenter
-import io.opentelemetry.instrumentation.api.instrumenter.http._
+import io.opentelemetry.instrumentation.api.semconv.http._
 import org.broadinstitute.dsde.workbench.model.ValueObject
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
