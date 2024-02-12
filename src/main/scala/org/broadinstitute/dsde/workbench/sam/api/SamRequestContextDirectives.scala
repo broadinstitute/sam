@@ -1,6 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive1, ExceptionHandler}
 import bio.terra.common.opentelemetry.HttpServerMetrics
@@ -9,11 +9,9 @@ import io.opentelemetry.context.Context
 import io.opentelemetry.context.propagation.TextMapGetter
 import io.opentelemetry.instrumentation.api.instrumenter.Instrumenter
 import io.opentelemetry.instrumentation.api.semconv.http._
-import org.broadinstitute.dsde.workbench.model.ValueObject
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.util
-import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
@@ -40,16 +38,6 @@ trait SamRequestContextDirectives {
       clientIP <- extractClientIP
       otelContext <- traceRequest
     } yield SamRequestContext(Option(otelContext), clientIP.toOption)
-
-  /** Constructs a route from the uri and the parameters and values. Replace the values in the uri with the parameter name enclosed with braces. For example, if
-    * the uri is /api/resource/123 and the parameters are ("resourceId", "123"), then the route will be /api/resource/{resourceId}.
-    */
-  private def constructRoute(uri: Uri, paramAndValues: Seq[(String, ValueObject)]): String = {
-    val path = uri.path.toString()
-    paramAndValues.foldLeft(path) { case (acc, (param, value)) =>
-      acc.replaceFirst(Pattern.quote(s"/${value.value}"), s"/{$param}")
-    }
-  }
 
   private def traceRequest(): Directive1[Context] =
     extractRequest.flatMap { req =>
