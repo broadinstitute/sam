@@ -18,6 +18,8 @@ object Merging {
     case "module-info.class" =>
       MergeStrategy.discard
     case x if x.endsWith("arrow-git.properties") => MergeStrategy.concat
+    case "logback.xml" => MergeStrategy.first
+    case PathList("META-INF", "spring-configuration-metadata.json") => MergeStrategy.discard // don't need no stinkin' spring
     case x => oldStrategy(x)
   }
 }
