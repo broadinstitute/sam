@@ -153,6 +153,8 @@ object Dependencies {
   def excludePostgresql = ExclusionRule("org.postgresql", "postgresql")
   def excludeSnakeyaml = ExclusionRule("org.yaml", "snakeyaml")
   def excludeLiquibase = ExclusionRule("org.liquibase")
+  def excludeOpenTelemetrySpringBoot = ExclusionRule("io.opentelemetry.instrumentation", "opentelemetry-spring-boot")
+  def excludeOpenTelemetrySpringWebmvc = ExclusionRule("io.opentelemetry.instrumentation", "opentelemetry-spring-webmvc-6.0")
   def tclExclusions(m: ModuleID): ModuleID = m.excludeAll(
     excludeSpringBoot,
     excludeSpringAop,
@@ -164,7 +166,9 @@ object Dependencies {
     excludePostgresql,
     excludeSnakeyaml,
     excludeSlf4j,
-    excludeLiquibase
+    excludeLiquibase,
+    excludeOpenTelemetrySpringBoot,
+    excludeOpenTelemetrySpringWebmvc
   )
 
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
