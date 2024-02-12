@@ -11,14 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{
-  AdminUpdateUserRequest,
-  SamUser,
-  SamUserAllowances,
-  SamUserAttributes,
-  SamUserAttributesRequest,
-  SamUserRegistrationRequest
-}
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -197,17 +190,13 @@ class UserService(
     directoryDAO.loadUser(userId, samRequestContext).flatMap {
       case Some(user) =>
         // validate all fields to be updated
-        var errorReports = Seq[ErrorReport]()
-        request.email.foreach(email => errorReports = errorReports ++ validateEmail(email, blockedEmailDomains))
+        val errorReports = request.isValid(user)
         if (errorReports.nonEmpty) {
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "invalid user update", errorReports)))
         } else { // apply all updates
-          var updatedUser = user
-          request.email.foreach { email =>
-            directoryDAO.updateUserEmail(userId, email, samRequestContext)
-            updatedUser = user.copy(email = email)
-          }
-          IO(Some(updatedUser))
+          if (request.azureB2CId.isDefined || request.googleSubjectId.isDefined) {
+            directoryDAO.updateUser(user, request, samRequestContext)
+          } else IO(Option(user))
         }
       case None => IO(None)
     }

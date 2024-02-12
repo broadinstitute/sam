@@ -3,7 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -31,7 +31,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       .build
     when(
       samRoutes.resourceService.listResourcesFlat(
-        any[SamUser],
+        any[WorkbenchUserId],
         any[Set[ResourceTypeName]],
         any[Set[AccessPolicyName]],
         any[Set[ResourceRoleName]],
@@ -58,7 +58,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
     )
     when(
       samRoutes.resourceService.listResourcesHierarchical(
-        any[SamUser],
+        any[WorkbenchUserId],
         any[Set[ResourceTypeName]],
         any[Set[AccessPolicyName]],
         any[Set[ResourceRoleName]],
@@ -91,7 +91,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       status shouldEqual StatusCodes.OK
     }
     verify(samRoutes.resourceService).listResourcesFlat(
-      any[SamUser],
+      any[WorkbenchUserId],
       eqTo(Set.empty),
       eqTo(Set.empty),
       eqTo(Set.empty),
@@ -106,7 +106,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       status shouldEqual StatusCodes.OK
     }
     verify(samRoutes.resourceService).listResourcesFlat(
-      any[SamUser],
+      any[WorkbenchUserId],
       eqTo(Set(ResourceTypeName("fooType"), ResourceTypeName("barType"))),
       eqTo(Set(AccessPolicyName("fooPolicy"))),
       eqTo(Set(ResourceRoleName("fooRole"), ResourceRoleName("barRole"), ResourceRoleName("bazRole"))),
@@ -121,7 +121,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       status shouldEqual StatusCodes.OK
     }
     verify(samRoutes.resourceService).listResourcesHierarchical(
-      any[SamUser],
+      any[WorkbenchUserId],
       eqTo(Set(ResourceTypeName("fooType"), ResourceTypeName("barType"))),
       eqTo(Set(AccessPolicyName("fooPolicy"))),
       eqTo(Set(ResourceRoleName("fooRole"), ResourceRoleName("barRole"), ResourceRoleName("bazRole"))),

@@ -288,6 +288,11 @@ class ResourceService(
     for {
       resourceType <- getResourceType(resource.resourceTypeName)
       _ <- validateAuthDomain(resourceType.get, authDomains, userId, samRequestContext)
+      accessPolicies <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
+      _ <-
+        if (accessPolicies.exists(_.public)) {
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot add an auth domain group to a public resource")))
+        } else IO.unit
       policies <- listResourcePolicies(resource, samRequestContext)
       _ <- accessPolicyDAO.addResourceAuthDomain(resource, authDomains, samRequestContext)
       _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), samRequestContext)
@@ -964,8 +969,34 @@ class ResourceService(
     FilteredResourcesHierarchical(resources = groupedFilteredResources)
   }
 
+  private def toUserResourcesResponse(hierarchicalResource: FilteredResourceHierarchical): UserResourcesResponse = {
+    val directPolicies = hierarchicalResource.policies.filter(p => !p.inherited)
+    val inheritedPolicies = hierarchicalResource.policies.filter(p => p.inherited)
+    val publicPolicies = hierarchicalResource.policies.filter(p => p.isPublic)
+
+    def policiesToRolesAndActions(policies: Set[FilteredResourceHierarchicalPolicy]) =
+      RolesAndActions(policies.flatMap(_.roles.map(_.role)), policies.flatMap(_.actions))
+
+    UserResourcesResponse(
+      hierarchicalResource.resourceId,
+      policiesToRolesAndActions(directPolicies),
+      policiesToRolesAndActions(inheritedPolicies),
+      policiesToRolesAndActions(publicPolicies),
+      hierarchicalResource.authDomainGroups,
+      hierarchicalResource.missingAuthDomainGroups
+    )
+  }
+  def listUserResources(
+      resourceTypeName: ResourceTypeName,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[Iterable[UserResourcesResponse]] =
+    for {
+      resources <- listResourcesHierarchical(userId, Set(resourceTypeName), Set.empty, Set.empty, Set.empty, true, samRequestContext)
+    } yield resources.resources.map(toUserResourcesResponse)
+
   def listResourcesFlat(
-      samUser: SamUser,
+      samUserId: WorkbenchUserId,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
@@ -973,10 +1004,10 @@ class ResourceService(
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesFlat] =
-    accessPolicyDAO.filterResources(samUser, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupFlat)
+    accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupFlat)
 
   def listResourcesHierarchical(
-      samUser: SamUser,
+      samUserId: WorkbenchUserId,
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
@@ -984,5 +1015,7 @@ class ResourceService(
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesHierarchical] =
-    accessPolicyDAO.filterResources(samUser, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupHierarchical)
+    accessPolicyDAO
+      .filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+      .map(groupHierarchical)
 }

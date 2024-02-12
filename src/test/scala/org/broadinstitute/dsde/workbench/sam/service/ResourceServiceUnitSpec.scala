@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
-import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
@@ -83,11 +83,44 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     ),
     // Testable DB Results
     FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), false, None, false, false),
+    FilterResourcesResult(
+      testResourceId,
+      resourceTypeName,
+      Some(testPolicy1),
+      Some(readerRoleName),
+      Some(readAction),
+      false,
+      None,
+      false,
+      false
+    ), // testing duplicate row results
+    FilterResourcesResult(
+      testResourceId,
+      resourceTypeName,
+      Some(testPolicy1),
+      Some(readerRoleName),
+      Some(readAction),
+      false,
+      None,
+      false,
+      false
+    ), // testing duplicate row results
     FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, true, None, false, false),
     FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, false, None, false, false),
     FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false, None, false, false),
     FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), false, None, false, false),
     FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), None, Some(readAction), true, None, false, false),
+    FilterResourcesResult(
+      testResourceId,
+      resourceTypeName,
+      Some(testPolicy5),
+      None,
+      Some(readAction),
+      true,
+      None,
+      false,
+      false
+    ), // testing duplicate row results
     // Auth Domain Results
     FilterResourcesResult(
       testResourceId2,
@@ -116,7 +149,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   val mockAccessPolicyDAO = mock[AccessPolicyDAO]
   when(
     mockAccessPolicyDAO.filterResources(
-      any[SamUser],
+      any[WorkbenchUserId],
       any[Set[ResourceTypeName]],
       any[Set[AccessPolicyName]],
       any[Set[ResourceRoleName]],
@@ -140,7 +173,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   )
 
   "ResourceService" should "group filtered resources from the database appropriately flatly" in {
-    val filteredResources = resourceService.listResourcesFlat(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+    val filteredResources = resourceService.listResourcesFlat(dummyUser.id, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
 
     val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
     oneResource.resourceType should be(resourceTypeName)
@@ -168,7 +201,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   it should "group filtered resources from the database appropriately hierarchically" in {
 
     val filteredResources =
-      resourceService.listResourcesHierarchical(dummyUser, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+      resourceService.listResourcesHierarchical(dummyUser.id, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
 
     val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
     oneResource.resourceType should be(resourceTypeName)
