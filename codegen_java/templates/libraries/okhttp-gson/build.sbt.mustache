@@ -12,6 +12,7 @@ lazy val root = (project in file(".")).
     javacOptions in compile ++= Seq("-Xlint:deprecation"),
     publishArtifact in (Compile, packageDoc) := false,
     resolvers += Resolver.mavenLocal,
+    dependencyOverrides += "org.json" %% "json" % "20240205",
     libraryDependencies ++= Seq(
       "io.swagger" % "swagger-annotations" % "1.6.5",
       "com.squareup.okhttp3" % "okhttp" % "4.10.0",
