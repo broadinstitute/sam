@@ -125,6 +125,10 @@ object Dependencies {
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
   val circeCore = "io.circe" %% "circe-core" % "0.14.4"
 
+  val openTelemetryInstrumentationVersion = "2.0.0"
+  val otelInstrumentationResources: ModuleID =
+    "io.opentelemetry.instrumentation" % "opentelemetry-resources" % (openTelemetryInstrumentationVersion + "-alpha")
+
   val pact4sDependencies = Seq(
     pact4sScalaTest,
     pact4sCirce,
@@ -149,6 +153,8 @@ object Dependencies {
   def excludePostgresql = ExclusionRule("org.postgresql", "postgresql")
   def excludeSnakeyaml = ExclusionRule("org.yaml", "snakeyaml")
   def excludeLiquibase = ExclusionRule("org.liquibase")
+  def excludeOpenTelemetrySpringBoot = ExclusionRule("io.opentelemetry.instrumentation", "opentelemetry-spring-boot")
+  def excludeOpenTelemetrySpringWebmvc = ExclusionRule("io.opentelemetry.instrumentation", "opentelemetry-spring-webmvc-6.0")
   def tclExclusions(m: ModuleID): ModuleID = m.excludeAll(
     excludeSpringBoot,
     excludeSpringAop,
@@ -160,13 +166,17 @@ object Dependencies {
     excludePostgresql,
     excludeSnakeyaml,
     excludeSlf4j,
-    excludeLiquibase
+    excludeLiquibase,
+    excludeOpenTelemetrySpringBoot,
+    excludeOpenTelemetrySpringWebmvc
   )
 
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
 
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
+
+  val openApiParser: ModuleID = "io.swagger.parser.v3" % "swagger-parser-v3" % "2.1.20"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -218,6 +228,8 @@ object Dependencies {
     sentry,
     sentryLogback,
     okio,
+    openApiParser,
+    otelInstrumentationResources,
     terraCommonLib
   )
 }
