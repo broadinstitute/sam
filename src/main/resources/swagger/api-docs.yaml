@@ -4281,7 +4281,7 @@ components:
         - updatedAt
       properties:
         id:
-          type: number
+          type: string
           description: User's Id
         googleSubjectId:
           type: string
