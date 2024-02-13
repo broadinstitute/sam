@@ -4281,7 +4281,7 @@ components:
         - updatedAt
       properties:
         id:
-          type: string
+          type: number
           description: User's Id
         googleSubjectId:
           type: string
@@ -4315,17 +4315,21 @@ components:
         allowed:
           type: boolean
           description: is the user allowed to use the system
+          nullable: false
         details:
           $ref: '#/components/schemas/SamUserAllowancesDetails'
     SamUserAllowancesDetails:
       type: object
+      nullable: false
       properties:
         enabled:
           type: boolean
           description: is the user enabled
+          nullable: false
         termsOfService:
           type: boolean
           description: has the user accepted the terms of service
+          nullable: false
     SamUserAttributes:
       type: object
       properties:
