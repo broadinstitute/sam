@@ -44,7 +44,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
       asWorkbenchAdmin(samUser) {
         path("email" / Segment) { email =>
           val workbenchEmail = WorkbenchEmail(email)
-          getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
+          get {
             complete {
               userService
                 .getUserStatusFromEmail(workbenchEmail, samRequestContext)
@@ -55,19 +55,19 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
         pathPrefix(Segment) { userId =>
           val workbenchUserId = WorkbenchUserId(userId)
           pathEnd {
-            deleteWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+            delete {
               complete {
                 userService.deleteUser(workbenchUserId, samRequestContext).map(_ => OK)
               }
             } ~
-            getWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+            get {
               complete {
                 userService
                   .getUserStatus(workbenchUserId, samRequestContext = samRequestContext)
                   .map(status => (if (status.isDefined) OK else NotFound) -> status)
               }
             } ~
-            patchWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+            patch {
               entity(as[AdminUpdateUserRequest]) { request =>
                 complete {
                   userService
@@ -79,7 +79,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           } ~
           pathPrefix("enable") {
             pathEndOrSingleSlash {
-              putWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+              put {
                 complete {
                   userService
                     .enableUser(workbenchUserId, samRequestContext)
@@ -90,7 +90,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           } ~
           pathPrefix("disable") {
             pathEndOrSingleSlash {
-              putWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+              put {
                 complete {
                   userService
                     .disableUser(workbenchUserId, samRequestContext)
@@ -102,7 +102,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           // This will get removed once ID-87 is resolved
           pathPrefix("repairAllUsersGroup") {
             pathEndOrSingleSlash {
-              putWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+              put {
                 complete {
                   userService
                     .addToAllUsersGroup(workbenchUserId, samRequestContext)
@@ -114,7 +114,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           pathPrefix("petServiceAccount") {
             path(Segment) { project =>
               val googleProject = GoogleProject(project)
-              deleteWithTelemetry(samRequestContext, userIdParam(workbenchUserId), googleProjectParam(googleProject)) {
+              delete {
                 complete {
                   cloudExtensions
                     .deleteUserPetServiceAccount(workbenchUserId, googleProject, samRequestContext)
@@ -132,7 +132,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
       pathPrefix(Segment) { userId =>
         val workbenchUserId = WorkbenchUserId(userId)
         pathEnd {
-          getWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+          get {
             complete {
               userService
                 .getUser(workbenchUserId, samRequestContext = samRequestContext)
@@ -148,7 +148,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
       withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
         val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
         pathEndOrSingleSlash {
-          getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
+          get {
             requireAdminResourceAction(adminReadPolicies, resourceType, user, samRequestContext) {
               complete {
                 resourceService
@@ -163,7 +163,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           val workbenchEmail = WorkbenchEmail(userEmail)
           pathEndOrSingleSlash {
             withSubject(workbenchEmail, samRequestContext) { subject =>
-              putWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
+              put {
                 requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
                   complete {
                     resourceService
@@ -172,7 +172,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                   }
                 }
               } ~
-              deleteWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
+              delete {
                 requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
                   complete {
                     resourceService
@@ -193,7 +193,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
         withNonAdminResourceType(ResourceTypeName(resourceTypeNameToAdminister)) { resourceTypeToAdminister =>
           val resource = FullyQualifiedResourceId(resourceTypeAdminName, ResourceId(resourceTypeToAdminister.name.value))
           pathEndOrSingleSlash {
-            getWithTelemetry(samRequestContext, resourceTypeParam(resourceTypeToAdminister)) {
+            get {
               complete {
                 resourceService
                   .listResourcePolicies(resource, samRequestContext)
@@ -204,7 +204,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           pathPrefix(Segment) { policyName =>
             val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
             pathEndOrSingleSlash {
-              putWithTelemetry(samRequestContext, policyParams(policyId): _*) {
+              put {
                 entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
                   withResourceType(resourceTypeAdminName) { resourceTypeAdmin =>
                     complete {
@@ -215,7 +215,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                   }
                 }
               } ~
-              deleteWithTelemetry(samRequestContext, policyParams(policyId): _*) {
+              delete {
                 complete(resourceService.deletePolicy(policyId, samRequestContext).as(NoContent))
               }
             }

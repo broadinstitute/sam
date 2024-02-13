@@ -21,6 +21,7 @@ object Dependencies {
   val workbenchOauth2V = s"0.5-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.30-SNAPSHOT"
+  val tclVersion = "0.1.11-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -63,7 +64,8 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
-  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.85.Final"
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.100.Final"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.0.39"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.1"
@@ -124,35 +126,9 @@ object Dependencies {
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
   val circeCore = "io.circe" %% "circe-core" % "0.14.4"
 
-  // OpenTelemetry
-  val openTelemetryVersion = "1.31.0"
-  val otelApi: ModuleID = "io.opentelemetry" % "opentelemetry-api" % openTelemetryVersion
-  val otelSdk: ModuleID = "io.opentelemetry" % "opentelemetry-sdk" % openTelemetryVersion
-  val otelSdkMetrics: ModuleID = "io.opentelemetry" % "opentelemetry-sdk-metrics" % openTelemetryVersion
-  val otelExporterLogging: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-logging" % openTelemetryVersion
-  val otelSemconv: ModuleID = "io.opentelemetry.semconv" % "opentelemetry-semconv" % "1.21.0-alpha"
-  val otelAnnotation: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-annotations" % openTelemetryVersion
-  val otelInstrumentationApi: ModuleID = "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api" % openTelemetryVersion
-  val otelInstrumentationApiSemconv: ModuleID =
-    "io.opentelemetry.instrumentation" % "opentelemetry-instrumentation-api-semconv" % (openTelemetryVersion + "-alpha")
-  val otelPrometheusExporter: ModuleID = "io.opentelemetry" % "opentelemetry-exporter-prometheus" % (openTelemetryVersion + "-alpha")
-
-  // Google cloud open telemetry exporters
-  var gcpOpenTelemetryExporterVersion = "0.25.2"
-  var googleTraceExporter: ModuleID = "com.google.cloud.opentelemetry" % "exporter-trace" % gcpOpenTelemetryExporterVersion
-
-  val openTelemetryDependencies = Seq(
-    otelApi,
-    otelSdk,
-    otelSdkMetrics,
-    otelExporterLogging,
-    otelSemconv,
-    otelAnnotation,
-    otelInstrumentationApi,
-    otelInstrumentationApiSemconv,
-    otelPrometheusExporter,
-    googleTraceExporter
-  )
+  val openTelemetryInstrumentationVersion = "2.0.0"
+  val otelInstrumentationResources: ModuleID =
+    "io.opentelemetry.instrumentation" % "opentelemetry-resources" % (openTelemetryInstrumentationVersion + "-alpha")
 
   val pact4sDependencies = Seq(
     pact4sScalaTest,
@@ -167,8 +143,41 @@ object Dependencies {
   val azureManagedApplications: ModuleID =
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
+  def excludeSpringBoot = ExclusionRule("org.springframework.boot")
+  def excludeSpringAop = ExclusionRule("org.springframework.spring-aop")
+  def excludeSpringData = ExclusionRule("org.springframework.data")
+  def excludeSpringFramework = ExclusionRule("org.springframework")
+  def excludeOpenCensus = ExclusionRule("io.opencensus")
+  def excludeGoogleFindBugs = ExclusionRule("com.google.code.findbugs")
+  def excludeBroadWorkbench = ExclusionRule("org.broadinstitute.dsde.workbench")
+  def excludeSlf4j = ExclusionRule("org.slf4j")
+  def excludePostgresql = ExclusionRule("org.postgresql", "postgresql")
+  def excludeSnakeyaml = ExclusionRule("org.yaml", "snakeyaml")
+  def excludeLiquibase = ExclusionRule("org.liquibase")
+  def excludeOpenTelemetrySpringBoot = ExclusionRule("io.opentelemetry.instrumentation", "opentelemetry-spring-boot")
+  def excludeOpenTelemetrySpringWebmvc = ExclusionRule("io.opentelemetry.instrumentation", "opentelemetry-spring-webmvc-6.0")
+  def tclExclusions(m: ModuleID): ModuleID = m.excludeAll(
+    excludeSpringBoot,
+    excludeSpringAop,
+    excludeSpringData,
+    excludeSpringFramework,
+    excludeOpenCensus,
+    excludeGoogleFindBugs,
+    excludeBroadWorkbench,
+    excludePostgresql,
+    excludeSnakeyaml,
+    excludeSlf4j,
+    excludeLiquibase,
+    excludeOpenTelemetrySpringBoot,
+    excludeOpenTelemetrySpringWebmvc
+  )
+
+  val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
+
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
+
+  val openApiParser: ModuleID = "io.swagger.parser.v3" % "swagger-parser-v3" % "2.1.20"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -216,9 +225,13 @@ object Dependencies {
     postgres,
     cloudResourceLib,
     nettyAll,
+    reactorNetty,
     azureManagedApplications,
     sentry,
     sentryLogback,
-    okio
-  ) ++ openTelemetryDependencies
+    okio,
+    openApiParser,
+    otelInstrumentationResources,
+    terraCommonLib
+  )
 }
