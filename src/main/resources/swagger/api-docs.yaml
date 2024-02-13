@@ -4316,8 +4316,16 @@ components:
           type: boolean
           description: is the user allowed to use the system
         details:
-          type: object
-          description: details of the user's allowances
+          $ref: '#/components/schemas/SamUserAllowancesDetails'
+    SamUserAllowancesDetails:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: is the user enabled
+        termsOfService:
+          type: boolean
+          description: has the user accepted the terms of service
     SamUserAttributes:
       type: object
       properties:
