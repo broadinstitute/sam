@@ -269,19 +269,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
             val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
             val googleProject = GoogleProject(project)
             val resourceAction = ResourceAction(action)
-            val params =
-              Seq(
-                "googleProject" -> googleProject,
-                "resourceTypeName" -> resource.resourceTypeName,
-                "resourceId" -> resource.resourceId,
-                actionParam(resourceAction)
-              )
+
             withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
               if (!resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
                 throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
               }
               pathEndOrSingleSlash {
-                postWithTelemetry(samRequestContext, params: _*) {
+                post {
                   complete {
                     googleExtensions.actionServiceAccounts.createActionServiceAccount(resource, googleProject, resourceAction, samRequestContext).map {
                       StatusCodes.OK -> _
@@ -291,7 +285,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               } ~
                 pathPrefix("signedUrlForBlob") {
                   pathEndOrSingleSlash {
-                    postWithTelemetry(samRequestContext, params: _*) {
+                    post {
                       requireAction(resource, resourceAction, samUser.id, samRequestContext) {
                         entity(as[RequesterPaysSignedUrlRequest]) { request =>
                           complete {
