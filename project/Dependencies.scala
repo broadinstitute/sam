@@ -27,8 +27,6 @@ object Dependencies {
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 = ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
   val excludeAkkaStream = ExclusionRule(organization = "com.typesafe.akka", name = "akka-stream_2.12")
-  val excludeCloudResourceLib = ExclusionRule(organization = "bio.terra", name = "terra-cloud-resource-lib_2.12")
-  val excludeCommonLib = ExclusionRule(organization = "bio.terra", name = "terra-common-lib_2.12")
   val excludeWorkbenchUtil = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
   val excludeWorkbenchUtil2 = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util2_2.12")
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
@@ -67,7 +65,7 @@ object Dependencies {
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
   val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.85.Final"
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.0.39" excludeAll (excludeCloudResourceLib, excludeCommonLib)
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.0.39"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.1"
