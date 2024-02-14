@@ -40,7 +40,6 @@ lazy val root = (project in file(".")).
       "com.novocode" % "junit-interface" % "0.10" % "test",
       "javax.annotation" % "javax.annotation-api" % "1.3.2",
       "org.json" % "json" % "20240205"
-    ),
-    dependencyOverrides += "org.json" % "json" % "20240205") ++ publishSettings:_*
+    )) ++ publishSettings:_*
   )
 
