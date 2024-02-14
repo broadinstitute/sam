@@ -2082,6 +2082,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2/{resourceTypeName}/{resourceId}/user/policies:
+    get:
+      tags:
+        - Resources
+      summary: List the policies the calling user is a part of for a resource. Takes into account auth domain membership.
+      operationId: listUserResourcePoliciesV2
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Policies successfully listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        403:
+          description: Unauthorized
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/resources/v2/{resourceTypeName}/{resourceId}/policies/{policyName}:
     get:
       tags:

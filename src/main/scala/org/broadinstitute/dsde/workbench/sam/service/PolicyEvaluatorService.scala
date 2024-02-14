@@ -72,6 +72,30 @@ class PolicyEvaluatorService(
     } yield res
   }
 
+  def listUserResourcePolicies(resource: FullyQualifiedResourceId, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[AccessPolicyName]] = {
+    for {
+      rt <- IO.fromEither[ResourceType](
+        resourceTypes.get(resource.resourceTypeName).toRight(new WorkbenchException(s"missing configuration for resourceType ${resource.resourceTypeName}"))
+      )
+      isConstrainable = rt.isAuthDomainConstrainable
+      policiesOnResource <- accessPolicyDAO.listUserAccessPoliciesOnResource(resource, userId, samRequestContext)
+      res <- if (isConstrainable) {
+        for {
+          authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
+          policies <- authDomainsResult match {
+            case LoadResourceAuthDomainResult.Constrained(authDomains) =>
+              isMemberOfAllAuthDomainGroups(authDomains, userId, samRequestContext).map {
+                case true => policiesOnResource
+                case false => Set.empty[AccessPolicyName]
+              }
+            case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
+              policiesOnResource.pure[IO]
+          }
+        } yield policies
+      } else policiesOnResource.pure[IO]
+    } yield res
+  }
+
   /** Lists all the actions a user has on the specified resource
     *
     * @param resource

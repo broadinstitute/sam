@@ -136,6 +136,7 @@ object UserStatusDetails {
 
 @Lenses final case class ResourceId(value: String) extends ValueObject
 @Lenses final case class ResourceIdAndPolicyName(resourceId: ResourceId, accessPolicyName: AccessPolicyName)
+@Lenses final case class ResourceIdAndPolicies(resourceId: ResourceId, resourceTypeName: ResourceTypeName, policies: Set[AccessPolicyResponseEntry])
 
 /** Response from AccessPolicyDAO.listUserResourcesWithRolesAndActions.
   * @param resourceId

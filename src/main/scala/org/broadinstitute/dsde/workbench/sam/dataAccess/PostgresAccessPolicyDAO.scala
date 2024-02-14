@@ -1360,6 +1360,32 @@ class PostgresAccessPolicyDAO(
     }
   }
 
+  def listUserAccessPoliciesOnResource(
+      fullyQualifiedResource: FullyQualifiedResourceId,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[Set[AccessPolicyName]] = {
+    val resource = ResourceTable.syntax("resource")
+    val resourceType = ResourceTypeTable.syntax("resourceType")
+    val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
+    val policy = PolicyTable.syntax("policy")
+
+    readOnlyTransaction("listUserAccessPoliciesWithAuthDomains", samRequestContext) { implicit session =>
+      samsql"""select ${policy.result.name},
+         from ${PolicyTable as policy}
+         join ${GroupMemberFlatTable as groupMemberFlat} on ${groupMemberFlat.groupId} = ${policy.groupId}
+         join ${ResourceTable as resource} on ${resource.id} = ${policy.resourceId}
+         join ${ResourceTypeTable as resourceType} on ${resourceType.id} = ${resource.resourceTypeId}
+         where ${resourceType.name} = ${fullyQualifiedResource.resourceTypeName}
+         and ${resource.name} = ${fullyQualifiedResource.resourceId}
+         and ${groupMemberFlat.memberUserId} = ${userId}"""
+        .map { rs => AccessPolicyName(rs.string(policy.resultName.name))}
+        .list()
+        .apply()
+        .toSet
+    }
+  }
+
   override def listUserResourcesWithRolesAndActions(
       resourceTypeName: ResourceTypeName,
       userId: WorkbenchUserId,

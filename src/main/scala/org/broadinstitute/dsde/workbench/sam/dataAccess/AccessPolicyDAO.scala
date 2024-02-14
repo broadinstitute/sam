@@ -73,6 +73,11 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[Set[AccessPolicyWithoutMembers]]
 
+  def listUserAccessPoliciesOnResource(
+      fullyQualifiedResource: FullyQualifiedResourceId,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[Set[AccessPolicyName]]
   def listUserResourceActions(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceAction]]
 
   def listUserResourceRoles(resourceId: FullyQualifiedResourceId, user: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]]

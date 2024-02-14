@@ -191,6 +191,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                   getResourceChildren(resource, samUser, samRequestContext)
                 }
               } ~
+              pathPrefix("user" / "policies") {} ~
               pathPrefix("policies") {
                 pathEndOrSingleSlash {
                   getResourcePolicies(resource, samUser, samRequestContext)

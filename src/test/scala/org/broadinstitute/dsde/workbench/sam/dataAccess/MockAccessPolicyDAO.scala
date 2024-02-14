@@ -236,6 +236,12 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
         .to(LazyList)
     )
 
+  def listUserAccessPoliciesOnResource(
+      fullyQualifiedResource: FullyQualifiedResourceId,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): IO[Set[AccessPolicyName]] = ???
+
   override def getResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = IO(None)
 
   override def setResourceParent(
