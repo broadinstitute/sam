@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.data.NonEmptyList
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipResponse
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, _}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipResponse, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /** Created by dvoet on 6/26/17.
@@ -107,6 +107,16 @@ trait AccessPolicyDAO {
         ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
       }
     }
+  def filterResources(
+      samUserId: WorkbenchUserId,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[FilterResourcesResult]]
+
 }
 
 sealed abstract class LoadResourceAuthDomainResult

@@ -11,23 +11,24 @@ object Dependencies {
   val postgresDriverVersion = "42.5.0"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "32f499b"
-  val workbenchUtilV = s"0.9-$workbenchLibV"
-  val workbenchUtil2V = s"0.4-$workbenchLibV"
-  val workbenchModelV = s"0.18-$workbenchLibV"
-  val workbenchGoogleV = s"0.27-$workbenchLibV"
-  val workbenchGoogle2V = s"0.30-$workbenchLibV"
-  val workbenchNotificationsV = s"0.5-$workbenchLibV"
-  val workbenchOauth2V = s"0.4-$workbenchLibV"
-  val workbenchOpenTelemetryV = s"0.5-$workbenchLibV"
+  val workbenchLibV = "5781917" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchUtilV = s"0.10-$workbenchLibV"
+  val workbenchUtil2V = s"0.8-$workbenchLibV"
+  val workbenchModelV = s"0.19-$workbenchLibV"
+  val workbenchGoogleV = s"0.30-$workbenchLibV"
+  val workbenchGoogle2V = s"0.35-$workbenchLibV"
+  val workbenchNotificationsV = s"0.6-$workbenchLibV"
+  val workbenchOauth2V = s"0.5-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.12-SNAPSHOT"
+  val crlVersion = "1.2.30-SNAPSHOT"
+  val tclVersion = "0.1.11-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
   val excludeAkkaProtobufV3 = ExclusionRule(organization = "com.typesafe.akka", name = "akka-protobuf-v3_2.12")
   val excludeAkkaStream = ExclusionRule(organization = "com.typesafe.akka", name = "akka-stream_2.12")
   val excludeWorkbenchUtil = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util_2.12")
+  val excludeWorkbenchUtil2 = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-util2_2.12")
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_2.12")
   val excludeWorkbenchMetrics = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-metrics_2.12")
   val excludeWorkbenchGoogle = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-google_2.12")
@@ -36,6 +37,7 @@ object Dependencies {
   val excludeSLF4J = ExclusionRule(organization = "org.slf4j")
   val excludeJerseyCore = ExclusionRule(organization = "org.glassfish.jersey.core", name = "*")
   val excludeJerseyMedia = ExclusionRule(organization = "org.glassfish.jersey.media", name = "*")
+  val excludeAwsSdk = ExclusionRule(organization = "software.amazon.awssdk", name = "*")
 
   val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
   val sentryLogback: ModuleID = "io.sentry" % "sentry-logback" % sentryVersion
@@ -45,7 +47,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.5"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.14"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
@@ -62,7 +64,8 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
-  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.85.Final"
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.100.Final"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.0.39"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.1"
@@ -86,9 +89,6 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil)
   val workbenchOauth2: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V
   val workbenchOauth2Tests: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-oauth2" % workbenchOauth2V % "test" classifier "tests"
-  val workbenchOpenTelemetry: ModuleID = "org.broadinstitute.dsde.workbench" %% "workbench-opentelemetry" % workbenchOpenTelemetryV
-  val workbenchOpenTelemetryTest: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-opentelemetry" % workbenchOpenTelemetryV % "test" classifier "tests"
   // the name of the auto-value package changed from auto-value to auto-value-annotations so old libraries are not evicted
   // leading to merge errors during sbt assembly. At this time the old version of auto-value is pulled in through the google2
   // workbench-libs dependency so exclude auto-value from there
@@ -103,7 +103,7 @@ object Dependencies {
   val workbenchGoogle2Tests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.126.10" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.7" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
@@ -115,15 +115,10 @@ object Dependencies {
   val scalikeCoreTest = "org.scalikejdbc" %% "scalikejdbc-test" % scalikejdbcVersion % "test"
   val postgres = "org.postgresql" % "postgresql" % postgresDriverVersion
 
-  val excludeScalaCllectionCompat = ExclusionRule(organization = "org.scala-lang.modules", name = "scala-collection-compat_2.12")
-  val opencensusScalaCode: ModuleID = "com.github.sebruck" %% "opencensus-scala-core" % "0.7.2" // excludeAll(excludIoGrpc, excludeCatsEffect )
-  val opencensusAkkaHttp: ModuleID =
-    "com.github.sebruck" %% "opencensus-scala-akka-http" % "0.7.2" excludeAll (excludeAkkaProtobufV3, excludeAkkaStream) // excludeAll(excludIoGrpc, excludeCatsEffect)
-  val opencensusStackDriverExporter: ModuleID =
-    "io.opencensus" % "opencensus-exporter-trace-stackdriver" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
-  val opencensusLoggingExporter: ModuleID = "io.opencensus" % "opencensus-exporter-trace-logging" % "0.31.1" // excludeAll(excludIoGrpc, excludeCatsEffect)
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
+
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.4.0" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
@@ -131,12 +126,9 @@ object Dependencies {
   val pact4sCirce = "io.github.jbwheatley" %% "pact4s-circe" % pact4sV
   val circeCore = "io.circe" %% "circe-core" % "0.14.4"
 
-  val openCensusDependencies = Seq(
-    opencensusScalaCode,
-    opencensusAkkaHttp,
-    opencensusStackDriverExporter,
-    opencensusLoggingExporter
-  )
+  val openTelemetryInstrumentationVersion = "2.0.0"
+  val otelInstrumentationResources: ModuleID =
+    "io.opentelemetry.instrumentation" % "opentelemetry-resources" % (openTelemetryInstrumentationVersion + "-alpha")
 
   val pact4sDependencies = Seq(
     pact4sScalaTest,
@@ -147,12 +139,45 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J, excludeAwsSdk)
   val azureManagedApplications: ModuleID =
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
+  def excludeSpringBoot = ExclusionRule("org.springframework.boot")
+  def excludeSpringAop = ExclusionRule("org.springframework.spring-aop")
+  def excludeSpringData = ExclusionRule("org.springframework.data")
+  def excludeSpringFramework = ExclusionRule("org.springframework")
+  def excludeOpenCensus = ExclusionRule("io.opencensus")
+  def excludeGoogleFindBugs = ExclusionRule("com.google.code.findbugs")
+  def excludeBroadWorkbench = ExclusionRule("org.broadinstitute.dsde.workbench")
+  def excludeSlf4j = ExclusionRule("org.slf4j")
+  def excludePostgresql = ExclusionRule("org.postgresql", "postgresql")
+  def excludeSnakeyaml = ExclusionRule("org.yaml", "snakeyaml")
+  def excludeLiquibase = ExclusionRule("org.liquibase")
+  def excludeOpenTelemetrySpringBoot = ExclusionRule("io.opentelemetry.instrumentation", "opentelemetry-spring-boot")
+  def excludeOpenTelemetrySpringWebmvc = ExclusionRule("io.opentelemetry.instrumentation", "opentelemetry-spring-webmvc-6.0")
+  def tclExclusions(m: ModuleID): ModuleID = m.excludeAll(
+    excludeSpringBoot,
+    excludeSpringAop,
+    excludeSpringData,
+    excludeSpringFramework,
+    excludeOpenCensus,
+    excludeGoogleFindBugs,
+    excludeBroadWorkbench,
+    excludePostgresql,
+    excludeSnakeyaml,
+    excludeSlf4j,
+    excludeLiquibase,
+    excludeOpenTelemetrySpringBoot,
+    excludeOpenTelemetrySpringWebmvc
+  )
+
+  val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
+
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
+
+  val openApiParser: ModuleID = "io.swagger.parser.v3" % "swagger-parser-v3" % "2.1.20"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -190,8 +215,6 @@ object Dependencies {
     googleStorageLocal,
     workbenchOauth2,
     workbenchOauth2Tests,
-    workbenchOpenTelemetry,
-    workbenchOpenTelemetryTest,
     commonsCodec,
     liquibaseCore,
     circeYAML,
@@ -202,8 +225,13 @@ object Dependencies {
     postgres,
     cloudResourceLib,
     nettyAll,
+    reactorNetty,
     azureManagedApplications,
     sentry,
-    sentryLogback
-  ) ++ openCensusDependencies
+    sentryLogback,
+    okio,
+    openApiParser,
+    otelInstrumentationResources,
+    terraCommonLib
+  )
 }

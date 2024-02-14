@@ -1,7 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.util
 
 import cats.effect.IO
-import io.opencensus.trace.AttributeValue
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
 import org.broadinstitute.dsde.workbench.util.addJitter
 import org.postgresql.util.PSQLException
@@ -9,13 +8,21 @@ import scalikejdbc._
 
 import scala.concurrent.duration._
 import cats.effect.Temporal
+import io.opentelemetry.api.common.{AttributeKey, Attributes}
 
 trait DatabaseSupport {
   protected val writeDbRef: DbReference
   protected val readDbRef: DbReference
+  protected val readReplicaDbRef: Option[DbReference] = None
 
   protected def readOnlyTransaction[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A): IO[A] = {
     val databaseIO = IO(readDbRef.readOnly(databaseFunction))
+    readDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO)
+  }
+
+  protected def readOnlyTransactionReadReplica[A](dbQueryName: String, samRequestContext: SamRequestContext)(databaseFunction: DBSession => A): IO[A] = {
+    val dbRef = readReplicaDbRef.getOrElse(readDbRef)
+    val databaseIO = IO(dbRef.readOnly(databaseFunction))
     readDbRef.runDatabaseIO(dbQueryName, samRequestContext, databaseIO)
   }
 
@@ -64,7 +71,12 @@ trait DatabaseSupport {
       sleepDuration: FiniteDuration = 20 millis
   )(implicit timer: Temporal[IO]): IO[A] =
     writeDbRef
-      .runDatabaseIO(dbQueryName, samRequestContext, transactionIO, Map("trial" -> AttributeValue.longAttributeValue(trialNumber.longValue())))
+      .runDatabaseIO(
+        dbQueryName,
+        samRequestContext,
+        transactionIO,
+        Attributes.of(AttributeKey.longKey("trial"), java.lang.Long.valueOf(trialNumber.longValue()))
+      )
       .handleErrorWith {
         case psqlE: PSQLException if psqlE.getSQLState == PSQLStateExtensions.SERIALIZATION_FAILURE && trialNumber < maxTries =>
           timer.sleep(addJitter(sleepDuration, sleepDuration / 2)) *> attemptSerializableTransaction(

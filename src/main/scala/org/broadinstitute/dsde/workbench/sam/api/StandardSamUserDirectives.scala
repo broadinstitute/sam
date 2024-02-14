@@ -13,9 +13,10 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import org.broadinstitute.dsde.workbench.sam.service.{TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.concurrent.ExecutionContext
@@ -27,7 +28,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getActiveSamUser(oidcHeaders, userService, tosService, samRequestContext).unsafeToFuture()
+      getActiveSamUser(oidcHeaders, userService, termsOfServiceConfig, samRequestContext).unsafeToFuture()
     }.tmap { samUser =>
       logger.debug(s"Handling request for active Sam User: $samUser")
       samUser
@@ -61,7 +62,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     val googleSubjectId = (oidcHeaders.externalId.left.toOption ++ oidcHeaders.googleSubjectIdFromAzure).headOption
     val azureB2CId = oidcHeaders.externalId.toOption // .right is missing (compared to .left above) since Either is Right biased
 
-    SamUser(genWorkbenchUserId(System.currentTimeMillis()), googleSubjectId, oidcHeaders.email, azureB2CId, false, None)
+    SamUser(genWorkbenchUserId(System.currentTimeMillis()), googleSubjectId, oidcHeaders.email, azureB2CId, false)
   }
 
   /** Utility function that knows how to convert all the various headers into OIDCHeaders
@@ -88,6 +89,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
 object StandardSamUserDirectives {
   val SAdomain: Regex = "(\\S+@\\S*gserviceaccount\\.com$)".r
+  val UAMIdomain: Regex = "(\\S+@\\S*uami\\.terra\\.bio$)".r
   // UAMI == "User Assigned Managed Identity" in Azure
   val UamiPattern: Regex = "(^/subscriptions/\\S+/resourcegroups/\\S+/providers/Microsoft\\.ManagedIdentity/userAssignedIdentities/\\S+$)".r
   val accessTokenHeader = "OIDC_access_token"
@@ -119,15 +121,21 @@ object StandardSamUserDirectives {
         loadUserMaybeUpdateAzureB2CId(azureB2CId, oidcHeaders.googleSubjectIdFromAzure, userService, samRequestContext)
     }
 
-  def getActiveSamUser(oidcHeaders: OIDCHeaders, userService: UserService, tosService: TosService, samRequestContext: SamRequestContext): IO[SamUser] =
+  def getActiveSamUser(
+      oidcHeaders: OIDCHeaders,
+      userService: UserService,
+      termsOfServiceConfig: TermsOfServiceConfig,
+      samRequestContext: SamRequestContext
+  ): IO[SamUser] =
     for {
       user <- getSamUser(oidcHeaders, userService, samRequestContext)
-      tosComplianceDetails <- tosService.getTosComplianceStatus(user)
+      allowances <- userService.getUserAllowances(user, samRequestContext)
     } yield {
-      if (!tosComplianceDetails.permitsSystemUsage) {
-        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User must accept the latest terms of service."))
+      if (!allowances.getTermsOfServiceCompliance) {
+        val goToUrl = termsOfServiceConfig.acceptanceUrl.map(url => s" Please go to $url to accept the latest terms of service.").getOrElse("")
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, s"User must accept the latest terms of service.$goToUrl"))
       }
-      if (!user.enabled) {
+      if (!allowances.getEnabled) {
         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Unauthorized, "User is disabled."))
       }
 

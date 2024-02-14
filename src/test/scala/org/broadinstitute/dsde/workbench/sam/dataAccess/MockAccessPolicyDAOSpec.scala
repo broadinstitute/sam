@@ -1,12 +1,14 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
+import akka.actor.ActorSystem
+import akka.testkit.TestKit
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
@@ -15,11 +17,24 @@ import scala.language.reflectiveCalls
 
 /** Created by dvoet on 6/26/17.
   */
-class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport with BeforeAndAfter with BeforeAndAfterAll {
+class MockAccessPolicyDAOSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
+    with Matchers
+    with TestSupport
+    with BeforeAndAfter
+    with BeforeAndAfterAll {
   private val dummyUser = Generator.genWorkbenchUserGoogle.sample.get
 
-  override protected def beforeAll(): Unit =
+  def this() = this(ActorSystem("MockAccessPolicyDAOSpec"))
+
+  override def beforeAll(): Unit =
     super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 
   before {
     TestSupport.truncateAll
@@ -50,7 +65,7 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
     val policyEvaluatorService = PolicyEvaluatorService(shared.emailDomain, shared.resourceTypes, ldapPolicyDao, ldapDirDao)
     val resourceService =
       new ResourceService(shared.resourceTypes, policyEvaluatorService, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain, Set.empty)
-    val userService = new UserService(ldapDirDao, NoExtensions, Seq.empty, new TosService(ldapDirDao, TestSupport.tosConfig))
+    val userService = new UserService(ldapDirDao, NoExtensions, Seq.empty, new TosService(NoExtensions, ldapDirDao, TestSupport.tosConfig))
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, ldapPolicyDao, ldapDirDao, NoExtensions, shared.emailDomain)
     shared.resourceTypes foreach { case (_, resourceType) => resourceService.createResourceType(resourceType, samRequestContext).unsafeRunSync() }
@@ -66,7 +81,7 @@ class MockAccessPolicyDAOSpec extends AnyFlatSpec with Matchers with TestSupport
     val resourceService =
       new ResourceService(shared.resourceTypes, policyEvaluatorService, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain, Set.empty)
     val userService =
-      new UserService(mockDirectoryDAO, NoExtensions, Seq.empty, new TosService(mockDirectoryDAO, TestSupport.tosConfig))
+      new UserService(mockDirectoryDAO, NoExtensions, Seq.empty, new TosService(NoExtensions, mockDirectoryDAO, TestSupport.tosConfig))
     val managedGroupService =
       new ManagedGroupService(resourceService, policyEvaluatorService, shared.resourceTypes, mockPolicyDAO, mockDirectoryDAO, NoExtensions, shared.emailDomain)
   }

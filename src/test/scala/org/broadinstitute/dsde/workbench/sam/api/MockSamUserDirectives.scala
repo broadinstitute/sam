@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives._
 import cats.effect.unsafe.implicits.global
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /** Created by dvoet on 6/7/17.
@@ -18,7 +18,7 @@ trait MockSamUserDirectives extends SamUserDirectives {
     OIDCHeaders(OAuth2BearerToken("dummy token"), user.googleSubjectId.toLeft(user.azureB2CId.get), user.email, user.googleSubjectId)
 
   override def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
-    StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, userService, tosService, samRequestContext).unsafeToFuture()
+    StandardSamUserDirectives.getActiveSamUser(fakeOidcHeaders, userService, termsOfServiceConfig, samRequestContext).unsafeToFuture()
   }
 
   override def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = onSuccess {
@@ -29,4 +29,5 @@ trait MockSamUserDirectives extends SamUserDirectives {
     case None => failWith(new Exception("samUser not specified"))
     case Some(u) => provide(u)
   }
+
 }

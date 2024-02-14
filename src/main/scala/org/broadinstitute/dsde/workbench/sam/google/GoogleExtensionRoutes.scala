@@ -17,8 +17,9 @@ import org.broadinstitute.dsde.workbench.sam.api.{
   SecurityDirectives,
   ioMarshaller
 }
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -42,24 +43,31 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
           samRequestContext
         ) {
           path(Segment / "key") { userEmail =>
-            complete {
-              import spray.json._
-              googleExtensions.getArbitraryPetServiceAccountKey(WorkbenchEmail(userEmail), samRequestContext) map {
-                // parse json to ensure it is json and tells akka http the right content-type
-                case Some(key) => StatusCodes.OK -> key.parseJson
-                case None =>
-                  throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
-              }
-            }
-          } ~
-            path(Segment / Segment) { (project, userEmail) =>
+            val email = WorkbenchEmail(userEmail)
+            get {
               complete {
                 import spray.json._
-                googleExtensions.getPetServiceAccountKey(WorkbenchEmail(userEmail), GoogleProject(project), samRequestContext) map {
+                googleExtensions.getArbitraryPetServiceAccountKey(email, samRequestContext) map {
                   // parse json to ensure it is json and tells akka http the right content-type
                   case Some(key) => StatusCodes.OK -> key.parseJson
                   case None =>
                     throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
+                }
+              }
+            }
+          } ~
+            path(Segment / Segment) { (project, userEmail) =>
+              val email = WorkbenchEmail(userEmail)
+              val googleProject = GoogleProject(project)
+              get {
+                complete {
+                  import spray.json._
+                  googleExtensions.getPetServiceAccountKey(email, googleProject, samRequestContext) map {
+                    // parse json to ensure it is json and tells akka http the right content-type
+                    case Some(key) => StatusCodes.OK -> key.parseJson
+                    case None =>
+                      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
+                  }
                 }
               }
             }
@@ -93,9 +101,10 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               }
             } ~
             pathPrefix(Segment) { project =>
+              val projectResourceId = ResourceId(project)
               pathPrefix("key") {
                 requireOneOfActionIfParentIsWorkspace(
-                  FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
+                  FullyQualifiedResourceId(SamResourceTypes.googleProjectName, projectResourceId),
                   Set(SamResourceActions.createPet),
                   samUser.id,
                   samRequestContext
@@ -113,10 +122,11 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   }
                 } ~
                   path(Segment) { keyId =>
+                    val serviceAccountKeyId = ServiceAccountKeyId(keyId)
                     delete {
                       complete {
                         googleExtensions
-                          .removePetServiceAccountKey(samUser.id, GoogleProject(project), ServiceAccountKeyId(keyId), samRequestContext)
+                          .removePetServiceAccountKey(samUser.id, GoogleProject(project), serviceAccountKeyId, samRequestContext)
                           .map(_ => StatusCodes.NoContent)
                       }
                     }
@@ -124,7 +134,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               } ~
                 pathPrefix("token") {
                   requireOneOfActionIfParentIsWorkspace(
-                    FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
+                    FullyQualifiedResourceId(SamResourceTypes.googleProjectName, projectResourceId),
                     Set(SamResourceActions.createPet),
                     samUser.id,
                     samRequestContext
@@ -144,7 +154,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 } ~
                 pathPrefix("signedUrlForBlob") {
                   requireOneOfAction(
-                    FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
+                    FullyQualifiedResourceId(SamResourceTypes.googleProjectName, projectResourceId),
                     Set(SamResourceActions.createPet),
                     samUser.id,
                     samRequestContext
@@ -172,7 +182,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 } ~
                 pathEnd {
                   requireOneOfActionIfParentIsWorkspace(
-                    FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project)),
+                    FullyQualifiedResourceId(SamResourceTypes.googleProjectName, projectResourceId),
                     Set(SamResourceActions.createPet),
                     samUser.id,
                     samRequestContext
@@ -194,19 +204,43 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
             }
         } ~
         pathPrefix("user") {
-          path("proxyGroup" / Segment) { targetUserEmail =>
-            complete {
-              googleExtensions.getUserProxy(WorkbenchEmail(targetUserEmail), samRequestContext).map {
-                case Some(proxyEmail) => StatusCodes.OK -> Option(proxyEmail)
-                case _ => StatusCodes.NotFound -> None
+          pathPrefix("signedUrlForBlob") {
+            post {
+              entity(as[RequesterPaysSignedUrlRequest]) { request =>
+                complete {
+                  googleExtensions
+                    .getRequesterPaysSignedUrl(
+                      samUser,
+                      request.gsPath,
+                      request.duration,
+                      request.requesterPaysProject.map(GoogleProject),
+                      samRequestContext
+                    )
+                    .map { signedUrl =>
+                      StatusCodes.OK -> JsString(signedUrl.toString)
+                    }
+                }
               }
             }
-          }
+          } ~
+            path("proxyGroup" / Segment) { targetUserEmail =>
+              val workbenchEmail = WorkbenchEmail(targetUserEmail)
+              get {
+                complete {
+                  googleExtensions.getUserProxy(workbenchEmail, samRequestContext).map {
+                    case Some(proxyEmail) => StatusCodes.OK -> Option(proxyEmail)
+                    case _ => StatusCodes.NotFound -> None
+                  }
+                }
+              }
+            }
         } ~
         pathPrefix("resource") {
           path(Segment / Segment / Segment / "sync") { (resourceTypeName, resourceId, accessPolicyName) =>
             val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
             val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(accessPolicyName))
+            val params =
+              Seq("resourceTypeName" -> resource.resourceTypeName, "resourceId" -> resource.resourceId, "accessPolicyName" -> policyId.accessPolicyName)
             pathEndOrSingleSlash {
               post {
                 complete {

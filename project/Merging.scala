@@ -13,10 +13,13 @@ object Merging {
     case PathList("META-INF", "kotlin-result.kotlin_module") => MergeStrategy.first
     case PathList("META-INF", "kotlin-stdlib.kotlin_module") => MergeStrategy.first
     case PathList("META-INF", "kotlin-stdlib-common.kotlin_module") => MergeStrategy.first
+    case PathList("META-INF", "okio.kotlin_module") => MergeStrategy.first
     case PathList("mozilla", "public-suffix-list.txt") => MergeStrategy.first
     case "module-info.class" =>
       MergeStrategy.discard
     case x if x.endsWith("arrow-git.properties") => MergeStrategy.concat
+    case "logback.xml" => MergeStrategy.first
+    case PathList("META-INF", "spring-configuration-metadata.json") => MergeStrategy.discard // don't need no stinkin' spring
     case x => oldStrategy(x)
   }
 }

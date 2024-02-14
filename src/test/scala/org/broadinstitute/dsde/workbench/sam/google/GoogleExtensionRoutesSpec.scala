@@ -6,7 +6,9 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
+import com.google.api.services.cloudresourcemanager.model.Operation
+import org.broadinstitute.dsde.workbench.google.mock.MockGoogleProjectDAO
+import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleProjectDAO}
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
@@ -15,7 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, ge
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -374,14 +376,16 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       googleServicesConfig: GoogleServicesConfig = TestSupport.googleServicesConfig,
       policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
       resourceServiceOpt: Option[ResourceService] = None,
-      user: SamUser = Generator.genWorkbenchUserBoth.sample.get
+      user: SamUser = Generator.genWorkbenchUserBoth.sample.get,
+      googleProjectDAO: Option[GoogleProjectDAO] = None
   ): (SamUser, SamDependencies, SamRoutes) = {
     lazy val samDependencies = genSamDependencies(
       resourceTypes,
       googIamDAO,
       googleServicesConfig,
       policyEvaluatorServiceOpt = policyEvaluatorServiceOpt,
-      resourceServiceOpt = resourceServiceOpt
+      resourceServiceOpt = resourceServiceOpt,
+      googProjectDAO = googleProjectDAO
     )
     lazy val createRoutes = genSamRoutes(samDependencies, user)
 
@@ -447,13 +451,20 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
 
   def setupSignedUrlTest(): (SamUser, SamRoutes, String) = {
     val googleIamDAO = new RealKeyMockGoogleIamDAO
+    val googleProjectDAO = new MockGoogleProjectDAO() {
+      override def pollOperation(operationId: String): Future[Operation] = {
+        val operation = new com.google.api.services.cloudresourcemanager.model.Operation
+        operation.setDone(true)
+        Future.successful(operation)
+      }
+    }
     val samUser = Generator.genWorkbenchUserGoogle.sample.get
-
     val (user, samDeps, routes) = createTestUser(
       configResourceTypes,
       Some(googleIamDAO),
       TestSupport.googleServicesConfig.copy(serviceAccountClientEmail = samUser.email, serviceAccountClientId = samUser.googleSubjectId.get.value),
-      user = samUser
+      user = samUser,
+      googleProjectDAO = Some(googleProjectDAO)
     )
     val resourceType = ResourceType(
       SamResourceTypes.googleProjectName,
@@ -479,7 +490,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
           samDeps.userService,
           samDeps.resourceService,
           samDeps.statusService,
-          new TosService(samDeps.directoryDAO, TestSupport.tosConfig)
+          new TosService(samDeps.cloudExtensions, samDeps.directoryDAO, TestSupport.tosConfig)
         )
       )
       .unsafeRunSync()
@@ -503,7 +514,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
           samDeps.userService,
           samDeps.resourceService,
           samDeps.statusService,
-          new TosService(samDeps.directoryDAO, TestSupport.tosConfig)
+          new TosService(samDeps.cloudExtensions, samDeps.directoryDAO, TestSupport.tosConfig)
         )
       )
       .unsafeRunSync()

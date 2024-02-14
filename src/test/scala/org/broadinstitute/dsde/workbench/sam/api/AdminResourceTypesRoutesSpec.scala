@@ -8,7 +8,7 @@ import cats.implicits.catsSyntaxOptionId
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
@@ -69,14 +69,14 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
 
     val cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin)
 
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val tosService = new TosService(cloudExtensions, directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, cloudExtensions)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
     runAndWait(mockUserService.createUser(user, samRequestContext))
-    runAndWait(tosService.acceptTosStatus(user.id, samRequestContext))
+    runAndWait(tosService.acceptCurrentTermsOfService(user.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,

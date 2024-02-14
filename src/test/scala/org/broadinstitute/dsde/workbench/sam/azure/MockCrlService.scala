@@ -12,7 +12,8 @@ import com.azure.resourcemanager.msi.models.{Identities, Identity}
 import com.azure.resourcemanager.resources.ResourceManager
 import com.azure.resourcemanager.resources.models.{ResourceGroup, ResourceGroups}
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, SamResourceTypes, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, SamResourceTypes}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
@@ -66,6 +67,9 @@ object MockCrlService extends MockitoSugar {
     lenient()
       .when(mockResourceGroup.id())
       .thenReturn(mrgName.value)
+    lenient()
+      .when(mockResourceGroup.region())
+      .thenReturn(Region.US_SOUTH_CENTRAL)
 
     val mockResourceGroups = mock[ResourceGroups](RETURNS_SMART_NULLS)
     lenient()

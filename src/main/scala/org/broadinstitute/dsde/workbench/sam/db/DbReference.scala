@@ -3,12 +3,13 @@ package org.broadinstitute.dsde.workbench.sam.db
 import cats.effect.{Async, IO, Resource}
 import com.google.common.base.Throwables
 import com.typesafe.scalalogging.LazyLogging
-import io.opencensus.trace.AttributeValue
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.Span
 import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
 import org.broadinstitute.dsde.workbench.sam.config.{DatabaseConfig, LiquibaseConfig}
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils.traceIOWithContext
+import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils.traceIOWithContext
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import scalikejdbc.config.DBs
@@ -18,7 +19,6 @@ import java.security.cert.CertPathBuilderException
 import java.sql.Connection.TRANSACTION_READ_COMMITTED
 import java.sql.SQLTimeoutException
 import scala.concurrent.ExecutionContext
-import scala.jdk.CollectionConverters._
 
 object DbReference extends LazyLogging {
   private def initWithLiquibase(liquibaseConfig: LiquibaseConfig, dbName: Symbol, changelogParameters: Map[String, AnyRef] = Map.empty): Unit = {
@@ -51,7 +51,10 @@ object DbReference extends LazyLogging {
     DBs.setup(dbName)
     DBs.loadGlobalSettings()
     if (liquibaseConfig.initWithLiquibase) {
+      logger.info(s"Initializing $dbName with liquibase")
       initWithLiquibase(liquibaseConfig, dbName)
+    } else {
+      logger.info(s"Initializing $dbName with without liquibase")
     }
 
     DbReference(dbName, dbExecutionContext)
@@ -106,11 +109,11 @@ case class DbReference(dbName: Symbol, dbExecutionContext: ExecutionContext) ext
       dbQueryName: String,
       samRequestContext: SamRequestContext,
       databaseIO: IO[A],
-      spanAttributes: Map[String, AttributeValue] = Map.empty
+      spanAttributes: Attributes = Attributes.empty()
   ): IO[A] =
     Async[IO].evalOnK(dbExecutionContext) {
       traceIOWithContext("postgres-" + dbQueryName, samRequestContext) { samCxt =>
-        samCxt.parentSpan.foreach(_.putAttributes(spanAttributes.asJava))
+        samCxt.otelContext.map(Span.fromContext).foreach(_.setAllAttributes(spanAttributes))
         databaseIO
       }
     }

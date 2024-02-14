@@ -3,7 +3,8 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
 import org.mockito.IdiomaticMockito.StubbingOps
@@ -128,6 +129,11 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     .when(mockedDirectoryDAO)
     .deleteUser(any[WorkbenchUserId], any[SamRequestContext])
 
+  lenient()
+    .doReturn(IO.unit)
+    .when(mockedDirectoryDAO)
+    .setUserAttributes(any[SamUserAttributes], any[SamRequestContext])
+
   def withExistingUser(samUser: SamUser): StatefulMockDirectoryDaoBuilder = withExistingUsers(Set(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): StatefulMockDirectoryDaoBuilder = {
     samUsers.toSet.foreach(makeUserExist)
@@ -223,6 +229,12 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
       .doReturn(IO(Option(samUser.id)))
       .when(mockedDirectoryDAO)
       .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
+
+    lenient()
+      .doReturn(IO(Option(samUser)))
+      .when(mockedDirectoryDAO)
+      .updateUser(ArgumentMatchers.eq(samUser), any[AdminUpdateUserRequest], any[SamRequestContext])
+
   }
 
   private def makeUserEnabled(samUser: SamUser): Unit = {

@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -257,6 +257,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   "POST /api/google/v1/user/petServiceAccount/{project}/signedUrlForBlob" should "200 with a signed url" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (user, samRoutes, projectName) = setupSignedUrlTest()
     val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt")
     val urlEncodedEmail = URLEncoder.encode(user.email.value, StandardCharsets.UTF_8)
@@ -269,6 +271,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   it should "set a duration for a signed url" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (_, samRoutes, projectName) = setupSignedUrlTest()
     val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt", Some(1))
 
@@ -287,10 +291,45 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   it should "404 when the user doesn't have access to the project" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
     val (_, samRoutes, projectName) = setupSignedUrlTest()
     val blob = SignedUrlRequest("my-bucket", "my-folder/my-object.txt")
     Post(s"/api/google/v1/user/petServiceAccount/not-$projectName/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+  "POST /api/google/v1/user/signedUrlForBlob" should "200 with a signed url" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val (user, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = RequesterPaysSignedUrlRequest("gs://my-bucket/my-folder/my-object.txt", requesterPaysProject = Some(projectName))
+    val urlEncodedEmail = URLEncoder.encode(user.email.value, StandardCharsets.UTF_8)
+
+    Post(s"/api/google/v1/user/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should include("my-bucket/my-folder/my-object.txt")
+      responseAs[String] should include(s"userProject=$projectName")
+      responseAs[String] should include(s"requestedBy=$urlEncodedEmail")
+    }
+  }
+
+  it should "set a duration for a signed url" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val (_, samRoutes, projectName) = setupSignedUrlTest()
+    val blob = RequesterPaysSignedUrlRequest("gs://my-bucket/my-folder/my-object.txt", Some(2))
+
+    Post(s"/api/google/v1/user/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should include("X-Goog-Expires=120")
+    }
+  }
+
+  it should "skip requester pays if no project provided" in {
+    val (_, samRoutes, _) = setupSignedUrlTest()
+    val blob = RequesterPaysSignedUrlRequest("gs://my-bucket/my-folder/my-object.txt", requesterPaysProject = None)
+
+    Post(s"/api/google/v1/user/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
+      responseAs[String] should not include "userProject"
     }
   }
 }

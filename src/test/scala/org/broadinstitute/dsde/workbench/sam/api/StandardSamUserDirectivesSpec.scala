@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockUserService, TosService, UserService}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpec
@@ -34,11 +34,10 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     new StandardSamUserDirectives {
       override implicit val executionContext: ExecutionContext = null
       override val cloudExtensions: CloudExtensions = null
-      override val termsOfServiceConfig: TermsOfServiceConfig = null
-      override val userService: UserService = new MockUserService(directoryDAO = dirDAO)
-      override val tosService: TosService = new TosService(dirDAO, tosConfig)
+      override val termsOfServiceConfig: TermsOfServiceConfig = tosConfig
+      override val tosService: TosService = new TosService(cloudExtensions, dirDAO, tosConfig)
+      override val userService: UserService = new MockUserService(directoryDAO = dirDAO, tosService = tosService)
       override val adminConfig: AppConfig.AdminConfig = testAdminConfig
-
     }
 
   "getSamUser" should "be able to get a SamUser object for regular user" in {
@@ -141,7 +140,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(externalId, email, accessToken)
     val user = TestSupport.newUserWithAcceptedTos(
       services,
-      SamUser(userId, externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true, None),
+      SamUser(userId, externalId.left.toOption, email = email, azureB2CId = externalId.toOption, true),
       samRequestContext
     )
     Get("/").withHeaders(headers) ~>
@@ -167,10 +166,23 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
     userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
-    services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
+    services.tosService.rejectCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.Unauthorized
+      }
+  }
+
+  it should "fail with a good message if user needs to accept the terms of service" in forAll(genWorkbenchUserAzure, genOAuth2BearerToken) { (user, token) =>
+    val services = directives(tosConfig = TestSupport.tosConfig)
+    val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
+    val userService = services.userService.asInstanceOf[MockUserService]
+    userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
+    services.tosService.rejectCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
+    Get("/").withHeaders(headers) ~>
+      handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
+        status shouldBe StatusCodes.Unauthorized
+        responseAs[String] should include("terms of service")
       }
   }
 
@@ -179,7 +191,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
     userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
-    services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
+    services.tosService.rejectCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.Unauthorized
@@ -191,7 +203,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(Left(user.googleSubjectId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
     userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
-    services.tosService.rejectTosStatus(user.id, samRequestContext).unsafeRunSync()
+    services.tosService.rejectCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.OK
@@ -203,7 +215,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
     val headers = createRequiredHeaders(Right(user.azureB2CId.get), user.email, token)
     val userService = services.userService.asInstanceOf[MockUserService]
     userService.createUserDAO(user.copy(enabled = true), samRequestContext).unsafeRunSync()
-    services.tosService.acceptTosStatus(user.id, samRequestContext).unsafeRunSync()
+    services.tosService.acceptCurrentTermsOfService(user.id, samRequestContext).unsafeRunSync()
     Get("/").withHeaders(headers) ~>
       handleExceptions(myExceptionHandler)(services.withActiveUser(samRequestContext)(_ => complete(""))) ~> check {
         status shouldBe StatusCodes.OK
@@ -255,7 +267,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
           services.withNewUser(samRequestContext)(user => complete(user.copy(id = WorkbenchUserId("")).toString))
         } ~> check {
           status shouldBe StatusCodes.OK
-          responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption, false, None).toString
+          responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), externalId.left.toOption, email, externalId.toOption, false).toString
         }
   }
 
@@ -268,7 +280,7 @@ class StandardSamUserDirectivesSpec extends AnyFlatSpec with PropertyBasedTestin
           services.withNewUser(samRequestContext)(x => complete(x.copy(id = WorkbenchUserId("")).toString))
         } ~> check {
           status shouldBe StatusCodes.OK
-          responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId), false, None).toString
+          responseAs[String] shouldEqual SamUser(WorkbenchUserId(""), Option(googleSubjectId), email, Option(azureB2CId), false).toString
         }
   }
 

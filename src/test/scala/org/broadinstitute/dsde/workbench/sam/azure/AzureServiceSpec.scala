@@ -1,6 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.azure
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import akka.testkit.TestKit
 import com.azure.resourcemanager.managedapplications.models.Plan
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
@@ -10,25 +12,37 @@ import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetail
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator}
 import org.mockito.Mockito.when
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
 import scala.jdk.CollectionConverters._
 
-class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
+class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with ScalaFutures with BeforeAndAfterAll {
   implicit val ec = scala.concurrent.ExecutionContext.global
   implicit val ioRuntime = cats.effect.unsafe.IORuntime.global
 
+  def this() = this(ActorSystem("AzureServiceSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
+
   "AzureService" should "create a pet managed identity" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
+    val janitorConfig = appConfig.janitorConfig
 
-    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
+    assume(azureServicesConfig.isDefined && janitorConfig.enabled, "-- skipping Azure test")
 
     // create dependencies
     val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
-    val crlService = new CrlService(azureServicesConfig.get)
-    val tosService = new TosService(directoryDAO, tosConfig)
+    val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
+    val tosService = new TosService(NoExtensions, directoryDAO, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
@@ -36,7 +50,10 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     // create user
     val defaultUser = genWorkbenchUserAzure.sample.get
     val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    userStatus shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true))
+    userStatus shouldBe UserStatus(
+      UserStatusDetails(defaultUser.id, defaultUser.email),
+      Map("tosAccepted" -> false, "adminEnabled" -> true, "ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    )
 
     // user should exist in postgres
     directoryDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
@@ -91,31 +108,6 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
     msiManager.identities().deleteById(azureRes.id())
   }
 
-  it should "get the billing profile id from the managed resource group" taggedAs ConnectedTest in {
-    val azureServicesConfig = appConfig.azureServicesConfig
-
-    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
-
-    // create dependencies
-    val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
-    val azureTestConfig = config.getConfig("testStuff.azure")
-    val crlService = new CrlService(azureServicesConfig.get)
-    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
-
-    // build request
-    val tenantId = TenantId(azureTestConfig.getString("tenantId"))
-    val subscriptionId = SubscriptionId(azureTestConfig.getString("subscriptionId"))
-    val managedResourceGroupName = ManagedResourceGroupName(azureTestConfig.getString("managedResourceGroupName"))
-    val request = GetOrCreatePetManagedIdentityRequest(tenantId, subscriptionId, managedResourceGroupName)
-
-    // call getBillingProfileId
-    val res = azureService.getBillingProfileId(request, samRequestContext).unsafeRunSync()
-
-    // should return a billing profile id
-    res shouldBe defined
-    res.get shouldBe BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
-  }
-
   "createManagedResourceGroup" should "create a managed resource group" in {
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
@@ -129,11 +121,12 @@ class AzureServiceSpec extends AnyFlatSpec with Matchers with ScalaFutures {
 
   it should "create a managed resource group IN AZURE" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
+    val janitorConfig = appConfig.janitorConfig
 
-    assume(azureServicesConfig.isDefined, "-- skipping Azure test")
+    assume(azureServicesConfig.isDefined && janitorConfig.enabled, "-- skipping Azure test")
 
     // create dependencies
-    val crlService = new CrlService(azureServicesConfig.get)
+    val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val azureService = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
 

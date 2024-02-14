@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
-import java.util.Date
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
@@ -8,10 +7,13 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
+import java.util.Date
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 
@@ -20,7 +22,9 @@ import scala.collection.mutable
 class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, WorkbenchGroup] = new TrieMap(), passStatusCheck: Boolean = true) extends DirectoryDAO {
   private val groupSynchronizedDates: mutable.Map[WorkbenchGroupIdentity, Date] = new TrieMap()
   private val users: mutable.Map[WorkbenchUserId, SamUser] = new TrieMap()
-  private val userAttributes: mutable.Map[WorkbenchUserId, mutable.Map[String, Any]] = new TrieMap()
+  private val userTermsOfService: mutable.Map[WorkbenchUserId, SamUserTos] = new TrieMap()
+  private val userTermsOfServiceHistory: mutable.Map[WorkbenchUserId, List[SamUserTos]] = new TrieMap()
+  private val userAttributes: mutable.Map[WorkbenchUserId, SamUserAttributes] = new TrieMap()
 
   private val usersWithEmails: mutable.Map[WorkbenchEmail, WorkbenchUserId] = new TrieMap()
   private val usersWithGoogleSubjectIds: mutable.Map[GoogleSubjectId, WorkbenchSubject] = new TrieMap()
@@ -123,6 +127,28 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO {
     users -= userId
+  }
+
+  override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] = {
+    val updatedUser = for {
+      user <- users.get(samUser.id)
+      updatedUser = user.copy(
+        googleSubjectId =
+          if (userUpdate.googleSubjectId.contains(GoogleSubjectId("null"))) None
+          else if (userUpdate.googleSubjectId.isDefined) userUpdate.googleSubjectId
+          else user.googleSubjectId,
+        azureB2CId =
+          if (userUpdate.azureB2CId.contains(AzureB2CId("null"))) None
+          else if (userUpdate.azureB2CId.isDefined) userUpdate.azureB2CId
+          else user.azureB2CId,
+        updatedAt = Instant.now()
+      )
+    } yield updatedUser
+
+    IO.pure(updatedUser.map { user =>
+      users.put(samUser.id, user)
+      user
+    })
   }
 
   override def listUsersGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]] = IO {
@@ -270,22 +296,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     IO.pure(())
   }
 
-  private def addUserAttribute(userId: WorkbenchUserId, attrId: String, value: Any): IO[Unit] = {
-    userAttributes.get(userId) match {
-      case Some(attributes: Map[String, Any]) => attributes += attrId -> value
-      case _ => userAttributes += userId -> (new TrieMap() += attrId -> value)
-    }
-    IO.unit
-  }
-
-  private def readUserAttribute[T](userId: WorkbenchUserId, attrId: String): IO[Option[T]] = {
-    val value = for {
-      attributes <- userAttributes.get(userId)
-      value <- attributes.get(attrId)
-    } yield value.asInstanceOf[T]
-    IO.pure(value)
-  }
-
   override def loadSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] = {
     val res = for {
       uid <- usersWithGoogleSubjectIds.get(googleSubjectId)
@@ -324,24 +334,53 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     loadUser(userId, samRequestContext).map {
       case None => false
       case Some(user) =>
-        if (user.acceptedTosVersion.contains(tosVersion)) {
-          false
-        } else {
-          users.put(userId, user.copy(acceptedTosVersion = Option(tosVersion)))
-          true
-        }
+        users.put(userId, user)
+        userTermsOfService.put(userId, SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
+        val userHistory = userTermsOfServiceHistory.getOrElse(userId, List.empty)
+        userTermsOfServiceHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.ACCEPT, Instant.now()))
+        true
     }
 
-  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
+  override def rejectTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
     loadUser(userId, samRequestContext).map {
       case None => false
       case Some(user) =>
-        if (user.acceptedTosVersion.isEmpty) {
-          false
-        } else {
-          users.put(userId, user.copy(acceptedTosVersion = None))
-          true
+        users.put(userId, user)
+        userTermsOfService.put(userId, SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
+        val userHistory = userTermsOfServiceHistory.getOrElse(userId, List.empty)
+        userTermsOfServiceHistory.put(userId, userHistory :+ SamUserTos(userId, tosVersion, TosTable.REJECT, Instant.now()))
+        true
+    }
+
+  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext, action: Option[String]): IO[Option[SamUserTos]] =
+    loadUser(userId, samRequestContext).map {
+      case None => None
+      case Some(_) =>
+        if (action.isDefined) {
+          userTermsOfService.get(userId).filter(_.action == action.get)
+        } else
+          userTermsOfService.get(userId)
+    }
+
+  override def getUserTermsOfServiceVersion(
+      userId: WorkbenchUserId,
+      tosVersion: Option[String],
+      samRequestContext: SamRequestContext,
+      action: Option[String]
+  ): IO[Option[SamUserTos]] =
+    loadUser(userId, samRequestContext).map {
+      case None => None
+      case Some(_) =>
+        tosVersion match {
+          case Some(_) => userTermsOfService.get(userId)
+          case None => None
         }
+    }
+
+  override def getUserTermsOfServiceHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
+    loadUser(userId, samRequestContext).map {
+      case None => List.empty
+      case Some(_) => userTermsOfServiceHistory.getOrElse(userId, List.empty)
     }
 
   override def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] = {
@@ -372,5 +411,19 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
             s"Cannot update registeredAt for user ${userId} because user does not exist"
           )
         }
+    }
+
+  override def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]] =
+    loadUser(userId, samRequestContext).map {
+      case None => None
+      case Some(_) =>
+        userAttributes.get(userId)
+    }
+
+  override def setUserAttributes(samUserAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[Unit] =
+    loadUser(samUserAttributes.userId, samRequestContext).map {
+      case None => throw new WorkbenchException("No user found")
+      case Some(_) =>
+        userAttributes.update(samUserAttributes.userId, samUserAttributes)
     }
 }

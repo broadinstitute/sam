@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -353,7 +354,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                   ${userColumn.googleSubjectId},
                   ${userColumn.enabled},
                   ${userColumn.azureB2cId},
-                  ${userColumn.acceptedTosVersion},
                   ${userColumn.createdAt},
                   ${userColumn.registeredAt},
                   ${userColumn.updatedAt})
@@ -363,7 +363,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                   ${newUser.googleSubjectId},
                   ${newUser.enabled},
                   ${newUser.azureB2CId},
-                  ${newUser.acceptedTosVersion},
                   ${newUser.createdAt},
                   ${newUser.registeredAt},
                   ${newUser.updatedAt})"""
@@ -469,6 +468,58 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+
+  override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    serializableWriteTransaction("updateUser", samRequestContext) { implicit session =>
+      val u = UserTable.column
+
+      // NOTE updating emails and 'enabled' status is currently not supported by this method
+      val setColumnsClause = userUpdate match {
+        case AdminUpdateUserRequest(None, None) => throw new WorkbenchException("Cannot update user with no values.")
+        case AdminUpdateUserRequest(Some(newAzureB2CId), None) =>
+          samsqls"(${u.azureB2cId}, ${u.updatedAt})"
+        case AdminUpdateUserRequest(None, Some(newGoogleSubjectId)) =>
+          samsqls"(${u.googleSubjectId}, ${u.updatedAt})"
+        case AdminUpdateUserRequest(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
+          samsqls"(${u.googleSubjectId}, ${u.azureB2cId}, ${u.updatedAt})"
+      }
+
+      var updatedUser =
+        samUser.copy(
+          googleSubjectId = userUpdate.googleSubjectId.orElse(samUser.googleSubjectId),
+          azureB2CId = userUpdate.azureB2CId.orElse(samUser.azureB2CId),
+          updatedAt = Instant.now()
+        )
+      val setColumnValuesClause = userUpdate match {
+        case AdminUpdateUserRequest(None, None) => throw new WorkbenchException("Cannot update user with no values.")
+        case AdminUpdateUserRequest(Some(AzureB2CId("null")), None) =>
+          updatedUser = updatedUser.copy(azureB2CId = None)
+          // string interpolation adds quotes around null so we have to special case it here
+          samsqls"(null, ${Instant.now()})"
+        case AdminUpdateUserRequest(None, Some(GoogleSubjectId("null"))) =>
+          updatedUser = updatedUser.copy(googleSubjectId = None)
+          // string interpolation adds quotes around null so we have to special case it here
+          samsqls"(null, ${Instant.now()})"
+        case AdminUpdateUserRequest(Some(newGoogleSubjectId), None) =>
+          samsqls"($newGoogleSubjectId, ${Instant.now()})"
+        case AdminUpdateUserRequest(None, Some(newAzureB2CId)) =>
+          samsqls"($newAzureB2CId, ${Instant.now()})"
+        case AdminUpdateUserRequest(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
+          samsqls"($newGoogleSubjectId, $newAzureB2CId, ${Instant.now()})"
+      }
+
+      val results = samsql"""update ${UserTable.table}
+               set ${setColumnsClause} = ${setColumnValuesClause}
+               where ${u.id} = ${samUser.id}"""
+        .update()
+        .apply()
+
+      if (results != 1) {
+        None
+      } else {
+        Option(updatedUser)
+      }
+    }
 
   override def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteUser", samRequestContext) { implicit session =>
@@ -631,25 +682,68 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       }
     }
 
-  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
+  override def acceptTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] = {
+    val tosTable = TosTable.syntax
+    val tosColumns = TosTable.column
     serializableWriteTransaction("acceptTermsOfService", samRequestContext) { implicit session =>
-      val u = UserTable.column
-      samsql"""update ${UserTable.table}
-               set (${u.acceptedTosVersion}, ${u.updatedAt}) =
-               (${tosVersion}, ${Instant.now()})
-               where ${u.id} = ${userId}
-                and (${u.acceptedTosVersion} is null
-                or ${u.acceptedTosVersion} != ${tosVersion})""".update().apply() > 0
+      samsql"""insert into ${TosTable as tosTable} (${tosColumns.samUserId}, ${tosColumns.version}, ${tosColumns.action}, ${tosColumns.createdAt})
+               values ($userId, $tosVersion, ${TosTable.ACCEPT}, ${Instant.now()})""".update().apply() > 0
+    }
+  }
+
+  override def rejectTermsOfService(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] = {
+    val tosTable = TosTable.syntax
+    val tosColumns = TosTable.column
+    serializableWriteTransaction("rejectTermsOfService", samRequestContext) { implicit session =>
+      samsql"""insert into ${TosTable as tosTable} (${tosColumns.samUserId}, ${tosColumns.version}, ${tosColumns.action}, ${tosColumns.createdAt})
+         values ($userId, $tosVersion, ${TosTable.REJECT}, ${Instant.now()})""".update().apply() > 0
+    }
+  }
+
+  // When no tosVersion is specified, return the latest TosRecord for the user
+  override def getUserTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext, action: Option[String] = None): IO[Option[SamUserTos]] =
+    getUserTermsOfServiceVersion(userId, None, samRequestContext, action)
+
+  override def getUserTermsOfServiceVersion(
+      userId: WorkbenchUserId,
+      tosVersion: Option[String],
+      samRequestContext: SamRequestContext,
+      action: Option[String] = None
+  ): IO[Option[SamUserTos]] =
+    readOnlyTransaction("getUserTermsOfService", samRequestContext) { implicit session =>
+      val tosTable = TosTable.syntax
+      val column = TosTable.column
+
+      val versionConstraint = tosVersion.map(v => samsqls"and ${column.version} = $v").getOrElse(samsqls"")
+      val actionConstraint = action.map(a => samsqls"and ${column.action} = $a").getOrElse(samsqls"")
+
+      val loadUserTosQuery =
+        samsql"""select ${tosTable.resultAll}
+              from ${TosTable as tosTable}
+              where ${column.samUserId} = $userId
+                $versionConstraint
+                $actionConstraint
+              order by ${column.createdAt} desc
+              limit 1"""
+
+      val userTosRecordOpt: Option[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).first().apply()
+      userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
 
-  override def rejectTermsOfService(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
-    serializableWriteTransaction("rejectTermsOfService", samRequestContext) { implicit session =>
-      val u = UserTable.column
-      samsql"""update ${UserTable.table}
-               set (${u.acceptedTosVersion}, ${u.updatedAt}) =
-               (null, ${Instant.now()})
-               where ${u.id} = ${userId}
-                and ${u.acceptedTosVersion} is not null""".update().apply() > 0
+  override def getUserTermsOfServiceHistory(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[List[SamUserTos]] =
+    readOnlyTransaction("getUserTermsOfServiceHistory", samRequestContext) { implicit session =>
+      val tosTable = TosTable.syntax
+      val column = TosTable.column
+
+      val loadUserTosQuery =
+        samsql"""select ${tosTable.resultAll}
+              from ${TosTable as tosTable}
+              where ${column.samUserId} = ${userId}
+              order by ${column.createdAt} desc
+              limit ${limit}"""
+
+      val userTosRecordOpt: List[TosRecord] = loadUserTosQuery.map(TosTable(tosTable)).list().apply()
+      userTosRecordOpt.map(TosTable.unmarshalUserRecord)
     }
 
   override def isEnabled(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
@@ -916,5 +1010,34 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       } else {
         ()
       }
+    }
+
+  override def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]] =
+    readOnlyTransaction("getUserAttributes", samRequestContext) { implicit session =>
+      val userAttributesTable = UserAttributesTable.syntax
+      val column = UserAttributesTable.column
+
+      val loadUserAttributesQuery =
+        samsql"""
+                 select ${userAttributesTable.resultAll}
+                 from ${UserAttributesTable as userAttributesTable}
+                 where ${column.samUserId} = $userId
+        """
+
+      val userAttributesRecordOpt: Option[UserAttributesRecord] = loadUserAttributesQuery.map(UserAttributesTable(userAttributesTable)).first().apply()
+      userAttributesRecordOpt.map(UserAttributesTable.unmarshalUserAttributesRecord)
+    }
+
+  override def setUserAttributes(userAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("setUserAttributes", samRequestContext) { implicit session =>
+      val userAttributesTable = UserAttributesTable.syntax
+      val userAttributesColumns = UserAttributesTable.column
+      samsql"""
+        insert into ${UserAttributesTable as userAttributesTable} (${userAttributesColumns.samUserId}, ${userAttributesColumns.marketingConsent}, ${userAttributesColumns.updatedAt})
+          values (${userAttributes.userId}, ${userAttributes.marketingConsent}, ${Instant.now()})
+        on conflict(${userAttributesColumns.samUserId})
+          do update set ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
+            ${userAttributesColumns.updatedAt} = ${Instant.now()}
+           """.update().apply() > 0
     }
 }

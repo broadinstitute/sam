@@ -1,7 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam
 package service
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import akka.testkit.TestKit
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
@@ -12,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.matchers.BeSameUserMatcher.beSameUserAs
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito
@@ -21,7 +24,7 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.Inside.inside
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest._
 
@@ -32,15 +35,25 @@ import scala.concurrent.duration._
 
 // TODO: continue breaking down old UserServiceSpec tests into nested suites
 // See: https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
-class UserServiceSpec extends Suite {
+class UserServiceSpec(_system: ActorSystem) extends TestKit(_system) with Suite with BeforeAndAfterAll {
   override def nestedSuites: IndexedSeq[Suite] =
     IndexedSeq(
       new CreateUserSpec,
       new InviteUserSpec,
       new GetUserStatusSpec,
-      new OldUserServiceSpec,
-      new OldUserServiceMockSpec
+      new OldUserServiceSpec(_system),
+      new OldUserServiceMockSpec(_system)
     )
+
+  def this() = this(ActorSystem("UserServiceSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 }
 
 // This test suite is deprecated.  It is still used and still has valid tests in it, but it should be broken out
@@ -48,8 +61,9 @@ class UserServiceSpec extends Suite {
 // This class does not connect to a real database (hence "mock" in the name (naming is hard, don't judge me)), but its
 // tests should still be broken out to individual Spec files and rewritten
 @DoNotDiscover
-class OldUserServiceMockSpec
-    extends AnyFlatSpec
+class OldUserServiceMockSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
     with Matchers
     with TestSupport
     with MockitoSugar
@@ -58,6 +72,16 @@ class OldUserServiceMockSpec
     with BeforeAndAfterAll
     with ScalaFutures
     with OptionValues {
+
+  def this() = this(ActorSystem("OldUserServiceMockSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -99,6 +123,7 @@ class OldUserServiceMockSpec
     when(dirDAO.listUserDirectMemberships(defaultUser.id, samRequestContext)).thenReturn(IO(LazyList(allUsersGroup.id)))
     when(dirDAO.setGoogleSubjectId(defaultUser.id, defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(()))
     when(dirDAO.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext)).thenReturn(IO(()))
+    when(dirDAO.setUserAttributes(any[SamUserAttributes], any[SamRequestContext])).thenReturn(IO(()))
 
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
@@ -112,7 +137,7 @@ class OldUserServiceMockSpec
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
-    when(mockTosService.getTosComplianceStatus(any[SamUser]))
+    when(mockTosService.getTermsOfServiceComplianceStatus(any[SamUser], any[SamRequestContext]))
       .thenAnswer((i: InvocationOnMock) => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, true, true)))
 
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
@@ -143,7 +168,8 @@ class OldUserServiceMockSpec
   }
 
   it should "return UserStatusDiagnostics.tosAccepted as false if user's TOS status is false" in {
-    when(mockTosService.getTosComplianceStatus(enabledUser)).thenReturn(IO.pure(TermsOfServiceComplianceStatus(enabledUser.id, false, false)))
+    when(mockTosService.getTermsOfServiceComplianceStatus(enabledUser, samRequestContext))
+      .thenReturn(IO.pure(TermsOfServiceComplianceStatus(enabledUser.id, false, false)))
     val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).unsafeRunSync()
     status.value.tosAccepted shouldBe false
   }
@@ -232,8 +258,9 @@ object GenEmail {
 // This class DOES connect to a real database and its tests should be broken out to individual Spec files
 // and rewritten
 @DoNotDiscover
-class OldUserServiceSpec
-    extends AnyFlatSpec
+class OldUserServiceSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
     with Matchers
     with TestSupport
     with MockitoSugar
@@ -243,6 +270,16 @@ class OldUserServiceSpec
     with ScalaFutures
     with OptionValues
     with TimeMatchers {
+
+  def this() = this(ActorSystem("OldUserServiceSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -284,9 +321,9 @@ class OldUserServiceSpec
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
 
-    tos = new TosService(dirDAO, TestSupport.tosConfig)
+    tos = new TosService(googleExtensions, dirDAO, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)
-    tosServiceEnabled = new TosService(dirDAO, TestSupport.tosConfig)
+    tosServiceEnabled = new TosService(googleExtensions, dirDAO, TestSupport.tosConfig)
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
   }
 
@@ -506,7 +543,7 @@ class OldUserServiceSpec
     // Lookup the invited user and their ID
     val invitedUserId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
     val invitedUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
-    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false, None)
+    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false)
 
     // Give them a fake GoogleSubjectId and a new WorkbenchUserId and use that to register them.
     // The real code in org/broadinstitute/dsde/workbench/sam/api/UserRoutes.scala calls
@@ -514,7 +551,7 @@ class OldUserServiceSpec
     // WorkbenchUserId for the SamUser on the request.
     val googleSubjectId = Option(GoogleSubjectId("123456789"))
     val newRegisteringUserId = WorkbenchUserId("11111111111111111")
-    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false, None)
+    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false)
     val registeredUser = service.createUser(registeringUser, samRequestContext).unsafeRunSync()
     registeredUser.userInfo.userSubjectId should {
       equal(invitedUser.id) and
@@ -548,14 +585,14 @@ class OldUserServiceSpec
 
     val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
     userInPostgres.value should {
-      equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None))
+      equal(SamUser(invitedUserId, None, inviteeEmail, None, false))
     }
 
     val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true, None)
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true)
   }
 
   it should "update azureB2CId for this user" in {
@@ -566,13 +603,13 @@ class OldUserServiceSpec
     val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
 
     val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    userInPostgres.value should equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None))
+    userInPostgres.value should equal(SamUser(invitedUserId, None, inviteeEmail, None, false))
 
     val registeringUser = genWorkbenchUserAzure.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, None, inviteeEmail, registeringUser.azureB2CId, true, None)
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, None, inviteeEmail, registeringUser.azureB2CId, true)
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {

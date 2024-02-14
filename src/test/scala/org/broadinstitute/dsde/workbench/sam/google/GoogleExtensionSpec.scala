@@ -19,7 +19,7 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, truncateAll}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -33,7 +33,7 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.{BeforeAndAfterAll, PrivateMethodTester}
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, PrivateMethodTester}
 
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{Date, GregorianCalendar, UUID}
@@ -49,6 +49,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     with MockitoSugar
     with ScalaFutures
     with BeforeAndAfterAll
+    with BeforeAndAfterEach
     with PrivateMethodTester {
   def this() = this(ActorSystem("GoogleGroupSyncMonitorSpec"))
 
@@ -59,6 +60,9 @@ class GoogleExtensionSpec(_system: ActorSystem)
     TestKit.shutdownActorSystem(system)
     super.afterAll()
   }
+
+  override def beforeEach(): Unit =
+    truncateAll
 
   lazy val petServiceAccountConfig = TestSupport.petServiceAccountConfig
   lazy val googleServicesConfig = TestSupport.googleServicesConfig
@@ -423,7 +427,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     googleExtensions.deleteUserPetServiceAccount(newUser.userInfo.userSubjectId, googleProject, samRequestContext).unsafeRunSync() shouldBe true
 
     // the user should still exist in DB
-    dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true, acceptedTosVersion = Some("0")))
+    dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
 
     // the pet should not exist in DB
     dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe None
@@ -462,7 +466,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       configResourceTypes,
       superAdminsGroup
     )
-    val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
     val service = new UserService(dirDAO, googleExtensions, Seq.empty, tosService)
 
     val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
@@ -472,7 +476,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
   def newUserWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
     TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
     TestSupport.runAndWait(userService.getUserStatus(samUser.id, samRequestContext = samRequestContext)).orNull
   }
 
@@ -865,10 +869,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
     )
 
     val app = SamApplication(
-      new UserService(mockDirectoryDAO, ge, Seq.empty, new TosService(mockDirectoryDAO, TestSupport.tosConfig)),
+      new UserService(mockDirectoryDAO, ge, Seq.empty, new TosService(NoExtensions, mockDirectoryDAO, TestSupport.tosConfig)),
       new ResourceService(configResourceTypes, null, mockAccessPolicyDAO, mockDirectoryDAO, ge, "example.com", Set.empty),
       null,
-      new TosService(mockDirectoryDAO, TestSupport.tosConfig)
+      new TosService(NoExtensions, mockDirectoryDAO, TestSupport.tosConfig)
     )
     val resourceAndPolicyName =
       FullyQualifiedPolicyId(FullyQualifiedResourceId(CloudExtensions.resourceTypeName, GoogleExtensions.resourceId), AccessPolicyName("owner"))
@@ -1237,7 +1241,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       configResourceTypes,
       superAdminsGroup
     )
-    val tosService = new TosService(dirDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, dirDAO, TestSupport.tosConfig)
     val service = new UserService(dirDAO, googleExtensions, Seq.empty, tosService)
 
     (googleExtensions, service, tosService)

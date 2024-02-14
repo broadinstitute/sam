@@ -43,7 +43,8 @@ paths:
     patch:
       tags:
         - Admin
-      summary: Updates given fields on a user, by user id
+      summary: Updates given fields on a user record in the database. Ids can be nulled by sending 'null' as the value of the id in the request.
+        An azureB2CId cannot be set to null if the user already has a null googleSubjectId and vice versa.
       operationId: adminUpdateUser
       parameters:
         - name: userId
@@ -1029,6 +1030,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v1/user/signedUrlForBlob:
+    post:
+      tags:
+        - Google
+      summary: Gets a signed URL for the given blob.
+        The signed URL is active for 1 hour and scoped to the permissions of the user.
+        An optional requesterPaysProject can be provided to specify which Google Project is billed.
+        Sam will provide a signed URL for any object path, even if that object does not exist.
+      operationId: getRequesterPaysSignedUrlForBlob
+      requestBody:
+        description: GsPath of to get a signed URL for
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/RequesterPaysSignedUrlRequest'
+        required: true
+      responses:
+        200:
+          description: signed URL for the blob, signed by the user's arbitrary Pet Service Account key
+          content:
+            application/json:
+              schema:
+                type: string
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/user/petServiceAccount/{project}:
     get:
       tags:
@@ -1529,6 +1559,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2:
+    get:
+      tags:
+        - Resources
+      summary: List resources the calling user has been granted policies/roles/actions on.
+        This endpoint MUST NOT be used to determine if a user has an action on a resource. 
+        This endpoint is ONLY for determining the state of the user's permissions. 
+        It does not take into account enabled status, or Terms of Service Compliance, nor does it take into account Auth Domains.
+        To check if a user is allowed to execute an action on a resource, use /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}
+        By default, public resources are not included. Including public resources incurs a 3x cost of DB performance.
+      operationId: listResourcesV2
+      parameters:
+        - name: format
+          in: query
+          description: Format of the response. If not specified, the response will be
+            a hierarchical list of resources.
+          required: false
+          schema:
+            type: string
+            enum:
+              - flat
+              - hierarchical
+            default: hierarchical
+        - name: resourceTypes
+          in: query
+          description: Types of resources to filter on
+          required: false
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: policies
+          in: query
+          description: Names of policies to filter on
+          required: false
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: roles
+          in: query
+          description: Names of roles to filter on
+          required: false
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: actions
+          in: query
+          description: Names of actions to filter on
+          required: false
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: includePublic
+          in: query
+          description: Include public resources in the response
+          required: false
+          schema:
+            type: boolean
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/FilteredResourcesFlatResponse'
+                  - $ref: '#/components/schemas/FilteredResourcesHierarchicalResponse'
   /api/resources/v2/{resourceTypeName}:
     get:
       tags:
@@ -1760,7 +1864,7 @@ paths:
     patch:
       tags:
         - Resources
-      summary: Update the groups in the Auth Domain for a resource
+      summary: Add groups to the Auth Domain for a resource (removal of groups is not permitted)
       operationId: patchAuthDomainV2
       parameters:
         - name: resourceTypeName
@@ -2764,6 +2868,170 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self:
+    get:
+      tags:
+        - Users
+      summary: gets the user
+      operationId: getSamUserSelf
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserResponse'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/register:
+    post:
+      tags:
+        - Users
+      summary: create current user in the system using login credentials
+      operationId: registerUser
+      requestBody:
+        description: The details of the new parent resource
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/SamUserRegistrationRequest'
+      responses:
+        201:
+          description: user successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserResponse'
+        409:
+          description: user already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/allowed:
+    get:
+      tags:
+        - Users
+      summary: gets the user allowances
+      operationId: getSamUserSelfAllowances
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAllowances'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/attributes:
+    get:
+      tags:
+        - Users
+      summary: gets the user attributes
+      operationId: getSamUserAttributes
+      responses:
+        200:
+          description: attributes exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAttributes'
+        404:
+          description: attributes/user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    patch:
+      tags:
+        - Users
+      summary: patch the user's attributes
+      operationId: patchSamUserAttributes
+      requestBody:
+        description: User attributes to patch
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/SamUserAttributes'
+      responses:
+        200:
+          description: attributes set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAttributes'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/{samUserId}:
+    get:
+      tags:
+        - Admin
+      summary: gets a user
+      description: Gets a SamUser by their id. This endpoint is scoped to the permissions of the caller.
+        A normal user can call the endpoint with their own id, but trying to get another user will result in a 404.
+        Admin permissions grant the caller the ability to get any id.
+      operationId: getSamUserById
+      parameters:
+        - name: samUserId
+          in: path
+          description: the id of the sam user to get
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserResponse'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/{samUserId}/allowed:
+    get:
+      tags:
+        - Admin
+      summary: gets a user
+      description: Gets a users allowances by their id. This endpoint is scoped to the permissions of the caller.
+        A normal user can call the endpoint with their own id, but trying to get another user will result in a 404.
+        Admin permissions grant the caller the ability to get any id.
+      operationId: getSamUserAllowancesById
+      parameters:
+        - name: samUserId
+          in: path
+          description: the id of the sam user to get
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAllowances'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /register/user/v1:
     get:
       tags:
@@ -2874,6 +3142,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets terms of service details, including user's accepted version
       operationId: getTermsOfServiceDetails
       responses:
@@ -2887,6 +3156,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets info on whether the user has accepted the latest terms of service and if they can use the system based on that
       operationId: getTermsOfServiceComplianceStatus
       responses:
@@ -2928,6 +3198,7 @@ paths:
     post:
       tags:
         - Terms of Service
+      deprecated: true
       summary: accepts terms of service
       operationId: acceptTermsOfService
       requestBody:
@@ -2953,6 +3224,7 @@ paths:
     delete:
       tags:
         - Terms of Service
+      deprecated: true
       summary: rejects terms of service
       operationId: rejectTermsOfService
       responses:
@@ -2972,6 +3244,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: returns whether or not the user has accepted the current terms of service.
       operationId: getUserTermsOfServiceStatus
       responses:
@@ -2993,6 +3266,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets terms of service text
       operationId: getTermsOfServiceText
       responses:
@@ -3006,6 +3280,7 @@ paths:
     get:
       tags:
         - Terms of Service
+      deprecated: true
       summary: gets privacy policy text
       operationId: getPrivacyPolicyText
       responses:
@@ -3015,6 +3290,155 @@ paths:
             text/plain:
               schema:
                 type: string
+  /termsOfService/v1:
+    get:
+      tags:
+        - TermsOfService
+      summary: Returns details about the currently deployed version of the terms of service.
+      operationId: termsOfServiceGet
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermsOfServiceConfigResponse'
+  /termsOfService/v1/docs:
+    get:
+      tags:
+        - TermsOfService
+      summary: Gets terms of service text and/or privacy policy text depending on query parameters.
+      operationId: getTermsOfServiceDocs
+      parameters:
+        - name: doc
+          in: query
+          description: Array of strings containing 'termsOfService' and/or 'privacyPolicy'.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        200:
+          description: success
+          content:
+            text/plain:
+              schema:
+                type: string
+  /api/termsOfService/v1/user/self:
+    get:
+      tags:
+        - TermsOfService
+      summary: Returns details about the requesting user's terms of service status.
+      operationId: userTermsOfServiceGetSelf
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        403:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/termsOfService/v1/user/self/accept:
+    put:
+      tags:
+        - TermsOfService
+      summary: Accepts the current terms of service for the requesting user.
+      operationId: userTermsOfServiceAcceptSelf
+      responses:
+        204:
+          description: OK
+  /api/termsOfService/v1/user/self/reject:
+    put:
+      tags:
+        - TermsOfService
+      summary: Rejects the current terms of service for the requesting user.
+      operationId: userTermsOfServiceRejectSelf
+      responses:
+        204:
+          description: OK
+  /api/termsOfService/v1/user/{samUserId}:
+    get:
+      tags:
+        - TermsOfService
+      summary: gets a user's terms of service status, can only get another user's status if the requester is an admin.
+      operationId: userTermsOfServiceGet
+      parameters:
+        - name: samUserId
+          in: path
+          description: the id of the sam user to get terms of service status for
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        404:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/termsOfService/v1/user/self/history:
+    get:
+      tags:
+        - TermsOfService
+      summary: gets a user's own terms of service acceptance/rejection action history
+      operationId: userTermsOfServiceSelfGetHistory
+      parameters:
+        - name: limit
+          in: query
+          description: limit on how many records to return, defaults to 100
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: user has a history of terms of service actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceHistory'
+        404:
+          description: user has no history of terms of service actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/termsOfService/v1/user/{samUserId}/history:
+    get:
+      tags:
+        - TermsOfService
+      summary: gets a user's terms of service acceptance/rejection action history, can only get another user's history if the requester is an admin.
+      operationId: userTermsOfServiceGetUserHistory
+      parameters:
+        - name: samUserId
+          in: path
+          description: the id of the sam user to get terms of service status for
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: limit on how many records to return, defaults to 100
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: user has a history of terms of service actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTermsOfServiceHistory'
   /version:
     get:
       tags:
@@ -3191,6 +3615,21 @@ components:
           type: boolean
           description: Use the pet service account project as the user project in the request.
           default: true
+    RequesterPaysSignedUrlRequest:
+      type: object
+      required:
+        - gsPath
+      properties:
+        gsPath:
+          type: string
+          description: GS Path to the blob
+        duration:
+          type: number
+          description: Optional validity duration of the link in minutes. Defaults to 1 hour.
+          default: 60
+        requesterPaysProject:
+          type: string
+          description: Optional Google Project to use for billing.
     CreateResourceRequest:
       required:
         - policies
@@ -3595,6 +4034,7 @@ components:
         - enabled
         - userEmail
         - userSubjectId
+        - adminEnabled
       type: object
       properties:
         userSubjectId:
@@ -3605,7 +4045,10 @@ components:
           description: user email
         enabled:
           type: boolean
-          description: true if the user is enabled in ldap
+          description: True if the user is permitted to use terra. If false, all api requests should be rejected.
+        adminEnabled:
+            type: boolean
+            description: False when the user has been disabled by an admin. This is informational, only the enabled field should be used to determine if the user is permitted to use terra.
       description: ""
     UserStatusDetails:
       required:
@@ -3637,6 +4080,52 @@ components:
           type: boolean
           description: true if the user is in their proxy group
       description: ""
+    TermsOfServiceConfigResponse:
+      required:
+        - enforced
+        - currentVersion
+        - inGracePeriod
+        - inRollingAcceptanceWindow
+      type: object
+      properties:
+        enforced:
+          type: boolean
+          description: true if terms of service is enforced in Sam
+        currentVersion:
+          type: string
+          description: the current version of terms of service for the system
+        inGracePeriod:
+          type: boolean
+          description: true if there is currently a grace period enabled,
+            letting users use the system without accepting the terms of service
+        inRollingAcceptanceWindow:
+          type: boolean
+          description: true if there is a rolling acceptance window active. This
+            means that users who have not accepted the latest terms of service
+            version (and who have accepted the previous version) will be allowed to use the system 
+            for a period of time after the terms of service have been updated.
+    UserTermsOfServiceDetails:
+      required:
+        - latestAcceptedVersion
+        - acceptedOn
+        - permitsSystemUsage
+        - isCurrentVersion
+      type: object
+      properties:
+        latestAcceptedVersion:
+          type: string
+          description: The latest version of the terms of service that the requesting user has accepted.
+        acceptedOn:
+          type: string
+          format: date-time
+          description: The timestamp marking when the user accepted the terms of service matching latestAcceptedVersion.
+        permitsSystemUsage:
+          type: boolean
+          description: based on the user's currently accepted terms of service version and when the terms of service were last changed,
+            should the user still be permitted to use the system?
+        isCurrentVersion:
+          type: boolean
+          description: Is the Terms of Service version the user has accepted the current Terms of Service version of the system.
     TermsOfServiceDetails:
       required:
         - isEnabled
@@ -3675,6 +4164,33 @@ components:
           type: boolean
           description: based on the user's currently accepted terms of service version and when the terms of service were last changed,
             should the user still be permitted to use the system?
+    UserTermsOfServiceHistory:
+      required:
+        - history
+      type: object
+      description: a user's terms of service action history
+      properties:
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserTermsOfServiceHistoryRecord'
+    UserTermsOfServiceHistoryRecord:
+      required:
+        - action
+        - version
+        - timestamp
+      type: object
+      properties:
+        action:
+          type: string
+          description: the terms of service action the user took
+        version:
+          type: string
+          description: the version of the terms of service the user accepted/rejected
+        timestamp:
+          type: string
+          format: date-time
+          description: the timestamp of the action
     ManagedResourceGroupCoordinates:
       required:
         - tenantId
@@ -3755,9 +4271,18 @@ components:
           format: date-time
           description: User's time of last update
       description: specification of a User
-    UpdateUserRequest:
+    SamUserResponse:
       type: object
+      required:
+        - id
+        - email
+        - allowed
+        - createdAt
+        - updatedAt
       properties:
+        id:
+          type: string
+          description: User's Id
         googleSubjectId:
           type: string
           description: User's Google subject Id
@@ -3765,10 +4290,210 @@ components:
           type: string
           description: User's email address
           format: email
+        azureB2CId:
+          type: string
+          description: User's Azure B2C Id
+        allowed:
+          type: boolean
+          description: Whether or not the user allowed to use the system
+        createdAt:
+          type: string
+          format: date-time
+          description: User's time of creation
+        registeredAt:
+          type: string
+          format: date-time
+          description: User's time of registration
+        updatedAt:
+          type: string
+          format: date-time
+          description: User's time of last update
+      description: specification of a User
+    SamUserAllowances:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+          description: is the user allowed to use the system
+          nullable: false
+        details:
+          $ref: '#/components/schemas/SamUserAllowancesDetails'
+    SamUserAllowancesDetails:
+      type: object
+      nullable: false
+      properties:
         enabled:
           type: boolean
-          description: Whether or not the user is enabled
+          description: is the user enabled
+          nullable: false
+        termsOfService:
+          type: boolean
+          description: has the user accepted the terms of service
+          nullable: false
+    SamUserAttributes:
+      type: object
+      properties:
+        marketingConsent:
+          type: boolean
+          description: does the user consent to receiving marketing communications
+    SamUserRegistrationRequest:
+      type: object
+      properties:
+        acceptsTermsOfService:
+          type: boolean
+          description: does the user accept the terms of service
+        userAttributes:
+          $ref: '#/components/schemas/SamUserAttributes'
+    UpdateUserRequest:
+      type: object
+      properties:
+        azureB2CId:
+          type: string
+          description: User's Azure B2C Id, can be set to null
+        googleSubjectId:
+          type: string
+          description: User's Google subject Id, can be set to null
       description: specification of a UpdateUserRequest
+    FilteredResourceResponse:
+      type: object
+      required:
+        - format
+      properties:
+        format:
+          type: string
+      discriminator:
+        propertyName: format
+        mapping:
+          flat: FilteredResourcesFlatResponse
+          hierarchical: FilteredResourcesHierarchicalResponse
+      oneOf:
+        - $ref: '#/components/schemas/FilteredResourcesFlatResponse'
+        - $ref: '#/components/schemas/FilteredResourcesHierarchicalResponse'
+    FilteredResourcesFlatResponse:
+        type: object
+        properties:
+          format:
+            type: string
+            enum:
+              - flat
+          resources:
+            type: array
+            items:
+              $ref: '#/components/schemas/FilteredFlatResource'
+    FilteredResourcesHierarchicalResponse:
+        type: object
+        properties:
+          format:
+            type: string
+            enum:
+              - hierarchical
+          resources:
+            type: array
+            items:
+              $ref: '#/components/schemas/FilteredHierarchicalResource'
+    FilteredFlatResource:
+      type: object
+      properties:
+        resourceType:
+          type: string
+          description: resourceType of the resource
+        resourceId:
+          type: string
+          description: resourceId of the resource
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilteredFlatResourcePolicy'
+          description: policies the user is a part of on the resource
+        roles:
+          type: array
+          items:
+            type: string
+          description: roles the user has on the resource
+        actions:
+          type: array
+          items:
+            type: string
+          description: actions the user has on the resource
+        authDomainGroups:
+          type: array
+          items:
+            type: string
+          description: The auth domain groups of the policy
+        missingAuthDomainGroups:
+          type: array
+          items:
+            type: string
+          description: Auth Domain groups the user is not a member of
+    FilteredFlatResourcePolicy:
+      type: object
+      properties:
+        policy:
+          type: string
+          description: The policy name
+        isPublic:
+          type: boolean
+          description: Is this policy on the resource a public policy?
+        inherited:
+          type: boolean
+          description: Is this policy inherited from an parent resource?
+    FilteredHierarchicalResource:
+      type: object
+      properties:
+        resourceType:
+          type: string
+          description: resourceType of the resource
+        resourceId:
+          type: string
+          description: resourceType of the resource
+        policies:
+          type: array
+          description: Policies on the resource
+          items:
+            $ref: '#/components/schemas/FilteredHierarchicalResourcePolicy'
+        authDomainGroups:
+          type: array
+          items:
+            type: string
+          description: The auth domain groups of the policy
+        missingAuthDomainGroups:
+          type: array
+          items:
+            type: string
+          description: Auth Domain groups the user is not a member of
+    FilteredHierarchicalResourcePolicy:
+      type: object
+      properties:
+        policy:
+          type: string
+          description: The policy name
+        roles:
+          type: array
+          description: Roles on the policy
+          items:
+            $ref: '#/components/schemas/FilteredHierarchicalResourceRole'
+        actions:
+          type: array
+          description: Actions on the role
+          items:
+            type: string
+        isPublic:
+          type: boolean
+          description: Is this policy on the resource a public policy?
+        inherited:
+          type: boolean
+          description: Is this policy inherited from an parent resource?
+    FilteredHierarchicalResourceRole:
+      type: object
+      properties:
+        role:
+          type: string
+          description: The role name
+        actions:
+          type: array
+          description: Actions on the role
+          items:
+            type: string
   securitySchemes:
     googleoauth:
       type: oauth2

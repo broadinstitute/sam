@@ -4,12 +4,15 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountDisplayName, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, samRequestContext, tosConfig}
 import org.broadinstitute.dsde.workbench.sam.azure._
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
+import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFreeSpec, TestSupport}
 import org.scalatest.Inside.inside
 import org.scalatest.matchers.should.Matchers
@@ -17,47 +20,50 @@ import org.scalatest.{BeforeAndAfterEach, OptionValues}
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.Date
+import java.util.{Date, UUID}
 import scala.concurrent.duration._
 
 class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
 
-  val defaultGroupName = WorkbenchGroupName("group")
-  val defaultGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
-  val defaultUser = Generator.genWorkbenchUserBoth.sample.get
-  val defaultPetSA = PetServiceAccount(
+  val defaultGroupName: WorkbenchGroupName = WorkbenchGroupName("group")
+  val defaultGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
+  val defaultUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
+  val defaultPetSA: PetServiceAccount = PetServiceAccount(
     PetServiceAccountId(defaultUser.id, GoogleProject("testProject")),
     ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares"))
   )
-  val defaultPetMI = PetManagedIdentity(
+  val defaultPetMI: PetManagedIdentity = PetManagedIdentity(
     PetManagedIdentityId(defaultUser.id, TenantId("testTenant"), SubscriptionId("testSubscription"), ManagedResourceGroupName("testMrg")),
     ManagedIdentityObjectId("testObjectId"),
     ManagedIdentityDisplayName("Managed Identity")
   )
 
-  val actionPatterns = Set(ResourceActionPattern("write", "description of pattern1", false), ResourceActionPattern("read", "description of pattern2", false))
-  val writeAction = ResourceAction("write")
-  val readAction = ResourceAction("read")
+  val actionPatterns: Set[ResourceActionPattern] = Set(
+    ResourceActionPattern("write", "description of pattern1", authDomainConstrainable = false),
+    ResourceActionPattern("read", "description of pattern2", authDomainConstrainable = false)
+  )
+  val writeAction: ResourceAction = ResourceAction("write")
+  val readAction: ResourceAction = ResourceAction("read")
 
-  val ownerRoleName = ResourceRoleName("role1")
-  val ownerRole = ResourceRole(ownerRoleName, Set(writeAction, readAction))
-  val readerRole = ResourceRole(ResourceRoleName("role2"), Set(readAction))
-  val actionlessRole = ResourceRole(ResourceRoleName("cantDoNuthin"), Set()) // yeah, it's a double negative, sue me!
-  val roles = Set(ownerRole, readerRole, actionlessRole)
+  val ownerRoleName: ResourceRoleName = ResourceRoleName("role1")
+  val ownerRole: ResourceRole = ResourceRole(ownerRoleName, Set(writeAction, readAction))
+  val readerRole: ResourceRole = ResourceRole(ResourceRoleName("role2"), Set(readAction))
+  val actionlessRole: ResourceRole = ResourceRole(ResourceRoleName("cantDoNuthin"), Set()) // yeah, it's a double negative, sue me!
+  val roles: Set[ResourceRole] = Set(ownerRole, readerRole, actionlessRole)
 
-  val resourceTypeName = ResourceTypeName("awesomeType")
-  val resourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName, false)
-  val defaultResource = Resource(resourceType.name, ResourceId("defaultResource"), Set.empty)
-  val defaultPolicy = AccessPolicy(
+  val resourceTypeName: ResourceTypeName = ResourceTypeName("awesomeType")
+  val resourceType: ResourceType = ResourceType(resourceTypeName, actionPatterns, roles, ownerRoleName)
+  val defaultResource: Resource = Resource(resourceType.name, ResourceId("defaultResource"), Set.empty)
+  val defaultPolicy: AccessPolicy = AccessPolicy(
     FullyQualifiedPolicyId(defaultResource.fullyQualifiedId, AccessPolicyName("defaultPolicy")),
     Set.empty,
     WorkbenchEmail("default@policy.com"),
     roles.map(_.roleName),
     Set(writeAction, readAction),
     Set.empty,
-    false
+    public = false
   )
 
   override protected def beforeEach(): Unit =
@@ -67,17 +73,19 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
     BasicWorkbenchGroup(WorkbenchGroupName(groupName), Set.empty, WorkbenchEmail(s"$groupName@test.com"))
 
   "PostgresDirectoryDAO" - {
-    assume(databaseEnabled, databaseEnabledClue)
     "createGroup" - {
       "create a group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync() shouldEqual defaultGroup
       }
 
       "create a group with access instructions" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, Option("access instructions"), samRequestContext = samRequestContext).unsafeRunSync() shouldEqual defaultGroup
       }
 
       "not allow groups with duplicate names" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val duplicateGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val exception = intercept[WorkbenchExceptionWithErrorReport] {
@@ -88,6 +96,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "create groups with subGroup members" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set.empty, WorkbenchEmail("bar@baz.com"))
         val members: Set[WorkbenchSubject] = Set(subGroup1.id, subGroup2.id)
@@ -102,6 +111,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "create groups with policy members" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberPolicy = defaultPolicy
         val members: Set[WorkbenchSubject] = Set(memberPolicy.id)
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), members, WorkbenchEmail("baz@qux.com"))
@@ -116,6 +126,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "create groups with both subGroup and policy members" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup = defaultGroup
         dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
@@ -133,6 +144,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "not allow nonexistent group members" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set.empty, WorkbenchEmail("bar@baz.com"))
         val members: Set[WorkbenchSubject] = Set(subGroup1.id, subGroup2.id)
@@ -146,30 +158,35 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "loadGroup" - {
       "load a group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
         loadedGroup shouldEqual defaultGroup
       }
 
       "return None when loading a nonexistent group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.loadGroup(WorkbenchGroupName("fakeGroup"), samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "loadGroupEmail" - {
       "load a group's email" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val loadedEmail = dao.loadGroupEmail(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"Failed to load group ${defaultGroup.id}"))
         loadedEmail shouldEqual defaultGroup.email
       }
 
       "return None when trying to load the email for a nonexistent group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.loadGroupEmail(WorkbenchGroupName("fakeGroup"), samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "deleteGroup" - {
       "delete groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"Failed to load group $defaultGroupName"))
@@ -181,6 +198,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "not delete a group that is still a member of another group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup = defaultGroup.copy(id = WorkbenchGroupName("subGroup"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup.id), WorkbenchEmail("bar@baz.com"))
 
@@ -199,6 +217,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "addGroupMember" - {
       "add groups to other groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
@@ -210,6 +229,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "add users to groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
@@ -220,6 +240,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "add policies to groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -232,6 +253,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "add groups to policies" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -245,6 +267,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "add users to policies" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -258,6 +281,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "add policies to other policies" in {
+        assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -273,6 +297,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "trying to add a group that does not exist will fail" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
@@ -282,6 +307,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "prevents group cycles" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup = emptyWorkbenchGroup("subGroup")
         val badGroup = emptyWorkbenchGroup("badGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
@@ -302,6 +328,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "batchLoadGroupEmail" - {
       "batch load multiple group emails" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val group1 = emptyWorkbenchGroup("group1")
         val group2 = emptyWorkbenchGroup("group2")
 
@@ -316,6 +343,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "removeGroupMember" - {
       "remove groups from other groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup = emptyWorkbenchGroup("subGroup")
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
@@ -330,6 +358,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "remove users from groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
@@ -343,6 +372,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "remove policies from groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -358,6 +388,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "remove groups from policies" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createGroup(defaultGroup.copy(members = Set(defaultUser.id)), samRequestContext = samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -377,6 +408,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "remove users from policies" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
@@ -391,6 +423,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "remove policies from other policies" in {
+        assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -409,6 +442,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "createUser" - {
       "returns the same user" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val expectedInstant = Instant.parse("2007-07-07T07:07:07Z")
         val expectedUser = defaultUser.copy(registeredAt = Some(expectedInstant))
@@ -423,12 +457,12 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
           user.email should equal(expectedUser.email)
           user.azureB2CId should equal(expectedUser.azureB2CId)
           user.enabled should equal(expectedUser.enabled)
-          user.acceptedTosVersion should equal(expectedUser.acceptedTosVersion)
           user.registeredAt should equal(expectedUser.registeredAt)
         }
       }
 
       "returns the samUser with the createdAt datetime set to the current time if one is not specified" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val expectedUser = defaultUser
 
@@ -442,6 +476,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "returns the samUser with the createdAt datetime set to the specified instant" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val expectedInstant = Instant.parse("2000-01-02T03:04:05Z")
         // Arrange
         val expectedUser = defaultUser.copy(createdAt = expectedInstant)
@@ -456,6 +491,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "returns the samUser with the updatedAt datetime set to the current time if one is not specified" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val expectedUser = defaultUser
 
@@ -469,6 +505,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "returns the samUser with the updatedAt datetime set to the specified instant" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val expectedInstant = Instant.parse("2000-01-02T03:04:05Z")
         // Arrange
         val expectedUser = defaultUser.copy(updatedAt = expectedInstant)
@@ -485,6 +522,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "loadUser" - {
       "loads a persisted user" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val instant = Instant.parse("2007-07-07T07:07:07Z")
         val expectedUser = defaultUser.copy(
@@ -503,7 +541,6 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
           user.email should equal(expectedUser.email)
           user.azureB2CId should equal(expectedUser.azureB2CId)
           user.enabled should equal(expectedUser.enabled)
-          user.acceptedTosVersion should equal(expectedUser.acceptedTosVersion)
           user.createdAt should equal(expectedUser.createdAt)
           user.registeredAt should equal(expectedUser.registeredAt)
           user.updatedAt should equal(expectedUser.updatedAt)
@@ -511,6 +548,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "loads a user without a google subject id" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val user = Generator.genWorkbenchUserAzure.sample.get
         assume(user.googleSubjectId.isEmpty)
@@ -524,6 +562,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "loads a user without an AzureB2C id" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val user = Generator.genWorkbenchUserGoogle.sample.get
         assume(user.azureB2CId.isEmpty)
@@ -539,6 +578,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "deleteUser" - {
       "delete users" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync() shouldEqual defaultUser
         val loadedUser = dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load user ${defaultUser.id}"))
         loadedUser shouldEqual defaultUser
@@ -547,6 +587,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "delete a user that is still a member of a group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val user = defaultUser
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(user.id), WorkbenchEmail("bar@baz.com"))
 
@@ -560,6 +601,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "listUsersGroups" - {
       "list all of the groups a user is in" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroupId = WorkbenchGroupName("subGroup")
         val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUser.id), WorkbenchEmail("subGroup@foo.com"))
         val parentGroupId = WorkbenchGroupName("parentGroup")
@@ -574,6 +616,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "list all of the policies a user is in" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subPolicy = defaultPolicy.copy(
           id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
           email = WorkbenchEmail("sp@policy.com"),
@@ -597,6 +640,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "createPetServiceAccount" - {
       "create pet service accounts" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync() shouldBe defaultPetSA
       }
@@ -604,6 +648,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "loadPetServiceAccount" - {
       "load pet service accounts" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -611,12 +656,14 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return None for nonexistent pet service accounts" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.loadPetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "deletePetServiceAccount" - {
       "delete pet service accounts" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -628,6 +675,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "throw an exception when trying to delete a nonexistent pet service account" in {
+        assume(databaseEnabled, databaseEnabledClue)
         assertThrows[WorkbenchException] {
           dao.deletePetServiceAccount(defaultPetSA.id, samRequestContext).unsafeRunSync()
         }
@@ -636,6 +684,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "getAllPetServiceAccountsForUser" - {
       "get all pet service accounts for user" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val petSA1 = PetServiceAccount(
@@ -656,6 +705,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "getUserFromPetServiceAccount" - {
       "get user from pet service account subject ID" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
@@ -666,6 +716,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "updatePetServiceAccount" - {
       "update a pet service account" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
@@ -679,6 +730,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "throw an exception when updating a nonexistent pet SA" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         val updatedPetSA = defaultPetSA.copy(serviceAccount =
@@ -692,6 +744,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "getManagedGroupAccessInstructions" - {
       "get managed group access instructions" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.getManagedGroupAccessInstructions(defaultGroupName, samRequestContext).unsafeRunSync() shouldBe None
@@ -700,6 +753,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "setManagedGroupAccessInstructions" - {
       "set managed group access instructions" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.setManagedGroupAccessInstructions(defaultGroupName, "testinstructions", samRequestContext).unsafeRunSync()
@@ -710,6 +764,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "isGroupMember" - {
       "return true when member is in sub group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(subGroup1.id), WorkbenchEmail("bar@baz.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup2.id), WorkbenchEmail("baz@qux.com"))
@@ -722,6 +777,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return false when member is not in sub group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup1 = defaultGroup
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(subGroup1.id), WorkbenchEmail("bar@baz.com"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set.empty, WorkbenchEmail("baz@qux.com"))
@@ -734,6 +790,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return true when user is in sub group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val user = defaultUser
         val subGroup = defaultGroup.copy(members = Set(user.id))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set(subGroup.id), WorkbenchEmail("parent@group.com"))
@@ -747,6 +804,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
       // https://broadworkbench.atlassian.net/browse/CA-600
       "return true when user is in multiple sub groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val user = defaultUser
         val subGroup1 = defaultGroup.copy(members = Set(user.id))
         val subGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("subGroup2"), Set(user.id), WorkbenchEmail("group2@foo.com"))
@@ -761,6 +819,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return false when user is not in sub group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val user = defaultUser
         val subGroup = defaultGroup.copy(members = Set(user.id))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup"), Set.empty, WorkbenchEmail("parent@group.com"))
@@ -773,6 +832,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return true when user is in policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val user = defaultUser
         val policy = defaultPolicy.copy(members = Set(user.id))
 
@@ -785,6 +845,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return false when user is not in policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val user = defaultUser
         val policy = defaultPolicy
 
@@ -797,6 +858,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return true when policy is in policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberPolicy =
           defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
         val policy = defaultPolicy.copy(members = Set(memberPolicy.id))
@@ -810,6 +872,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return false when policy is not in policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberPolicy =
           defaultPolicy.copy(id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("memberPolicy")), email = WorkbenchEmail("copied@policy.com"))
         val policy = defaultPolicy
@@ -823,6 +886,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return true when policy is in group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberPolicy = defaultPolicy
         val group = defaultGroup.copy(members = Set(memberPolicy.id))
 
@@ -835,6 +899,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return false when policy is not in group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberPolicy = defaultPolicy
         val group = defaultGroup
 
@@ -847,6 +912,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return true when group is in policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberGroup = defaultGroup
         val policy = defaultPolicy.copy(members = Set(memberGroup.id))
 
@@ -859,6 +925,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return false when group is not in policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberGroup = defaultGroup
         val policy = defaultPolicy
 
@@ -874,6 +941,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
     "listIntersectionGroupUsers" - {
       // DV: I have tried this up to 100 groups to intersect locally with no functional issue, performance seems linear
       "intersect groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         for (groupCount <- 1 to 3) {
           beforeEach()
           val inAllGroups = Generator.genWorkbenchUserGoogle.sample.get
@@ -902,6 +970,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "intersect lots of groups with lots of dups and overlaps" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val groupCount = 40
         val userCount = 50
 
@@ -941,6 +1010,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "enableIdentity and disableIdentity" - {
       "can enable and disable users" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.isEnabled(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
 
@@ -952,6 +1022,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "cannot enable and disable pet service accounts" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
         val initialEnabledStatus = dao.isEnabled(defaultPetSA.id, samRequestContext).unsafeRunSync()
@@ -964,6 +1035,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "cannot enable and disable groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
         val initialEnabledStatus = dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync()
 
@@ -975,6 +1047,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "cannot enable and disable policies" in {
+        assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -989,6 +1062,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
       "enableIdentity" - {
         "sets the updatedAt datetime to the current datetime" in {
+          assume(databaseEnabled, databaseEnabledClue)
           /// Arrange
           val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
             enabled = false,
@@ -1007,6 +1081,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
       "disableIdentity" - {
         "sets the updatedAt datetime to the current datetime" in {
+          assume(databaseEnabled, databaseEnabledClue)
           /// Arrange
           val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
             enabled = true,
@@ -1026,6 +1101,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "isEnabled" - {
       "gets a user's enabled status" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.disableIdentity(defaultUser.id, samRequestContext).unsafeRunSync()
@@ -1036,6 +1112,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "gets a pet's user's enabled status" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -1047,6 +1124,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "returns false for groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.isEnabled(defaultGroup.id, samRequestContext).unsafeRunSync() shouldBe false
@@ -1055,6 +1133,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "returns false for policies" in {
+        assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -1067,6 +1146,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "listUserDirectMemberships" - {
       "lists all groups that a user is in directly" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("ssg"), Set(defaultUser.id), WorkbenchEmail("ssg@groups.r.us"))
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(defaultUser.id, subSubGroup.id), WorkbenchEmail("sg@groups.r.us"))
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("pg"), Set(subGroup.id), WorkbenchEmail("pg@groups.r.us"))
@@ -1080,6 +1160,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "lists all policies that a user is in directly" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // disclaimer: not sure this ever happens in actual sam usage, but it should still work
         val subSubPolicy = defaultPolicy.copy(
           id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("ssp")),
@@ -1110,6 +1191,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "listAncestorGroups" - {
       "list all of the groups a group is in" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subSubGroup = BasicWorkbenchGroup(WorkbenchGroupName("ssg"), Set.empty, WorkbenchEmail("ssg@groups.r.us"))
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(subSubGroup.id), WorkbenchEmail("sg@groups.r.us"))
         val directParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("dpg"), Set(subGroup.id, subSubGroup.id), WorkbenchEmail("dpg@groups.r.us"))
@@ -1125,6 +1207,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "list all of the policies a group is in" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subPolicy = defaultPolicy.copy(
           id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
           email = WorkbenchEmail("sp@policy.com"),
@@ -1146,6 +1229,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "list all of the groups a policy is in" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("sg"), Set(defaultPolicy.id), WorkbenchEmail("sg@groups.r.us"))
         val directParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("dpg"), Set(subGroup.id, defaultPolicy.id), WorkbenchEmail("dpg@groups.r.us"))
         val indirectParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("ipg"), Set(subGroup.id), WorkbenchEmail("ipg@groups.r.us"))
@@ -1162,6 +1246,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "list all of the policies a policy is in" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val subPolicy = defaultPolicy.copy(
           id = defaultPolicy.id.copy(accessPolicyName = AccessPolicyName("sp")),
           email = WorkbenchEmail("sp@policy.com"),
@@ -1192,12 +1277,14 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "getSynchronizedEmail" - {
       "load the email for a group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.getSynchronizedEmail(defaultGroup.id, samRequestContext).unsafeRunSync() shouldEqual Option(defaultGroup.email)
       }
 
       "load the email for a policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -1208,15 +1295,17 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "getSynchronizedDate" - {
       "load the synchronized date for a group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.updateSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync()
 
         val loadedDate = dao.getSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail("failed to load date"))
-        loadedDate.getTime() should equal(new Date().getTime +- 2.seconds.toMillis)
+        loadedDate.getTime should equal(new Date().getTime +- 2.seconds.toMillis)
       }
 
       "load the synchronized date for a policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
@@ -1224,12 +1313,77 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.updateSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync()
 
         val loadedDate = dao.getSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail("failed to load date"))
-        loadedDate.getTime() should equal(new Date().getTime +- 2.seconds.toMillis)
+        loadedDate.getTime should equal(new Date().getTime +- 2.seconds.toMillis)
+      }
+    }
+
+    "updateUser" - {
+      "will null the googleSubjectId for a user when provided googleSubjectId is 'null'" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = genWorkbenchUserBoth.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe user.googleSubjectId
+        dao.updateUser(user, AdminUpdateUserRequest(None, Option(GoogleSubjectId("null"))), samRequestContext).unsafeRunSync()
+
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+      }
+
+      "will null the azureB2CId for a user when provided azureB2CId is 'null'" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = genWorkbenchUserBoth.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe user.azureB2CId
+        dao.updateUser(user, AdminUpdateUserRequest(Option(AzureB2CId("null")), None), samRequestContext).unsafeRunSync()
+
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
+      }
+
+      "update the googleSubjectId for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+        dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+        dao.updateUser(defaultUser, AdminUpdateUserRequest(None, Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+      }
+
+      "update the azureB2CId for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val newB2CId = AzureB2CId(UUID.randomUUID().toString)
+        dao.createUser(defaultUser.copy(azureB2CId = None), samRequestContext).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
+        dao.updateUser(defaultUser, AdminUpdateUserRequest(Option(newB2CId), None), samRequestContext).unsafeRunSync()
+
+        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(newB2CId)
+      }
+
+      "sets the updatedAt datetime to the current datetime" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        // Arrange
+        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
+          googleSubjectId = None,
+          updatedAt = Instant.parse("2020-02-02T20:20:20Z")
+        )
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
+
+        // Act
+        dao.updateUser(user, AdminUpdateUserRequest(None, Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
+
+        // Assert
+        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        loadedUser.value.updatedAt should beAround(Instant.now())
       }
     }
 
     "setGoogleSubjectId" - {
       "update the googleSubjectId for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
         dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
 
@@ -1239,16 +1393,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
       }
 
-      "throw an exception when trying to overwrite an existing googleSubjectId" in {
-        val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-
-        assertThrows[WorkbenchException] {
-          dao.setGoogleSubjectId(defaultUser.id, newGoogleSubjectId, samRequestContext).unsafeRunSync()
-        }
-      }
-
       "sets the updatedAt datetime to the current datetime" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
           googleSubjectId = None,
@@ -1269,6 +1415,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       // cannot imagine we would be in unless something went wrong.  The test is handy though to make sure the sql is
       // working correctly.
       "does not change the registeredAt datetime if it is already set" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val expectedRegisteredAt = Instant.parse("2022-02-22T22:22:22Z")
         val user = Generator.genWorkbenchUserAzure.sample.get.copy(googleSubjectId = None, azureB2CId = None, registeredAt = Option(expectedRegisteredAt))
@@ -1288,25 +1435,29 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "loadSubjectFromEmail" - {
       "load a user subject from their email" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromEmail(defaultUser.email, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
       "load a user subject from their email case insensitive" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val email = WorkbenchEmail("Mixed.Case.Email@foo.com")
         dao.createUser(defaultUser.copy(email = email), samRequestContext).unsafeRunSync()
 
-        dao.loadSubjectFromEmail(new WorkbenchEmail(email.value.toLowerCase()), samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.id)
+        dao.loadSubjectFromEmail(WorkbenchEmail(email.value.toLowerCase()), samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
       "load a group subject from its email" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromEmail(defaultGroup.email, samRequestContext).unsafeRunSync() shouldBe Some(defaultGroupName)
       }
 
       "load a pet service account subject from its email" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -1314,6 +1465,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "load a policy subject from its email" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberPolicy = defaultPolicy
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -1324,6 +1476,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "throw an exception when an email refers to more than one subject" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao
           .createPetServiceAccount(defaultPetSA.copy(serviceAccount = defaultPetSA.serviceAccount.copy(email = defaultUser.email)), samRequestContext)
@@ -1337,12 +1490,14 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "loadSubjectFromGoogleSubjectId" - {
       "load a user subject from their google subject id" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectFromGoogleSubjectId(defaultUser.googleSubjectId.get, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.id)
       }
 
       "load a pet service account subject from its google subject id" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -1354,18 +1509,21 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "loadSubjectEmail" - {
       "load the email for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadSubjectEmail(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.email)
       }
 
       "load the email for a group" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
         dao.loadSubjectEmail(defaultGroup.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultGroup.email)
       }
 
       "load the email for a pet service account" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
 
@@ -1373,6 +1531,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "load the email for a policy" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val memberPolicy = defaultPolicy
 
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
@@ -1385,6 +1544,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "loadUserByAzureB2CId" - {
       "load a user from their azure b2c id" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.loadUserByAzureB2CId(defaultUser.azureB2CId.get, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
@@ -1393,6 +1553,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "setUserAzureB2CId" - {
       "set the azureB2CId for a user with no pre-existing azureB2CId" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val newAzureB2cId = AzureB2CId("newAzureB2cId")
         dao.createUser(defaultUser.copy(azureB2CId = None), samRequestContext).unsafeRunSync()
 
@@ -1403,6 +1564,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "set the azureB2CId for a user with a pre-existing azureB2CId of the same value" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         dao.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext).unsafeRunSync()
@@ -1410,9 +1572,9 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(defaultUser.azureB2CId.get)
       }
 
-      "throw an exception when trying to overwrite a azureB2CId with a different value" in {
+      "throw an exception when trying to set azureB2CId for a non-existing user" in {
+        assume(databaseEnabled, databaseEnabledClue)
         val newAzureB2cId = AzureB2CId("newAzureB2cId")
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
 
         assertThrows[WorkbenchException] {
           dao.setUserAzureB2CId(defaultUser.id, newAzureB2cId, samRequestContext).unsafeRunSync()
@@ -1420,6 +1582,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "sets the updatedAt datetime to the current datetime" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val user = Generator.genWorkbenchUserAzure.sample.get.copy(
           azureB2CId = None,
@@ -1440,6 +1603,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       // cannot imagine we would be in unless something went wrong.  The test is handy though to make sure the sql is
       // working correctly.
       "does not change the registeredAt datetime if it is already set" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val expectedRegisteredAt = Instant.parse("2022-02-22T22:22:22Z")
         val user = Generator.genWorkbenchUserAzure.sample.get.copy(
@@ -1463,6 +1627,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "createPetManagedIdentity" - {
       "create pet managed identity" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetManagedIdentity(defaultPetMI, samRequestContext).unsafeRunSync() shouldBe defaultPetMI
       }
@@ -1470,6 +1635,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "loadPetManagedIdentity" - {
       "load pet managed identity" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.createPetManagedIdentity(defaultPetMI, samRequestContext).unsafeRunSync()
 
@@ -1477,71 +1643,98 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "return None for nonexistent pet managed identities" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.loadPetManagedIdentity(defaultPetMI.id, samRequestContext).unsafeRunSync() shouldBe None
       }
     }
 
     "acceptTermsOfService" - {
       "accept the terms of service for a new user" in {
+        assume(databaseEnabled, databaseEnabledClue)
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+
+        // Assert
+        val userTos = dao.getUserTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+        userTos should not be empty
+        userTos.get.createdAt should beAround(Instant.now())
+        userTos.get.action shouldBe TosTable.ACCEPT
+        userTos.get.version shouldBe tosConfig.version
       }
 
       "accept the terms of service for a user who has already accepted a previous version of the terms of service" in {
         assume(databaseEnabled, databaseEnabledClue)
-
         dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
         dao.acceptTermsOfService(defaultUser.id, "0", samRequestContext).unsafeRunSync() shouldBe true
         dao.acceptTermsOfService(defaultUser.id, "2", samRequestContext).unsafeRunSync() shouldBe true
-      }
-
-      "sets the updatedAt datetime to the current datetime" in {
-        // Arrange
-        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
-          updatedAt = Instant.parse("2010-10-10T10:10:10Z")
-        )
-        dao.createUser(user, samRequestContext).unsafeRunSync()
-
-        // Act
-        dao.acceptTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync()
 
         // Assert
-        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        loadedUser.value.updatedAt should beAround(Instant.now())
+        val userTos = dao.getUserTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync()
+        userTos should not be empty
+        userTos.get.createdAt should beAround(Instant.now())
+        userTos.get.action shouldBe TosTable.ACCEPT
+        userTos.get.version shouldBe "2"
       }
     }
 
     "rejectTermsOfService" - {
-      "reject the terms of service for an existing user" in {
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.acceptTermsOfService(defaultUser.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
-        dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
-      }
-
-      "cannot reject the terms of service for a user who has not accepted terms of service previously" in {
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.rejectTermsOfService(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe false
-      }
-
-      "sets the updatedAt datetime to the current datetime" in {
-        // Arrange
-        val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
-          updatedAt = Instant.parse("2010-10-10T10:10:10Z"),
-          acceptedTosVersion = Option(tosConfig.version)
-        )
+      "reject the terms of service for an new user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
         dao.createUser(user, samRequestContext).unsafeRunSync()
-
-        // Act
-        dao.rejectTermsOfService(user.id, samRequestContext).unsafeRunSync()
+        dao.rejectTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
 
         // Assert
-        val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
-        loadedUser.value.updatedAt should beAround(Instant.now())
+        val userTos = dao.getUserTermsOfService(user.id, samRequestContext).unsafeRunSync()
+        userTos should not be empty
+        userTos.get.createdAt should beAround(Instant.now())
+        userTos.get.action shouldBe TosTable.REJECT
+        userTos.get.version shouldBe tosConfig.version
+      }
+
+      "reject the terms of service for an existing user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        dao.acceptTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+        dao.rejectTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+
+        // Assert
+        val userTos = dao.getUserTermsOfService(user.id, samRequestContext).unsafeRunSync()
+        userTos should not be empty
+        userTos.get.createdAt should beAround(Instant.now())
+        userTos.get.action shouldBe TosTable.REJECT
+        userTos.get.version shouldBe tosConfig.version
+      }
+    }
+
+    "load terms of service" - {
+      "returns none if no record" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        // Assert
+        val userTos = dao.getUserTermsOfService(user.id, samRequestContext).unsafeRunSync()
+        userTos should be(None)
+      }
+      "returns acceptances" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.acceptTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+        dao.rejectTermsOfService(user.id, tosConfig.version, samRequestContext).unsafeRunSync() shouldBe true
+
+        // Assert
+        val userTos = dao.getUserTermsOfService(user.id, samRequestContext, action = Option(TosTable.ACCEPT)).unsafeRunSync()
+        userTos should be(Some(SamUserTos(user.id, tosConfig.version, TosTable.ACCEPT, Instant.now())))
       }
     }
 
     "checkStatus" - {
       "is true if database is queryable" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Act
         val samStatus = dao.checkStatus(samRequestContext).unsafeRunSync()
 
@@ -1550,6 +1743,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "is false if database cannot be connected to" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val badDBName = Symbol("noDB")
         val badDbReference = new TestDbReference(badDBName, TestSupport.blockingEc)
@@ -1565,6 +1759,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       // Test ignored - not sure how to test it without injecting a mocked DBReference into the DAO or maybe passing
       // a bad query as a parameter into the checkStatus method
       "is false if database has connections but cannot be queried" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Act
         val samStatus = dao.checkStatusWithQuery(samsqls"SELECT FOO FROM BAR", samRequestContext).unsafeRunSync()
 
@@ -1575,6 +1770,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
     "setUserRegisteredAt" - {
       "sets the user's registeredAt column if its not yet set" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val registeredAt = Instant.now().minus(10, ChronoUnit.MINUTES)
         val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = None)
@@ -1589,6 +1785,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "refuses to overwrite the user's registeredAt date" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val registeredAt = Instant.now()
         val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = Some(registeredAt))
@@ -1604,6 +1801,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
 
       "refuses to update the registeredAt date for a non-existent user" in {
+        assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val registeredAt = Instant.now()
         val user = Generator.genWorkbenchUserGoogle.sample.get.copy(registeredAt = Some(registeredAt))
@@ -1612,6 +1810,65 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         assertThrows[WorkbenchException] {
           dao.setUserRegisteredAt(user.id, Instant.now().minus(10, ChronoUnit.MINUTES), samRequestContext).unsafeRunSync()
         }
+      }
+    }
+
+    "getUserAttributes" - {
+      "gets the user attributes of an existing user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        // Arrange
+        val expectedUser = defaultUser.copy(registeredAt = Some(Instant.now()))
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+        val userAttributes = SamUserAttributes(createdUser.id, marketingConsent = true)
+        dao.setUserAttributes(userAttributes, samRequestContext).unsafeRunSync()
+
+        // Act
+        val retrievedAttributes = dao.getUserAttributes(createdUser.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        retrievedAttributes should be(Some(userAttributes))
+      }
+
+      "returns None if no user attributes exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        // Arrange
+        val expectedUser = defaultUser.copy(registeredAt = Some(Instant.now()))
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+
+        // Act
+        val retrievedAttributes = dao.getUserAttributes(createdUser.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        retrievedAttributes should be(None)
+      }
+
+      "returns None if the user does not exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        // Arrange
+        // Act
+        val retrievedAttributes = dao.getUserAttributes(defaultUser.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        retrievedAttributes should be(None)
+      }
+    }
+
+    "setUserAttributes" - {
+      "upserts new user attributes if user attributes already exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        // Arrange
+        val expectedUser = defaultUser.copy(registeredAt = Some(Instant.now()))
+        val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
+        val userAttributes = SamUserAttributes(createdUser.id, marketingConsent = true)
+        dao.setUserAttributes(userAttributes, samRequestContext).unsafeRunSync()
+
+        // Act
+        val upsertedAttributes = userAttributes.copy(marketingConsent = false)
+        dao.setUserAttributes(upsertedAttributes, samRequestContext).unsafeRunSync()
+        val retrievedAttributes = dao.getUserAttributes(expectedUser.id, samRequestContext).unsafeRunSync()
+
+        // Assert
+        retrievedAttributes should be(Some(upsertedAttributes))
       }
     }
   }

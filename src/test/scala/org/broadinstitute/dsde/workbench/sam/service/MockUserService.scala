@@ -3,10 +3,10 @@ package org.broadinstitute.dsde.workbench.sam.service
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.util.Date
@@ -17,7 +17,7 @@ class MockUserService(
     cloudExtensions: CloudExtensions = null,
     blockedEmailDomains: Seq[String] = Seq(),
     tosService: TosService = null
-)(implicit executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetrics[IO])
+)(implicit executionContext: ExecutionContext)
     extends UserService(directoryDAO, cloudExtensions, blockedEmailDomains, tosService) {
 
   def createGroup(
@@ -144,8 +144,8 @@ class MockUserService(
   def acceptTermsOfServiceDAO(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
     directoryDAO.acceptTermsOfService(userId, tosVersion, samRequestContext)
 
-  def rejectTermsOfServiceDAO(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Boolean] =
-    directoryDAO.rejectTermsOfService(userId, samRequestContext)
+  def rejectTermsOfServiceDAO(userId: WorkbenchUserId, tosVersion: String, samRequestContext: SamRequestContext): IO[Boolean] =
+    directoryDAO.rejectTermsOfService(userId, tosVersion, samRequestContext)
 
   def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity] =
     directoryDAO.createPetManagedIdentity(petManagedIdentity, samRequestContext)

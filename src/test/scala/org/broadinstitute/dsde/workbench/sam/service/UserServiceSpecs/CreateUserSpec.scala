@@ -1,14 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.Generator.{genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
+import org.broadinstitute.dsde.workbench.sam.Generator.{genNewWorkbenchUserAzureUami, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
+import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.matchers.BeEnabledInMatcher.beEnabledIn
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForUserMatcher.beForUser
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes, SamUserAttributesRequest, SamUserRegistrationRequest}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
+import org.mockito.Mockito.verify
 import org.scalatest.DoNotDiscover
 
 import scala.concurrent.ExecutionContextExecutor
@@ -21,8 +24,7 @@ class CreateUserSpec extends UserServiceTestTraits {
   val defaultTosService: TosService = MockTosServiceBuilder().build
 
   describe("A new User") {
-
-    describe("should be able to register") {
+    describe("should be able to register with old registration method") {
 
       // Not sure if this test can happen in the real world anymore now that we always log users in through B2C.
       // Keeping it here for now just in case.
@@ -68,6 +70,28 @@ class CreateUserSpec extends UserServiceTestTraits {
         }
       }
 
+      it("after authenticating with a Microsoft managed identity") {
+        // Arrange
+        val newAzureUser = genNewWorkbenchUserAzureUami.sample.get
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService: UserService =
+          new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, Some(AzureServicesConfig("", "", "", Seq.empty, true)))
+
+        // Act
+        val newUsersStatus = runAndWait(userService.createUser(newAzureUser, samRequestContext))
+
+        // Assert
+        inside(newUsersStatus) { status =>
+          status should beForUser(newAzureUser.copy(email = WorkbenchEmail(s"${newAzureUser.azureB2CId.get.value}@uami.terra.bio")))
+          "google" should beEnabledIn(status)
+          "ldap" should beEnabledIn(status)
+          "allUsersGroup" should beEnabledIn(status)
+          "adminEnabled" should beEnabledIn(status)
+          "tosAccepted" shouldNot beEnabledIn(status)
+        }
+      }
+
       it("after authenticating with Google through Azure B2C") {
         // Arrange
         val newUserWithBothCloudIds = genWorkbenchUserBoth.sample.get
@@ -87,6 +111,26 @@ class CreateUserSpec extends UserServiceTestTraits {
           "adminEnabled" should beEnabledIn(status)
           "tosAccepted" shouldNot beEnabledIn(status)
         }
+      }
+
+      it("with a valid registration request body") {
+        // Arrange
+        val newUserWithBothCloudIds = genWorkbenchUserBoth.sample.get
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+        val userRegistrationRequest = SamUserRegistrationRequest(
+          acceptsTermsOfService = true,
+          SamUserAttributesRequest(marketingConsent = Some(false))
+        )
+
+        // Act
+        val newUsersStatus = runAndWait(userService.createUser(newUserWithBothCloudIds, Some(userRegistrationRequest), samRequestContext))
+
+        // Assert
+        verify(directoryDAO).setUserAttributes(SamUserAttributes(newUsersStatus.userInfo.userSubjectId, marketingConsent = false), samRequestContext)
+        verify(defaultTosService).acceptCurrentTermsOfService(newUsersStatus.userInfo.userSubjectId, samRequestContext)
       }
     }
 
@@ -197,6 +241,69 @@ class CreateUserSpec extends UserServiceTestTraits {
           runAndWait(userService.createUser(userWithoutIds, samRequestContext))
         }
       }
+
+      it("with an invalid registration request body") {
+        // Arrange
+        val userWithoutIds = genWorkbenchUserBoth.sample.get.copy(googleSubjectId = None, azureB2CId = None)
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+        val invalidRegistrationRequest = SamUserRegistrationRequest(
+          acceptsTermsOfService = true,
+          SamUserAttributesRequest(marketingConsent = None)
+        )
+
+        // Act and Assert
+        assertThrows[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userService.createUser(userWithoutIds, Some(invalidRegistrationRequest), samRequestContext))
+        }
+      }
+
+      it("without accepting the Terms of Service") {
+        // Arrange
+        val userWithoutIds = genWorkbenchUserBoth.sample.get.copy(googleSubjectId = None, azureB2CId = None)
+        val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+        val invalidRegistrationRequest = SamUserRegistrationRequest(
+          acceptsTermsOfService = false,
+          SamUserAttributesRequest(marketingConsent = None)
+        )
+
+        // Act and Assert
+        assertThrows[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userService.createUser(userWithoutIds, Some(invalidRegistrationRequest), samRequestContext))
+        }
+      }
+
+      it("with a Microsoft managed identity if the feature is disabled") {
+        // Arrange
+        val newAzureUser = genNewWorkbenchUserAzureUami.sample.get
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userServiceDisabledFeature: UserService =
+          new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, Some(AzureServicesConfig("", "", "", Seq.empty, false)))
+
+        // Act and Assert
+        assertThrows[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userServiceDisabledFeature.createUser(newAzureUser, samRequestContext))
+        }
+      }
+
+      it("with a Microsoft managed identity if the azure is disabled") {
+        // Arrange
+        val newAzureUser = genNewWorkbenchUserAzureUami.sample.get
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+        val userServiceNoAzureConfig: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+        // Act and Assert
+        assertThrows[WorkbenchExceptionWithErrorReport] {
+          runAndWait(userServiceNoAzureConfig.createUser(newAzureUser, samRequestContext))
+        }
+      }
     }
 
     describe("should be added to the All Users group") {
@@ -275,6 +382,20 @@ class CreateUserSpec extends UserServiceTestTraits {
   }
 
   describe("An invited User") {
+
+    it("should be able to be invited with no marketing consent") {
+      // Arrange
+      val invitedGoogleUser = genWorkbenchUserGoogle.sample.get
+      val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+      val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+      val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
+
+      // Act
+      val invitedUserStatus = runAndWait(userService.inviteUser(invitedGoogleUser.email, samRequestContext))
+
+      // Assert
+      verify(directoryDAO).setUserAttributes(SamUserAttributes(invitedUserStatus.userSubjectId, marketingConsent = false), samRequestContext)
+    }
 
     describe("should be able to register") {
 

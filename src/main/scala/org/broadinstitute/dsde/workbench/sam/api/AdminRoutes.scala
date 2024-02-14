@@ -9,11 +9,11 @@ import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AdminUpdateUserRequest}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AdminUpdateUserRequest, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -30,8 +30,8 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
     pathPrefix("admin") {
       adminUserRoutes(user, requestContext) ~ pathPrefix("v1") {
         adminUserRoutes(user, requestContext) ~
-          adminResourcesRoutes(user, requestContext) ~
-          adminResourceTypesRoutes(user, requestContext)
+        adminResourcesRoutes(user, requestContext) ~
+        adminResourceTypesRoutes(user, requestContext)
       } ~ pathPrefix("v2") {
         asWorkbenchAdmin(user) {
           adminUserRoutesV2(user, requestContext)
@@ -43,93 +43,99 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
     pathPrefix("user") {
       asWorkbenchAdmin(samUser) {
         path("email" / Segment) { email =>
-          complete {
-            userService
-              .getUserStatusFromEmail(WorkbenchEmail(email), samRequestContext)
-              .map(status => (if (status.isDefined) OK else NotFound) -> status)
+          val workbenchEmail = WorkbenchEmail(email)
+          get {
+            complete {
+              userService
+                .getUserStatusFromEmail(workbenchEmail, samRequestContext)
+                .map(status => (if (status.isDefined) OK else NotFound) -> status)
+            }
           }
         } ~
-          pathPrefix(Segment) { userId =>
-            pathEnd {
-              delete {
-                complete {
-                  userService.deleteUser(WorkbenchUserId(userId), samRequestContext).map(_ => OK)
-                }
-              } ~
-                get {
-                  complete {
-                    userService
-                      .getUserStatus(WorkbenchUserId(userId), samRequestContext = samRequestContext)
-                      .map(status => (if (status.isDefined) OK else NotFound) -> status)
-                  }
-                } ~
-                patch {
-                  entity(as[AdminUpdateUserRequest]) { request =>
-                    complete {
-                      userService
-                        .updateUserCrud(WorkbenchUserId(userId), request, samRequestContext)
-                        .map(user => (if (user.isDefined) OK else NotFound) -> user)
-                    }
-                  }
-                }
+        pathPrefix(Segment) { userId =>
+          val workbenchUserId = WorkbenchUserId(userId)
+          pathEnd {
+            delete {
+              complete {
+                userService.deleteUser(workbenchUserId, samRequestContext).map(_ => OK)
+              }
             } ~
-              pathPrefix("enable") {
-                pathEndOrSingleSlash {
-                  put {
-                    complete {
-                      userService
-                        .enableUser(WorkbenchUserId(userId), samRequestContext)
-                        .map(status => (if (status.isDefined) OK else NotFound) -> status)
-                    }
-                  }
-                }
-              } ~
-              pathPrefix("disable") {
-                pathEndOrSingleSlash {
-                  put {
-                    complete {
-                      userService
-                        .disableUser(WorkbenchUserId(userId), samRequestContext)
-                        .map(status => (if (status.isDefined) OK else NotFound) -> status)
-                    }
-                  }
-                }
-              } ~
-              // This will get removed once ID-87 is resolved
-              pathPrefix("repairAllUsersGroup") {
-                pathEndOrSingleSlash {
-                  put {
-                    complete {
-                      userService
-                        .addToAllUsersGroup(WorkbenchUserId(userId), samRequestContext)
-                        .map(_ => OK)
-                    }
-                  }
-                }
-              } ~
-              pathPrefix("petServiceAccount") {
-                path(Segment) { project =>
-                  delete {
-                    complete {
-                      cloudExtensions
-                        .deleteUserPetServiceAccount(WorkbenchUserId(userId), GoogleProject(project), samRequestContext)
-                        .map(_ => NoContent)
-                    }
-                  }
+            get {
+              complete {
+                userService
+                  .getUserStatus(workbenchUserId, samRequestContext = samRequestContext)
+                  .map(status => (if (status.isDefined) OK else NotFound) -> status)
+              }
+            } ~
+            patch {
+              entity(as[AdminUpdateUserRequest]) { request =>
+                complete {
+                  userService
+                    .updateUserCrud(workbenchUserId, request, samRequestContext)
+                    .map(user => (if (user.isDefined) OK else NotFound) -> user)
                 }
               }
+            }
+          } ~
+          pathPrefix("enable") {
+            pathEndOrSingleSlash {
+              put {
+                complete {
+                  userService
+                    .enableUser(workbenchUserId, samRequestContext)
+                    .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                }
+              }
+            }
+          } ~
+          pathPrefix("disable") {
+            pathEndOrSingleSlash {
+              put {
+                complete {
+                  userService
+                    .disableUser(workbenchUserId, samRequestContext)
+                    .map(status => (if (status.isDefined) OK else NotFound) -> status)
+                }
+              }
+            }
+          } ~
+          // This will get removed once ID-87 is resolved
+          pathPrefix("repairAllUsersGroup") {
+            pathEndOrSingleSlash {
+              put {
+                complete {
+                  userService
+                    .addToAllUsersGroup(workbenchUserId, samRequestContext)
+                    .map(_ => OK)
+                }
+              }
+            }
+          } ~
+          pathPrefix("petServiceAccount") {
+            path(Segment) { project =>
+              val googleProject = GoogleProject(project)
+              delete {
+                complete {
+                  cloudExtensions
+                    .deleteUserPetServiceAccount(workbenchUserId, googleProject, samRequestContext)
+                    .map(_ => NoContent)
+                }
+              }
+            }
           }
+        }
       }
     }
 
   private def adminUserRoutesV2(user: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("user") {
       pathPrefix(Segment) { userId =>
+        val workbenchUserId = WorkbenchUserId(userId)
         pathEnd {
           get {
             complete {
               userService
-                .getUser(WorkbenchUserId(userId), samRequestContext = samRequestContext)
+                .getUser(workbenchUserId, samRequestContext = samRequestContext)
                 .map(user => (if (user.isDefined) OK else NotFound) -> user)
             }
           }
@@ -152,31 +158,32 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
             }
           }
         } ~
-          pathPrefix(Segment / "memberEmails" / Segment) { case (policyName, userEmail) =>
-            val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
-            pathEndOrSingleSlash {
-              withSubject(WorkbenchEmail(userEmail), samRequestContext) { subject =>
-                put {
-                  requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
-                    complete {
-                      resourceService
-                        .addSubjectToPolicy(policyId, subject, samRequestContext)
-                        .as(NoContent)
-                    }
+        pathPrefix(Segment / "memberEmails" / Segment) { case (policyName, userEmail) =>
+          val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+          val workbenchEmail = WorkbenchEmail(userEmail)
+          pathEndOrSingleSlash {
+            withSubject(workbenchEmail, samRequestContext) { subject =>
+              put {
+                requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
+                  complete {
+                    resourceService
+                      .addSubjectToPolicy(policyId, subject, samRequestContext)
+                      .as(NoContent)
                   }
-                } ~
-                  delete {
-                    requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
-                      complete {
-                        resourceService
-                          .removeSubjectFromPolicy(policyId, subject, samRequestContext)
-                          .as(NoContent)
-                      }
-                    }
+                }
+              } ~
+              delete {
+                requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
+                  complete {
+                    resourceService
+                      .removeSubjectFromPolicy(policyId, subject, samRequestContext)
+                      .as(NoContent)
                   }
+                }
               }
             }
           }
+        }
       }
     }
 
@@ -194,25 +201,25 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
               }
             }
           } ~
-            pathPrefix(Segment) { policyName =>
-              val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
-              pathEndOrSingleSlash {
-                put {
-                  entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
-                    withResourceType(resourceTypeAdminName) { resourceTypeAdmin =>
-                      complete {
-                        resourceService
-                          .overwriteAdminPolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext)
-                          .as(Created)
-                      }
+          pathPrefix(Segment) { policyName =>
+            val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+            pathEndOrSingleSlash {
+              put {
+                entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
+                  withResourceType(resourceTypeAdminName) { resourceTypeAdmin =>
+                    complete {
+                      resourceService
+                        .overwriteAdminPolicy(resourceTypeAdmin, policyId.accessPolicyName, policyId.resource, membershipUpdate, samRequestContext)
+                        .as(Created)
                     }
                   }
-                } ~
-                  delete {
-                    complete(resourceService.deletePolicy(policyId, samRequestContext).as(NoContent))
-                  }
+                }
+              } ~
+              delete {
+                complete(resourceService.deletePolicy(policyId, samRequestContext).as(NoContent))
               }
             }
+          }
         }
       }
     }

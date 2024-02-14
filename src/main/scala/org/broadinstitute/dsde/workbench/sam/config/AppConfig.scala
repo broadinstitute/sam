@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig.googleS
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DistributedLockConfig
 import org.broadinstitute.dsde.workbench.sam.model._
 
+import java.time.Instant
 import scala.concurrent.duration.Duration
 
 /** Created by dvoet on 7/18/17.
@@ -28,7 +29,8 @@ final case class AppConfig(
     oidcConfig: OidcConfig,
     adminConfig: AdminConfig,
     azureServicesConfig: Option[AzureServicesConfig],
-    prometheusConfig: PrometheusConfig
+    prometheusConfig: PrometheusConfig,
+    janitorConfig: JanitorConfig
 )
 
 object AppConfig {
@@ -119,7 +121,11 @@ object AppConfig {
       config.getAs[Boolean]("isTosEnabled").getOrElse(true),
       config.getBoolean("isGracePeriodEnabled"),
       config.getString("version"),
-      config.getString("url")
+      config.getString("baseUrl"),
+      // Must be a valid UTC datetime string in ISO 8601 format ex: 2007-12-03T10:15:30.00Z
+      config.as[Option[String]]("rollingAcceptanceWindowExpirationDatetime").map(Instant.parse),
+      config.as[Option[String]]("previousVersion"),
+      config.as[Option[String]]("acceptanceUrl")
     )
   }
 
@@ -141,7 +147,12 @@ object AppConfig {
   }
 
   implicit val samDatabaseConfigReader: ValueReader[SamDatabaseConfig] = ValueReader.relative { config =>
-    SamDatabaseConfig(config.as[DatabaseConfig]("sam_read"), config.as[DatabaseConfig]("sam_write"), config.as[DatabaseConfig]("sam_background"))
+    SamDatabaseConfig(
+      config.as[DatabaseConfig]("sam_read"),
+      config.as[DatabaseConfig]("sam_write"),
+      config.as[DatabaseConfig]("sam_background"),
+      config.as[DatabaseConfig]("sam_read_replica")
+    )
   }
 
   final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String], serviceAccountAdmins: Set[WorkbenchEmail])
@@ -168,7 +179,8 @@ object AppConfig {
               config.getString("managedAppClientId"),
               config.getString("managedAppClientSecret"),
               config.getString("managedAppTenantId"),
-              config.as[Seq[ManagedAppPlan]]("managedAppPlans")
+              config.as[Seq[ManagedAppPlan]]("managedAppPlans"),
+              config.as[Option[Boolean]]("allowManagedIdentityUserCreation").getOrElse(false)
             )
           )
         } else {
@@ -179,6 +191,17 @@ object AppConfig {
 
   implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
     PrometheusConfig(config.getInt("endpointPort"))
+  }
+
+  implicit val janitorConfig: ValueReader[JanitorConfig] = ValueReader.relative { config =>
+    JanitorConfig(
+      config.getBoolean("enabled"),
+      ServiceAccountCredentialJson(
+        DefaultServiceAccountJsonPath(config.getString("clientCredentialFilePath"))
+      ),
+      GoogleProject(config.getString("trackResourceProjectId")),
+      config.getString("trackResourceTopicId")
+    )
   }
 
   /** Loads all the configs for the Sam App. All values defined in `src/main/resources/sam.conf` will take precedence over any other configs. In this way, we
@@ -201,13 +224,17 @@ object AppConfig {
   }
 
   def readConfig(config: Config): AppConfig = {
-    val googleConfigOption = for {
-      googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
-    } yield GoogleConfig(
-      googleServices,
-      config.as[PetServiceAccountConfig]("petServiceAccount"),
-      config.as[Option[Duration]]("coordinatedAdminSdkBackoffDuration")
-    )
+    val googleEnabled = config.getAs[Boolean]("googleServices.googleEnabled").getOrElse(true)
+    val googleConfigOption =
+      if (googleEnabled) {
+        for {
+          googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
+        } yield GoogleConfig(
+          googleServices,
+          config.as[PetServiceAccountConfig]("petServiceAccount"),
+          config.as[Option[Duration]]("coordinatedAdminSdkBackoffDuration")
+        )
+      } else None
 
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
@@ -226,7 +253,8 @@ object AppConfig {
       oidcConfig = config.as[OidcConfig]("oidc"),
       adminConfig = config.as[AdminConfig]("admin"),
       azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
-      prometheusConfig = config.as[PrometheusConfig]("prometheus")
+      prometheusConfig = config.as[PrometheusConfig]("prometheus"),
+      janitorConfig = config.as[JanitorConfig]("janitor")
     )
   }
 }

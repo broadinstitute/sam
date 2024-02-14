@@ -10,7 +10,8 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, _}
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -29,7 +30,6 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
     (pathPrefix("groups" / "v1") | pathPrefix("group")) {
       pathPrefix(Segment) { groupId =>
         val managedGroup = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
-
         pathEndOrSingleSlash {
           get {
             handleGetGroup(managedGroup.resourceId, samRequestContext)
@@ -52,7 +52,6 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
           }
         } ~ pathPrefix(Segment) { policyName =>
           val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
-
           pathEndOrSingleSlash {
             get {
               handleListEmails(managedGroup, accessPolicyName, samUser, samRequestContext)
@@ -60,11 +59,12 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
               handleOverwriteEmails(managedGroup, accessPolicyName, samUser, samRequestContext)
             }
           } ~ pathPrefix(Segment) { email =>
+            val workbenchEmail = WorkbenchEmail(email)
             pathEndOrSingleSlash {
               put {
-                handleAddEmailToPolicy(managedGroup, accessPolicyName, email, samUser, samRequestContext)
+                handleAddEmailToPolicy(managedGroup, accessPolicyName, workbenchEmail, samUser, samRequestContext)
               } ~ delete {
-                handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, email, samUser, samRequestContext)
+                handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, workbenchEmail, samUser, samRequestContext)
               }
             }
           }
@@ -122,12 +122,12 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
   private def handleAddEmailToPolicy(
       managedGroup: FullyQualifiedResourceId,
       accessPolicyName: ManagedGroupPolicyName,
-      email: String,
+      email: WorkbenchEmail,
       samUser: SamUser,
       samRequestContext: SamRequestContext
   ): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), samUser.id, samRequestContext) {
-      withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+      withSubject(email, samRequestContext) { subject =>
         complete(
           managedGroupService
             .addSubjectToPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext)
@@ -139,12 +139,12 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
   private def handleDeleteEmailFromPolicy(
       managedGroup: FullyQualifiedResourceId,
       accessPolicyName: ManagedGroupPolicyName,
-      email: String,
+      email: WorkbenchEmail,
       samUser: SamUser,
       samRequestContext: SamRequestContext
   ): Route =
     requireAction(managedGroup, SamResourceActions.sharePolicy(accessPolicyName), samUser.id, samRequestContext) {
-      withSubject(WorkbenchEmail(email), samRequestContext) { subject =>
+      withSubject(email, samRequestContext) { subject =>
         complete(
           managedGroupService.removeSubjectFromPolicy(managedGroup.resourceId, accessPolicyName, subject, samRequestContext).map(_ => StatusCodes.NoContent)
         )

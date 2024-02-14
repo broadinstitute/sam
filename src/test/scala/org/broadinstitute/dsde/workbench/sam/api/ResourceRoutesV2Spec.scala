@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -53,14 +53,14 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     resourceTypes.map { case (resourceTypeName, resourceType) =>
       when(mockResourceService.getResourceType(resourceTypeName)).thenReturn(IO(Option(resourceType)))
     }
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, NoExtensions)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, NoExtensions, emailDomain)
 
     TestSupport.runAndWait(mockUserService.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,
@@ -447,7 +447,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     )
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true, None)
+    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true)
     runAndWait(samRoutes.userService.createUser(secondUser, samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -560,7 +560,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
     // create a second owner so our test user can leave the owner policy without orphaning the resource
-    val secondOwner = SamUser(WorkbenchUserId("1111112"), Some(GoogleSubjectId("1111112")), WorkbenchEmail("seconduser@gmail.com"), None, true, None)
+    val secondOwner = SamUser(WorkbenchUserId("1111112"), Some(GoogleSubjectId("1111112")), WorkbenchEmail("seconduser@gmail.com"), None, true)
     runAndWait(samRoutes.userService.createUser(secondOwner, samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -668,7 +668,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     )
     val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
 
-    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true, None)
+    val secondUser = SamUser(WorkbenchUserId("11112"), Some(GoogleSubjectId("11112")), WorkbenchEmail("some-other-user@example.com"), None, true)
     runAndWait(samRoutes.userService.createUser(secondUser, samRequestContext))
 
     val resourceId = ResourceId("foo")
@@ -927,7 +927,8 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     // Read the policies
     Get(s"/api/resources/v2/${resourceType.name}") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[List[UserResourcesResponse]].size should equal(1)
+      val response = responseAs[List[UserResourcesResponse]]
+      response.size should equal(1)
     }
   }
 

@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, MockSamDependencies, MockTestSupport}
@@ -129,6 +130,16 @@ class SamProviderSpec
     })
   } yield ()
 
+  private def mockGetArbitraryPetServiceAccountToken(): IO[Unit] = for {
+    _ <- IO(
+      when {
+        googleExt.getArbitraryPetServiceAccountToken(any[SamUser], any[Set[String]], any[SamRequestContext])
+      } thenReturn {
+        Future.successful("aToken")
+      }
+    )
+  } yield ()
+
   private def mockResourceActionPermission(action: ResourceAction, hasPermission: Boolean): IO[Unit] = for {
     _ <- IO(
       lenient()
@@ -142,7 +153,7 @@ class SamProviderSpec
 
   private val providerStatesHandler: StateManagementFunction = StateManagementFunction {
     case ProviderState(States.UserExists, _) =>
-      logger.debug(States.UserExists)
+      mockGetArbitraryPetServiceAccountToken().unsafeRunSync()
     case ProviderState(States.SamOK, _) =>
       mockCriticalSubsystemsStatus(true).unsafeRunSync()
     case ProviderState(States.SamNotOK, _) =>
@@ -198,14 +209,14 @@ class SamProviderSpec
   lazy val pactBrokerUrl: String = sys.env.getOrElse("PACT_BROKER_URL", "")
   lazy val pactBrokerUser: String = sys.env.getOrElse("PACT_BROKER_USERNAME", "")
   lazy val pactBrokerPass: String = sys.env.getOrElse("PACT_BROKER_PASSWORD", "")
-  // Provider branch, sha
-  lazy val branch: String = sys.env.getOrElse("PROVIDER_BRANCH", "")
-  lazy val gitSha: String = sys.env.getOrElse("PROVIDER_SHA", "")
-  // Consumer name, bran, sha (used for webhook events only)
+  // Provider branch, semver
+  lazy val providerBranch: String = sys.env.getOrElse("PROVIDER_BRANCH", "")
+  lazy val providerVer: String = sys.env.getOrElse("PROVIDER_VERSION", "")
+  // Consumer name, branch, semver (used for webhook events only)
   lazy val consumerName: Option[String] = sys.env.get("CONSUMER_NAME")
   lazy val consumerBranch: Option[String] = sys.env.get("CONSUMER_BRANCH")
   // This matches the latest commit of the consumer branch that triggered the webhook event
-  lazy val consumerSha: Option[String] = sys.env.get("CONSUMER_SHA")
+  lazy val consumerVer: Option[String] = sys.env.get("CONSUMER_VERSION")
 
   var consumerVersionSelectors: ConsumerVersionSelectors = ConsumerVersionSelectors()
   // consumerVersionSelectors = consumerVersionSelectors.mainBranch
@@ -275,14 +286,14 @@ class SamProviderSpec
       .getOrElse(NoOpFilter)
 
   val provider: ProviderInfoBuilder = ProviderInfoBuilder(
-    name = "sam-provider",
+    name = "sam",
     pactSource = PactSource
       .PactBrokerWithSelectors(
         brokerUrl = pactBrokerUrl
       )
       .withConsumerVersionSelectors(consumerVersionSelectors)
       .withAuth(BasicAuth(pactBrokerUser, pactBrokerPass))
-      .withPendingPactsEnabled(ProviderTags(gitSha))
+      .withPendingPactsEnabled(ProviderTags(providerVer))
   ).withHost("localhost")
     .withPort(8080)
     .withRequestFiltering(requestFilter)
@@ -297,11 +308,15 @@ class SamProviderSpec
     )
 
   it should "Verify pacts" in {
+    val publishResults = sys.env.getOrElse("PACT_PUBLISH_RESULTS", "false").toBoolean
     verifyPacts(
-      providerBranch = if (branch.isEmpty) None else Some(Branch(branch)),
-      publishVerificationResults = Some(
-        PublishVerificationResults(gitSha, ProviderTags(branch))
-      ),
+      providerBranch = if (providerBranch.isEmpty) None else Some(Branch(providerBranch)),
+      publishVerificationResults =
+        if (publishResults)
+          Some(
+            PublishVerificationResults(providerVer, ProviderTags(providerBranch))
+          )
+        else None,
       providerVerificationOptions = Seq(
         ProviderVerificationOption.SHOW_STACKTRACE
       ).toList,

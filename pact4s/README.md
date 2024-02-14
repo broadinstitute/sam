@@ -10,6 +10,8 @@ The credentials for authenticating with the Pact Broker can be found here:
 On the command line, you can try the following:
 
 ```shell
+source env/local.env
+source src/main/resources/rendered/secrets.env
 export PACT_BROKER_URL="https://pact-broker.dsp-eng-tools.broadinstitute.org/"
 export PACT_BROKER_USERNAME=$(vault read -field=basic_auth_read_only_username secret/dsp/pact-broker/users/read-only)
 export PACT_BROKER_PASSWORD=$(vault read -field=basic_auth_read_only_password secret/dsp/pact-broker/users/read-only)
@@ -20,6 +22,15 @@ In IntelliJ, you can create a Run Configuration for `SamProviderSpec.scala` and 
 * `PACT_BROKER_URL`
 * `PACT_BROKER_USERNAME`
 * `PACT_BROKER_USERNAME`
+
+Or you can run the following command from the root of the project:
+
+```shell
+sbt "set scalafmtOnCompile := false" "project pact4s" "testOnly *SamProviderSpec"
+```
+
+## Publishing Pacts
+Publishing is disabled by default. To enable publishing, set the `PACT_PUBLISH_RESULTS` environment variable to `true`.
 
 ## References
 * https://broadworkbench.atlassian.net/wiki/spaces/IRT/pages/2660368406/Getting+Started+with+Pact+Contract+Testing

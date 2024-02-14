@@ -10,12 +10,11 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.mock._
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.{FakeOpenTelemetryMetricsInterpreter, OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
@@ -25,6 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -49,7 +49,6 @@ trait TestSupport {
 
   implicit val futureTimeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
-  implicit val openTelemetry = FakeOpenTelemetryMetricsInterpreter
 
   val samRequestContext = SamRequestContext()
 
@@ -87,7 +86,8 @@ object TestSupport extends TestSupport {
       googleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
       policyAccessDAO: Option[AccessPolicyDAO] = None,
       policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
-      resourceServiceOpt: Option[ResourceService] = None
+      resourceServiceOpt: Option[ResourceService] = None,
+      googProjectDAO: Option[GoogleProjectDAO] = None
   )(implicit system: ActorSystem) = {
     val googleDirectoryDAO = new MockGoogleDirectoryDAO()
     val directoryDAO = new MockDirectoryDAO()
@@ -98,7 +98,7 @@ object TestSupport extends TestSupport {
     val googleDisableUsersPubSubDAO = new MockGooglePubSubDAO()
     val googleKeyCachePubSubDAO = new MockGooglePubSubDAO()
     val googleStorageDAO = new MockGoogleStorageDAO()
-    val googleProjectDAO = new MockGoogleProjectDAO()
+    val googleProjectDAO = googProjectDAO.getOrElse(new MockGoogleProjectDAO())
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
     val cloudKeyCache = new GoogleKeyCache(
       distributedLock,
@@ -148,7 +148,7 @@ object TestSupport extends TestSupport {
     )
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, tosConfig)
+    val tosService = new TosService(googleExt, directoryDAO, tosConfig)
     val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     SamDependencies(
       mockResourceService,
@@ -170,8 +170,7 @@ object TestSupport extends TestSupport {
 
   def genSamRoutes(samDependencies: SamDependencies, uInfo: SamUser)(implicit
       system: ActorSystem,
-      materializer: Materializer,
-      openTelemetry: OpenTelemetryMetrics[IO]
+      materializer: Materializer
   ): SamRoutes = new SamRoutes(
     samDependencies.resourceService,
     samDependencies.userService,
@@ -210,7 +209,7 @@ object TestSupport extends TestSupport {
     override def asAdminServiceUser: Directive0 = Directive.Empty
   }
 
-  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): SamRoutes =
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): SamRoutes =
     genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
 
   /*
@@ -230,6 +229,9 @@ object TestSupport extends TestSupport {
           PolicyRoleTable,
           PolicyTable,
           AuthDomainTable,
+          EffectiveResourcePolicyTable,
+          EffectivePolicyRoleTable,
+          EffectivePolicyActionTable,
           ResourceTable,
           RoleActionTable,
           ResourceActionTable,
@@ -245,7 +247,9 @@ object TestSupport extends TestSupport {
           UserTable,
           AccessInstructionsTable,
           GroupTable,
-          LastQuotaErrorTable
+          LastQuotaErrorTable,
+          TosTable,
+          UserAttributesTable
         )
 
         tables
@@ -262,13 +266,13 @@ object TestSupport extends TestSupport {
 
   def newUserWithAcceptedTos(services: StandardSamUserDirectives, samUser: SamUser, samRequestContext: SamRequestContext): SamUser = {
     TestSupport.runAndWait(services.userService.directoryDAO.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(services.tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(services.tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
     TestSupport.runAndWait(services.userService.directoryDAO.loadUser(samUser.id, samRequestContext)).orNull
   }
 
   def newUserStatusWithAcceptedTos(userService: UserService, tosService: TosService, samUser: SamUser, samRequestContext: SamRequestContext): UserStatus = {
     TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
     TestSupport.runAndWait(userService.getUserStatus(samUser.id, userDetailsOnly = false, samRequestContext)).orNull
   }
 

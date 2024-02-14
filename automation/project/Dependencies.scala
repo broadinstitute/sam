@@ -3,12 +3,13 @@ import sbt._
 object Dependencies {
   val scalaV = "2.13"
 
-  val jacksonV = "2.12.0"
+  val jacksonV = "2.15.2"
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.2"
 
-  val workbenchGoogleV = "0.21-ae11b9f"
-  val workbenchGoogle2V = "0.24-447afa5"
+  val workbenchLibV = "a0519cb"
+  val workbenchGoogleV = s"0.30-$workbenchLibV"
+  val workbenchGoogle2V = s"0.34-$workbenchLibV"
   val workbenchServiceTestV = "2.0-5863cbd"
 
   val excludeWorkbenchModel = ExclusionRule(organization = "org.broadinstitute.dsde.workbench", name = "workbench-model_" + scalaV)
