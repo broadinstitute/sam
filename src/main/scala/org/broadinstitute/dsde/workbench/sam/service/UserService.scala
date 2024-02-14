@@ -448,7 +448,6 @@ class UserService(
     for {
       tosStatus <- tosService.getTermsOfServiceComplianceStatus(samUser, samRequestContext)
     } yield SamUserAllowances(
-      allowed = samUser.enabled && tosStatus.permitsSystemUsage,
       enabled = samUser.enabled,
       termsOfService = tosStatus.permitsSystemUsage
     )
