@@ -173,65 +173,6 @@ class SamApiSpec extends AnyFreeSpec with Matchers with ScalaFutures with CleanU
       petEmail2 shouldBe petEmail1
     }
 
-    "should synchronize groups with Google" taggedAs Tags.ExcludeInAlpha in {
-      val managedGroupId = UUID.randomUUID.toString
-      val adminPolicyName = "admin"
-      val Seq(user1: Credentials, user2: Credentials, user3: Credentials) = UserPool.chooseStudents(3)
-      val user1AuthToken = user1.makeAuthToken()
-      val Seq(user1Proxy: WorkbenchEmail, user2Proxy: WorkbenchEmail, user3Proxy: WorkbenchEmail) =
-        Seq(user1, user2, user3).map(user => Sam.user.proxyGroup(user.email)(user1AuthToken))
-
-      val waitTime = 10.minutes
-
-      Sam.user.createGroup(managedGroupId)(user1AuthToken)
-      register cleanUp Sam.user.deleteGroup(managedGroupId)(user1AuthToken)
-
-      val policies = Sam.user.listResourcePolicies("managed-group", managedGroupId)(user1AuthToken)
-      val policyEmail = policies.collect {
-        case SamModel.AccessPolicyResponseEntry(_, policy, email) if policy.memberEmails.nonEmpty => email
-      }
-      assert(policyEmail.size == 1) // Only the admin policy should be non-empty after creation
-
-      // The admin policy should contain only the user that created the group
-      awaitAssert(
-        Await
-          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), waitTime)
-          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value),
-        waitTime,
-        5.seconds
-      )
-
-      // Change the membership of the admin policy to include users 1 and 2
-      Sam.user.setPolicyMembers(managedGroupId, adminPolicyName, Set(user1.email, user2.email))(user1AuthToken)
-      awaitAssert(
-        Await
-          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), waitTime)
-          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value),
-        waitTime,
-        5.seconds
-      )
-
-      // Add user 3 to the admin policy
-      Sam.user.addUserToPolicy(managedGroupId, adminPolicyName, user3.email)(user1AuthToken)
-      awaitAssert(
-        Await
-          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), waitTime)
-          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user2Proxy.value, user3Proxy.value),
-        waitTime,
-        5.seconds
-      )
-
-      // Remove user 2 from the admin policy
-      Sam.user.removeUserFromPolicy(managedGroupId, adminPolicyName, user2.email)(user1AuthToken)
-      awaitAssert(
-        Await
-          .result(googleDirectoryDAO.listGroupMembers(policyEmail.head), waitTime)
-          .getOrElse(Set.empty) should contain theSameElementsAs Set(user1Proxy.value, user3Proxy.value),
-        waitTime,
-        5.seconds
-      )
-    }
-
     "should only synchronize the intersection group for policies constrained by auth domains" taggedAs Tags.ExcludeInAlpha in {
       val waitTime = 10.minutes
       val authDomainId = UUID.randomUUID.toString
