@@ -2974,7 +2974,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/users/v2/{samUserId}:
+  /api/users/v2/{sam_user_id}:
     get:
       tags:
         - Admin
@@ -2984,7 +2984,7 @@ paths:
         Admin permissions grant the caller the ability to get any id.
       operationId: getSamUserById
       parameters:
-        - name: samUserId
+        - name: sam_user_id
           in: path
           description: the id of the sam user to get
           required: true
@@ -3003,7 +3003,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/users/v2/{samUserId}/allowed:
+  /api/users/v2/{sam_user_id}/allowed:
     get:
       tags:
         - Admin
@@ -3013,7 +3013,7 @@ paths:
         Admin permissions grant the caller the ability to get any id.
       operationId: getSamUserAllowancesById
       parameters:
-        - name: samUserId
+        - name: sam_user_id
           in: path
           description: the id of the sam user to get
           required: true
@@ -3361,14 +3361,14 @@ paths:
       responses:
         204:
           description: OK
-  /api/termsOfService/v1/user/{samUserId}:
+  /api/termsOfService/v1/user/{sam_user_id}:
     get:
       tags:
         - TermsOfService
       summary: gets a user's terms of service status, can only get another user's status if the requester is an admin.
       operationId: userTermsOfServiceGet
       parameters:
-        - name: samUserId
+        - name: sam_user_id
           in: path
           description: the id of the sam user to get terms of service status for
           required: true
@@ -3413,14 +3413,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/termsOfService/v1/user/{samUserId}/history:
+  /api/termsOfService/v1/user/{sam_user_id}/history:
     get:
       tags:
         - TermsOfService
       summary: gets a user's terms of service acceptance/rejection action history, can only get another user's history if the requester is an admin.
       operationId: userTermsOfServiceGetUserHistory
       parameters:
-        - name: samUserId
+        - name: sam_user_id
           in: path
           description: the id of the sam user to get terms of service status for
           required: true
