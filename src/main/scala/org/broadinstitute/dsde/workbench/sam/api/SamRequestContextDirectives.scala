@@ -102,7 +102,7 @@ trait SamRequestContextDirectives {
   // the following are utility methods for constructing parameter and value tuples, use these for consistent parameter naming
   def resourceTypeParam(resourceTypeName: ResourceTypeName, prefix: String = ""): (String, ValueObject) =
     // the uncapitalize and prefix stuff is because some apis have 2 resource types in the path, so we need to distinguish them
-    StringUtils.uncapitalize(prefix + "ResourceType") -> resourceTypeName
+    StringUtils.uncapitalize(prefix + "ResourceTypeName") -> resourceTypeName
 
   def resourceTypeParam(resourceType: ResourceType): (String, ValueObject) =
     resourceTypeParam(resourceType.name)
@@ -124,7 +124,7 @@ trait SamRequestContextDirectives {
     "userId" -> workbenchUserId
 
   def googleProjectParam(googleProject: GoogleProject): (String, ValueObject) =
-    "googleProject" -> googleProject
+    "project" -> googleProject
 
   def policyNameParam(policyName: AccessPolicyName, prefix: String = ""): (String, ValueObject) =
     // the uncapitalize and prefix stuff is because some apis have 2 policies in the path, so we need to distinguish them
@@ -134,7 +134,7 @@ trait SamRequestContextDirectives {
     resourceParams(policyId.resource, prefix).appended(policyNameParam(policyId.accessPolicyName, prefix))
 
   def groupIdParam(managedGroup: FullyQualifiedResourceId): (String, ValueObject) =
-    "groupId" -> managedGroup.resourceId
+    "groupName" -> managedGroup.resourceId
 
   /** Constructs a route from the uri and the parameters and values. Replace the values in the uri with the parameter name enclosed with braces. For example, if
     * the uri is /api/resource/123 and the parameters are ("resourceId", "123"), then the route will be /api/resource/{resourceId}.

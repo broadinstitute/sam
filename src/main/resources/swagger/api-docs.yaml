@@ -324,7 +324,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/admin/v1/resources/{resourceTypeName}/{resourceId}/policies/{policyName}/memberEmails/{userEmail}:
+  /api/admin/v1/resources/{resourceTypeName}/{resourceId}/policies/{policyName}/memberEmails/{email}:
     put:
       tags:
         - Admin
@@ -349,7 +349,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: userEmail
+        - name: email
           in: path
           description: Email of user to be added
           required: true
@@ -404,7 +404,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: userEmail
+        - name: email
           in: path
           description: Email of user to be removed
           required: true
@@ -943,7 +943,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/google/v1/petServiceAccount/{project}/{userEmail}:
+  /api/google/v1/petServiceAccount/{project}/{email}:
     get:
       tags:
         - Google
@@ -957,7 +957,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: userEmail
+        - name: email
           in: path
           description: User's email address
           required: true
@@ -990,14 +990,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/google/v1/petServiceAccount/{userEmail}/key:
+  /api/google/v1/petServiceAccount/{email}/key:
     get:
       tags:
         - Google
       summary: gets a key for the user's arbitrary pet service account, get_pet_private_key action on cloud-extension/google required
       operationId: getUserArbitraryPetServiceAccountKey
       parameters:
-        - name: userEmail
+        - name: email
           in: path
           description: User's email address
           required: true
@@ -1509,7 +1509,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/azure/v1/petManagedIdentity/{userEmail}:
+  /api/azure/v1/petManagedIdentity/{email}:
     post:
       tags:
         - Azure
@@ -1517,7 +1517,7 @@ paths:
         action on cloud-extension/azure required
       operationId: getPetManagedIdentityForUser
       parameters:
-        - name: userEmail
+        - name: email
           in: path
           description: User's email address
           required: true
@@ -2602,7 +2602,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}/userEmail/{userEmail}:
+  /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}/userEmail/{email}:
     get:
       tags:
         - Resources
@@ -2627,7 +2627,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: userEmail
+        - name: email
           in: path
           description: User Email address to check
           required: true
@@ -2837,14 +2837,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/users/v1/invite/{inviteeEmail}:
+  /api/users/v1/invite/{email}:
     post:
       tags:
         - Users
       summary: create current user in the system using login credentials
       operationId: inviteUser
       parameters:
-        - name: inviteeEmail
+        - name: email
           in: path
           description: email for the user you want to invite
           required: true
