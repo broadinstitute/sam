@@ -14,7 +14,6 @@ import io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.context.propagation.{ContextPropagators, TextMapPropagator}
 import io.opentelemetry.exporter.prometheus.PrometheusHttpServer
-import io.opentelemetry.instrumentation.resources.{ContainerResource, HostResource}
 import io.opentelemetry.sdk.metrics.SdkMeterProvider
 import io.opentelemetry.sdk.{OpenTelemetrySdk, resources}
 import io.opentelemetry.sdk.trace.SdkTracerProvider
@@ -356,10 +355,7 @@ object Boot extends IOApp with LazyLogging {
       resources.Resource.getDefault.toBuilder
         .put(ResourceAttributes.SERVICE_NAME, "sam")
     maybeVersion.foreach(version => resourceBuilder.put(ResourceAttributes.SERVICE_VERSION, version))
-    val resource = HostResource
-      .get()
-      .merge(ContainerResource.get())
-      .merge(resourceBuilder.build)
+    val resource = resourceBuilder.build
 
     val maybeTracerProvider = appConfig.googleConfig.flatMap { googleConfig =>
       if (googleConfig.googleServicesConfig.traceExporter.enabled) {

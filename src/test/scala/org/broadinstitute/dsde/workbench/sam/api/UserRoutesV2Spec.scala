@@ -123,7 +123,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Act and Assert
     Get(s"/api/users/v2/self/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
+      responseAs[SamUserAllowances] should be(SamUserAllowances(enabled = true, termsOfService = true))
     }
   }
 
@@ -138,7 +138,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Act and Assert
     Get(s"/api/users/v2/${defaultUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
+      responseAs[SamUserAllowances] should be(SamUserAllowances(enabled = true, termsOfService = true))
     }
   }
 
@@ -169,12 +169,12 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     // Act and Assert
     Get(s"/api/users/v2/${otherUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = true, enabled = true, termsOfService = true))
+      responseAs[SamUserAllowances] should be(SamUserAllowances(enabled = true, termsOfService = true))
     }
 
     Get(s"/api/users/v2/${thirdUser.id}/allowed") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserAllowances] should be(SamUserAllowances(allowed = false, enabled = false, termsOfService = false))
+      responseAs[SamUserAllowances] should be(SamUserAllowances(enabled = false, termsOfService = false))
     }
   }
 
