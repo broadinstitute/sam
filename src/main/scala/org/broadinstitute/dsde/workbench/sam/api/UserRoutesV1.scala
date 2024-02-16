@@ -18,7 +18,7 @@ trait UserRoutesV1 extends SamUserDirectives with SamRequestContextDirectives {
       path(Segment) { email =>
         val workbenchEmail = WorkbenchEmail(email)
         pathEnd {
-          get {
+          getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
             complete {
               userService.getUserIdInfoFromEmail(workbenchEmail, samRequestContext).map {
                 case Left(_) => StatusCodes.NotFound -> None
@@ -32,7 +32,7 @@ trait UserRoutesV1 extends SamUserDirectives with SamRequestContextDirectives {
       pathPrefix("invite") {
         path(Segment) { inviteeEmail =>
           val workbenchEmail = WorkbenchEmail(inviteeEmail.trim)
-          post {
+          postWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
             complete {
               userService
                 .inviteUser(workbenchEmail, samRequestContext)
