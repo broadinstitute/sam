@@ -81,6 +81,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                       putPolicyMembershipOverwrite(policyId, samUser, samRequestContext)
                     } ~ pathPrefix(Segment) { email =>
                       val workbenchEmail = WorkbenchEmail(email)
+                      val memberParams = policyParams(policyId).appended(emailParam(workbenchEmail))
                       withSubject(workbenchEmail, samRequestContext) { subject =>
                         pathEndOrSingleSlash {
                           requireOneOfAction(
@@ -89,8 +90,13 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                             samUser.id,
                             samRequestContext
                           ) {
-                            putUserInPolicy(policyId, subject, samRequestContext) ~
-                            deleteUserFromPolicy(policyId, subject, samRequestContext)
+                            putUserInPolicy(
+                              policyId,
+                              subject,
+                              samRequestContext,
+                              memberParams
+                            ) ~
+                            deleteUserFromPolicy(policyId, subject, samRequestContext, memberParams)
                           }
                         }
                       }
@@ -209,10 +215,16 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                       } ~
                       pathPrefix(Segment) { email =>
                         val workbenchEmail = WorkbenchEmail(email)
+                        val memberParams = policyParams(policyId).appended(emailParam(workbenchEmail))
                         withSubject(workbenchEmail, samRequestContext) { subject =>
                           pathEndOrSingleSlash {
-                            putUserInPolicy(policyId, subject, samRequestContext) ~
-                            deleteUserFromPolicy(policyId, subject, samRequestContext)
+                            putUserInPolicy(
+                              policyId,
+                              subject,
+                              samRequestContext,
+                              memberParams
+                            ) ~
+                            deleteUserFromPolicy(policyId, subject, samRequestContext, memberParams)
                           }
                         }
                       }
@@ -223,10 +235,11 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                       path(Segment / Segment / Segment) { (memberResourceType, memberResourceId, memberPolicyName) =>
                         val memberResource = FullyQualifiedResourceId(ResourceTypeName(memberResourceType), ResourceId(memberResourceId))
                         val policySubject = FullyQualifiedPolicyId(memberResource, AccessPolicyName(memberPolicyName))
+                        val memberParams = policyParams(policyId) ++ policyParams(policySubject, "member")
                         withPolicy(policySubject, samRequestContext) { memberPolicy =>
                           pathEndOrSingleSlash {
-                            putUserInPolicy(policyId, memberPolicy.id, samRequestContext) ~
-                            deleteUserFromPolicy(policyId, memberPolicy.id, samRequestContext)
+                            putUserInPolicy(policyId, memberPolicy.id, samRequestContext, memberParams) ~
+                            deleteUserFromPolicy(policyId, memberPolicy.id, samRequestContext, memberParams)
                           }
                         }
                       }
@@ -253,17 +266,17 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
   }
 
   def getUserPoliciesForResourceType(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceTypeParam(resourceType)) {
       complete(Deprecated.Corral.listUserAccessPolicies(resourceType.name, samUser.id, samRequestContext))
     }
 
   def getUserResourcesOfType(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceTypeParam(resourceType)) {
       complete(resourceService.listUserResources(resourceType.name, samUser.id, samRequestContext))
     }
 
   def postResource(resourceType: ResourceType, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    post {
+    postWithTelemetry(samRequestContext, resourceTypeParam(resourceType)) {
       entity(as[CreateResourceRequest]) { createResourceRequest =>
         requireCreateWithOptionalParent(createResourceRequest.parent, resourceType, samUser.id, samRequestContext) {
           if (resourceType.reuseIds && resourceType.isAuthDomainConstrainable) {
@@ -301,7 +314,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def deleteResource(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    delete {
+    deleteWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       // Note that this does not require remove_child on the parent if it exists. remove_child is meant to prevent
       // users from removing a child only to add it to a different parent and thus circumvent any permissions
       // a parent may be enforcing. Deleting a child does not allow this situation.
@@ -316,12 +329,12 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       samUser: SamUser,
       samRequestContext: SamRequestContext
   ): server.Route =
-    post {
+    postWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       complete(resourceService.createResource(resourceType, resource.resourceId, samUser, samRequestContext).map(_ => StatusCodes.NoContent))
     }
 
   def leaveResource(resourceType: ResourceType, resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    delete {
+    deleteWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       if (resourceType.allowLeaving) complete(resourceService.leaveResource(resourceType, resource, samUser, samRequestContext).map(_ => StatusCodes.NoContent))
       else complete(StatusCodes.Forbidden -> s"Leaving a resource of type ${resourceType.name.value} is not supported")
     }
@@ -332,7 +345,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       action: ResourceAction,
       samRequestContext: SamRequestContext
   ): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource).appended(actionParam(action)): _*) {
       complete {
         policyEvaluatorService.hasPermission(resource, action, samUser.id, samRequestContext).map { hasPermission =>
           StatusCodes.OK -> JsBoolean(hasPermission)
@@ -351,7 +364,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       userEmail: WorkbenchEmail,
       samRequestContext: SamRequestContext
   ): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource) ++ Seq(actionParam(action), emailParam(userEmail)): _*) {
       requireOneOfAction(
         resource,
         Set(SamResourceActions.readPolicies, SamResourceActions.testAnyActionAccess, SamResourceActions.testActionAccess(action)),
@@ -367,14 +380,14 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def listActionsForUser(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       complete(policyEvaluatorService.listUserResourceActions(resource, samUser.id, samRequestContext = samRequestContext).map { actions =>
         StatusCodes.OK -> actions
       })
     }
 
   def getResourceAuthDomain(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       requireAction(resource, SamResourceActions.readAuthDomain, samUser.id, samRequestContext) {
         complete(resourceService.loadResourceAuthDomain(resource, samRequestContext).map { response =>
           StatusCodes.OK -> response
@@ -383,7 +396,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def patchResourceAuthDomain(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    patch {
+    patchWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       requireAction(resource, SamResourceActions.updateAuthDomain, samUser.id, samRequestContext) {
         entity(as[Set[WorkbenchGroupName]]) { authDomains =>
           complete(resourceService.addResourceAuthDomain(resource, authDomains, samUser.id, samRequestContext).map { response =>
@@ -394,7 +407,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def getResourcePolicies(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       requireAction(resource, SamResourceActions.readPolicies, samUser.id, samRequestContext) {
         complete(resourceService.listResourcePolicies(resource, samRequestContext).map { response =>
           StatusCodes.OK -> response.toSet
@@ -403,7 +416,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def getPolicy(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, policyParams(policyId): _*) {
       requireOneOfAction(
         policyId.resource,
         Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)),
@@ -418,7 +431,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def putPolicyOverwrite(resourceType: ResourceType, policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    put {
+    putWithTelemetry(samRequestContext, policyParams(policyId): _*) {
       requireAction(policyId.resource, SamResourceActions.alterPolicies, samUser.id, samRequestContext) {
         entity(as[AccessPolicyMembershipRequest]) { membershipUpdate =>
           complete(
@@ -443,7 +456,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def putPolicyMembershipOverwrite(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    put {
+    putWithTelemetry(samRequestContext, policyParams(policyId): _*) {
       requireOneOfAction(
         policyId.resource,
         Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
@@ -456,20 +469,30 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       }
     }
 
-  def putUserInPolicy(policyId: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): server.Route =
-    put {
+  def putUserInPolicy(
+      policyId: FullyQualifiedPolicyId,
+      subject: WorkbenchSubject,
+      samRequestContext: SamRequestContext,
+      pathParams: Seq[(String, ValueObject)]
+  ): server.Route =
+    putWithTelemetry(samRequestContext, pathParams: _*) {
       complete(
         resourceService.addSubjectToPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent)
       )
     }
 
-  def deleteUserFromPolicy(policyId: FullyQualifiedPolicyId, subject: WorkbenchSubject, samRequestContext: SamRequestContext): server.Route =
-    delete {
+  def deleteUserFromPolicy(
+      policyId: FullyQualifiedPolicyId,
+      subject: WorkbenchSubject,
+      samRequestContext: SamRequestContext,
+      pathParams: Seq[(String, ValueObject)]
+  ): server.Route =
+    deleteWithTelemetry(samRequestContext, pathParams: _*) {
       complete(resourceService.removeSubjectFromPolicy(policyId, subject, samRequestContext).map(_ => StatusCodes.NoContent))
     }
 
   def getPublicFlag(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, policyParams(policyId): _*) {
       requireOneOfAction(
         policyId.resource,
         Set(SamResourceActions.readPolicies, SamResourceActions.readPolicy(policyId.accessPolicyName)),
@@ -481,7 +504,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def putPublicFlag(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    put {
+    putWithTelemetry(samRequestContext, policyParams(policyId): _*) {
       requireOneOfAction(
         policyId.resource,
         Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(policyId.accessPolicyName)),
@@ -502,7 +525,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def getUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       complete {
         resourceService.listUserResourceRoles(resource, samUser, samRequestContext).map { roles =>
           StatusCodes.OK -> roles
@@ -511,7 +534,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def getAllResourceUsers(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       requireAction(resource, SamResourceActions.readPolicies, samUser.id, samRequestContext) {
         complete(resourceService.listAllFlattenedResourceUsers(resource, samRequestContext).map { allUsers =>
           StatusCodes.OK -> allUsers
@@ -520,7 +543,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def getResourceParent(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       requireAction(resource, SamResourceActions.getParent, samUser.id, samRequestContext) {
         complete(resourceService.getResourceParent(resource, samRequestContext).map {
           case Some(response) => StatusCodes.OK -> response
@@ -530,7 +553,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def setResourceParent(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    put {
+    putWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       entity(as[FullyQualifiedResourceId]) { newResourceParent =>
         requireAction(resource, SamResourceActions.setParent, samUser.id, samRequestContext) {
           requireParentAction(resource, None, SamResourceActions.removeChild, samUser.id, samRequestContext) {
@@ -543,7 +566,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def deleteResourceParent(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    delete {
+    deleteWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       requireAction(resource, SamResourceActions.setParent, samUser.id, samRequestContext) {
         requireParentAction(resource, None, SamResourceActions.removeChild, samUser.id, samRequestContext) {
           complete(resourceService.deleteResourceParent(resource, samRequestContext).map { parentDeleted =>
@@ -558,14 +581,14 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     }
 
   def getResourceChildren(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    get {
+    getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       requireAction(resource, SamResourceActions.listChildren, samUser.id, samRequestContext) {
         complete(resourceService.listResourceChildren(resource, samRequestContext).map(children => StatusCodes.OK -> children))
       }
     }
 
   def deletePolicy(policyId: FullyQualifiedPolicyId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
-    delete {
+    deleteWithTelemetry(samRequestContext, policyParams(policyId): _*) {
       requireOneOfAction(
         policyId.resource,
         Set(SamResourceActions.alterPolicies, SamResourceActions.deletePolicy(policyId.accessPolicyName)),
