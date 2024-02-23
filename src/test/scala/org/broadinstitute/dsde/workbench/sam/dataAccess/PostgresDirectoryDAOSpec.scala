@@ -1343,30 +1343,31 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       "update the googleSubjectId for a user" in {
         assume(databaseEnabled, databaseEnabledClue)
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
-        dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
+        val user = Generator.genWorkbenchUserAzure.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
-        dao.updateUser(defaultUser, AdminUpdateUserRequest(None, Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+        dao.updateUser(user, AdminUpdateUserRequest(None, Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
       }
 
       "update the azureB2CId for a user" in {
         assume(databaseEnabled, databaseEnabledClue)
         val newB2CId = AzureB2CId(UUID.randomUUID().toString)
-        dao.createUser(defaultUser.copy(azureB2CId = None), samRequestContext).unsafeRunSync()
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
-        dao.updateUser(defaultUser, AdminUpdateUserRequest(Option(newB2CId), None), samRequestContext).unsafeRunSync()
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
+        dao.updateUser(user, AdminUpdateUserRequest(Option(newB2CId), None), samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(newB2CId)
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(newB2CId)
       }
 
       "sets the updatedAt datetime to the current datetime" in {
         assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
-          googleSubjectId = None,
           updatedAt = Instant.parse("2020-02-02T20:20:20Z")
         )
         dao.createUser(user, samRequestContext).unsafeRunSync()
@@ -1378,6 +1379,20 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         // Assert
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
         loadedUser.value.updatedAt should beAround(Instant.now())
+      }
+
+      "will update the googleSubjectId and azureB2CId for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val newGoogleSubjectId = GoogleSubjectId("234567890123456789012")
+        val newB2CId = AzureB2CId(UUID.randomUUID().toString)
+        val user = Generator.genWorkbenchUserBoth.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.updateUser(user, AdminUpdateUserRequest(Option(newB2CId), Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
+
+        val updatedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        updatedUser.flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+        updatedUser.flatMap(_.azureB2CId) shouldBe Option(newB2CId)
       }
     }
 
