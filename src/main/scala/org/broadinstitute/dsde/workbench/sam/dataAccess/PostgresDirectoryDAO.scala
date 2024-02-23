@@ -470,46 +470,41 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    // NOTE updating emails and 'enabled' status is currently not supported by this method
     serializableWriteTransaction("updateUser", samRequestContext) { implicit session =>
       val u = UserTable.column
 
-      // NOTE updating emails and 'enabled' status is currently not supported by this method
-      val setColumnsClause = userUpdate match {
-        case AdminUpdateUserRequest(None, None) => throw new WorkbenchException("Cannot update user with no values.")
-        case AdminUpdateUserRequest(Some(newAzureB2CId), None) =>
-          samsqls"(${u.azureB2cId}, ${u.updatedAt})"
-        case AdminUpdateUserRequest(None, Some(newGoogleSubjectId)) =>
-          samsqls"(${u.googleSubjectId}, ${u.updatedAt})"
-        case AdminUpdateUserRequest(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
-          samsqls"(${u.googleSubjectId}, ${u.azureB2cId}, ${u.updatedAt})"
+      if (userUpdate.googleSubjectId.isEmpty && userUpdate.azureB2CId.isEmpty) {
+        throw new WorkbenchException("Cannot update user with no values.")
       }
 
-      var updatedUser =
-        samUser.copy(
-          googleSubjectId = userUpdate.googleSubjectId.orElse(samUser.googleSubjectId),
-          azureB2CId = userUpdate.azureB2CId.orElse(samUser.azureB2CId),
-          updatedAt = Instant.now()
-        )
-      val setColumnValuesClause = userUpdate match {
-        case AdminUpdateUserRequest(None, None) => throw new WorkbenchException("Cannot update user with no values.")
-        case AdminUpdateUserRequest(Some(AzureB2CId("null")), None) =>
-          updatedUser = updatedUser.copy(azureB2CId = None)
-          // string interpolation adds quotes around null so we have to special case it here
-          samsqls"(null, ${Instant.now()})"
-        case AdminUpdateUserRequest(None, Some(GoogleSubjectId("null"))) =>
-          updatedUser = updatedUser.copy(googleSubjectId = None)
-          // string interpolation adds quotes around null so we have to special case it here
-          samsqls"(null, ${Instant.now()})"
-        case AdminUpdateUserRequest(Some(newGoogleSubjectId), None) =>
-          samsqls"($newGoogleSubjectId, ${Instant.now()})"
-        case AdminUpdateUserRequest(None, Some(newAzureB2CId)) =>
-          samsqls"($newAzureB2CId, ${Instant.now()})"
-        case AdminUpdateUserRequest(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
-          samsqls"($newGoogleSubjectId, $newAzureB2CId, ${Instant.now()})"
+      val (updateGoogleColumn, updateGoogleValue, returnGoogleValue) = userUpdate.googleSubjectId match {
+        case None => (None, None, samUser.googleSubjectId)
+        case Some(GoogleSubjectId("null")) =>
+          (Some(samsqls"${u.googleSubjectId}"), Some(samsqls"null"), None)
+        case Some(newGoogleSubjectId: GoogleSubjectId) =>
+          (Some(samsqls"${u.googleSubjectId}"), Some(samsqls"$newGoogleSubjectId"), Some(newGoogleSubjectId))
       }
+
+      val (updateAzureB2CColumn, updateAzureB2CValue, returnAzureB2CValue) = userUpdate.azureB2CId match {
+        case None => (None, None, samUser.azureB2CId)
+        case Some(AzureB2CId("null")) =>
+          (Some(samsqls"${u.azureB2cId}"), Some(samsqls"null"), None)
+        case Some(newAzureB2CId: AzureB2CId) =>
+          (Some(samsqls"${u.azureB2cId}"), Some(samsqls"$newAzureB2CId"), Some(newAzureB2CId))
+      }
+
+      // This is a little hacky, but is needed because SQLSyntax's `flatten`, `substring`, and other string-manipulation
+      // methods transform the SQLSyntax into a String. Thankfully, since we always have an `updatedAt` value,
+      // we can use it as a base for foldLeft, and then concatenate the rest of the existing values to it
+      // within the `samsqls` interpolation, preserving the SQLSyntax functionality.
+      val updateColumns = List(updateGoogleColumn, updateAzureB2CColumn).flatten
+        .foldLeft(samsqls"${u.updatedAt}")((acc, col) => samsqls"$acc, $col")
+      val updateValues = List(updateGoogleValue, updateAzureB2CValue).flatten
+        .foldLeft(samsqls"${Instant.now()}")((acc, col) => samsqls"$acc, $col")
 
       val results = samsql"""update ${UserTable.table}
-               set ${setColumnsClause} = ${setColumnValuesClause}
+               set ($updateColumns) = ($updateValues)
                where ${u.id} = ${samUser.id}"""
         .update()
         .apply()
@@ -517,7 +512,13 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       if (results != 1) {
         None
       } else {
-        Option(updatedUser)
+        Option(
+          samUser.copy(
+            googleSubjectId = returnGoogleValue,
+            azureB2CId = returnAzureB2CValue,
+            updatedAt = Instant.now()
+          )
+        )
       }
     }
 
