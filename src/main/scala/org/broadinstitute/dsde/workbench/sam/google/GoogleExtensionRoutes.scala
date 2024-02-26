@@ -77,7 +77,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
         pathPrefix("user" / "petServiceAccount") {
           pathPrefix("key") {
             pathEndOrSingleSlash {
-              get {
+              getWithTelemetry(samRequestContext) {
                 complete {
                   import spray.json._
                   googleExtensions
@@ -89,7 +89,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
           } ~
             pathPrefix("token") {
               pathEndOrSingleSlash {
-                post {
+                postWithTelemetry(samRequestContext) {
                   entity(as[Set[String]]) { scopes =>
                     complete {
                       googleExtensions.getArbitraryPetServiceAccountToken(samUser, scopes, samRequestContext).map { token =>
@@ -205,7 +205,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
         } ~
         pathPrefix("user") {
           pathPrefix("signedUrlForBlob") {
-            post {
+            postWithTelemetry(samRequestContext) {
               entity(as[RequesterPaysSignedUrlRequest]) { request =>
                 complete {
                   googleExtensions

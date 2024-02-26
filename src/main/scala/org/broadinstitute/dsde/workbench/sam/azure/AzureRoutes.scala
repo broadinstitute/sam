@@ -25,7 +25,7 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestCon
       .map { service =>
         pathPrefix("azure" / "v1") {
           path("user" / "petManagedIdentity") {
-            post {
+            postWithTelemetry(samRequestContext) {
               entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
                 requireUserCreatePetAction(request, samUser, samRequestContext) {
                   complete {

@@ -72,7 +72,7 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
       }
     } ~ (pathPrefix("groups" / "v1") | pathPrefix("groups")) {
       pathEndOrSingleSlash {
-        get {
+        getWithTelemetry(samRequestContext) {
           handleListGroups(samUser, samRequestContext)
         }
       }
