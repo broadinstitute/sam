@@ -37,7 +37,7 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
     pathPrefix("user") {
       (pathPrefix("v1") | pathEndOrSingleSlash) {
         pathEndOrSingleSlash {
-          post {
+          postWithTelemetry(samRequestContext) {
             withNewUser(samRequestContext) { createUser =>
               complete {
                 userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
@@ -45,7 +45,7 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
             }
           } ~
           (changeForbiddenToNotFound & withUserAllowInactive(samRequestContext)) { user =>
-            get {
+            getWithTelemetry(samRequestContext) {
               parameter("userDetailsOnly".?) { userDetailsOnly =>
                 complete {
                   userService.getUserStatus(user.id, userDetailsOnly.exists(_.equalsIgnoreCase("true")), samRequestContext).map { statusOption =>
@@ -63,7 +63,7 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
         pathPrefix("termsofservice") {
           pathPrefix("status") {
             pathEndOrSingleSlash {
-              get {
+              getWithTelemetry(samRequestContext) {
                 withUserAllowInactive(samRequestContext) { samUser =>
                   complete {
                     tosService.getTermsOfServiceComplianceStatus(samUser, samRequestContext).map { tosAcceptanceStatus =>
@@ -75,7 +75,7 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
             }
           } ~
           pathEndOrSingleSlash {
-            post {
+            postWithTelemetry(samRequestContext) {
               withUserAllowInactive(samRequestContext) { samUser =>
                 withTermsOfServiceAcceptance {
                   complete {
@@ -90,7 +90,7 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
                 }
               }
             } ~
-            delete {
+            deleteWithTelemetry(samRequestContext) {
               withUserAllowInactive(samRequestContext) { samUser =>
                 complete {
                   userService.rejectTermsOfService(samUser.id, samRequestContext).map { userStatusOption =>
@@ -108,7 +108,7 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
       } ~ pathPrefix("v2") {
         pathPrefix("self") {
           pathEndOrSingleSlash {
-            post {
+            postWithTelemetry(samRequestContext) {
               withNewUser(samRequestContext) { createUser =>
                 complete {
                   userService.createUser(createUser, samRequestContext).map(userStatus => StatusCodes.Created -> userStatus)
@@ -118,14 +118,14 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
           } ~
           (changeForbiddenToNotFound & withUserAllowInactive(samRequestContext)) { user =>
             path("info") {
-              get {
+              getWithTelemetry(samRequestContext) {
                 complete {
                   userService.getUserStatusInfo(user, samRequestContext)
                 }
               }
             } ~
             path("diagnostics") {
-              get {
+              getWithTelemetry(samRequestContext) {
                 complete {
                   userService.getUserStatusDiagnostics(user.id, samRequestContext).map { statusOption =>
                     statusOption
@@ -138,12 +138,12 @@ trait OldUserRoutes extends SamUserDirectives with SamRequestContextDirectives {
               }
             } ~
             path("termsOfServiceDetails") {
-              get {
+              getWithTelemetry(samRequestContext) {
                 complete(tosService.getTosDetails(user, samRequestContext))
               }
             } ~
             path("termsOfServiceComplianceStatus") {
-              get {
+              getWithTelemetry(samRequestContext) {
                 complete(tosService.getTermsOfServiceComplianceStatus(user, samRequestContext))
               }
             }

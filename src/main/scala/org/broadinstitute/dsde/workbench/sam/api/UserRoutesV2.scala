@@ -104,7 +104,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
 
   // Get Sam User
   private def getAdminSamUserResponse(samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         for {
           user <- userService.getUser(samUserId, samRequestContext)
@@ -117,7 +117,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     }
 
   private def getSamUserResponse(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         samUserResponse(samUser, samRequestContext).map(response => StatusCodes.OK -> response)
       }
@@ -129,14 +129,14 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
 
   // Get Sam User Allowed
   private def getSamUserAllowances(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         userService.getUserAllowances(samUser, samRequestContext).map(StatusCodes.OK -> _)
       }
     }
 
   private def getAdminSamUserAllowances(samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         for {
           user <- userService.getUser(samUserId, samRequestContext)
@@ -149,14 +149,14 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     }
 
   private def getSamUserAttributes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         userService.getUserAttributes(samUser.id, samRequestContext).map(response => (if (response.isDefined) OK else NotFound) -> response)
       }
     }
 
   private def patchSamUserAttributes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    patch {
+    patchWithTelemetry(samRequestContext) {
       entity(as[SamUserAttributesRequest]) { userAttributesRequest =>
         complete {
           userService.setUserAttributesFromRequest(samUser.id, userAttributesRequest, samRequestContext).map(OK -> _)
@@ -165,7 +165,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     }
 
   private def postUserRegistration(newUser: SamUser, samRequestContext: SamRequestContext): Route =
-    post {
+    postWithTelemetry(samRequestContext) {
       entity(as[SamUserRegistrationRequest]) { userRegistrationRequest =>
         complete {
           for {
