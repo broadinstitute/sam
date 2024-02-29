@@ -8,20 +8,20 @@ object Dependencies {
   val scalaTestV = "3.2.12"
   val scalaCheckV = "1.14.3"
   val scalikejdbcVersion = "3.4.2"
-  val postgresDriverVersion = "42.5.0"
+  val postgresDriverVersion = "42.7.2"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "5781917" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchLibV = "ad61f19" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
-  val workbenchUtil2V = s"0.8-$workbenchLibV"
+  val workbenchUtil2V = s"0.9-$workbenchLibV"
   val workbenchModelV = s"0.19-$workbenchLibV"
   val workbenchGoogleV = s"0.30-$workbenchLibV"
-  val workbenchGoogle2V = s"0.35-$workbenchLibV"
+  val workbenchGoogle2V = s"0.36-$workbenchLibV"
   val workbenchNotificationsV = s"0.6-$workbenchLibV"
   val workbenchOauth2V = s"0.5-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.30-SNAPSHOT"
-  val tclVersion = "0.1.19-SNAPSHOT"
+  val tclVersion = "1.0.5-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -150,6 +150,7 @@ object Dependencies {
   def excludePostgresql = ExclusionRule("org.postgresql", "postgresql")
   def excludeSnakeyaml = ExclusionRule("org.yaml", "snakeyaml")
   def excludeLiquibase = ExclusionRule("org.liquibase")
+  def excludeKubernetes = ExclusionRule("io.kubernetes", "client-java")
   def tclExclusions(m: ModuleID): ModuleID = m.excludeAll(
     excludeSpringBoot,
     excludeSpringAop,
@@ -161,7 +162,8 @@ object Dependencies {
     excludePostgresql,
     excludeSnakeyaml,
     excludeSlf4j,
-    excludeLiquibase
+    excludeLiquibase,
+    excludeKubernetes
   )
 
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
@@ -221,5 +223,10 @@ object Dependencies {
     sentryLogback,
     okio,
     terraCommonLib
+  )
+
+  // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
+  val rootDependencyOverrides = Seq(
+    "org.apache.commons" % "commons-compress" % "1.26.0"
   )
 }

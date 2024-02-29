@@ -80,7 +80,8 @@ object Settings {
   // thus commonSettings needs to be added first.
   lazy val rootSettings = commonSettings ++ List(
     name := "sam",
-    libraryDependencies ++= rootDependencies
+    libraryDependencies ++= rootDependencies,
+    dependencyOverrides ++= rootDependencyOverrides
   ) ++ commonAssemblySettings ++ rootVersionSettings
 
   val pact4sSettings = commonSettings ++ List(
