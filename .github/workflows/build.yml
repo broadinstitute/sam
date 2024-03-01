@@ -1,4 +1,6 @@
-name: Scala tests with coverage
+# Github action to Run Unit Tests and Publish Sam Client
+
+name: Run Unit Tests and Publish Client
 
 on:
   pull_request:
@@ -68,9 +70,15 @@ jobs:
         id: coverageReport
         run: source env/test.env; sbt coverage "testOnly --" coverageReport
 
+  tag:
+    uses: ./.github/workflows/tag.yml
+    with:
+      release-branches: develop
+    secrets: inherit
+
   generateAndPublishClient:
     runs-on: ubuntu-20.04
-    needs: run-unit-tests
+    needs: [ tag, run-unit-tests ]
 
     env:
       ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
@@ -92,13 +100,13 @@ jobs:
         working-directory: codegen_java
         id: publishJavaClient
         if: ${{ github.ref_name == 'develop' }}
-        run: sbt "+ publish" -Dproject.isSnapshot=false
+        run: sbt "+ publish" -Dproject.isSnapshot=false -Dproject.semVer=${{ needs.tag.outputs.tag }}
 
       - name: Publish java client as snapshot for PRs
         working-directory: codegen_java
         id: publishJavaClientSnapshot
         if: ${{ github.ref_name != 'develop' }}
-        run: sbt "+ publish" -Dproject.isSnapshot=true
+        run: sbt "+ publish" -Dproject.isSnapshot=true -Dproject.semVer=${{ needs.tag.outputs.tag }}
 
       - name: Generate old javax java client
         id: generateOldJavaClient
@@ -108,10 +116,10 @@ jobs:
         working-directory: codegen_java_old
         id: publishOldJavaClient
         if: ${{ github.ref_name == 'develop' }}
-        run: sbt "+ publish" -Dproject.isSnapshot=false
+        run: sbt "+ publish" -Dproject.isSnapshot=false -Dproject.semVer=${{ needs.tag.outputs.tag }}
 
       - name: Publish old javax java client as snapshot for PRs
         working-directory: codegen_java_old
         id: publishOldJavaClientSnapshot
         if: ${{ github.ref_name != 'develop' }}
-        run: sbt "+ publish" -Dproject.isSnapshot=true
+        run: sbt "+ publish" -Dproject.isSnapshot=true -Dproject.semVer=${{ needs.tag.outputs.tag }}
