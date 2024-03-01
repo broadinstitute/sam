@@ -76,6 +76,55 @@ jobs:
           echo "$GITHUB_CONTEXT"
           echo 'custom-version-json={\"sam\":{\"appVersion\":\"${{ needs.tag.outputs.tag }}\"}}' >> $GITHUB_OUTPUT
 
+  generateAndPublishClient:
+    runs-on: ubuntu-20.04
+    needs: [ sam-build-tag-publish-job ]
+
+    env:
+      ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
+      ARTIFACTORY_PASSWORD: ${{secrets.ARTIFACTORY_PASSWORD}}
+      SBT_OPTS: -Xmx3g
+
+    steps:
+      - uses: actions/checkout@v2
+
+      # coursier cache action caches both coursier and sbt caches
+      - name: coursier-cache-action
+        uses: coursier/cache-action@v5
+
+      - name: Generate java client
+        id: generateJavaClient
+        run: bash scripts/gen_java_client.sh
+
+      - name: Publish java client for merge to develop branch
+        working-directory: codegen_java
+        id: publishJavaClient
+        if: ${{ github.ref_name == 'develop' }}
+        run: sbt "+ publish" -Dproject.isSnapshot=false -Dproject.semVer=${{ needs.sam-build-tag-publish-job.outputs.tag }}
+
+      - name: Publish java client as snapshot for PRs
+        working-directory: codegen_java
+        id: publishJavaClientSnapshot
+        if: ${{ github.ref_name != 'develop' }}
+        run: sbt "+ publish" -Dproject.isSnapshot=true -Dproject.semVer=${{ needs.sam-build-tag-publish-job.outputs.tag }}
+
+      - name: Generate old javax java client
+        id: generateOldJavaClient
+        run: bash scripts/gen_java_client_old.sh
+
+      - name: Publish old javax java client for merge to develop branch
+        working-directory: codegen_java_old
+        id: publishOldJavaClient
+        if: ${{ github.ref_name == 'develop' }}
+        run: sbt "+ publish" -Dproject.isSnapshot=false -Dproject.semVer=${{ needs.sam-build-tag-publish-job.outputs.tag }}
+
+      - name: Publish old javax java client as snapshot for PRs
+        working-directory: codegen_java_old
+        id: publishOldJavaClientSnapshot
+        if: ${{ github.ref_name != 'develop' }}
+        run: sbt "+ publish" -Dproject.isSnapshot=true -Dproject.semVer=${{ needs.sam-build-tag-publish-job.outputs.tag }}
+
+
   prepare-configs:
     runs-on: ubuntu-latest
     outputs:
