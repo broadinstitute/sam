@@ -100,13 +100,13 @@ jobs:
         working-directory: codegen_java
         id: publishJavaClient
         if: ${{ github.ref_name == 'develop' }}
-        run: sbt "+ publish" -Dproject.isSnapshot=false -Dproject.semVer=${{ needs.tags.outputs.tag }}
+        run: sbt "+ publish" -Dproject.isSnapshot=false -Dproject.semVer=${{ needs.tag.outputs.tag }}
 
       - name: Publish java client as snapshot for PRs
         working-directory: codegen_java
         id: publishJavaClientSnapshot
         if: ${{ github.ref_name != 'develop' }}
-        run: sbt "+ publish" -Dproject.isSnapshot=true -Dproject.semVer=${{ needs.tags.outputs.tag }}
+        run: sbt "+ publish" -Dproject.isSnapshot=true -Dproject.semVer=${{ needs.tag.outputs.tag }}
 
       - name: Generate old javax java client
         id: generateOldJavaClient
@@ -116,10 +116,10 @@ jobs:
         working-directory: codegen_java_old
         id: publishOldJavaClient
         if: ${{ github.ref_name == 'develop' }}
-        run: sbt "+ publish" -Dproject.isSnapshot=false -Dproject.semVer=${{ needs.tags.outputs.tag }}
+        run: sbt "+ publish" -Dproject.isSnapshot=false -Dproject.semVer=${{ needs.tag.outputs.tag }}
 
       - name: Publish old javax java client as snapshot for PRs
         working-directory: codegen_java_old
         id: publishOldJavaClientSnapshot
         if: ${{ github.ref_name != 'develop' }}
-        run: sbt "+ publish" -Dproject.isSnapshot=true -Dproject.semVer=${{ needs.tags.outputs.tag }}
+        run: sbt "+ publish" -Dproject.isSnapshot=true -Dproject.semVer=${{ needs.tag.outputs.tag }}
