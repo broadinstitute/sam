@@ -133,7 +133,7 @@ class SamProviderSpec
   private def mockGetArbitraryPetServiceAccountToken(): IO[Unit] = for {
     _ <- IO(
       when {
-        googleExt.getArbitraryPetServiceAccountToken(any[SamUser], any[Set[String]], any[SamRequestContext])
+        googleExt.petServiceAccounts.getArbitraryPetServiceAccountToken(any[SamUser], any[Set[String]], any[SamRequestContext])
       } thenReturn {
         Future.successful("aToken")
       }

@@ -90,9 +90,15 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
       )
     )
 
+    val petServiceAccounts = mock[PetServiceAccounts](RETURNS_SMART_NULLS)
+
     doReturn(IO.pure(petServiceAccount))
-      .when(googleExtensions)
+      .when(petServiceAccounts)
       .createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
+
+    doReturn(petServiceAccounts)
+      .when(googleExtensions)
+      .petServiceAccounts
 
     doReturn(IO.pure(petServiceAccountKey))
       .when(mockGoogleKeyCache)
@@ -117,7 +123,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
 
         signedUrl should be(expectedUrl)
 
-        verify(googleExtensions).createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
+        verify(petServiceAccounts).createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
 
         verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
 
@@ -167,8 +173,10 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
       val arbitraryPetServiceAccountKey = RealKeyMockGoogleIamDAO.generateNewRealKey(arbitraryPetServiceAccount.serviceAccount.email)._2
 
       doReturn(Future.successful(arbitraryPetServiceAccountKey))
-        .when(googleExtensions)
+        .when(petServiceAccounts)
         .getArbitraryPetServiceAccountKey(eqTo(newGoogleUser), any[SamRequestContext])
+
+      doReturn(petServiceAccounts).when(googleExtensions).petServiceAccounts
 
       "includes the requester pays user project if provided" in {
         runAndWait(
