@@ -165,13 +165,13 @@ class SamProviderSpec
     case ProviderState(States.HasResourceWritePermission, _) =>
       mockResourceActionPermission(SamResourceActions.write, hasPermission = true).unsafeRunSync()
     case ProviderState(States.HasResourceReadPermission, _) =>
-      mockResourceActionPermission(SamResourceActions.read, hasPermission = true).unsafeRunSync()
+      mockResourceActionPermission(ResourceAction("read"), hasPermission = true).unsafeRunSync()
     case ProviderState(States.DoesNotHaveResourceDeletePermission, _) =>
       mockResourceActionPermission(SamResourceActions.delete, hasPermission = false).unsafeRunSync()
     case ProviderState(States.DoesNotHaveResourceWritePermission, _) =>
       mockResourceActionPermission(SamResourceActions.write, hasPermission = false).unsafeRunSync()
     case ProviderState(States.DoesNotHaveResourceReadPermission, _) =>
-      mockResourceActionPermission(SamResourceActions.read, hasPermission = false).unsafeRunSync()
+      mockResourceActionPermission(ResourceAction("read"), hasPermission = false).unsafeRunSync()
     case ProviderState(States.UserStatusInfoRequestWithAccessToken, _) =>
       logger.debug(s"you may stub provider behaviors here for the state: ${States.UserStatusInfoRequestWithAccessToken}")
     case ProviderState(States.UserStatusInfoRequestWithoutAccessToken, _) =>
