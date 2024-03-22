@@ -41,7 +41,7 @@ object States {
   val UserExists = "user exists"
   val HasResourceDeletePermission = "user has delete permission"
   val HasResourceWritePermission = "user has write permission"
-  val HasResourceReadPermission = "user had read permission"
+  val HasResourceReadPermission = "user has read permission"
   val DoesNotHaveResourceDeletePermission = "user does not have delete permission"
   val DoesNotHaveResourceWritePermission = "user does not have write permission"
   val DoesNotHaveResourceReadPermission = "user does not have read permission"
