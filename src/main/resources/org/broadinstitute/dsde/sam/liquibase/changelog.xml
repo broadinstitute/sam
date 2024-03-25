@@ -28,4 +28,6 @@
     <include file="changesets/20230929_add_tos_audit_table.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20231011_add_tos_audit_table_created_at_pk.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20231019_sam_user_attributes_table.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20240325_default_registered_at_to_1970.xml" relativeToChangelogFile="true"/>
+
 </databaseChangeLog>

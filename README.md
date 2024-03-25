@@ -191,6 +191,8 @@ You only have to do this once.
 ```shell
 ./render_config.sh
 ```
+#### Get on the Broad VPN
+You need to be on the non-split VPN to perform the next steps
 
 #### Source Environment Variables
 ```shell
@@ -209,6 +211,8 @@ sh docker/run-proxy.sh start
 ```
 
 #### Run Sam!
+You can either use sbt, or if you are using intelliJ set up a run configuration to debug as described below instead
+
 ```shell
 sbt run
 ```
