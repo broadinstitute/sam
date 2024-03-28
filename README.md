@@ -76,7 +76,7 @@ Group - Create, delete, read, list, add/remove users and groups. Nested groups a
 Note that in this model Group is a Subject. This allows it to be used interchangeably with Users within policies.
 
 ### ERD
-![Sam ERD](sam_erd.png)
+![Sam ERD](sam_ERD.png)
 
 The Sam schema can be viewed in sections: users in blue, groups in yellow, resources in orange, policies in green, and resource type
 configuration in purple. Both groups and resources have a hierarchical model (groups can contain groups
