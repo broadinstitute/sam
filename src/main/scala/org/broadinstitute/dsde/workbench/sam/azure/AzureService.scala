@@ -36,6 +36,41 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
     )
   )
 
+  private val managedAppValidationFailureAppNotInSubscription = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "Specified manged resource group invalid. App is not in the specified subscription."
+    )
+  )
+
+  private val managedAppValidationFailureCurrentUserNotInAuthedUserList = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "Specified manged resource group invalid. Current user is not in the authed user list."
+    )
+  )
+
+  private val managedAppValidationFailureUnableToReadAuthedUsers = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "Specified manged resource group invalid. Unable to read authed users list."
+    )
+  )
+
+  private val managedAppValidationFailureInvalidPlan = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "Specified manged resource group invalid. Invalid plan."
+    )
+  )
+
+  private val managedAppValidationFailureGetRGByName = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "Specified manged resource group invalid. Can't find resource group with specified coordinates."
+    )
+  )
+
   private val managedAppServiceCatalogValidationFailure = new WorkbenchExceptionWithErrorReport(
     ErrorReport(
       StatusCodes.Forbidden,
@@ -193,7 +228,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         mrg <- lookupMrg(mrgCoords, resourceManager)
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         appsInSubscription <- IO(appManager.applications().list().asScala)
-        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
+        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailureAppNotInSubscription)
         plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
         _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
       } yield mrg
@@ -242,13 +277,13 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
     } yield authorizedUsersValue.toString
 
     for {
-      authorizedUsersString <- IO.fromOption(authorizedUsersValue)(managedAppValidationFailure)
+      authorizedUsersString <- IO.fromOption(authorizedUsersValue)(managedAppValidationFailureUnableToReadAuthedUsers)
       user <- IO.fromOption(samRequestContext.samUser)(
         // this exception is different from the others because it is a coding bug, the user should always be present here
         new WorkbenchException("user is missing in call to validateAuthorizedAppUser")
       )
       authorizedUsers = authorizedUsersString.split(",").map(_.trim.toLowerCase)
-      _ <- IO.raiseUnless(authorizedUsers.contains(user.email.value.toLowerCase))(managedAppValidationFailure)
+      _ <- IO.raiseUnless(authorizedUsers.contains(user.email.value.toLowerCase))(managedAppValidationFailureCurrentUserNotInAuthedUserList)
     } yield ()
   }
 
@@ -258,12 +293,12 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       matchingPlan <- allPlans.find(p => p.name == applicationPlan.name() && p.publisher == applicationPlan.publisher())
     } yield matchingPlan
 
-    IO.fromOption(maybePlan)(managedAppValidationFailure)
+    IO.fromOption(maybePlan)(managedAppValidationFailureInvalidPlan)
   }
 
   private def lookupMrg(mrgCoords: ManagedResourceGroupCoordinates, resourceManager: ResourceManager) =
     IO(resourceManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value)).handleErrorWith { case t: Throwable =>
-      IO.raiseError(managedAppValidationFailure)
+      IO.raiseError(managedAppValidationFailureGetRGByName)
     }
 
   /** Null-safe get billing profile tag from a ResourceGroup. */
