@@ -229,8 +229,9 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         appsInSubscription <- IO(appManager.applications().list().asScala)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailureAppNotInSubscription)
-        plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
-        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
+        // plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
+        // _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
+        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, ManagedAppPlan("", "", crlService.getAuthorizedUserKey), samRequestContext) else IO.unit
       } yield mrg
     }
 
