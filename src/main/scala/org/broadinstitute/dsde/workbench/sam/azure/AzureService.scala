@@ -272,10 +272,19 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
     val authorizedUsersValue = for {
       parametersObj <- Option(app.parameters()) if parametersObj.isInstanceOf[java.util.Map[_, _]]
       parametersMap = parametersObj.asInstanceOf[java.util.Map[_, _]]
-      paramValuesObj <- Option(parametersMap.get(plan.authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
+      // paramValuesObj <- Option(parametersMap.get(plan.authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
+      paramValuesObj <- Option(parametersMap.get("authorizedTerraUser")) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
       paramValues = paramValuesObj.asInstanceOf[java.util.Map[_, _]]
       authorizedUsersValue <- Option(paramValues.get("value"))
     } yield authorizedUsersValue.toString
+
+    new WorkbenchException(
+      "parametersMap: " + app.parameters().toString +
+        "  paramValues: " + Option((app.parameters().asInstanceOf[java.util.Map[_, _]]).get("authorizedTerraUser")) +
+        " authorizedUsersValue: " + Option(
+          app.parameters().asInstanceOf[java.util.Map[_, _]].get("authorizedTerraUser").asInstanceOf[java.util.Map[_, _]].get("value")
+        )
+    )
 
     for {
       authorizedUsersString <- IO.fromOption(authorizedUsersValue)(managedAppValidationFailureUnableToReadAuthedUsers)
