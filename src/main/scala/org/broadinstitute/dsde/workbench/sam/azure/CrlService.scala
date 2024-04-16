@@ -7,8 +7,7 @@ import cats.effect.IO
 import com.azure.core.management.AzureEnvironment
 import com.azure.core.management.profile.AzureProfile
 import com.azure.core.credential.TokenCredential
-//import com.azure.identity.{ClientSecretCredentialBuilder, DefaultAzureCredentialBuilder}
-import com.azure.identity.{ClientSecretCredentialBuilder}
+import com.azure.identity.{ClientSecretCredentialBuilder, DefaultAzureCredentialBuilder}
 import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
@@ -65,17 +64,17 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
   def getKindServiceCatalog: String = config.kindServiceCatalog
 
   private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (TokenCredential, AzureProfile) = {
-    //val credential = if (config.azureControlPlaneEnabled) {
-    //  new DefaultAzureCredentialBuilder()
-    //    .managedIdentityClientId(config.managedAppWorkloadClientId)
-    //    .build
-    //} else {
-     val credential =  new ClientSecretCredentialBuilder()
+    val credential = if (config.azureControlPlaneEnabled) {
+      new DefaultAzureCredentialBuilder()
+        .managedIdentityClientId(config.managedAppWorkloadClientId)
+        .build
+    } else {
+      new ClientSecretCredentialBuilder()
         .clientId(config.managedAppClientId)
         .clientSecret(config.managedAppClientSecret)
         .tenantId(config.managedAppTenantId)
         .build
-    //}
+    }
 
     val profile = new AzureProfile(tenantId.value, subscriptionId.value, AzureEnvironment.AZURE)
 

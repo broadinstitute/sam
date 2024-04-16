@@ -35,49 +35,6 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         "associated to an application, the application's plan is not supported or the user is not listed as authorized."
     )
   )
-/*
-  private val managedAppValidationFailureAppNotInSubscription = new WorkbenchExceptionWithErrorReport(
-    ErrorReport(
-      StatusCodes.Forbidden,
-      "Specified manged resource group invalid. App is not in the specified subscription."
-    )
-  )
-
-  private val managedAppValidationFailureCurrentUserNotInAuthedUserList = new WorkbenchExceptionWithErrorReport(
-    ErrorReport(
-      StatusCodes.Forbidden,
-      "Specified manged resource group invalid. Current user is not in the authed user list."
-    )
-  )
-
-  private val managedAppValidationFailureUnableToReadAuthedUsers = new WorkbenchExceptionWithErrorReport(
-    ErrorReport(
-      StatusCodes.Forbidden,
-      "Specified manged resource group invalid. Unable to read authed users list."
-    )
-  )
-
-  private val managedAppValidationFailureInvalidPlan = new WorkbenchExceptionWithErrorReport(
-    ErrorReport(
-      StatusCodes.Forbidden,
-      "Specified manged resource group invalid. Invalid plan."
-    )
-  )
-
-  private val managedAppValidationFailureGetRGByName = new WorkbenchExceptionWithErrorReport(
-    ErrorReport(
-      StatusCodes.Forbidden,
-      "Specified manged resource group invalid. Can't find resource group with specified coordinates."
-    )
-  )
-
-  private val managedAppServiceCatalogValidationFailure = new WorkbenchExceptionWithErrorReport(
-    ErrorReport(
-      StatusCodes.Forbidden,
-      "Specified ServiceCatalog deployed manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
-        "associated to an application, the application's kind is not ServiceCatalog or the user is not listed as authorized."
-    )
-  )*/
 
   def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] =
     for {
