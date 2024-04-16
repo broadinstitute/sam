@@ -35,7 +35,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         "associated to an application, the application's plan is not supported or the user is not listed as authorized."
     )
   )
-
+/*
   private val managedAppValidationFailureAppNotInSubscription = new WorkbenchExceptionWithErrorReport(
     ErrorReport(
       StatusCodes.Forbidden,
@@ -77,12 +77,12 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       "Specified ServiceCatalog deployed manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
         "associated to an application, the application's kind is not ServiceCatalog or the user is not listed as authorized."
     )
-  )
+  )*/
 
   def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <-
-        if (crlService.getControlPlaneEnabled) {
+        if (crlService.getAzureControlPlaneEnabled) {
           validateServiceCatalogManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
         } else {
           validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
@@ -228,10 +228,10 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         mrg <- lookupMrg(mrgCoords, resourceManager)
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         appsInSubscription <- IO(appManager.applications().list().asScala)
-        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailureAppNotInSubscription)
-        // plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
-        // _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
-        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, new ManagedAppPlan("", "", "authorizedTerraUser"), samRequestContext) else IO.unit
+        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
+        plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
+        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
+        //_ <- if (validateUser) validateAuthorizedAppUser(managedApp, new ManagedAppPlan("", "", "authorizedTerraUser"), samRequestContext) else IO.unit
       } yield mrg
     }
 
@@ -249,12 +249,12 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         mrg <- lookupMrg(mrgCoords, resourceManager)
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         appsInSubscription <- IO(appManager.applications().list().asScala)
-        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppServiceCatalogValidationFailure)
+        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         _ <-
           if (managedApp.kind() == crlService.getKindServiceCatalog)
             validateAuthorizedAppUser(
               managedApp,
-              ManagedAppPlan("", "", crlService.getAuthorizedUserKey),
+              new ManagedAppPlan("", "", crlService.getAuthorizedUserKey),
               samRequestContext
             )
           else IO.unit
@@ -273,19 +273,18 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       parametersObj <- Option(app.parameters()) if parametersObj.isInstanceOf[java.util.Map[_, _]]
       parametersMap = parametersObj.asInstanceOf[java.util.Map[_, _]]
       paramValuesObj <- Option(parametersMap.get(plan.authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
-      // paramValuesObj <- Option(parametersMap.get("authorizedTerraUser")) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
       paramValues = paramValuesObj.asInstanceOf[java.util.Map[_, _]]
       authorizedUsersValue <- Option(paramValues.get("value"))
     } yield authorizedUsersValue.toString
 
     for {
-      authorizedUsersString <- IO.fromOption(authorizedUsersValue)(managedAppValidationFailureUnableToReadAuthedUsers)
+      authorizedUsersString <- IO.fromOption(authorizedUsersValue)(managedAppValidationFailure)
       user <- IO.fromOption(samRequestContext.samUser)(
         // this exception is different from the others because it is a coding bug, the user should always be present here
         new WorkbenchException("user is missing in call to validateAuthorizedAppUser")
       )
       authorizedUsers = authorizedUsersString.split(",").map(_.trim.toLowerCase)
-      _ <- IO.raiseUnless(authorizedUsers.contains(user.email.value.toLowerCase))(managedAppValidationFailureCurrentUserNotInAuthedUserList)
+      _ <- IO.raiseUnless(authorizedUsers.contains(user.email.value.toLowerCase))(managedAppValidationFailure)
     } yield ()
   }
 
@@ -295,12 +294,12 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       matchingPlan <- allPlans.find(p => p.name == applicationPlan.name() && p.publisher == applicationPlan.publisher())
     } yield matchingPlan
 
-    IO.fromOption(maybePlan)(managedAppValidationFailureInvalidPlan)
+    IO.fromOption(maybePlan)(managedAppValidationFailure)
   }
 
   private def lookupMrg(mrgCoords: ManagedResourceGroupCoordinates, resourceManager: ResourceManager) =
     IO(resourceManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value)).handleErrorWith { case t: Throwable =>
-      IO.raiseError(managedAppValidationFailureGetRGByName)
+      IO.raiseError(managedAppValidationFailure)
     }
 
   /** Null-safe get billing profile tag from a ResourceGroup. */

@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.config
 
 case class ManagedAppPlan(name: String, publisher: String, authorizedUserKey: String)
 case class AzureServicesConfig(
-    controlPlaneEnabled: Boolean,
+    azureControlPlaneEnabled: Boolean,
     authorizedUserKey: String,
     kindServiceCatalog: String,
     managedAppWorkloadClientId: String,
