@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" author="kfeldman" id="add_sam_rac_tables">
+        <createTable tableName="SAM_RESOURCE_ACCESS_CONSTRAINT">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="resource_id" type="BIGINT">
+                <constraints primaryKey="false" foreignKeyName="FK_SRAC_RESOURCE_ID" referencedTableName="SAM_RESOURCE" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+        <createTable tableName="SAM_LOCK">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="lock_detail" type="JSONB">
+                <constraints primaryKey="false" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR">
+                <constraints primaryKey="false" nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR">
+                <constraints primaryKey="false"/>
+            </column>
+        </createTable>
+        <createTable tableName="SAM_RESOURCE_ACCESS_CONSTRAINT_LOCK">
+            <column name="resource_access_constraint_id" type="BIGINT">
+                <constraints primaryKey="true" foreignKeyName="FK_SRACL_RESOURCE_ACCESS_CONSTRAINT_ID" referencedTableName="SAM_RESOURCE_ACCESS_CONSTRAINT" referencedColumnNames="id"/>
+            </column>
+            <column name="lock_id" type="BIGINT">
+                <constraints primaryKey="false" foreignKeyName="FK_SRACL_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id" nullable="false"/>
+            </column>
+            <column name="relationship" type="VARCHAR">
+                <constraints primaryKey="false" nullable="false"/>
+            </column>
+        </createTable>
+        <createTable tableName="SAM_KEYCHAIN_GROUP">
+            <column name="lock_id" type="BIGINT">
+                <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints primaryKey="false" foreignKeyName="FK_SKG_GROUP_ID" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+        <createTable tableName="SAM_KEYCHAIN_USER">
+            <column name="lock_id" type="BIGINT">
+                <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints primaryKey="false" foreignKeyName="FK_SKG_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
