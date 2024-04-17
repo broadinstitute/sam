@@ -6,10 +6,16 @@ import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ActionManagedIdentity,
+  ActionManagedIdentityId,
+  ManagedIdentityObjectId,
+  PetManagedIdentity,
+  PetManagedIdentityId
+}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, ResourceId, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -396,6 +402,25 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(None)
+
+  override def createActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] = ???
+
+  override def loadActionManagedIdentity(
+      actionManagedIdentityId: ActionManagedIdentityId,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] = ???
+
+  override def updateActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] = ???
+
+  override def deleteActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit] = ???
+
+  override def getAllActionManagedIdentitiesForResource(
+      resourceId: ResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]] = ???
+
+  override def deleteAllActionManagedIdentitiesForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    ???
 
   override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =
     loadUser(userId, samRequestContext).map {

@@ -6,7 +6,17 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ActionManagedIdentity,
+  ActionManagedIdentityId,
+  ManagedIdentityDisplayName,
+  ManagedIdentityObjectId,
+  ManagedResourceGroupName,
+  PetManagedIdentity,
+  PetManagedIdentityId,
+  SubscriptionId,
+  TenantId
+}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
@@ -989,6 +999,147 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
       userRecordOpt.map(UserTable.unmarshalUserRecord)
     }
+
+  override def createActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] =
+    serializableWriteTransaction("createActionManagedIdentity", samRequestContext) { implicit session =>
+      val actionManagedIdentityColumn = ActionManagedIdentityTable.column
+
+      samsql"""insert into ${ActionManagedIdentityTable.table}
+                 (
+                   ${actionManagedIdentityColumn.resourceId},
+                   ${actionManagedIdentityColumn.resourceActionId},
+                   ${actionManagedIdentityColumn.tenantId},
+                   ${actionManagedIdentityColumn.subscriptionId},
+                   ${actionManagedIdentityColumn.managedResourceGroupName},
+                   ${actionManagedIdentityColumn.objectId},
+                   ${actionManagedIdentityColumn.displayName}
+                 )
+             values (
+                      (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionManagedIdentity.id.resourceId}),
+                      (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action}),
+                      ${actionManagedIdentity.id.tenantId},
+                      ${actionManagedIdentity.id.subscriptionId},
+                      ${actionManagedIdentity.id.managedResourceGroupName},
+                      ${actionManagedIdentity.objectId},
+                      ${actionManagedIdentity.displayName}
+                    )"""
+        .update()
+        .apply()
+      actionManagedIdentity
+    }
+
+  type TableSyntax[A] = scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[A], A]
+
+  override def loadActionManagedIdentity(
+      actionManagedIdentityId: ActionManagedIdentityId,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] =
+    readOnlyTransaction("loadActionManagedIdentity", samRequestContext) { implicit session =>
+      implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+
+      val loadActionManagedIdentityQuery =
+        samsql"""select ${resourceTable.result.name}, ${resourceActionTable.result.action}, ${actionManagedIdentityTable.result.tenantId}, ${actionManagedIdentityTable.result.subscriptionId}, ${actionManagedIdentityTable.result.managedResourceGroupName}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
+        where ${resourceTable.name} = ${actionManagedIdentityId.resourceId}
+          and ${actionManagedIdentityTable.tenantId} = ${actionManagedIdentityId.tenantId}
+          and ${actionManagedIdentityTable.subscriptionId} = ${actionManagedIdentityId.subscriptionId}
+          and ${actionManagedIdentityTable.managedResourceGroupName} = ${actionManagedIdentityId.managedResourceGroupName}
+          and ${resourceActionTable.action} = ${actionManagedIdentityId.action}"""
+
+      loadActionManagedIdentityQuery.map(unmarshalActionManagedIdentity).single().apply()
+    }
+
+  override def updateActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] =
+    serializableWriteTransaction("updateActionManagedIdentity", samRequestContext) { implicit session =>
+      val actionManagedIdentityColumn = ActionManagedIdentityTable.column
+      val updateAmiQuery =
+        samsql"""
+                 update ${ActionManagedIdentityTable.table}
+                 set
+                   ${actionManagedIdentityColumn.objectId} = ${actionManagedIdentity.objectId},
+                   ${actionManagedIdentityColumn.displayName} = ${actionManagedIdentity.displayName}
+                 where
+                   ${actionManagedIdentityColumn.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionManagedIdentity.id.resourceId})
+                   and ${actionManagedIdentityColumn.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action})
+                   and ${actionManagedIdentityColumn.tenantId} = ${actionManagedIdentity.id.tenantId}
+                   and ${actionManagedIdentityColumn.subscriptionId} = ${actionManagedIdentity.id.subscriptionId}
+                   and ${actionManagedIdentityColumn.managedResourceGroupName} = ${actionManagedIdentity.id.managedResourceGroupName}
+                   """
+      val updated = updateAmiQuery.update().apply()
+      if (updated != 1) {
+        throw new WorkbenchException(s"Update cannot be applied because ${actionManagedIdentity.id} does not exist")
+      }
+
+      actionManagedIdentity
+    }
+
+  override def deleteActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deleteActionManagedIdentity", samRequestContext) { implicit session =>
+      val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
+      val deleteActionManagedIdentityQuery =
+        samsql"""delete from ${ActionManagedIdentityTable.table}
+                  where ${actionManagedIdentityTable.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionManagedIdentityId.resourceId})
+                  and ${actionManagedIdentityTable.tenantId} = ${actionManagedIdentityId.tenantId}
+                  and ${actionManagedIdentityTable.subscriptionId} = ${actionManagedIdentityId.subscriptionId}
+                  and ${actionManagedIdentityTable.managedResourceGroupName} = ${actionManagedIdentityId.managedResourceGroupName}
+                  and ${actionManagedIdentityTable.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentityId.action})"""
+      if (deleteActionManagedIdentityQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"${actionManagedIdentityId} cannot be deleted because it already does not exist")
+      }
+    }
+
+  override def getAllActionManagedIdentitiesForResource(
+      resourceId: ResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]] =
+    readOnlyTransaction("loadActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
+      implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+
+      val listActionManagedIdentitysQuery =
+        samsql"""select ${resourceTable.result.name}, ${resourceActionTable.result.action}, ${actionManagedIdentityTable.result.tenantId}, ${actionManagedIdentityTable.result.subscriptionId}, ${actionManagedIdentityTable.result.managedResourceGroupName}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
+        where ${resourceTable.name} = ${resourceId}"""
+
+      listActionManagedIdentitysQuery.map(unmarshalActionManagedIdentity).list().apply()
+    }
+
+  override def deleteAllActionManagedIdentitiesForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deleteAllActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
+      val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
+      val deleteActionManagedIdentityQuery =
+        samsql"""delete from ${ActionManagedIdentityTable.table}
+                 where ${actionManagedIdentityTable.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${resourceId})"""
+      deleteActionManagedIdentityQuery.update().apply()
+    }
+
+  private def unmarshalActionManagedIdentity(rs: WrappedResultSet)(implicit
+      resourceTable: TableSyntax[ResourceRecord],
+      resourceActionTable: TableSyntax[ResourceActionRecord],
+      actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord]
+  ) =
+    ActionManagedIdentity(
+      ActionManagedIdentityId(
+        rs.get[ResourceId](resourceTable.resultName.name),
+        rs.get[ResourceAction](resourceActionTable.resultName.action),
+        rs.get[TenantId](actionManagedIdentityTable.resultName.tenantId),
+        rs.get[SubscriptionId](actionManagedIdentityTable.resultName.subscriptionId),
+        rs.get[ManagedResourceGroupName](actionManagedIdentityTable.resultName.managedResourceGroupName)
+      ),
+      rs.get[ManagedIdentityObjectId](actionManagedIdentityTable.resultName.objectId),
+      rs.get[ManagedIdentityDisplayName](actionManagedIdentityTable.resultName.displayName)
+    )
 
   override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("setUserRegisteredAt", samRequestContext) { implicit session =>

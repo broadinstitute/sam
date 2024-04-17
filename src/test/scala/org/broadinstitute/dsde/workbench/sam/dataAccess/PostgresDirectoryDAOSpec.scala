@@ -66,6 +66,18 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
     public = false
   )
 
+  val defaultTenantId = TenantId("testTenant")
+  val defaultSubscriptionId = SubscriptionId(UUID.randomUUID().toString)
+  val defaultManagedResourceGroup = ManagedResourceGroupName("mrg-test")
+
+  val defaultActionManagedIdentities: Set[ActionManagedIdentity] = Set(readAction, writeAction).map(action =>
+    ActionManagedIdentity(
+      ActionManagedIdentityId(defaultResource.resourceId, action, defaultTenantId, defaultSubscriptionId, defaultManagedResourceGroup),
+      ManagedIdentityObjectId(UUID.randomUUID().toString),
+      ManagedIdentityDisplayName(s"whoCares-$action")
+    )
+  )
+
   override protected def beforeEach(): Unit =
     TestSupport.truncateAll
 
@@ -1884,6 +1896,56 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         // Assert
         retrievedAttributes should be(Some(upsertedAttributes))
+      }
+    }
+
+    "Action Managed Identities" - {
+      "can be individually created, read, updated, and deleted" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val readActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == readAction)
+        val loadedReadActionManagedIdentity = dao.loadActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        loadedReadActionManagedIdentity should be(readActionManagedIdentity)
+
+        val writeActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == writeAction)
+        val loadedWriteActionManagedIdentity = dao.loadActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        loadedWriteActionManagedIdentity should be(writeActionManagedIdentity)
+
+        val updatedActionManagedIdentity = writeActionManagedIdentity.get.copy(
+          objectId = ManagedIdentityObjectId(UUID.randomUUID().toString),
+          displayName = ManagedIdentityDisplayName("newDisplayName")
+        )
+
+        dao.updateActionManagedIdentity(updatedActionManagedIdentity, samRequestContext).unsafeRunSync()
+
+        val loadedUpdatedActionManagedIdentity = dao.loadActionManagedIdentity(updatedActionManagedIdentity.id, samRequestContext).unsafeRunSync()
+        loadedUpdatedActionManagedIdentity should be(Some(updatedActionManagedIdentity))
+
+        dao.deleteActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        dao.deleteActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+
+        dao.loadActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync() should be(None)
+        dao.loadActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync() should be(None)
+      }
+
+      "can be read, and deleted en mass for a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val bothLoadedServiceAccounts =
+          dao.getAllActionManagedIdentitiesForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync().toSet
+        bothLoadedServiceAccounts should be(defaultActionManagedIdentities)
+
+        dao.deleteAllActionManagedIdentitiesForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync()
+
+        dao.getAllActionManagedIdentitiesForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync() should be(Seq.empty)
       }
     }
   }
