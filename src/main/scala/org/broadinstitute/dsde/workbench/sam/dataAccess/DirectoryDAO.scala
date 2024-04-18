@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   PetManagedIdentityId
 }
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceId, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -104,11 +104,11 @@ trait DirectoryDAO {
   def deleteActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit]
 
   def getAllActionManagedIdentitiesForResource(
-      resourceId: ResourceId,
+      resourceId: FullyQualifiedResourceId,
       samRequestContext: SamRequestContext
   ): IO[Seq[ActionManagedIdentity]]
 
-  def deleteAllActionManagedIdentitiesForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit]
+  def deleteAllActionManagedIdentitiesForResource(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
   def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit]
   def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]]
 

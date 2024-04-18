@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.azure
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceAction, ResourceId}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceId}
 import spray.json.DefaultJsonProtocol._
 
 object AzureJsonSupport {
@@ -56,13 +56,7 @@ final case class PetManagedIdentityId(
 
 final case class PetManagedIdentity(id: PetManagedIdentityId, objectId: ManagedIdentityObjectId, displayName: ManagedIdentityDisplayName)
 
-final case class ActionManagedIdentityId(
-    resourceId: ResourceId,
-    action: ResourceAction,
-    tenantId: TenantId,
-    subscriptionId: SubscriptionId,
-    managedResourceGroupName: ManagedResourceGroupName
-)
+final case class ActionManagedIdentityId(resourceId: FullyQualifiedResourceId, action: ResourceAction, mrgCoordinates: ManagedResourceGroupCoordinates)
 
 final case class ActionManagedIdentity(id: ActionManagedIdentityId, objectId: ManagedIdentityObjectId, displayName: ManagedIdentityDisplayName)
 object AzureExtensions {

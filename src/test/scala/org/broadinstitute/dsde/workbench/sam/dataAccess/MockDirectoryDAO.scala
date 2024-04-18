@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
 }
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, ResourceId, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -415,11 +415,11 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def deleteActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit] = ???
 
   override def getAllActionManagedIdentitiesForResource(
-      resourceId: ResourceId,
+      resourceId: FullyQualifiedResourceId,
       samRequestContext: SamRequestContext
   ): IO[Seq[ActionManagedIdentity]] = ???
 
-  override def deleteAllActionManagedIdentitiesForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+  override def deleteAllActionManagedIdentitiesForResource(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     ???
 
   override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =

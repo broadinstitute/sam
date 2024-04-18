@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentityId,
   ManagedIdentityDisplayName,
   ManagedIdentityObjectId,
+  ManagedResourceGroupCoordinates,
   ManagedResourceGroupName,
   PetManagedIdentity,
   PetManagedIdentityId,
@@ -1003,6 +1004,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def createActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] =
     serializableWriteTransaction("createActionManagedIdentity", samRequestContext) { implicit session =>
       val actionManagedIdentityColumn = ActionManagedIdentityTable.column
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
 
       samsql"""insert into ${ActionManagedIdentityTable.table}
                  (
@@ -1015,11 +1018,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                    ${actionManagedIdentityColumn.displayName}
                  )
              values (
-                      (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionManagedIdentity.id.resourceId}),
+                      (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentity.id.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName}),
                       (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action}),
-                      ${actionManagedIdentity.id.tenantId},
-                      ${actionManagedIdentity.id.subscriptionId},
-                      ${actionManagedIdentity.id.managedResourceGroupName},
+                      ${actionManagedIdentity.id.mrgCoordinates.tenantId},
+                      ${actionManagedIdentity.id.mrgCoordinates.subscriptionId},
+                      ${actionManagedIdentity.id.mrgCoordinates.managedResourceGroupName},
                       ${actionManagedIdentity.objectId},
                       ${actionManagedIdentity.displayName}
                     )"""
@@ -1038,18 +1041,22 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
       implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
       implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+      implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
 
       val loadActionManagedIdentityQuery =
-        samsql"""select ${resourceTable.result.name}, ${resourceActionTable.result.action}, ${actionManagedIdentityTable.result.tenantId}, ${actionManagedIdentityTable.result.subscriptionId}, ${actionManagedIdentityTable.result.managedResourceGroupName}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}, ${resourceActionTable.result.action}, ${actionManagedIdentityTable.result.tenantId}, ${actionManagedIdentityTable.result.subscriptionId}, ${actionManagedIdentityTable.result.managedResourceGroupName}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
         from ${ActionManagedIdentityTable as actionManagedIdentityTable}
           left join ${ResourceActionTable as resourceActionTable}
             on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
           left join ${ResourceTable as resourceTable}
             on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
-        where ${resourceTable.name} = ${actionManagedIdentityId.resourceId}
-          and ${actionManagedIdentityTable.tenantId} = ${actionManagedIdentityId.tenantId}
-          and ${actionManagedIdentityTable.subscriptionId} = ${actionManagedIdentityId.subscriptionId}
-          and ${actionManagedIdentityTable.managedResourceGroupName} = ${actionManagedIdentityId.managedResourceGroupName}
+          left join ${ResourceTypeTable as resourceTypeTable}
+            on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+        where ${resourceTable.name} = ${actionManagedIdentityId.resourceId.resourceId}
+          and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName}
+          and ${actionManagedIdentityTable.tenantId} = ${actionManagedIdentityId.mrgCoordinates.tenantId}
+          and ${actionManagedIdentityTable.subscriptionId} = ${actionManagedIdentityId.mrgCoordinates.subscriptionId}
+          and ${actionManagedIdentityTable.managedResourceGroupName} = ${actionManagedIdentityId.mrgCoordinates.managedResourceGroupName}
           and ${resourceActionTable.action} = ${actionManagedIdentityId.action}"""
 
       loadActionManagedIdentityQuery.map(unmarshalActionManagedIdentity).single().apply()
@@ -1058,6 +1065,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def updateActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] =
     serializableWriteTransaction("updateActionManagedIdentity", samRequestContext) { implicit session =>
       val actionManagedIdentityColumn = ActionManagedIdentityTable.column
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
       val updateAmiQuery =
         samsql"""
                  update ${ActionManagedIdentityTable.table}
@@ -1065,11 +1074,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                    ${actionManagedIdentityColumn.objectId} = ${actionManagedIdentity.objectId},
                    ${actionManagedIdentityColumn.displayName} = ${actionManagedIdentity.displayName}
                  where
-                   ${actionManagedIdentityColumn.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionManagedIdentity.id.resourceId})
+                   ${actionManagedIdentityColumn.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentity.id.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName})
                    and ${actionManagedIdentityColumn.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action})
-                   and ${actionManagedIdentityColumn.tenantId} = ${actionManagedIdentity.id.tenantId}
-                   and ${actionManagedIdentityColumn.subscriptionId} = ${actionManagedIdentity.id.subscriptionId}
-                   and ${actionManagedIdentityColumn.managedResourceGroupName} = ${actionManagedIdentity.id.managedResourceGroupName}
+                   and ${actionManagedIdentityColumn.tenantId} = ${actionManagedIdentity.id.mrgCoordinates.tenantId}
+                   and ${actionManagedIdentityColumn.subscriptionId} = ${actionManagedIdentity.id.mrgCoordinates.subscriptionId}
+                   and ${actionManagedIdentityColumn.managedResourceGroupName} = ${actionManagedIdentity.id.mrgCoordinates.managedResourceGroupName}
                    """
       val updated = updateAmiQuery.update().apply()
       if (updated != 1) {
@@ -1082,12 +1091,14 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def deleteActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteActionManagedIdentity", samRequestContext) { implicit session =>
       val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
       val deleteActionManagedIdentityQuery =
         samsql"""delete from ${ActionManagedIdentityTable.table}
-                  where ${actionManagedIdentityTable.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${actionManagedIdentityId.resourceId})
-                  and ${actionManagedIdentityTable.tenantId} = ${actionManagedIdentityId.tenantId}
-                  and ${actionManagedIdentityTable.subscriptionId} = ${actionManagedIdentityId.subscriptionId}
-                  and ${actionManagedIdentityTable.managedResourceGroupName} = ${actionManagedIdentityId.managedResourceGroupName}
+                  where ${actionManagedIdentityTable.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentityId.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName})
+                  and ${actionManagedIdentityTable.tenantId} = ${actionManagedIdentityId.mrgCoordinates.tenantId}
+                  and ${actionManagedIdentityTable.subscriptionId} = ${actionManagedIdentityId.mrgCoordinates.subscriptionId}
+                  and ${actionManagedIdentityTable.managedResourceGroupName} = ${actionManagedIdentityId.mrgCoordinates.managedResourceGroupName}
                   and ${actionManagedIdentityTable.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentityId.action})"""
       if (deleteActionManagedIdentityQuery.update().apply() != 1) {
         throw new WorkbenchException(s"${actionManagedIdentityId} cannot be deleted because it already does not exist")
@@ -1095,47 +1106,57 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
 
   override def getAllActionManagedIdentitiesForResource(
-      resourceId: ResourceId,
+      resourceId: FullyQualifiedResourceId,
       samRequestContext: SamRequestContext
   ): IO[Seq[ActionManagedIdentity]] =
     readOnlyTransaction("loadActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
       implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
       implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
       implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+      implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
 
       val listActionManagedIdentitysQuery =
-        samsql"""select ${resourceTable.result.name}, ${resourceActionTable.result.action}, ${actionManagedIdentityTable.result.tenantId}, ${actionManagedIdentityTable.result.subscriptionId}, ${actionManagedIdentityTable.result.managedResourceGroupName}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}, ${resourceActionTable.result.action}, ${actionManagedIdentityTable.result.tenantId}, ${actionManagedIdentityTable.result.subscriptionId}, ${actionManagedIdentityTable.result.managedResourceGroupName}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
         from ${ActionManagedIdentityTable as actionManagedIdentityTable}
           left join ${ResourceActionTable as resourceActionTable}
             on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
           left join ${ResourceTable as resourceTable}
             on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
-        where ${resourceTable.name} = ${resourceId}"""
+          left join ${ResourceTypeTable as resourceTypeTable}
+            on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+        where ${resourceTable.name} = ${resourceId.resourceId}
+        and ${resourceTypeTable.name} = ${resourceId.resourceTypeName}
+        """
 
       listActionManagedIdentitysQuery.map(unmarshalActionManagedIdentity).list().apply()
     }
 
-  override def deleteAllActionManagedIdentitiesForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+  override def deleteAllActionManagedIdentitiesForResource(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteAllActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
       val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
       val deleteActionManagedIdentityQuery =
         samsql"""delete from ${ActionManagedIdentityTable.table}
-                 where ${actionManagedIdentityTable.resourceId} = (select ${ResourceTable.column.id} from ${ResourceTable.table} where ${ResourceTable.column.name} = ${resourceId})"""
+                 where ${actionManagedIdentityTable.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${resourceId.resourceId} and ${resourceTypeTable.name} = ${resourceId.resourceTypeName})"""
       deleteActionManagedIdentityQuery.update().apply()
     }
 
   private def unmarshalActionManagedIdentity(rs: WrappedResultSet)(implicit
       resourceTable: TableSyntax[ResourceRecord],
+      resourceTypeTable: TableSyntax[ResourceTypeRecord],
       resourceActionTable: TableSyntax[ResourceActionRecord],
       actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord]
   ) =
     ActionManagedIdentity(
       ActionManagedIdentityId(
-        rs.get[ResourceId](resourceTable.resultName.name),
+        FullyQualifiedResourceId(rs.get[ResourceTypeName](resourceTypeTable.resultName.name), rs.get[ResourceId](resourceTable.resultName.name)),
         rs.get[ResourceAction](resourceActionTable.resultName.action),
-        rs.get[TenantId](actionManagedIdentityTable.resultName.tenantId),
-        rs.get[SubscriptionId](actionManagedIdentityTable.resultName.subscriptionId),
-        rs.get[ManagedResourceGroupName](actionManagedIdentityTable.resultName.managedResourceGroupName)
+        ManagedResourceGroupCoordinates(
+          rs.get[TenantId](actionManagedIdentityTable.resultName.tenantId),
+          rs.get[SubscriptionId](actionManagedIdentityTable.resultName.subscriptionId),
+          rs.get[ManagedResourceGroupName](actionManagedIdentityTable.resultName.managedResourceGroupName)
+        )
       ),
       rs.get[ManagedIdentityObjectId](actionManagedIdentityTable.resultName.objectId),
       rs.get[ManagedIdentityDisplayName](actionManagedIdentityTable.resultName.displayName)

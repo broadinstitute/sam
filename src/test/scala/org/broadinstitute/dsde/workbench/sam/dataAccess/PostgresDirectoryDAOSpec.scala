@@ -72,7 +72,11 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
   val defaultActionManagedIdentities: Set[ActionManagedIdentity] = Set(readAction, writeAction).map(action =>
     ActionManagedIdentity(
-      ActionManagedIdentityId(defaultResource.resourceId, action, defaultTenantId, defaultSubscriptionId, defaultManagedResourceGroup),
+      ActionManagedIdentityId(
+        FullyQualifiedResourceId(defaultResource.resourceTypeName, defaultResource.resourceId),
+        action,
+        ManagedResourceGroupCoordinates(defaultTenantId, defaultSubscriptionId, defaultManagedResourceGroup)
+      ),
       ManagedIdentityObjectId(UUID.randomUUID().toString),
       ManagedIdentityDisplayName(s"whoCares-$action")
     )
@@ -1940,12 +1944,12 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
 
         val bothLoadedServiceAccounts =
-          dao.getAllActionManagedIdentitiesForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync().toSet
+          dao.getAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync().toSet
         bothLoadedServiceAccounts should be(defaultActionManagedIdentities)
 
-        dao.deleteAllActionManagedIdentitiesForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync()
+        dao.deleteAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
 
-        dao.getAllActionManagedIdentitiesForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync() should be(Seq.empty)
+        dao.getAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should be(Seq.empty)
       }
     }
   }
