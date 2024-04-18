@@ -76,7 +76,13 @@ class CreateUserSpec extends UserServiceTestTraits {
         val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
         val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
         val userService: UserService =
-          new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, Some(AzureServicesConfig(azureControlPlaneEnabled = false, "", "", "", "", "", "", Seq.empty, allowManagedIdentityUserCreation = true)))
+          new UserService(
+            directoryDAO,
+            cloudExtensions,
+            Seq.empty,
+            defaultTosService,
+            Some(AzureServicesConfig(azureControlPlaneEnabled = false, "", "", "", "", "", "", Seq.empty, allowManagedIdentityUserCreation = true))
+          )
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(newAzureUser, samRequestContext))
@@ -284,7 +290,13 @@ class CreateUserSpec extends UserServiceTestTraits {
         val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
         val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
         val userServiceDisabledFeature: UserService =
-          new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, Some(AzureServicesConfig(azureControlPlaneEnabled = false, "", "", "", "", "", "", Seq.empty, allowManagedIdentityUserCreation = false)))
+          new UserService(
+            directoryDAO,
+            cloudExtensions,
+            Seq.empty,
+            defaultTosService,
+            Some(AzureServicesConfig(azureControlPlaneEnabled = false, "", "", "", "", "", "", Seq.empty, allowManagedIdentityUserCreation = false))
+          )
 
         // Act and Assert
         assertThrows[WorkbenchExceptionWithErrorReport] {

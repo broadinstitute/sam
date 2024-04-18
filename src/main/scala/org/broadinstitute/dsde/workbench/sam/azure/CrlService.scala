@@ -63,7 +63,7 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
   def getAuthorizedUserKey: String = config.authorizedUserKey
   def getKindServiceCatalog: String = config.kindServiceCatalog
 
-  private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId) : (TokenCredential, AzureProfile) = {
+  private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (TokenCredential, AzureProfile) = {
 
     val managedIdentityCredential = new ManagedIdentityCredentialBuilder()
       .clientId(config.managedAppWorkloadClientId)
