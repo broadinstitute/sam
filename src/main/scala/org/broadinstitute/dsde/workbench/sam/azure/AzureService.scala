@@ -14,13 +14,20 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, Wor
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.jdk.CollectionConverters._
 
-class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO) {
+class AzureService(
+    crlService: CrlService,
+    directoryDAO: DirectoryDAO,
+    azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO,
+    policyEvaluatorService: PolicyEvaluatorService
+) {
 
   // Tag on the MRG to specify the Sam billing-profile id
   private val billingProfileTag = "terra.billingProfileId"
@@ -125,6 +132,70 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       petToCreate = PetManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()))
       createdPet <- directoryDAO.createPetManagedIdentity(petToCreate, samRequestContext)
     } yield (createdPet, true)
+
+  def getOrCreateActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      resourceAction: ResourceAction,
+      mrgCoordinates: ManagedResourceGroupCoordinates,
+      samUser: SamUser,
+      samRequestContext: SamRequestContext
+  ): IO[(ActionManagedIdentity, Boolean)] = {
+    val id = ActionManagedIdentityId(resource, resourceAction, mrgCoordinates)
+    for {
+      hasPermission <- policyEvaluatorService.hasPermission(resource, resourceAction, samUser.id, samRequestContext)
+      _ <- IO.raiseWhen(!hasPermission)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"User ${samUser.id} does not have $resourceAction on $resource"))
+      )
+      existingAmiOpt <- directoryDAO.loadActionManagedIdentity(id, samRequestContext)
+      ami <- existingAmiOpt match {
+        // pet exists in Sam DB - return it
+        case Some(p) => IO.pure((p, false))
+        // pet does not exist in Sam DB - create it
+        case None => createActionManagedIdentity(id, samRequestContext)
+      }
+    } yield ami
+
+  }
+
+  private def createActionManagedIdentity(
+      id: ActionManagedIdentityId,
+      samRequestContext: SamRequestContext
+  ): IO[(ActionManagedIdentity, Boolean)] =
+    for {
+      msiManager <- crlService.buildMsiManager(id.mrgCoordinates.tenantId, id.mrgCoordinates.subscriptionId)
+      mrgManager <- crlService.buildResourceManager(id.mrgCoordinates.tenantId, id.mrgCoordinates.subscriptionId)
+      amiName = toManagedIdentityNameFromAmiId(id)
+      region <- getRegionFromMrg(id.mrgCoordinates, mrgManager, samRequestContext)
+      context = managedIdentityContext(id.mrgCoordinates, amiName, region)
+      azureUami <- traceIOWithContext("createUAMI", samRequestContext) { _ =>
+        IO(
+          // note that this will not fail when the UAMI already exists
+          msiManager
+            .identities()
+            .define(amiName.value)
+            .withRegion(region)
+            .withExistingResourceGroup(id.mrgCoordinates.managedResourceGroupName.value)
+            .withTags(managedIdentityTags(id).asJava)
+            .create(context)
+        )
+      }
+      amiToCreate = ActionManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()))
+      createdAmi <- directoryDAO.createActionManagedIdentity(amiToCreate, samRequestContext)
+    } yield (createdAmi, true)
+
+  def deleteActionManagedIdentity(id: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit] =
+    for {
+      existing <- directoryDAO.loadActionManagedIdentity(id, samRequestContext)
+      _ <- existing
+        .map { ami =>
+          for {
+            msiManager <- crlService.buildMsiManager(id.mrgCoordinates.tenantId, id.mrgCoordinates.subscriptionId)
+            _ <- IO(msiManager.identities().deleteById(ami.objectId.value))
+            _ <- directoryDAO.deleteActionManagedIdentity(ami.id, samRequestContext)
+          } yield {}
+        }
+        .getOrElse(IO.unit)
+    } yield {}
 
   private def getRegionFromMrg(mrgCoords: ManagedResourceGroupCoordinates, mrgManager: ResourceManager, samRequestContext: SamRequestContext) =
     traceIOWithContext("getRegionFromMrg", samRequestContext) { _ =>
@@ -234,6 +305,9 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   private def managedIdentityTags(user: SamUser): Map[String, String] =
     Map("samUserId" -> user.id.value, "samUserEmail" -> user.email.value)
 
+  private def managedIdentityTags(amiId: ActionManagedIdentityId): Map[String, String] =
+    Map("resourceTypeName" -> amiId.resourceId.resourceTypeName.value, "resourceId" -> amiId.resourceId.resourceId.value, "action" -> amiId.action.value)
+
   private def managedIdentityContext(mrgCoords: ManagedResourceGroupCoordinates, petName: ManagedIdentityDisplayName, region: Region): Context =
     Defaults.buildContext(
       CreateUserAssignedManagedIdentityRequestData
@@ -248,5 +322,13 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
 
   private def toManagedIdentityNameFromUser(user: SamUser): ManagedIdentityDisplayName =
     ManagedIdentityDisplayName(s"pet-${user.id.value}")
+
+  def toManagedIdentityNameFromAmiId(amiId: ActionManagedIdentityId): ManagedIdentityDisplayName = {
+    // Managed Identity Names are limited to 24 characters
+    val actionPart = if (amiId.action.value.length > 11) amiId.action.value.substring(0, 11) else amiId.action.value
+    val resourceIdPart =
+      if (amiId.resourceId.resourceId.value.length > 12) amiId.resourceId.resourceId.value.substring(0, 12) else amiId.resourceId.resourceId.value
+    ManagedIdentityDisplayName(s"$resourceIdPart-$actionPart")
+  }
 
 }

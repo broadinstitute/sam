@@ -149,7 +149,7 @@ object TestSupport extends TestSupport {
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(googleExt, directoryDAO, tosConfig)
-    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO, policyEvaluatorService)
     SamDependencies(
       mockResourceService,
       policyEvaluatorService,
@@ -225,6 +225,7 @@ object TestSupport extends TestSupport {
     if (databaseEnabled) {
       dbRef.inLocalTransaction { implicit session =>
         val tables = List(
+          ActionManagedIdentityTable,
           PolicyActionTable,
           PolicyRoleTable,
           PolicyTable,
