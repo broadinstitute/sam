@@ -408,6 +408,9 @@ object Boot extends IOApp with LazyLogging {
   )(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
+    val azureService = config.azureServicesConfig.map { azureConfig =>
+      new AzureService(new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO, policyEvaluatorService)
+    }
     val resourceService = new ResourceService(
       resourceTypeMap,
       policyEvaluatorService,
@@ -415,7 +418,8 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO,
       cloudExtensionsInitializer.cloudExtensions,
       config.emailDomain,
-      config.adminConfig.allowedEmailDomains
+      config.adminConfig.allowedEmailDomains,
+      azureService
     )
     val tosService = new TosService(cloudExtensionsInitializer.cloudExtensions, directoryDAO, config.termsOfServiceConfig)
     val userService =
@@ -433,9 +437,7 @@ object Boot extends IOApp with LazyLogging {
         config.emailDomain
       )
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
-    val azureService = config.azureServicesConfig.map { azureConfig =>
-      new AzureService(new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO, policyEvaluatorService)
-    }
+
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
         val routes = new SamRoutes(

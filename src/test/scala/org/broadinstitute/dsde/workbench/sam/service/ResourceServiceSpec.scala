@@ -13,6 +13,17 @@ import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.audit._
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ActionManagedIdentity,
+  ActionManagedIdentityId,
+  AzureService,
+  ManagedIdentityDisplayName,
+  ManagedIdentityObjectId,
+  ManagedResourceGroupCoordinates,
+  ManagedResourceGroupName,
+  SubscriptionId,
+  TenantId
+}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -136,6 +147,10 @@ class ResourceServiceSpec
   private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
   private val constrainableService =
     new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
+
+  val mockAzureService = mock[AzureService]
+  private val azuredService =
+    new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set("test.firecloud.org"), Some(mockAzureService))
 
   val managedGroupService =
     new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
@@ -1777,6 +1792,45 @@ class ResourceServiceSpec
 
     assert(managedGroupResourceType.reuseIds)
     testDeleteResource(managedGroupResourceType)
+  }
+
+  it should "delete any action managed identites for the resource while it deletes the resource" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
+    val ownerRoleActions = defaultResourceType.roles.find(_.roleName == defaultResourceType.ownerRoleName).get.actions
+
+    azuredService.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(azuredService.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext))
+    ownerRoleActions.foreach { action =>
+      val ami = ActionManagedIdentity(
+        ActionManagedIdentityId(
+          resource,
+          action,
+          ManagedResourceGroupCoordinates(
+            TenantId(UUID.randomUUID().toString),
+            SubscriptionId(UUID.randomUUID().toString),
+            ManagedResourceGroupName(UUID.randomUUID().toString)
+          )
+        ),
+        ManagedIdentityObjectId(UUID.randomUUID().toString),
+        ManagedIdentityDisplayName(s"${resource.resourceId.value}-${action.value}")
+      )
+      runAndWait(dirDAO.createActionManagedIdentity(ami, samRequestContext))
+    }
+    when(mockAzureService.deleteActionManagedIdentity(any[ActionManagedIdentityId], any[SamRequestContext])).thenReturn(IO.unit)
+
+    assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().nonEmpty)
+
+    runAndWait(azuredService.deleteResource(resource, samRequestContext))
+
+    assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().isEmpty)
+    ownerRoleActions.foreach { action =>
+      verify(mockAzureService).deleteActionManagedIdentity(
+        argThat((arg: ActionManagedIdentityId) => arg.action.equals(action) && arg.resourceId.equals(resource)),
+        eqTo(samRequestContext)
+      )
+    }
   }
 
   private def testDeleteResource(resourceType: ResourceType) = {
