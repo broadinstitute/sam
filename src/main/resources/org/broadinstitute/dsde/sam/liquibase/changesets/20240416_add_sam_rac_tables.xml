@@ -51,7 +51,7 @@
             <column name="lock_id" type="BIGINT">
                 <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id"/>
             </column>
-            <column name="user_id" type="BIGINT">
+            <column name="user_id" type="VARCHAR">
                 <constraints primaryKey="false" foreignKeyName="FK_SKG_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id"/>
             </column>
         </createTable>
