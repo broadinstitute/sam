@@ -17,7 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsString
 
-trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestContextDirectives {
+trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestContextDirectives with SamModelDirectives {
   val azureService: Option[AzureService]
 
   def azureRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
@@ -49,6 +49,36 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestCon
                           service.getOrCreateUserPetManagedIdentity(targetSamUser, request, samRequestContext).map { case (pet, created) =>
                             val status = if (created) StatusCodes.Created else StatusCodes.OK
                             status -> JsString(pet.objectId.value)
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } ~
+            pathPrefix("actionManagedIdentity") {
+              path(Segment / Segment / Segment) { (resourceTypeName, resourceId, action) =>
+                val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+                val resourceAction = ResourceAction(action)
+
+                withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
+                  if (!resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
+                    throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+                  }
+                  pathEndOrSingleSlash {
+                    postWithTelemetry(
+                      samRequestContext,
+                      "resourceType" -> resource.resourceTypeName,
+                      "resource" -> resource.resourceId,
+                      "action" -> resourceAction
+                    ) {
+                      entity(as[ManagedResourceGroupCoordinates]) { mrgCoordinates =>
+                        complete {
+                          service.getOrCreateActionManagedIdentity(resource, resourceAction, mrgCoordinates, samUser, samRequestContext).map {
+                            case (ami, created) =>
+                              val status = if (created) StatusCodes.Created else StatusCodes.OK
+                              status -> JsString(ami.objectId.value)
                           }
                         }
                       }
