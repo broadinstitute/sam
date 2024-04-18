@@ -31,7 +31,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{
 import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, PolicyEvaluatorService, ResourceService, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar
-import org.scalatest.BeforeAndAfterAll
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -45,6 +45,7 @@ class AzureServiceSpec(_system: ActorSystem)
     with Matchers
     with ScalaFutures
     with BeforeAndAfterAll
+    with BeforeAndAfterEach
     with MockitoSugar {
   implicit val ec = scala.concurrent.ExecutionContext.global
   implicit val ioRuntime = cats.effect.unsafe.IORuntime.global
@@ -58,6 +59,9 @@ class AzureServiceSpec(_system: ActorSystem)
     TestKit.shutdownActorSystem(system)
     super.afterAll()
   }
+
+  override def beforeEach(): Unit =
+    TestSupport.truncateAll
 
   "AzureService" should "create a pet managed identity" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
@@ -219,7 +223,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val (res, created) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, mrgCoordinates, defaultUser, samRequestContext).unsafeRunSync()
     created shouldBe true
     res.id shouldBe actionManagedIdentityId
-    res.displayName shouldBe ManagedIdentityDisplayName(s"pet-${defaultUser.id.value}")
+    res.displayName shouldBe ManagedIdentityDisplayName(s"${resource.resourceId.value}-${viewAction.value}")
 
     // action managed identity should now exist in postgres
     directoryDAO.loadActionManagedIdentity(actionManagedIdentityId, samRequestContext).unsafeRunSync() shouldBe Some(res)
@@ -294,7 +298,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val (res, created) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, mrgCoordinates, defaultUser, samRequestContext).unsafeRunSync()
     created shouldBe true
     res.id shouldBe actionManagedIdentityId
-    res.displayName shouldBe ManagedIdentityDisplayName(s"pet-${defaultUser.id.value}")
+    res.displayName shouldBe ManagedIdentityDisplayName(s"${resource.resourceId.value}-${viewAction.value}")
 
     // managed identity should now exist in azure
     val msiManager = crlService.buildMsiManager(tenantId, subscriptionId).unsafeRunSync()
