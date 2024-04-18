@@ -170,9 +170,10 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
     } yield getBillingProfileFromTag(mrg)
   }
 
-  /** Validates a managed resource group. Algorithm:
-    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Get the managed app "plan" name and publisher 5.
-    *      Validate the plan name and publisher matches a configured value 6. Validate that the caller is on the list of authorized users for the app
+  /** Validates a managed resource group deployed from Azure Marketplace.
+    * Algorithm:
+    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Get the managed app "plan" name and publisher
+    *   5. Validate the plan name and publisher matches a configured value 6. Validate that the caller is on the list of authorized users for the app
     */
   private def validateManagedResourceGroup(
       mrgCoords: ManagedResourceGroupCoordinates,
@@ -188,17 +189,18 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
         _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
-        //_ <- if (validateUser) validateAuthorizedAppUser(managedApp, new ManagedAppPlan("", "", "authorizedTerraUser"), samRequestContext) else IO.unit
       } yield mrg
     }
 
-  /** Validates a managed resource group. Algorithm:
-    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Get the managed app "plan" name and publisher 5.
-    *      Validate the plan name and publisher matches a configured value 6. Validate that the caller is on the list of authorized users for the app
+  /** Validates a managed resource group deployed from Azure Service Catalog. Service Catalog apps do not contain a "plan" or publisher.
+    * Algorithm:
+    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Validate the app kind is "ServiceCatalog"
+    *   5. Validate that the caller is on the list of authorized users for the app
     */
   private def validateServiceCatalogManagedResourceGroup(
       mrgCoords: ManagedResourceGroupCoordinates,
-      samRequestContext: SamRequestContext
+      samRequestContext: SamRequestContext,
+      validateUser: Boolean = true
   ): IO[ResourceGroup] =
     traceIOWithContext("validateServiceCatalogManagedResourceGroup", samRequestContext) { _ =>
       for {
@@ -208,13 +210,13 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         appsInSubscription <- IO(appManager.applications().list().asScala)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         _ <-
-          if (managedApp.kind() == crlService.getKindServiceCatalog)
+          if (managedApp.kind() == crlService.getKindServiceCatalog && validateUser) {
             validateAuthorizedAppUser(
               managedApp,
-              new ManagedAppPlan("", "", crlService.getAuthorizedUserKey),
+              ManagedAppPlan("", "", crlService.getAuthorizedUserKey),
               samRequestContext
             )
-          else IO.unit
+          } else IO.unit
       } yield mrg
     }
 
