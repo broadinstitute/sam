@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
 }
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -408,6 +408,12 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def loadActionManagedIdentity(
       actionManagedIdentityId: ActionManagedIdentityId,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] = ???
+
+  override def loadActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      action: ResourceAction,
       samRequestContext: SamRequestContext
   ): IO[Option[ActionManagedIdentity]] = ???
 

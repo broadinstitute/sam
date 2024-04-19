@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   PetManagedIdentityId
 }
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -99,6 +99,12 @@ trait DirectoryDAO {
   def createActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity]
 
   def loadActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Option[ActionManagedIdentity]]
+
+  def loadActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      action: ResourceAction,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]]
 
   def updateActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity]
 

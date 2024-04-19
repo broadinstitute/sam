@@ -4,6 +4,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceId}
 import spray.json.DefaultJsonProtocol._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 
 object AzureJsonSupport {
   implicit val tenantIdFormat = ValueObjectFormat(TenantId.apply)
@@ -23,6 +24,12 @@ object AzureJsonSupport {
   implicit val petManagedIdentityFormat = jsonFormat3(PetManagedIdentity.apply)
 
   implicit val managedResourceGroupCoordinatesFormat = jsonFormat3(ManagedResourceGroupCoordinates.apply)
+
+  implicit val billingProfileIdFormat = ValueObjectFormat(BillingProfileId.apply)
+
+  implicit val actionManagedIdentityIdFormat = jsonFormat3(ActionManagedIdentityId.apply)
+
+  implicit val actionManagedIdentityFormat = jsonFormat4(ActionManagedIdentity.apply)
 }
 
 final case class TenantId(value: String) extends ValueObject

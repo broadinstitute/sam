@@ -1944,6 +1944,24 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.loadActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync() should be(None)
       }
 
+      "can be loaded for a resource and action" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val readActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == readAction)
+        val loadedReadActionManagedIdentity = dao.loadActionManagedIdentity(defaultResource.fullyQualifiedId, readAction, samRequestContext).unsafeRunSync()
+        loadedReadActionManagedIdentity should be(readActionManagedIdentity)
+
+        val writeActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == writeAction)
+        val loadedWriteActionManagedIdentity = dao.loadActionManagedIdentity(defaultResource.fullyQualifiedId, writeAction, samRequestContext).unsafeRunSync()
+        loadedWriteActionManagedIdentity should be(writeActionManagedIdentity)
+      }
+
       "can be read, and deleted en mass for a resource" in {
         assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()

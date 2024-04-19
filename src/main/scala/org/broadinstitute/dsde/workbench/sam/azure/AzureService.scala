@@ -160,6 +160,20 @@ class AzureService(
       }
     } yield ami
 
+  def getActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      resourceAction: ResourceAction,
+      samUser: SamUser,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] =
+    for {
+      hasPermission <- policyEvaluatorService.hasPermission(resource, resourceAction, samUser.id, samRequestContext)
+      _ <- IO.raiseWhen(!hasPermission)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"User ${samUser.id} does not have $resourceAction on $resource"))
+      )
+      ami <- directoryDAO.loadActionManagedIdentity(resource, resourceAction, samRequestContext)
+    } yield ami
+
   private def createActionManagedIdentity(
       id: ActionManagedIdentityId,
       samRequestContext: SamRequestContext

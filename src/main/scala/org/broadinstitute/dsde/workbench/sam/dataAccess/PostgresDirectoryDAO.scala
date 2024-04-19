@@ -1071,6 +1071,44 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       loadActionManagedIdentityQuery.map(unmarshalActionManagedIdentity).single().apply()
     }
 
+  def loadActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      action: ResourceAction,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] =
+    readOnlyTransaction("loadActionManagedIdentityForResourceAction", samRequestContext) { implicit session =>
+      implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord] = AzureManagedResourceGroupTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+      implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
+
+      val loadActionManagedIdentityQuery =
+        samsql"""select ${resourceTable.result.name},
+                 ${resourceTypeTable.result.name},
+                 ${resourceActionTable.result.action},
+                 ${managedResourceGroupTable.result.tenantId},
+                 ${managedResourceGroupTable.result.subscriptionId},
+                 ${managedResourceGroupTable.result.managedResourceGroupName},
+                 ${managedResourceGroupTable.result.billingProfileId},
+                 ${actionManagedIdentityTable.result.objectId},
+                 ${actionManagedIdentityTable.result.displayName}
+        from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+            on ${actionManagedIdentityTable.managedResourceGroupId} = ${managedResourceGroupTable.id}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
+          left join ${ResourceTypeTable as resourceTypeTable}
+            on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+        where ${resourceTable.name} = ${resource.resourceId}
+          and ${resourceTypeTable.name} = ${resource.resourceTypeName}
+          and ${resourceActionTable.action} = $action"""
+
+      loadActionManagedIdentityQuery.map(unmarshalActionManagedIdentity).single().apply()
+    }
+
   override def updateActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] =
     serializableWriteTransaction("updateActionManagedIdentity", samRequestContext) { implicit session =>
       val actionManagedIdentityColumn = ActionManagedIdentityTable.column
