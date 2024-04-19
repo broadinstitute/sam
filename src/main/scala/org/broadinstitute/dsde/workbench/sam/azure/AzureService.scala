@@ -5,6 +5,7 @@ import bio.terra.cloudres.azure.resourcemanager.common.Defaults
 import bio.terra.cloudres.azure.resourcemanager.msi.data.CreateUserAssignedManagedIdentityRequestData
 import cats.data.OptionT
 import cats.effect.IO
+import cats.implicits.toTraverseOps
 import com.azure.core.management.Region
 import com.azure.core.util.Context
 import com.azure.resourcemanager.managedapplications.models.Application
@@ -38,7 +39,7 @@ class AzureService(
   private val managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
     ErrorReport(
       StatusCodes.Forbidden,
-      "Specified manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
+      "Specified managed resource group invalid. Possible reasons include resource group does not exist, it is not " +
         "associated to an application, the application's plan is not supported or the user is not listed as authorized."
     )
   )
@@ -78,6 +79,10 @@ class AzureService(
       _ <- IO.raiseWhen(existing.isEmpty)(
         new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"managed resource group for profile ${billingProfileId} not found"))
       )
+      actionManagedIdentities <- directoryDAO.getAllActionManagedIdentitiesForBillingProfile(billingProfileId, samRequestContext)
+      _ <- actionManagedIdentities.toList.traverse { ami =>
+        deleteActionManagedIdentity(ami.id, samRequestContext)
+      }
       _ <- azureManagedResourceGroupDAO.deleteManagedResourceGroup(
         billingProfileId,
         samRequestContext
@@ -136,16 +141,16 @@ class AzureService(
   def getOrCreateActionManagedIdentity(
       resource: FullyQualifiedResourceId,
       resourceAction: ResourceAction,
-      mrgCoordinates: ManagedResourceGroupCoordinates,
+      billingProfileId: BillingProfileId,
       samUser: SamUser,
       samRequestContext: SamRequestContext
-  ): IO[(ActionManagedIdentity, Boolean)] = {
-    val id = ActionManagedIdentityId(resource, resourceAction, mrgCoordinates)
+  ): IO[(ActionManagedIdentity, Boolean)] =
     for {
       hasPermission <- policyEvaluatorService.hasPermission(resource, resourceAction, samUser.id, samRequestContext)
       _ <- IO.raiseWhen(!hasPermission)(
         new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"User ${samUser.id} does not have $resourceAction on $resource"))
       )
+      id = ActionManagedIdentityId(resource, resourceAction, billingProfileId)
       existingAmiOpt <- directoryDAO.loadActionManagedIdentity(id, samRequestContext)
       ami <- existingAmiOpt match {
         // pet exists in Sam DB - return it
@@ -155,18 +160,27 @@ class AzureService(
       }
     } yield ami
 
-  }
-
   private def createActionManagedIdentity(
       id: ActionManagedIdentityId,
       samRequestContext: SamRequestContext
   ): IO[(ActionManagedIdentity, Boolean)] =
     for {
-      msiManager <- crlService.buildMsiManager(id.mrgCoordinates.tenantId, id.mrgCoordinates.subscriptionId)
-      mrgManager <- crlService.buildResourceManager(id.mrgCoordinates.tenantId, id.mrgCoordinates.subscriptionId)
+      mrgOpt <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(id.billingProfileId, samRequestContext)
+      mrgCoordinates <- mrgOpt match {
+        case Some(mrg) => IO.pure(mrg.managedResourceGroupCoordinates)
+        case None =>
+          IO.raiseError(
+            new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.NotFound, s"Managed Resource Group with Billing Profile ID [${id.billingProfileId}] does not exist")
+            )
+          )
+      }
+      _ <- validateManagedResourceGroup(mrgCoordinates, samRequestContext)
+      msiManager <- crlService.buildMsiManager(mrgCoordinates.tenantId, mrgCoordinates.subscriptionId)
+      mrgManager <- crlService.buildResourceManager(mrgCoordinates.tenantId, mrgCoordinates.subscriptionId)
       amiName = toManagedIdentityNameFromAmiId(id)
-      region <- getRegionFromMrg(id.mrgCoordinates, mrgManager, samRequestContext)
-      context = managedIdentityContext(id.mrgCoordinates, amiName, region)
+      region <- getRegionFromMrg(mrgCoordinates, mrgManager, samRequestContext)
+      context = managedIdentityContext(mrgCoordinates, amiName, region)
       azureUami <- traceIOWithContext("createUAMI", samRequestContext) { _ =>
         IO(
           // note that this will not fail when the UAMI already exists
@@ -174,12 +188,12 @@ class AzureService(
             .identities()
             .define(amiName.value)
             .withRegion(region)
-            .withExistingResourceGroup(id.mrgCoordinates.managedResourceGroupName.value)
+            .withExistingResourceGroup(mrgCoordinates.managedResourceGroupName.value)
             .withTags(managedIdentityTags(id).asJava)
             .create(context)
         )
       }
-      amiToCreate = ActionManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()))
+      amiToCreate = ActionManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()), mrgCoordinates)
       createdAmi <- directoryDAO.createActionManagedIdentity(amiToCreate, samRequestContext)
     } yield (createdAmi, true)
 
@@ -189,7 +203,7 @@ class AzureService(
       _ <- existing
         .map { ami =>
           for {
-            msiManager <- crlService.buildMsiManager(id.mrgCoordinates.tenantId, id.mrgCoordinates.subscriptionId)
+            msiManager <- crlService.buildMsiManager(ami.managedResourceGroupCoordinates.tenantId, ami.managedResourceGroupCoordinates.subscriptionId)
             _ <- IO(msiManager.identities().deleteById(ami.objectId.value))
             _ <- directoryDAO.deleteActionManagedIdentity(ami.id, samRequestContext)
           } yield {}
@@ -250,7 +264,7 @@ class AzureService(
         resourceManager <- crlService.buildResourceManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         mrg <- lookupMrg(mrgCoords, resourceManager)
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
-        appsInSubscription <- IO(appManager.applications().list().asScala)
+        appsInSubscription <- IO(appManager.applications().list().asScala.toSeq)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
         _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit

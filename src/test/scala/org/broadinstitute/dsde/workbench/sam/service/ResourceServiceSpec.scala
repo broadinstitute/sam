@@ -17,15 +17,24 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentity,
   ActionManagedIdentityId,
   AzureService,
+  BillingProfileId,
   ManagedIdentityDisplayName,
   ManagedIdentityObjectId,
+  ManagedResourceGroup,
   ManagedResourceGroupCoordinates,
   ManagedResourceGroupName,
   SubscriptionId,
   TenantId
 }
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{
+  AccessPolicyDAO,
+  AzureManagedResourceGroupDAO,
+  DirectoryDAO,
+  PostgresAccessPolicyDAO,
+  PostgresAzureManagedResourceGroupDAO,
+  PostgresDirectoryDAO
+}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -62,6 +71,7 @@ class ResourceServiceSpec
 
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  lazy val azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   private val ownerRoleName = ResourceRoleName("owner")
 
@@ -1798,23 +1808,32 @@ class ResourceServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
+    // There's no actual need for it to be a real "billing profile", we just need a resource to attach the managed resource group to.
+    val billingProfileResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId(UUID.randomUUID().toString))
     val ownerRoleActions = defaultResourceType.roles.find(_.roleName == defaultResourceType.ownerRoleName).get.actions
+
+    val managedResourceGroupCoordinates = ManagedResourceGroupCoordinates(
+      TenantId(UUID.randomUUID().toString),
+      SubscriptionId(UUID.randomUUID().toString),
+      ManagedResourceGroupName(UUID.randomUUID().toString)
+    )
+
+    val managedResourceGroup = ManagedResourceGroup(managedResourceGroupCoordinates, BillingProfileId(billingProfileResource.resourceId.value))
 
     azuredService.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     runAndWait(azuredService.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext))
+    runAndWait(azuredService.createResource(defaultResourceType, billingProfileResource.resourceId, dummyUser, samRequestContext))
+    runAndWait(azureManagedResourceGroupDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext))
     ownerRoleActions.foreach { action =>
       val ami = ActionManagedIdentity(
         ActionManagedIdentityId(
           resource,
           action,
-          ManagedResourceGroupCoordinates(
-            TenantId(UUID.randomUUID().toString),
-            SubscriptionId(UUID.randomUUID().toString),
-            ManagedResourceGroupName(UUID.randomUUID().toString)
-          )
+          BillingProfileId(billingProfileResource.resourceId.value)
         ),
         ManagedIdentityObjectId(UUID.randomUUID().toString),
-        ManagedIdentityDisplayName(s"${resource.resourceId.value}-${action.value}")
+        ManagedIdentityDisplayName(s"${resource.resourceId.value}-${action.value}"),
+        managedResourceGroupCoordinates
       )
       runAndWait(dirDAO.createActionManagedIdentity(ami, samRequestContext))
     }

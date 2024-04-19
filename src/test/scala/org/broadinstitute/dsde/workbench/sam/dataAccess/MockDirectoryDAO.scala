@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentity,
   ActionManagedIdentityId,
+  BillingProfileId,
   ManagedIdentityObjectId,
   PetManagedIdentity,
   PetManagedIdentityId
@@ -417,10 +418,17 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def getAllActionManagedIdentitiesForResource(
       resourceId: FullyQualifiedResourceId,
       samRequestContext: SamRequestContext
-  ): IO[Seq[ActionManagedIdentity]] = ???
+  ): IO[Seq[ActionManagedIdentity]] = IO.pure(Seq.empty)
 
   override def deleteAllActionManagedIdentitiesForResource(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     ???
+
+  override def getAllActionManagedIdentitiesForBillingProfile(
+      billingProfileId: BillingProfileId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]] = IO.pure(Seq.empty)
+
+  override def deleteAllActionManagedIdentitiesForBillingProfile(billingProfileId: BillingProfileId, samRequestContext: SamRequestContext): IO[Unit] = ???
 
   override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =
     loadUser(userId, samRequestContext).map {

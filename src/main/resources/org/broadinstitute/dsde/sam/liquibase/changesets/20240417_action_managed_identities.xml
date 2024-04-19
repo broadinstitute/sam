@@ -14,14 +14,8 @@
             <column name="resource_action_id" type="BIGINT">
                 <constraints nullable="false" primaryKey="true" foreignKeyName="FK_SAMI_ACTION" referencedTableName="SAM_RESOURCE_ACTION" referencedColumnNames="id"/>
             </column>
-            <column name="tenant_id" type="VARCHAR(40)">
-                <constraints nullable="false" primaryKey="true"/>
-            </column>
-            <column name="subscription_id" type="VARCHAR(40)">
-                <constraints nullable="false" primaryKey="true"/>
-            </column>
-            <column name="managed_resource_group_name" type="VARCHAR">
-                <constraints nullable="false" primaryKey="true"/>
+            <column name="managed_resource_group_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" foreignKeyName="FK_SAMI_MRG" referencedTableName="SAM_AZURE_MANAGED_RESOURCE_GROUP" referencedColumnNames="id" deleteCascade="true"/>
             </column>
             <column name="object_id" type="VARCHAR">
                 <constraints nullable="false"/>

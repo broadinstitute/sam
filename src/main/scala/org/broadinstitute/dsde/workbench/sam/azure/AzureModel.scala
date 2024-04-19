@@ -56,9 +56,14 @@ final case class PetManagedIdentityId(
 
 final case class PetManagedIdentity(id: PetManagedIdentityId, objectId: ManagedIdentityObjectId, displayName: ManagedIdentityDisplayName)
 
-final case class ActionManagedIdentityId(resourceId: FullyQualifiedResourceId, action: ResourceAction, mrgCoordinates: ManagedResourceGroupCoordinates)
+final case class ActionManagedIdentityId(resourceId: FullyQualifiedResourceId, action: ResourceAction, billingProfileId: BillingProfileId)
 
-final case class ActionManagedIdentity(id: ActionManagedIdentityId, objectId: ManagedIdentityObjectId, displayName: ManagedIdentityDisplayName)
+final case class ActionManagedIdentity(
+    id: ActionManagedIdentityId,
+    objectId: ManagedIdentityObjectId,
+    displayName: ManagedIdentityDisplayName,
+    managedResourceGroupCoordinates: ManagedResourceGroupCoordinates
+)
 object AzureExtensions {
   val resourceId = ResourceId("azure")
   val getPetManagedIdentityAction = ResourceAction("get_pet_managed_identity")

@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{
   MockAzureManagedResourceGroupDAO,
   MockDirectoryDAO,
   PostgresAccessPolicyDAO,
+  PostgresAzureManagedResourceGroupDAO,
   PostgresDirectoryDAO
 }
 import org.broadinstitute.dsde.workbench.sam.model.{
@@ -188,7 +189,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO, policyEvaluatorService)
 
     // create user
-    val defaultUser = genWorkbenchUserAzure.sample.get
+    val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("rtitlefireclouddev@gmail.com"))).get
     val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
     userStatus shouldBe UserStatus(
       UserStatusDetails(defaultUser.id, defaultUser.email),
@@ -204,12 +205,20 @@ class AzureServiceSpec(_system: ActorSystem)
     resourceService.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     runAndWait(resourceService.createResource(defaultResourceType, resourceName, defaultUser, samRequestContext))
 
+    // Create the "billing profile" resource. There's no actual need for it to be a "billing profile", we just need a resource to attach the managed resource group to.
+    val billingProfileId = BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
+    val billingProfileResource = runAndWait(resourceService.createResource(defaultResourceType, billingProfileId.asResourceId, defaultUser, samRequestContext))
+
     // action managed identity should not exist in postgres
     val tenantId = TenantId(azureTestConfig.getString("tenantId"))
     val subscriptionId = SubscriptionId(azureTestConfig.getString("subscriptionId"))
     val managedResourceGroupName = ManagedResourceGroupName(azureTestConfig.getString("managedResourceGroupName"))
+    val mrgCoordinates = ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName)
+    val managedResourceGroup = ManagedResourceGroup(mrgCoordinates, billingProfileId)
+    runAndWait(azureService.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = Some(defaultUser))))
+
     val actionManagedIdentityId =
-      ActionManagedIdentityId(resource, viewAction, ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName))
+      ActionManagedIdentityId(resource, viewAction, billingProfileId)
     directoryDAO.loadActionManagedIdentity(actionManagedIdentityId, samRequestContext).unsafeRunSync() shouldBe None
 
     // managed identity should not exist in Azure
@@ -219,8 +228,9 @@ class AzureServiceSpec(_system: ActorSystem)
     } shouldBe false
 
     // create action managed identity
-    val mrgCoordinates = ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName)
-    val (res, created) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, mrgCoordinates, defaultUser, samRequestContext).unsafeRunSync()
+    val (res, created) = azureService
+      .getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, defaultUser, samRequestContext.copy(samUser = Some(defaultUser)))
+      .unsafeRunSync()
     created shouldBe true
     res.id shouldBe actionManagedIdentityId
     res.displayName shouldBe ManagedIdentityDisplayName(s"${resource.resourceId.value}-${viewAction.value}")
@@ -237,7 +247,7 @@ class AzureServiceSpec(_system: ActorSystem)
     azureRes.name() shouldBe res.displayName.value
 
     // call getOrCreate again
-    val (res2, created2) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, mrgCoordinates, defaultUser, samRequestContext).unsafeRunSync()
+    val (res2, created2) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, defaultUser, samRequestContext).unsafeRunSync()
     created2 shouldBe false
     res2 shouldBe res
 
@@ -266,12 +276,13 @@ class AzureServiceSpec(_system: ActorSystem)
     val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
     val tosService = new TosService(NoExtensions, directoryDAO, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
+    val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(dbRef, dbRef)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val (resourceService, policyEvaluatorService, defaultResourceType, viewAction) = setUpResources(directoryDAO)
-    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO, policyEvaluatorService)
+    val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO, policyEvaluatorService)
 
     // create user
-    val defaultUser = genWorkbenchUserAzure.sample.get
+    val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("rtitlefireclouddev@gmail.com"))).get
     val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
     userStatus shouldBe UserStatus(
       UserStatusDetails(defaultUser.id, defaultUser.email),
@@ -287,15 +298,24 @@ class AzureServiceSpec(_system: ActorSystem)
     resourceService.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     runAndWait(resourceService.createResource(defaultResourceType, resourceName, defaultUser, samRequestContext))
 
+    // Create the "billing profile" resource. There's no actual need for it to be a "billing profile", we just need a resource to attach the managed resource group to.
+    val billingProfileId = BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
+    val billingProfileResource = runAndWait(resourceService.createResource(defaultResourceType, billingProfileId.asResourceId, defaultUser, samRequestContext))
+
     val tenantId = TenantId(azureTestConfig.getString("tenantId"))
     val subscriptionId = SubscriptionId(azureTestConfig.getString("subscriptionId"))
     val managedResourceGroupName = ManagedResourceGroupName(azureTestConfig.getString("managedResourceGroupName"))
+    val mrgCoordinates = ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName)
+    val managedResourceGroup = ManagedResourceGroup(mrgCoordinates, billingProfileId)
+    runAndWait(azureService.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = Some(defaultUser))))
+
     val actionManagedIdentityId =
-      ActionManagedIdentityId(resource, viewAction, ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName))
+      ActionManagedIdentityId(resource, viewAction, billingProfileId)
 
     // create action managed identity
-    val mrgCoordinates = ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName)
-    val (res, created) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, mrgCoordinates, defaultUser, samRequestContext).unsafeRunSync()
+    val (res, created) = azureService
+      .getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, defaultUser, samRequestContext.copy(samUser = Some(defaultUser)))
+      .unsafeRunSync()
     created shouldBe true
     res.id shouldBe actionManagedIdentityId
     res.displayName shouldBe ManagedIdentityDisplayName(s"${resource.resourceId.value}-${viewAction.value}")

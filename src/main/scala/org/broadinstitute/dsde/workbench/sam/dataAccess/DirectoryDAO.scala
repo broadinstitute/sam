@@ -6,6 +6,7 @@ import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentity,
   ActionManagedIdentityId,
+  BillingProfileId,
   ManagedIdentityObjectId,
   PetManagedIdentity,
   PetManagedIdentityId
@@ -109,6 +110,13 @@ trait DirectoryDAO {
   ): IO[Seq[ActionManagedIdentity]]
 
   def deleteAllActionManagedIdentitiesForResource(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
+
+  def getAllActionManagedIdentitiesForBillingProfile(
+      billingProfileId: BillingProfileId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]]
+  def deleteAllActionManagedIdentitiesForBillingProfile(billingProfileId: BillingProfileId, samRequestContext: SamRequestContext): IO[Unit]
+
   def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit]
   def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]]
 

@@ -26,6 +26,7 @@ import scala.concurrent.duration._
 class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   val defaultGroupName: WorkbenchGroupName = WorkbenchGroupName("group")
   val defaultGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
@@ -68,17 +69,22 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
   val defaultTenantId = TenantId("testTenant")
   val defaultSubscriptionId = SubscriptionId(UUID.randomUUID().toString)
-  val defaultManagedResourceGroup = ManagedResourceGroupName("mrg-test")
+  val defaultManagedResourceGroupName = ManagedResourceGroupName("mrg-test")
+  val defaultManagedResourceGroupCoordinates = ManagedResourceGroupCoordinates(defaultTenantId, defaultSubscriptionId, defaultManagedResourceGroupName)
+  val defaultBillingProfileId = BillingProfileId(UUID.randomUUID().toString)
+  val defaultBillingProfileResource = defaultResource.copy(resourceId = defaultBillingProfileId.asResourceId)
+  val defaultManagedResourceGroup = ManagedResourceGroup(defaultManagedResourceGroupCoordinates, defaultBillingProfileId)
 
   val defaultActionManagedIdentities: Set[ActionManagedIdentity] = Set(readAction, writeAction).map(action =>
     ActionManagedIdentity(
       ActionManagedIdentityId(
         FullyQualifiedResourceId(defaultResource.resourceTypeName, defaultResource.resourceId),
         action,
-        ManagedResourceGroupCoordinates(defaultTenantId, defaultSubscriptionId, defaultManagedResourceGroup)
+        defaultBillingProfileId
       ),
       ManagedIdentityObjectId(UUID.randomUUID().toString),
-      ManagedIdentityDisplayName(s"whoCares-$action")
+      ManagedIdentityDisplayName(s"whoCares-$action"),
+      defaultManagedResourceGroupCoordinates
     )
   )
 
@@ -1908,6 +1914,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
 
         defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
 
@@ -1940,6 +1948,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         assume(databaseEnabled, databaseEnabledClue)
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
 
         defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
 

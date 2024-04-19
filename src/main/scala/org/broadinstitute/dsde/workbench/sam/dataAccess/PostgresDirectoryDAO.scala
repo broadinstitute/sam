@@ -9,6 +9,7 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentity,
   ActionManagedIdentityId,
+  BillingProfileId,
   ManagedIdentityDisplayName,
   ManagedIdentityObjectId,
   ManagedResourceGroupCoordinates,
@@ -1006,23 +1007,22 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val actionManagedIdentityColumn = ActionManagedIdentityTable.column
       val resourceTable = ResourceTable.syntax
       val resourceTypeTable = ResourceTypeTable.syntax
+      val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
 
       samsql"""insert into ${ActionManagedIdentityTable.table}
                  (
                    ${actionManagedIdentityColumn.resourceId},
                    ${actionManagedIdentityColumn.resourceActionId},
-                   ${actionManagedIdentityColumn.tenantId},
-                   ${actionManagedIdentityColumn.subscriptionId},
-                   ${actionManagedIdentityColumn.managedResourceGroupName},
+                   ${actionManagedIdentityColumn.managedResourceGroupId},
                    ${actionManagedIdentityColumn.objectId},
                    ${actionManagedIdentityColumn.displayName}
                  )
              values (
                       (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentity.id.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName}),
                       (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action}),
-                      ${actionManagedIdentity.id.mrgCoordinates.tenantId},
-                      ${actionManagedIdentity.id.mrgCoordinates.subscriptionId},
-                      ${actionManagedIdentity.id.mrgCoordinates.managedResourceGroupName},
+                      (select ${managedResourceGroupTable.result.id}
+                      from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+                      where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentity.id.billingProfileId}),
                       ${actionManagedIdentity.objectId},
                       ${actionManagedIdentity.displayName}
                     )"""
@@ -1039,13 +1039,24 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   ): IO[Option[ActionManagedIdentity]] =
     readOnlyTransaction("loadActionManagedIdentity", samRequestContext) { implicit session =>
       implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord] = AzureManagedResourceGroupTable.syntax
       implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
       implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
       implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
 
       val loadActionManagedIdentityQuery =
-        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}, ${resourceActionTable.result.action}, ${actionManagedIdentityTable.result.tenantId}, ${actionManagedIdentityTable.result.subscriptionId}, ${actionManagedIdentityTable.result.managedResourceGroupName}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        samsql"""select ${resourceTable.result.name},
+                 ${resourceTypeTable.result.name},
+                 ${resourceActionTable.result.action},
+                 ${managedResourceGroupTable.result.tenantId},
+                 ${managedResourceGroupTable.result.subscriptionId},
+                 ${managedResourceGroupTable.result.managedResourceGroupName},
+                 ${managedResourceGroupTable.result.billingProfileId},
+                 ${actionManagedIdentityTable.result.objectId},
+                 ${actionManagedIdentityTable.result.displayName}
         from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+            on ${actionManagedIdentityTable.managedResourceGroupId} = ${managedResourceGroupTable.id}
           left join ${ResourceActionTable as resourceActionTable}
             on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
           left join ${ResourceTable as resourceTable}
@@ -1054,9 +1065,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
             on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
         where ${resourceTable.name} = ${actionManagedIdentityId.resourceId.resourceId}
           and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName}
-          and ${actionManagedIdentityTable.tenantId} = ${actionManagedIdentityId.mrgCoordinates.tenantId}
-          and ${actionManagedIdentityTable.subscriptionId} = ${actionManagedIdentityId.mrgCoordinates.subscriptionId}
-          and ${actionManagedIdentityTable.managedResourceGroupName} = ${actionManagedIdentityId.mrgCoordinates.managedResourceGroupName}
+          and ${managedResourceGroupTable.id} = ${actionManagedIdentityTable.managedResourceGroupId}
           and ${resourceActionTable.action} = ${actionManagedIdentityId.action}"""
 
       loadActionManagedIdentityQuery.map(unmarshalActionManagedIdentity).single().apply()
@@ -1067,6 +1076,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val actionManagedIdentityColumn = ActionManagedIdentityTable.column
       val resourceTable = ResourceTable.syntax
       val resourceTypeTable = ResourceTypeTable.syntax
+      val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
+
       val updateAmiQuery =
         samsql"""
                  update ${ActionManagedIdentityTable.table}
@@ -1076,9 +1087,9 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                  where
                    ${actionManagedIdentityColumn.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentity.id.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName})
                    and ${actionManagedIdentityColumn.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action})
-                   and ${actionManagedIdentityColumn.tenantId} = ${actionManagedIdentity.id.mrgCoordinates.tenantId}
-                   and ${actionManagedIdentityColumn.subscriptionId} = ${actionManagedIdentity.id.mrgCoordinates.subscriptionId}
-                   and ${actionManagedIdentityColumn.managedResourceGroupName} = ${actionManagedIdentity.id.mrgCoordinates.managedResourceGroupName}
+                   and ${actionManagedIdentityColumn.managedResourceGroupId} = (select ${managedResourceGroupTable.result.id}
+                                                                                from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+                                                                                where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentity.id.billingProfileId})
                    """
       val updated = updateAmiQuery.update().apply()
       if (updated != 1) {
@@ -1093,12 +1104,14 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
       val resourceTable = ResourceTable.syntax
       val resourceTypeTable = ResourceTypeTable.syntax
+      val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
+
       val deleteActionManagedIdentityQuery =
         samsql"""delete from ${ActionManagedIdentityTable.table}
                   where ${actionManagedIdentityTable.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentityId.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName})
-                  and ${actionManagedIdentityTable.tenantId} = ${actionManagedIdentityId.mrgCoordinates.tenantId}
-                  and ${actionManagedIdentityTable.subscriptionId} = ${actionManagedIdentityId.mrgCoordinates.subscriptionId}
-                  and ${actionManagedIdentityTable.managedResourceGroupName} = ${actionManagedIdentityId.mrgCoordinates.managedResourceGroupName}
+                  and ${actionManagedIdentityTable.managedResourceGroupId} = (select ${managedResourceGroupTable.result.id}
+                                                                                        from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+                                                                                        where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentityId.billingProfileId})
                   and ${actionManagedIdentityTable.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentityId.action})"""
       if (deleteActionManagedIdentityQuery.update().apply() != 1) {
         throw new WorkbenchException(s"${actionManagedIdentityId} cannot be deleted because it already does not exist")
@@ -1111,15 +1124,18 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   ): IO[Seq[ActionManagedIdentity]] =
     readOnlyTransaction("loadActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
       implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord] = AzureManagedResourceGroupTable.syntax
       implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
       implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
       implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
 
       val listActionManagedIdentitysQuery =
-        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}, ${resourceActionTable.result.action}, ${actionManagedIdentityTable.result.tenantId}, ${actionManagedIdentityTable.result.subscriptionId}, ${actionManagedIdentityTable.result.managedResourceGroupName}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}, ${resourceActionTable.result.action}, ${managedResourceGroupTable.result.tenantId}, ${managedResourceGroupTable.result.subscriptionId}, ${managedResourceGroupTable.result.managedResourceGroupName}, ${managedResourceGroupTable.result.billingProfileId}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
         from ${ActionManagedIdentityTable as actionManagedIdentityTable}
           left join ${ResourceActionTable as resourceActionTable}
             on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+            on ${actionManagedIdentityTable.managedResourceGroupId} = ${managedResourceGroupTable.id}
           left join ${ResourceTable as resourceTable}
             on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
           left join ${ResourceTypeTable as resourceTypeTable}
@@ -1142,24 +1158,66 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       deleteActionManagedIdentityQuery.update().apply()
     }
 
+  override def getAllActionManagedIdentitiesForBillingProfile(
+      billingProfileId: BillingProfileId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]] =
+    readOnlyTransaction("loadActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
+      implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord] = AzureManagedResourceGroupTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+      implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
+
+      val listActionManagedIdentitysQuery =
+        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}, ${resourceActionTable.result.action}, ${managedResourceGroupTable.result.tenantId}, ${managedResourceGroupTable.result.subscriptionId}, ${managedResourceGroupTable.result.managedResourceGroupName}, ${managedResourceGroupTable.result.billingProfileId}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+            on ${actionManagedIdentityTable.managedResourceGroupId} = ${managedResourceGroupTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
+          left join ${ResourceTypeTable as resourceTypeTable}
+            on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+        where ${managedResourceGroupTable.billingProfileId} = $billingProfileId
+        """
+
+      listActionManagedIdentitysQuery.map(unmarshalActionManagedIdentity).list().apply()
+    }
+  override def deleteAllActionManagedIdentitiesForBillingProfile(billingProfileId: BillingProfileId, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deleteAllActionManagedIdentitiesForManagedResourceGroup", samRequestContext) { implicit session =>
+      val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
+      val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
+      val deleteActionManagedIdentityQuery =
+        samsql"""delete from ${ActionManagedIdentityTable.table}
+                 where ${actionManagedIdentityTable.managedResourceGroupId} = (select ${managedResourceGroupTable.result.id}
+                                                                        from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+                                                                        where ${managedResourceGroupTable.billingProfileId} = $billingProfileId)
+             """
+      deleteActionManagedIdentityQuery.update().apply()
+    }
+
   private def unmarshalActionManagedIdentity(rs: WrappedResultSet)(implicit
       resourceTable: TableSyntax[ResourceRecord],
       resourceTypeTable: TableSyntax[ResourceTypeRecord],
       resourceActionTable: TableSyntax[ResourceActionRecord],
-      actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord]
+      actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord],
+      managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord]
   ) =
     ActionManagedIdentity(
       ActionManagedIdentityId(
         FullyQualifiedResourceId(rs.get[ResourceTypeName](resourceTypeTable.resultName.name), rs.get[ResourceId](resourceTable.resultName.name)),
         rs.get[ResourceAction](resourceActionTable.resultName.action),
-        ManagedResourceGroupCoordinates(
-          rs.get[TenantId](actionManagedIdentityTable.resultName.tenantId),
-          rs.get[SubscriptionId](actionManagedIdentityTable.resultName.subscriptionId),
-          rs.get[ManagedResourceGroupName](actionManagedIdentityTable.resultName.managedResourceGroupName)
-        )
+        rs.get[BillingProfileId](managedResourceGroupTable.resultName.billingProfileId)
       ),
       rs.get[ManagedIdentityObjectId](actionManagedIdentityTable.resultName.objectId),
-      rs.get[ManagedIdentityDisplayName](actionManagedIdentityTable.resultName.displayName)
+      rs.get[ManagedIdentityDisplayName](actionManagedIdentityTable.resultName.displayName),
+      ManagedResourceGroupCoordinates(
+        rs.get[TenantId](managedResourceGroupTable.resultName.tenantId),
+        rs.get[SubscriptionId](managedResourceGroupTable.resultName.subscriptionId),
+        rs.get[ManagedResourceGroupName](managedResourceGroupTable.resultName.managedResourceGroupName)
+      )
     )
 
   override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =

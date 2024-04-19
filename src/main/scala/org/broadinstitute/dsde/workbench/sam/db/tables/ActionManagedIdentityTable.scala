@@ -7,9 +7,7 @@ import scalikejdbc._
 final case class ActionManagedIdentityRecord(
     resourceId: ResourcePK,
     resourceActionId: ResourceActionPK,
-    tenantId: TenantId,
-    subscriptionId: SubscriptionId,
-    managedResourceGroupName: ManagedResourceGroupName,
+    managedResourceGroupId: ManagedResourceGroupPK,
     objectId: ManagedIdentityObjectId,
     displayName: ManagedIdentityDisplayName
 )
@@ -21,9 +19,7 @@ object ActionManagedIdentityTable extends SQLSyntaxSupportWithDefaultSamDB[Actio
   def apply(e: ResultName[ActionManagedIdentityRecord])(rs: WrappedResultSet): ActionManagedIdentityRecord = ActionManagedIdentityRecord(
     rs.get(e.resourceId),
     rs.get(e.resourceActionId),
-    rs.get(e.tenantId),
-    rs.get(e.subscriptionId),
-    rs.get(e.managedResourceGroupName),
+    rs.get(e.managedResourceGroupId),
     rs.get(e.objectId),
     rs.get(e.displayName)
   )

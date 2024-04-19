@@ -58,7 +58,8 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestCon
               }
             } ~
             pathPrefix("actionManagedIdentity") {
-              path(Segment / Segment / Segment) { (resourceTypeName, resourceId, action) =>
+              path(Segment / Segment / Segment / Segment) { (bpId, resourceTypeName, resourceId, action) =>
+                val billingProfileId = BillingProfileId(bpId)
                 val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
                 val resourceAction = ResourceAction(action)
 
@@ -67,19 +68,18 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestCon
                     throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
                   }
                   pathEndOrSingleSlash {
-                    postWithTelemetry(
+                    getWithTelemetry(
                       samRequestContext,
+                      "billingProfileId" -> billingProfileId,
                       "resourceType" -> resource.resourceTypeName,
                       "resource" -> resource.resourceId,
                       "action" -> resourceAction
                     ) {
-                      entity(as[ManagedResourceGroupCoordinates]) { mrgCoordinates =>
-                        complete {
-                          service.getOrCreateActionManagedIdentity(resource, resourceAction, mrgCoordinates, samUser, samRequestContext).map {
-                            case (ami, created) =>
-                              val status = if (created) StatusCodes.Created else StatusCodes.OK
-                              status -> JsString(ami.objectId.value)
-                          }
+                      complete {
+                        service.getOrCreateActionManagedIdentity(resource, resourceAction, billingProfileId, samUser, samRequestContext).map {
+                          case (ami, created) =>
+                            val status = if (created) StatusCodes.Created else StatusCodes.OK
+                            status -> JsString(ami.objectId.value)
                         }
                       }
                     }
