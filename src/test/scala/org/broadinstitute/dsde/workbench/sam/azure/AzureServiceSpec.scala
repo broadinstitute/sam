@@ -184,12 +184,13 @@ class AzureServiceSpec(_system: ActorSystem)
     val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
     val tosService = new TosService(NoExtensions, directoryDAO, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
+    val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val (resourceService, policyEvaluatorService, defaultResourceType, viewAction) = setUpResources(directoryDAO)
-    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO, policyEvaluatorService)
+    val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO, policyEvaluatorService)
 
     // create user
-    val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("rtitlefireclouddev@gmail.com"))).get
+    val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("hermione.owner@test.firecloud.org"))).get
     val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
     userStatus shouldBe UserStatus(
       UserStatusDetails(defaultUser.id, defaultUser.email),
@@ -282,7 +283,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO, policyEvaluatorService)
 
     // create user
-    val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("rtitlefireclouddev@gmail.com"))).get
+    val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("hermione.owner@test.firecloud.org"))).get
     val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
     userStatus shouldBe UserStatus(
       UserStatusDetails(defaultUser.id, defaultUser.email),
@@ -379,7 +380,7 @@ class AzureServiceSpec(_system: ActorSystem)
       BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
     )
 
-    val user = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("rtitlefireclouddev@gmail.com")))
+    val user = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("hermione.owner@test.firecloud.org")))
 
     azureService.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
     mockMrgDAO.mrgs should contain(managedResourceGroup)

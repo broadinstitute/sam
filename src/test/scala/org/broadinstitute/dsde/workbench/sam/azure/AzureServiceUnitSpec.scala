@@ -33,6 +33,7 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
   "AzureService" - {
     "Action Managed Identities" - {
       "create an Action Managed Identity" in {
+        // Arrange
         val mockCrlService = mock[CrlService]
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
@@ -100,13 +101,17 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         when(mockIdentity.name()).thenReturn(testDisplayName.value)
         when(mockDirectoryDAO.createActionManagedIdentity(testActionManagedIdentity, testSamRequestContext)).thenReturn(IO.pure(testActionManagedIdentity))
 
+        // Act
         val (ami, created) =
           azureService.getOrCreateActionManagedIdentity(testResource, testAction, testBillingProfileId, dummyUser, testSamRequestContext).unsafeRunSync()
+
+        // Assert
         ami should be(testActionManagedIdentity)
         created should be(true)
       }
 
       "retrieve an existing Action Managed Identity" in {
+        // Arrange
         val mockCrlService = mock[CrlService]
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
@@ -130,14 +135,18 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         when(mockPolicyEvaluatorService.hasPermission(testResource, testAction, dummyUser.id, samRequestContext)).thenReturn(IO.pure(true))
         when(mockDirectoryDAO.loadActionManagedIdentity(testActionManagedIdentityId, samRequestContext)).thenReturn(IO.pure(Option(testActionManagedIdentity)))
 
+        // Act
         val (ami, created) =
           azureService.getOrCreateActionManagedIdentity(testResource, testAction, testBillingProfileId, dummyUser, samRequestContext).unsafeRunSync()
+
+        // Assert
         ami should be(testActionManagedIdentity)
         created should be(false)
         verify(mockCrlService, never).buildMsiManager(testMrgCoordinates.tenantId, testMrgCoordinates.subscriptionId)
       }
 
       "delete an existing Action Managed Identity" in {
+        // Arrange
         val mockCrlService = mock[CrlService]
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
@@ -166,10 +175,12 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         doNothing.when(mockIdentities).deleteById(testObjectId.value)
         when(mockDirectoryDAO.deleteActionManagedIdentity(testActionManagedIdentityId, samRequestContext)).thenReturn(IO.pure(()))
 
+        // Act & Assert
         azureService.deleteActionManagedIdentity(testActionManagedIdentityId, samRequestContext).unsafeRunSync()
       }
 
       "refuse to interact with a user without the action" in {
+        // Arrange
         val mockCrlService = mock[CrlService]
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
@@ -183,10 +194,64 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
 
         when(mockPolicyEvaluatorService.hasPermission(testResource, testAction, dummyUser.id, samRequestContext)).thenReturn(IO.pure(false))
 
+        // Act
         val thrown = intercept[WorkbenchExceptionWithErrorReport] {
           azureService.getOrCreateActionManagedIdentity(testResource, testAction, testBillingProfileId, dummyUser, samRequestContext).unsafeRunSync()
         }
+
+        // Assert
         thrown.errorReport.statusCode should be(Some(StatusCodes.Forbidden))
+      }
+    }
+
+    "Managed Resource Groups" - {
+      "delete action managed identities when deleting managed resource group" in {
+        // Arrange
+        val mockCrlService = mock[CrlService]
+        val mockDirectoryDAO = mock[DirectoryDAO]
+        val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
+        val mockPolicyEvaluatorService = mock[PolicyEvaluatorService]
+        val mockMsiManager = mock[MsiManager]
+        val mockIdentities = mock[Identities]
+
+        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO, mockPolicyEvaluatorService)
+
+        val testMrgCoordinates = ManagedResourceGroupCoordinates(
+          TenantId(UUID.randomUUID().toString),
+          SubscriptionId(UUID.randomUUID().toString),
+          ManagedResourceGroupName(UUID.randomUUID().toString)
+        )
+        val testBillingProfileId = BillingProfileId(UUID.randomUUID().toString)
+        val testManagedResourceGroup = ManagedResourceGroup(testMrgCoordinates, testBillingProfileId)
+        val testAction = ResourceAction("testAction")
+        val testResource = FullyQualifiedResourceId(ResourceTypeName("testResourceType"), ResourceId("testResource"))
+        val testActionManagedIdentityId = ActionManagedIdentityId(testResource, testAction, testBillingProfileId)
+        val testDisplayName = azureService.toManagedIdentityNameFromAmiId(testActionManagedIdentityId)
+        val testObjectId = ManagedIdentityObjectId(UUID.randomUUID().toString)
+        val testActionManagedIdentity = ActionManagedIdentity(testActionManagedIdentityId, testObjectId, testDisplayName, testMrgCoordinates)
+
+        val testAction2 = ResourceAction("testAction2")
+        val testDisplayName2 = azureService.toManagedIdentityNameFromAmiId(testActionManagedIdentityId)
+        val testObjectId2 = ManagedIdentityObjectId(UUID.randomUUID().toString)
+        val testActionManagedIdentityId2 = ActionManagedIdentityId(testResource, testAction2, testBillingProfileId)
+        val testActionManagedIdentity2 = ActionManagedIdentity(testActionManagedIdentityId2, testObjectId2, testDisplayName2, testMrgCoordinates)
+
+        when(mockDirectoryDAO.getAllActionManagedIdentitiesForBillingProfile(testActionManagedIdentityId.billingProfileId, samRequestContext))
+          .thenReturn(IO.pure(Seq(testActionManagedIdentity, testActionManagedIdentity2)))
+        when(mockAzureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(testBillingProfileId, samRequestContext))
+          .thenReturn(IO.pure(Some(testManagedResourceGroup)))
+        when(mockCrlService.buildMsiManager(testMrgCoordinates.tenantId, testMrgCoordinates.subscriptionId)).thenReturn(IO.pure(mockMsiManager))
+        when(mockMsiManager.identities()).thenReturn(mockIdentities)
+        doNothing.when(mockIdentities).deleteById(testObjectId.value)
+        doNothing.when(mockIdentities).deleteById(testObjectId2.value)
+        when(mockDirectoryDAO.loadActionManagedIdentity(testActionManagedIdentityId, samRequestContext)).thenReturn(IO.pure(Some(testActionManagedIdentity)))
+        when(mockDirectoryDAO.loadActionManagedIdentity(testActionManagedIdentityId2, samRequestContext)).thenReturn(IO.pure(Some(testActionManagedIdentity2)))
+        when(mockDirectoryDAO.deleteActionManagedIdentity(testActionManagedIdentityId, samRequestContext)).thenReturn(IO.pure(()))
+        when(mockDirectoryDAO.deleteActionManagedIdentity(testActionManagedIdentityId2, samRequestContext)).thenReturn(IO.pure(()))
+        when(mockAzureManagedResourceGroupDAO.deleteManagedResourceGroup(testBillingProfileId, samRequestContext)).thenReturn(IO.pure(1))
+
+        // Act & Assert
+        azureService.deleteManagedResourceGroup(testBillingProfileId, samRequestContext).unsafeRunSync()
       }
     }
   }
