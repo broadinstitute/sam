@@ -1007,6 +1007,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val actionManagedIdentityColumn = ActionManagedIdentityTable.column
       val resourceTable = ResourceTable.syntax
       val resourceTypeTable = ResourceTypeTable.syntax
+      val resourceActionTable = ResourceActionTable.syntax
       val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
 
       samsql"""insert into ${ActionManagedIdentityTable.table}
@@ -1019,7 +1020,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                  )
              values (
                       (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentity.id.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName}),
-                      (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action}),
+                      (select ${resourceActionTable.result.id} from ${ResourceActionTable as resourceActionTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceActionTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceActionTable.action} = ${actionManagedIdentity.id.action} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName}),
                       (select ${managedResourceGroupTable.result.id}
                       from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
                       where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentity.id.billingProfileId}),
