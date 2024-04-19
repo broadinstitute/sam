@@ -44,7 +44,7 @@
                 <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id" nullable="false"/>
             </column>
             <column name="group_id" type="BIGINT">
-                <constraints primaryKey="false" foreignKeyName="FK_SKG_GROUP_ID" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
+                <constraints primaryKey="false" foreignKeyName="FK_SKG_GROUP_ID" referencedTableName="SAM_GROUP" referencedColumnNames="id" nullable="false"/>
             </column>
         </createTable>
         <createTable tableName="SAM_KEYCHAIN_USER">
@@ -52,7 +52,7 @@
                 <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id" nullable="false"/>
             </column>
             <column name="user_id" type="VARCHAR">
-                <constraints primaryKey="false" foreignKeyName="FK_SKG_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id"/>
+                <constraints primaryKey="false" foreignKeyName="FK_SKG_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id" nullable="false"/>
             </column>
         </createTable>
     </changeSet>
