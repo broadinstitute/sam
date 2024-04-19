@@ -30,7 +30,7 @@
         </createTable>
         <createTable tableName="SAM_RESOURCE_ACCESS_CONSTRAINT_LOCK">
             <column name="resource_access_constraint_id" type="BIGINT">
-                <constraints primaryKey="true" foreignKeyName="FK_SRACL_RESOURCE_ACCESS_CONSTRAINT_ID" referencedTableName="SAM_RESOURCE_ACCESS_CONSTRAINT" referencedColumnNames="id"/>
+                <constraints primaryKey="true" foreignKeyName="FK_SRACL_RESOURCE_ACCESS_CONSTRAINT_ID" referencedTableName="SAM_RESOURCE_ACCESS_CONSTRAINT" referencedColumnNames="id" nullable="false"/>
             </column>
             <column name="lock_id" type="BIGINT">
                 <constraints primaryKey="false" foreignKeyName="FK_SRACL_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id" nullable="false"/>
@@ -41,7 +41,7 @@
         </createTable>
         <createTable tableName="SAM_KEYCHAIN_GROUP">
             <column name="lock_id" type="BIGINT">
-                <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id"/>
+                <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id" nullable="false"/>
             </column>
             <column name="group_id" type="BIGINT">
                 <constraints primaryKey="false" foreignKeyName="FK_SKG_GROUP_ID" referencedTableName="SAM_GROUP" referencedColumnNames="id"/>
@@ -49,7 +49,7 @@
         </createTable>
         <createTable tableName="SAM_KEYCHAIN_USER">
             <column name="lock_id" type="BIGINT">
-                <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id"/>
+                <constraints primaryKey="true" foreignKeyName="FK_SKG_LOCK_ID" referencedTableName="SAM_LOCK" referencedColumnNames="id" nullable="false"/>
             </column>
             <column name="user_id" type="VARCHAR">
                 <constraints primaryKey="false" foreignKeyName="FK_SKG_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id"/>
