@@ -8,15 +8,15 @@
     <changeSet logicalFilePath="dummy" author="kfeldman" id="add_sam_rac_tables">
         <createTable tableName="SAM_RESOURCE_ACCESS_CONSTRAINT">
             <column name="id" type="BIGINT" autoIncrement="true">
-                <constraints primaryKey="true"/>
+                <constraints primaryKey="true" nullable="false"/>
             </column>
             <column name="resource_id" type="BIGINT">
-                <constraints primaryKey="false" foreignKeyName="FK_SRAC_RESOURCE_ID" referencedTableName="SAM_RESOURCE" referencedColumnNames="id"/>
+                <constraints primaryKey="false" foreignKeyName="FK_SRAC_RESOURCE_ID" referencedTableName="SAM_RESOURCE" referencedColumnNames="id" nullable="true"/>
             </column>
         </createTable>
         <createTable tableName="SAM_LOCK">
             <column name="id" type="BIGINT" autoIncrement="true">
-                <constraints primaryKey="true"/>
+                <constraints primaryKey="true" nullable="false"/>
             </column>
             <column name="lock_detail" type="JSONB">
                 <constraints primaryKey="false" nullable="false"/>
@@ -25,7 +25,7 @@
                 <constraints primaryKey="false" nullable="false"/>
             </column>
             <column name="description" type="VARCHAR">
-                <constraints primaryKey="false"/>
+                <constraints primaryKey="false" nullable="true"/>
             </column>
         </createTable>
         <createTable tableName="SAM_RESOURCE_ACCESS_CONSTRAINT_LOCK">
