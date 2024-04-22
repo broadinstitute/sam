@@ -77,7 +77,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val (_, policyEvaluatorService, _, _) = setUpResources(directoryDAO)
-    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO, policyEvaluatorService)
+    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
 
     // create user
     val defaultUser = genWorkbenchUserAzure.sample.get
@@ -187,7 +187,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val (resourceService, policyEvaluatorService, defaultResourceType, viewAction) = setUpResources(directoryDAO)
-    val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO, policyEvaluatorService)
+    val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO)
 
     // create user
     val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("hermione.owner@test.firecloud.org"))).get
@@ -230,7 +230,7 @@ class AzureServiceSpec(_system: ActorSystem)
 
     // create action managed identity
     val (res, created) = azureService
-      .getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, defaultUser, samRequestContext.copy(samUser = Some(defaultUser)))
+      .getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, samRequestContext.copy(samUser = Some(defaultUser)))
       .unsafeRunSync()
     created shouldBe true
     res.id shouldBe actionManagedIdentityId
@@ -248,7 +248,7 @@ class AzureServiceSpec(_system: ActorSystem)
     azureRes.name() shouldBe res.displayName.value
 
     // call getOrCreate again
-    val (res2, created2) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, defaultUser, samRequestContext).unsafeRunSync()
+    val (res2, created2) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, samRequestContext).unsafeRunSync()
     created2 shouldBe false
     res2 shouldBe res
 
@@ -280,7 +280,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(dbRef, dbRef)
     val azureTestConfig = config.getConfig("testStuff.azure")
     val (resourceService, policyEvaluatorService, defaultResourceType, viewAction) = setUpResources(directoryDAO)
-    val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO, policyEvaluatorService)
+    val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO)
 
     // create user
     val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("hermione.owner@test.firecloud.org"))).get
@@ -315,7 +315,7 @@ class AzureServiceSpec(_system: ActorSystem)
 
     // create action managed identity
     val (res, created) = azureService
-      .getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, defaultUser, samRequestContext.copy(samUser = Some(defaultUser)))
+      .getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, samRequestContext.copy(samUser = Some(defaultUser)))
       .unsafeRunSync()
     created shouldBe true
     res.id shouldBe actionManagedIdentityId
@@ -350,8 +350,7 @@ class AzureServiceSpec(_system: ActorSystem)
       new AzureService(
         MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
         new MockDirectoryDAO(),
-        mockMrgDAO,
-        mock[PolicyEvaluatorService]
+        mockMrgDAO
       )
 
     svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
@@ -367,7 +366,7 @@ class AzureServiceSpec(_system: ActorSystem)
     // create dependencies
     val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
-    val azureService = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO, mock[PolicyEvaluatorService])
+    val azureService = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     // build request
     val azureTestConfig = config.getConfig("testStuff.azure")
@@ -394,8 +393,7 @@ class AzureServiceSpec(_system: ActorSystem)
       new AzureService(
         MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
         new MockDirectoryDAO(),
-        mockMrgDAO,
-        mock[PolicyEvaluatorService]
+        mockMrgDAO
       )
 
     mockMrgDAO.insertManagedResourceGroup(managedResourceGroup.copy(billingProfileId = BillingProfileId("no the same")), samRequestContext).unsafeRunSync()
@@ -414,8 +412,7 @@ class AzureServiceSpec(_system: ActorSystem)
       new AzureService(
         MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
         new MockDirectoryDAO(),
-        mockMrgDAO,
-        mock[PolicyEvaluatorService]
+        mockMrgDAO
       )
 
     mockMrgDAO
@@ -436,7 +433,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
-    val svc = new AzureService(MockCrlService(user), new MockDirectoryDAO(), mockMrgDAO, mock[PolicyEvaluatorService])
+    val svc = new AzureService(MockCrlService(user), new MockDirectoryDAO(), mockMrgDAO)
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
@@ -450,7 +447,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO, mock[PolicyEvaluatorService])
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -476,7 +473,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO, mock[PolicyEvaluatorService])
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -503,7 +500,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO, mock[PolicyEvaluatorService])
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -530,7 +527,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO, mock[PolicyEvaluatorService])
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -560,8 +557,7 @@ class AzureServiceSpec(_system: ActorSystem)
       new AzureService(
         MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
         new MockDirectoryDAO(),
-        mockMrgDAO,
-        mock[PolicyEvaluatorService]
+        mockMrgDAO
       )
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
@@ -578,7 +574,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO, mock[PolicyEvaluatorService])
+    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -619,8 +615,7 @@ class AzureServiceSpec(_system: ActorSystem)
       new AzureService(
         MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
         new MockDirectoryDAO(),
-        mockMrgDAO,
-        mock[PolicyEvaluatorService]
+        mockMrgDAO
       )
 
     mockMrgDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext).unsafeRunSync()
@@ -636,8 +631,7 @@ class AzureServiceSpec(_system: ActorSystem)
       new AzureService(
         MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
         new MockDirectoryDAO(),
-        mockMrgDAO,
-        mock[PolicyEvaluatorService]
+        mockMrgDAO
       )
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {

@@ -75,11 +75,12 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestCon
                       "resource" -> resource.resourceId,
                       "action" -> resourceAction
                     ) {
-                      complete {
-                        service.getOrCreateActionManagedIdentity(resource, resourceAction, billingProfileId, samUser, samRequestContext).map {
-                          case (ami, created) =>
+                      requireAction(resource, resourceAction, samUser.id, samRequestContext) {
+                        complete {
+                          service.getOrCreateActionManagedIdentity(resource, resourceAction, billingProfileId, samRequestContext).map { case (ami, created) =>
                             val status = if (created) StatusCodes.Created else StatusCodes.OK
                             status -> ami
+                          }
                         }
                       }
                     }
@@ -101,13 +102,15 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestCon
                         "resource" -> resource.resourceId,
                         "action" -> resourceAction
                       ) {
-                        complete {
-                          service.getActionManagedIdentity(resource, resourceAction, samUser, samRequestContext).map {
-                            case Some(actionManagedIdentity) => StatusCodes.OK -> actionManagedIdentity
-                            case None =>
-                              throw new WorkbenchExceptionWithErrorReport(
-                                ErrorReport(StatusCodes.NotFound, s"Action Managed identity for [$resourceAction] on [$resource] not found")
-                              )
+                        requireAction(resource, resourceAction, samUser.id, samRequestContext) {
+                          complete {
+                            service.getActionManagedIdentity(resource, resourceAction, samRequestContext).map {
+                              case Some(actionManagedIdentity) => StatusCodes.OK -> actionManagedIdentity
+                              case None =>
+                                throw new WorkbenchExceptionWithErrorReport(
+                                  ErrorReport(StatusCodes.NotFound, s"Action Managed identity for [$resourceAction] on [$resource] not found")
+                                )
+                            }
                           }
                         }
                       }

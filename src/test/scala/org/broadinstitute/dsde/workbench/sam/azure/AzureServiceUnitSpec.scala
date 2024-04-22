@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.azure
 
-import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.azure.core.http.rest.PagedIterable
@@ -13,11 +12,9 @@ import com.azure.resourcemanager.msi.models.Identity.DefinitionStages
 import com.azure.resourcemanager.msi.models.{Identities, Identity}
 import com.azure.resourcemanager.resources.ResourceManager
 import com.azure.resourcemanager.resources.models.{ResourceGroup, ResourceGroups}
-import org.broadinstitute.dsde.workbench.model.WorkbenchExceptionWithErrorReport
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceTypeName}
-import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.ScalaFutures
@@ -37,7 +34,6 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockCrlService = mock[CrlService]
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
-        val mockPolicyEvaluatorService = mock[PolicyEvaluatorService]
         val mockMsiManager = mock[MsiManager]
         val mockApplicationManager = mock[ApplicationManager]
         val mockApplications = mock[Applications]
@@ -53,7 +49,7 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockIdentityWithCreate = mock[DefinitionStages.WithCreate]
         val mockIdentity = mock[Identity]
 
-        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO, mockPolicyEvaluatorService)
+        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
 
         val testMrgCoordinates = ManagedResourceGroupCoordinates(
           TenantId(UUID.randomUUID().toString),
@@ -71,7 +67,6 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val testSamRequestContext = samRequestContext.copy(samUser = Some(dummyUser))
         val testMrgId = UUID.randomUUID().toString
 
-        when(mockPolicyEvaluatorService.hasPermission(testResource, testAction, dummyUser.id, testSamRequestContext)).thenReturn(IO.pure(true))
         when(mockDirectoryDAO.loadActionManagedIdentity(testActionManagedIdentityId, testSamRequestContext)).thenReturn(IO.pure(None))
         when(mockAzureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(testBillingProfileId, testSamRequestContext))
           .thenReturn(IO.pure(Some(ManagedResourceGroup(testMrgCoordinates, testBillingProfileId))))
@@ -103,7 +98,7 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
 
         // Act
         val (ami, created) =
-          azureService.getOrCreateActionManagedIdentity(testResource, testAction, testBillingProfileId, dummyUser, testSamRequestContext).unsafeRunSync()
+          azureService.getOrCreateActionManagedIdentity(testResource, testAction, testBillingProfileId, testSamRequestContext).unsafeRunSync()
 
         // Assert
         ami should be(testActionManagedIdentity)
@@ -115,9 +110,8 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockCrlService = mock[CrlService]
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
-        val mockPolicyEvaluatorService = mock[PolicyEvaluatorService]
 
-        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO, mockPolicyEvaluatorService)
+        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
 
         val testMrgCoordinates = ManagedResourceGroupCoordinates(
           TenantId(UUID.randomUUID().toString),
@@ -132,12 +126,11 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val testObjectId = ManagedIdentityObjectId(UUID.randomUUID().toString)
         val testActionManagedIdentity = ActionManagedIdentity(testActionManagedIdentityId, testObjectId, testDisplayName, testMrgCoordinates)
 
-        when(mockPolicyEvaluatorService.hasPermission(testResource, testAction, dummyUser.id, samRequestContext)).thenReturn(IO.pure(true))
         when(mockDirectoryDAO.loadActionManagedIdentity(testActionManagedIdentityId, samRequestContext)).thenReturn(IO.pure(Option(testActionManagedIdentity)))
 
         // Act
         val (ami, created) =
-          azureService.getOrCreateActionManagedIdentity(testResource, testAction, testBillingProfileId, dummyUser, samRequestContext).unsafeRunSync()
+          azureService.getOrCreateActionManagedIdentity(testResource, testAction, testBillingProfileId, samRequestContext).unsafeRunSync()
 
         // Assert
         ami should be(testActionManagedIdentity)
@@ -150,11 +143,10 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockCrlService = mock[CrlService]
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
-        val mockPolicyEvaluatorService = mock[PolicyEvaluatorService]
         val mockMsiManager = mock[MsiManager]
         val mockIdentities = mock[Identities]
 
-        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO, mockPolicyEvaluatorService)
+        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
 
         val testMrgCoordinates = ManagedResourceGroupCoordinates(
           TenantId(UUID.randomUUID().toString),
@@ -178,30 +170,6 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         // Act & Assert
         azureService.deleteActionManagedIdentity(testActionManagedIdentityId, samRequestContext).unsafeRunSync()
       }
-
-      "refuse to interact with a user without the action" in {
-        // Arrange
-        val mockCrlService = mock[CrlService]
-        val mockDirectoryDAO = mock[DirectoryDAO]
-        val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
-        val mockPolicyEvaluatorService = mock[PolicyEvaluatorService]
-
-        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO, mockPolicyEvaluatorService)
-
-        val testBillingProfileId = BillingProfileId(UUID.randomUUID().toString)
-        val testAction = ResourceAction("testAction")
-        val testResource = FullyQualifiedResourceId(ResourceTypeName("testResourceType"), ResourceId("testResource"))
-
-        when(mockPolicyEvaluatorService.hasPermission(testResource, testAction, dummyUser.id, samRequestContext)).thenReturn(IO.pure(false))
-
-        // Act
-        val thrown = intercept[WorkbenchExceptionWithErrorReport] {
-          azureService.getOrCreateActionManagedIdentity(testResource, testAction, testBillingProfileId, dummyUser, samRequestContext).unsafeRunSync()
-        }
-
-        // Assert
-        thrown.errorReport.statusCode should be(Some(StatusCodes.Forbidden))
-      }
     }
 
     "Managed Resource Groups" - {
@@ -210,11 +178,10 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockCrlService = mock[CrlService]
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
-        val mockPolicyEvaluatorService = mock[PolicyEvaluatorService]
         val mockMsiManager = mock[MsiManager]
         val mockIdentities = mock[Identities]
 
-        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO, mockPolicyEvaluatorService)
+        val azureService = new AzureService(mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
 
         val testMrgCoordinates = ManagedResourceGroupCoordinates(
           TenantId(UUID.randomUUID().toString),

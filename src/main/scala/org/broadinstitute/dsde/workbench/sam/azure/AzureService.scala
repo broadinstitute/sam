@@ -17,7 +17,6 @@ import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.service.PolicyEvaluatorService
 import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -26,8 +25,7 @@ import scala.jdk.CollectionConverters._
 class AzureService(
     crlService: CrlService,
     directoryDAO: DirectoryDAO,
-    azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO,
-    policyEvaluatorService: PolicyEvaluatorService
+    azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO
 ) {
 
   // Tag on the MRG to specify the Sam billing-profile id
@@ -142,15 +140,10 @@ class AzureService(
       resource: FullyQualifiedResourceId,
       resourceAction: ResourceAction,
       billingProfileId: BillingProfileId,
-      samUser: SamUser,
       samRequestContext: SamRequestContext
-  ): IO[(ActionManagedIdentity, Boolean)] =
+  ): IO[(ActionManagedIdentity, Boolean)] = {
+    val id = ActionManagedIdentityId(resource, resourceAction, billingProfileId)
     for {
-      hasPermission <- policyEvaluatorService.hasPermission(resource, resourceAction, samUser.id, samRequestContext)
-      _ <- IO.raiseWhen(!hasPermission)(
-        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"User ${samUser.id} does not have $resourceAction on $resource"))
-      )
-      id = ActionManagedIdentityId(resource, resourceAction, billingProfileId)
       existingAmiOpt <- directoryDAO.loadActionManagedIdentity(id, samRequestContext)
       ami <- existingAmiOpt match {
         // pet exists in Sam DB - return it
@@ -159,20 +152,13 @@ class AzureService(
         case None => createActionManagedIdentity(id, samRequestContext)
       }
     } yield ami
+  }
 
   def getActionManagedIdentity(
       resource: FullyQualifiedResourceId,
       resourceAction: ResourceAction,
-      samUser: SamUser,
       samRequestContext: SamRequestContext
-  ): IO[Option[ActionManagedIdentity]] =
-    for {
-      hasPermission <- policyEvaluatorService.hasPermission(resource, resourceAction, samUser.id, samRequestContext)
-      _ <- IO.raiseWhen(!hasPermission)(
-        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Forbidden, s"User ${samUser.id} does not have $resourceAction on $resource"))
-      )
-      ami <- directoryDAO.loadActionManagedIdentity(resource, resourceAction, samRequestContext)
-    } yield ami
+  ): IO[Option[ActionManagedIdentity]] = directoryDAO.loadActionManagedIdentity(resource, resourceAction, samRequestContext)
 
   private def createActionManagedIdentity(
       id: ActionManagedIdentityId,
@@ -180,21 +166,19 @@ class AzureService(
   ): IO[(ActionManagedIdentity, Boolean)] =
     for {
       mrgOpt <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(id.billingProfileId, samRequestContext)
-      mrgCoordinates <- mrgOpt match {
-        case Some(mrg) => IO.pure(mrg.managedResourceGroupCoordinates)
-        case None =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.NotFound, s"Managed Resource Group with Billing Profile ID [${id.billingProfileId}] does not exist")
-            )
-          )
-      }
-      _ <- validateManagedResourceGroup(mrgCoordinates, samRequestContext)
-      msiManager <- crlService.buildMsiManager(mrgCoordinates.tenantId, mrgCoordinates.subscriptionId)
-      mrgManager <- crlService.buildResourceManager(mrgCoordinates.tenantId, mrgCoordinates.subscriptionId)
+      mrg <- IO.fromOption(mrgOpt)(
+        new WorkbenchExceptionWithErrorReport(
+          ErrorReport(StatusCodes.NotFound, s"Managed Resource Group with Billing Profile ID [${id.billingProfileId}] does not exist")
+        )
+      )
+      mrgCoordinates = mrg.managedResourceGroupCoordinates
+      // mapping the result of the validate call to ensure that validation happens before anything is created in Azure
+      validatedMrgCoordinates <- validateManagedResourceGroup(mrgCoordinates, samRequestContext).map(_ => mrg.managedResourceGroupCoordinates)
+      msiManager <- crlService.buildMsiManager(validatedMrgCoordinates.tenantId, validatedMrgCoordinates.subscriptionId)
+      mrgManager <- crlService.buildResourceManager(validatedMrgCoordinates.tenantId, validatedMrgCoordinates.subscriptionId)
       amiName = toManagedIdentityNameFromAmiId(id)
-      region <- getRegionFromMrg(mrgCoordinates, mrgManager, samRequestContext)
-      context = managedIdentityContext(mrgCoordinates, amiName, region)
+      region <- getRegionFromMrg(validatedMrgCoordinates, mrgManager, samRequestContext)
+      context = managedIdentityContext(validatedMrgCoordinates, amiName, region)
       azureUami <- traceIOWithContext("createUAMI", samRequestContext) { _ =>
         IO(
           // note that this will not fail when the UAMI already exists
@@ -202,12 +186,12 @@ class AzureService(
             .identities()
             .define(amiName.value)
             .withRegion(region)
-            .withExistingResourceGroup(mrgCoordinates.managedResourceGroupName.value)
+            .withExistingResourceGroup(validatedMrgCoordinates.managedResourceGroupName.value)
             .withTags(managedIdentityTags(id).asJava)
             .create(context)
         )
       }
-      amiToCreate = ActionManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()), mrgCoordinates)
+      amiToCreate = ActionManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()), validatedMrgCoordinates)
       createdAmi <- directoryDAO.createActionManagedIdentity(amiToCreate, samRequestContext)
     } yield (createdAmi, true)
 

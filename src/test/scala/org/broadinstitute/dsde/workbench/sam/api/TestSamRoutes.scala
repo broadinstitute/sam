@@ -204,7 +204,7 @@ object TestSamRoutes {
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
     val azureService =
-      new AzureService(crlService.getOrElse(MockCrlService(Option(user))), directoryDAO, new MockAzureManagedResourceGroupDAO, policyEvaluatorService)
+      new AzureService(crlService.getOrElse(MockCrlService(Option(user))), directoryDAO, new MockAzureManagedResourceGroupDAO)
     new TestSamRoutes(
       mockResourceService,
       policyEvaluatorService,
