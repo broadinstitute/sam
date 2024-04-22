@@ -159,7 +159,7 @@ class ResourceServiceSpec
     new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
 
   val mockAzureService = mock[AzureService]
-  private val azuredService =
+  private val serviceWithAzure =
     new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set("test.firecloud.org"), Some(mockAzureService))
 
   val managedGroupService =
@@ -1820,9 +1820,9 @@ class ResourceServiceSpec
 
     val managedResourceGroup = ManagedResourceGroup(managedResourceGroupCoordinates, BillingProfileId(billingProfileResource.resourceId.value))
 
-    azuredService.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
-    runAndWait(azuredService.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext))
-    runAndWait(azuredService.createResource(defaultResourceType, billingProfileResource.resourceId, dummyUser, samRequestContext))
+    serviceWithAzure.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(serviceWithAzure.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext))
+    runAndWait(serviceWithAzure.createResource(defaultResourceType, billingProfileResource.resourceId, dummyUser, samRequestContext))
     runAndWait(azureManagedResourceGroupDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext))
     ownerRoleActions.foreach { action =>
       val ami = ActionManagedIdentity(
@@ -1837,11 +1837,11 @@ class ResourceServiceSpec
       )
       runAndWait(dirDAO.createActionManagedIdentity(ami, samRequestContext))
     }
-    when(mockAzureService.deleteActionManagedIdentity(any[ActionManagedIdentityId], any[SamRequestContext])).thenReturn(IO.unit)
 
     assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().nonEmpty)
 
-    runAndWait(azuredService.deleteResource(resource, samRequestContext))
+    when(mockAzureService.deleteActionManagedIdentity(any[ActionManagedIdentityId], any[SamRequestContext])).thenReturn(IO.unit)
+    runAndWait(serviceWithAzure.deleteResource(resource, samRequestContext))
 
     assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().isEmpty)
     ownerRoleActions.foreach { action =>

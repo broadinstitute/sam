@@ -76,7 +76,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val tosService = new TosService(NoExtensions, directoryDAO, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
-    val (_, policyEvaluatorService, _, _) = setUpResources(directoryDAO)
+    setUpResources(directoryDAO)
     val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
 
     // create user
@@ -139,7 +139,7 @@ class AzureServiceSpec(_system: ActorSystem)
     // this is a best effort -- it will be deleted anyway by Janitor
     msiManager.identities().deleteById(azureRes.id())
   }
-  def setUpResources(directoryDAO: DirectoryDAO): (ResourceService, PolicyEvaluatorService, ResourceType, ResourceAction) = {
+  def setUpResources(directoryDAO: DirectoryDAO): (ResourceService, ResourceType, ResourceAction) = {
     lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
     val emailDomain = "example.com"
     val ownerRoleName = ResourceRoleName("owner")
@@ -170,10 +170,10 @@ class AzureServiceSpec(_system: ActorSystem)
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, directoryDAO)
     val resourceService =
       new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain, Set("test.firecloud.org"))
-    (resourceService, policyEvaluatorService, defaultResourceType, viewAction)
+    (resourceService, defaultResourceType, viewAction)
   }
 
-  it should "create an action managed identity" taggedAs ConnectedTest in {
+  it should "create and delete an action managed identity" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
     val janitorConfig = appConfig.janitorConfig
 
@@ -186,7 +186,7 @@ class AzureServiceSpec(_system: ActorSystem)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
     val azureTestConfig = config.getConfig("testStuff.azure")
-    val (resourceService, policyEvaluatorService, defaultResourceType, viewAction) = setUpResources(directoryDAO)
+    val (resourceService, defaultResourceType, viewAction) = setUpResources(directoryDAO)
     val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO)
 
     // create user
@@ -261,75 +261,6 @@ class AzureServiceSpec(_system: ActorSystem)
     azureRes2.id() shouldBe res2.objectId.value
     azureRes2.name() shouldBe res2.displayName.value
 
-    // delete managed identity from Azure
-    // this is a best effort -- it will be deleted anyway by Janitor
-    msiManager.identities().deleteById(azureRes.id())
-  }
-
-  it should "delete an action managed identity" taggedAs ConnectedTest in {
-    val azureServicesConfig = appConfig.azureServicesConfig
-    val janitorConfig = appConfig.janitorConfig
-
-    assume(azureServicesConfig.isDefined && janitorConfig.enabled, "-- skipping Azure test")
-
-    // create dependencies
-    val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
-    val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
-    val tosService = new TosService(NoExtensions, directoryDAO, tosConfig)
-    val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
-    val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(dbRef, dbRef)
-    val azureTestConfig = config.getConfig("testStuff.azure")
-    val (resourceService, policyEvaluatorService, defaultResourceType, viewAction) = setUpResources(directoryDAO)
-    val azureService = new AzureService(crlService, directoryDAO, azureManagedResourceGroupDAO)
-
-    // create user
-    val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("hermione.owner@test.firecloud.org"))).get
-    val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
-    userStatus shouldBe UserStatus(
-      UserStatusDetails(defaultUser.id, defaultUser.email),
-      Map("tosAccepted" -> false, "adminEnabled" -> true, "ldap" -> true, "allUsersGroup" -> true, "google" -> true)
-    )
-
-    // user should exist in postgres
-    directoryDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
-
-    // Create the resource type and resource
-    val resourceName = ResourceId("resource")
-    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
-    resourceService.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
-    runAndWait(resourceService.createResource(defaultResourceType, resourceName, defaultUser, samRequestContext))
-
-    // Create the "billing profile" resource. There's no actual need for it to be a "billing profile", we just need a resource to attach the managed resource group to.
-    val billingProfileId = BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
-    val billingProfileResource = runAndWait(resourceService.createResource(defaultResourceType, billingProfileId.asResourceId, defaultUser, samRequestContext))
-
-    val tenantId = TenantId(azureTestConfig.getString("tenantId"))
-    val subscriptionId = SubscriptionId(azureTestConfig.getString("subscriptionId"))
-    val managedResourceGroupName = ManagedResourceGroupName(azureTestConfig.getString("managedResourceGroupName"))
-    val mrgCoordinates = ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName)
-    val managedResourceGroup = ManagedResourceGroup(mrgCoordinates, billingProfileId)
-    runAndWait(azureService.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = Some(defaultUser))))
-
-    val actionManagedIdentityId =
-      ActionManagedIdentityId(resource, viewAction, billingProfileId)
-
-    // create action managed identity
-    val (res, created) = azureService
-      .getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, samRequestContext.copy(samUser = Some(defaultUser)))
-      .unsafeRunSync()
-    created shouldBe true
-    res.id shouldBe actionManagedIdentityId
-    res.displayName shouldBe ManagedIdentityDisplayName(s"${resource.resourceId.value}-${viewAction.value}")
-
-    // managed identity should now exist in azure
-    val msiManager = crlService.buildMsiManager(tenantId, subscriptionId).unsafeRunSync()
-    val azureRes = msiManager.identities().getById(res.objectId.value)
-    azureRes should not be null
-    azureRes.tenantId() shouldBe tenantId.value
-    azureRes.resourceGroupName() shouldBe managedResourceGroupName.value
-    azureRes.id() shouldBe res.objectId.value
-    azureRes.name() shouldBe res.displayName.value
-
     // delete action managed identity
     azureService.deleteActionManagedIdentity(actionManagedIdentityId, samRequestContext).unsafeRunSync()
 
@@ -340,6 +271,10 @@ class AzureServiceSpec(_system: ActorSystem)
     msiManager.identities().listByResourceGroup(managedResourceGroupName.value).asScala.toList.exists { i =>
       i.name() === azureService.toManagedIdentityNameFromAmiId(actionManagedIdentityId)
     } shouldBe false
+
+    // delete managed identity from Azure
+    // this is a best effort -- it will be deleted anyway by Janitor
+    msiManager.identities().deleteById(azureRes.id())
   }
 
   "createManagedResourceGroup" should "create a managed resource group" in {
