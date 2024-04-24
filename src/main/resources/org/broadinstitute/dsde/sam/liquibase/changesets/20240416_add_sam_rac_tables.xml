@@ -18,10 +18,13 @@
             <column name="id" type="BIGINT" autoIncrement="true">
                 <constraints primaryKey="true" nullable="false"/>
             </column>
-            <column name="lock_detail" type="JSONB">
+            <column name="name" type="VARCHAR">
                 <constraints primaryKey="false" nullable="false"/>
             </column>
-            <column name="name" type="VARCHAR">
+            <column name="lock_type" type="VARCHAR">
+                <constraints primaryKey="false" nullable="false"/>
+            </column>
+            <column name="lock_detail" type="JSONB">
                 <constraints primaryKey="false" nullable="false"/>
             </column>
             <column name="description" type="VARCHAR">
