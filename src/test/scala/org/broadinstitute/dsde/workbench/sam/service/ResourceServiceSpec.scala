@@ -13,8 +13,28 @@ import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.audit._
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ActionManagedIdentity,
+  ActionManagedIdentityId,
+  AzureService,
+  BillingProfileId,
+  ManagedIdentityDisplayName,
+  ManagedIdentityObjectId,
+  ManagedResourceGroup,
+  ManagedResourceGroupCoordinates,
+  ManagedResourceGroupName,
+  SubscriptionId,
+  TenantId
+}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{
+  AccessPolicyDAO,
+  AzureManagedResourceGroupDAO,
+  DirectoryDAO,
+  PostgresAccessPolicyDAO,
+  PostgresAzureManagedResourceGroupDAO,
+  PostgresDirectoryDAO
+}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -51,6 +71,7 @@ class ResourceServiceSpec
 
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  lazy val azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   private val ownerRoleName = ResourceRoleName("owner")
 
@@ -136,6 +157,10 @@ class ResourceServiceSpec
   private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
   private val constrainableService =
     new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
+
+  val mockAzureService = mock[AzureService]
+  private val serviceWithAzure =
+    new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set("test.firecloud.org"), Some(mockAzureService))
 
   val managedGroupService =
     new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
@@ -1777,6 +1802,54 @@ class ResourceServiceSpec
 
     assert(managedGroupResourceType.reuseIds)
     testDeleteResource(managedGroupResourceType)
+  }
+
+  it should "delete any action managed identites for the resource while it deletes the resource" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
+    // There's no actual need for it to be a real "billing profile", we just need a resource to attach the managed resource group to.
+    val billingProfileResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId(UUID.randomUUID().toString))
+    val ownerRoleActions = defaultResourceType.roles.find(_.roleName == defaultResourceType.ownerRoleName).get.actions
+
+    val managedResourceGroupCoordinates = ManagedResourceGroupCoordinates(
+      TenantId(UUID.randomUUID().toString),
+      SubscriptionId(UUID.randomUUID().toString),
+      ManagedResourceGroupName(UUID.randomUUID().toString)
+    )
+
+    val managedResourceGroup = ManagedResourceGroup(managedResourceGroupCoordinates, BillingProfileId(billingProfileResource.resourceId.value))
+
+    serviceWithAzure.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(serviceWithAzure.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext))
+    runAndWait(serviceWithAzure.createResource(defaultResourceType, billingProfileResource.resourceId, dummyUser, samRequestContext))
+    runAndWait(azureManagedResourceGroupDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext))
+    ownerRoleActions.foreach { action =>
+      val ami = ActionManagedIdentity(
+        ActionManagedIdentityId(
+          resource,
+          action,
+          BillingProfileId(billingProfileResource.resourceId.value)
+        ),
+        ManagedIdentityObjectId(UUID.randomUUID().toString),
+        ManagedIdentityDisplayName(s"${resource.resourceId.value}-${action.value}"),
+        managedResourceGroupCoordinates
+      )
+      runAndWait(dirDAO.createActionManagedIdentity(ami, samRequestContext))
+    }
+
+    assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().nonEmpty)
+
+    when(mockAzureService.deleteActionManagedIdentity(any[ActionManagedIdentityId], any[SamRequestContext])).thenReturn(IO.unit)
+    runAndWait(serviceWithAzure.deleteResource(resource, samRequestContext))
+
+    assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().isEmpty)
+    ownerRoleActions.foreach { action =>
+      verify(mockAzureService).deleteActionManagedIdentity(
+        argThat((arg: ActionManagedIdentityId) => arg.action.equals(action) && arg.resourceId.equals(resource)),
+        eqTo(samRequestContext)
+      )
+    }
   }
 
   private def testDeleteResource(resourceType: ResourceType) = {
