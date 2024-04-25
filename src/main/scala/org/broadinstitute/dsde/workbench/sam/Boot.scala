@@ -423,7 +423,14 @@ object Boot extends IOApp with LazyLogging {
     )
     val tosService = new TosService(cloudExtensionsInitializer.cloudExtensions, directoryDAO, config.termsOfServiceConfig)
     val userService =
-      new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService, config.azureServicesConfig)
+      new UserService(
+        directoryDAO,
+        cloudExtensionsInitializer.cloudExtensions,
+        config.blockedEmailDomains,
+        tosService,
+        config.azureServicesConfig,
+        Seq(config.emailDomain)
+      )
     val statusService =
       new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds, 1 minute)
     val managedGroupService =
