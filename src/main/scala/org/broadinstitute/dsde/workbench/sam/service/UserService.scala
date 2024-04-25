@@ -442,7 +442,14 @@ class UserService(
       case emailString if matchesBadDomain(emailString, blockedEmailDomains) =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")))
       case emailString if matchesBadDomain(emailString, nonInvitableDomain) =>
-        IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain cannot be invited [${email.value}]")))
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(
+            ErrorReport(
+              StatusCodes.BadRequest,
+              s"Email domain cannot be invited [${email.value}]. If you are trying to invite a group, please make sure that group exists before adding it to a resource policy."
+            )
+          )
+        )
       case UserService.emailRegex() => IO.unit
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }

@@ -397,7 +397,7 @@ class CreateUserSpec extends UserServiceTestTraits {
       }
 
       // Assert
-      exception.errorReport.message should include("email domain cannot be invited")
+      exception.errorReport.message should include("Email domain cannot be invited")
     }
 
     it("should be able to be invited with no marketing consent") {
