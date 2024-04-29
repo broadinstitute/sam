@@ -34,7 +34,7 @@ import org.broadinstitute.dsde.workbench.google.{
 }
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
+import org.broadinstitute.dsde.workbench.oauth2.{ClientId, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -140,8 +140,6 @@ object Boot extends IOApp with LazyLogging {
         OpenIDConnectConfiguration[IO](
           appConfig.oidcConfig.authorityEndpoint,
           ClientId(appConfig.oidcConfig.clientId),
-          oidcClientSecret = appConfig.oidcConfig.clientSecret.map(ClientSecret),
-          extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
           extraAuthParams = Some("prompt=login")
         )
       )
