@@ -7,9 +7,16 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributesRequest, SamUserCombinedStateResponse, SamUserRegistrationRequest, SamUserResponse}
-import org.broadinstitute.dsde.workbench.sam.service.{TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  SamUser,
+  SamUserAttributesRequest,
+  SamUserCombinedStateResponse,
+  SamUserRegistrationRequest,
+  SamUserResponse
+}
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /** Created by tlangs on 10/12/2023.
@@ -17,6 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
   val userService: UserService
   val tosService: TosService
+  val resourceService: ResourceService
 
   /** Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where a user is not found. In most routes that is appropriate
     * but in the user routes it should be a 404.
@@ -181,7 +189,17 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
           allowances <- userService.getUserAllowances(samUser, samRequestContext)
           maybeAttributes <- userService.getUserAttributes(samUser.id, samRequestContext)
           termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
-        } yield maybeAttributes.map(SamUserCombinedStateResponse(allowances, _, termsOfServiceDetails))
+          enterpriseFeatures <- resourceService
+            .listResourcesFlat(
+              samUser.id,
+              Set(ResourceTypeName("enterprise-feature")),
+              Set.empty,
+              Set(ResourceRoleName("user")),
+              Set.empty,
+              includePublic = false,
+              samRequestContext
+            )
+        } yield maybeAttributes.map(SamUserCombinedStateResponse(samUser, allowances, _, termsOfServiceDetails, enterpriseFeatures))
         combinedStateResponse.map {
           case Some(response) => OK -> Some(response)
           case None => NotFound -> None

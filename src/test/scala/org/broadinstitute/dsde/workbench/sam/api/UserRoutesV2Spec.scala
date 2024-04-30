@@ -3,11 +3,22 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail}
+import cats.effect.IO
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForSamUserResponseMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAllowances, SamUserAttributes, SamUserAttributesRequest, SamUserCombinedStateResponse, SamUserRegistrationRequest, SamUserResponse}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  FilteredResourceFlat,
+  FilteredResourcesFlat,
+  SamUser,
+  SamUserAllowances,
+  SamUserAttributes,
+  SamUserAttributesRequest,
+  SamUserCombinedStateResponse,
+  SamUserRegistrationRequest,
+  SamUserResponse
+}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar
@@ -16,7 +27,8 @@ import org.scalatest.matchers.should.Matchers
 
 import java.time.Instant
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
-
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.Mockito.lenient
 
 class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
@@ -247,10 +259,22 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
   "GET /api/users/v2/self/combinedState" should "get the user combined state of the calling user" in {
     // Arrange
     val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
+    val enterpriseFeature = FilteredResourceFlat(
+      resourceType = ResourceTypeName("enterprise-feature"),
+      resourceId = ResourceId("enterprise-feature"),
+      policies = Set.empty,
+      roles = Set(ResourceRoleName("user")),
+      actions = Set.empty,
+      authDomainGroups = Set.empty,
+      missingAuthDomainGroups = Set.empty
+    )
+    val filteresResourcesFlat = FilteredResourcesFlat(Set(enterpriseFeature))
     val userCombinedStateResponse = SamUserCombinedStateResponse(
+      defaultUser,
       SamUserAllowances(enabled = true, termsOfService = true),
       SamUserAttributes(defaultUser.id, marketingConsent = true),
-      TermsOfServiceDetails("v1", Instant.now(), permitsSystemUsage = true, isCurrentVersion = true)
+      TermsOfServiceDetails("v1", Instant.now(), permitsSystemUsage = true, isCurrentVersion = true),
+      FilteredResourcesFlat(Set(enterpriseFeature))
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -260,16 +284,31 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       .callAsNonAdminUser()
       .build
 
+    lenient()
+      .doReturn(IO.pure(FilteredResourcesFlat(Set(enterpriseFeature))))
+      .when(samRoutes.resourceService)
+      .listResourcesFlat(
+        any[WorkbenchUserId],
+        any[Set[ResourceTypeName]],
+        any[Set[AccessPolicyName]],
+        any[Set[ResourceRoleName]],
+        any[Set[ResourceAction]],
+        any[Boolean],
+        any[SamRequestContext]
+      )
+
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[SamUserCombinedStateResponse]
+      response.samUser should be(defaultUser)
       response.allowances should be(userCombinedStateResponse.allowances)
       response.attributes should be(userCombinedStateResponse.attributes)
       response.termsOfServiceDetails.acceptedOn should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn)
       response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
+      response.enterpriseFeatures should be(filteresResourcesFlat)
     }
   }
 

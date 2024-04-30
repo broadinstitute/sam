@@ -8,10 +8,12 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamUserAttributes.SamUser
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 
 object SamUserCombinedStateResponse {
-  implicit val SamUserResponseFormat: RootJsonFormat[SamUserCombinedStateResponse] = jsonFormat3(SamUserCombinedStateResponse.apply)
+  implicit val SamUserResponseFormat: RootJsonFormat[SamUserCombinedStateResponse] = jsonFormat5(SamUserCombinedStateResponse.apply)
 }
 final case class SamUserCombinedStateResponse(
+    samUser: SamUser,
     allowances: SamUserAllowances,
     attributes: SamUserAttributes,
-    termsOfServiceDetails: TermsOfServiceDetails
+    termsOfServiceDetails: TermsOfServiceDetails,
+    enterpriseFeatures: FilteredResourcesFlat
 )
