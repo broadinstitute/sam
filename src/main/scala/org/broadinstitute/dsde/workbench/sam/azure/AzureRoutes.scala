@@ -17,7 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsString
 
-trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestContextDirectives {
+trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestContextDirectives with SamModelDirectives {
   val azureService: Option[AzureService]
 
   def azureRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
@@ -25,7 +25,7 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestCon
       .map { service =>
         pathPrefix("azure" / "v1") {
           path("user" / "petManagedIdentity") {
-            post {
+            postWithTelemetry(samRequestContext) {
               entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
                 requireUserCreatePetAction(request, samUser, samRequestContext) {
                   complete {
@@ -56,6 +56,67 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestCon
                   }
                 }
               }
+            } ~
+            pathPrefix("actionManagedIdentity") {
+              path(Segment / Segment / Segment / Segment) { (bpId, resourceTypeName, resourceId, action) =>
+                val billingProfileId = BillingProfileId(bpId)
+                val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+                val resourceAction = ResourceAction(action)
+
+                withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
+                  if (!resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
+                    throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+                  }
+                  pathEndOrSingleSlash {
+                    postWithTelemetry(
+                      samRequestContext,
+                      "billingProfileId" -> billingProfileId,
+                      "resourceType" -> resource.resourceTypeName,
+                      "resource" -> resource.resourceId,
+                      "action" -> resourceAction
+                    ) {
+                      requireAction(resource, resourceAction, samUser.id, samRequestContext) {
+                        complete {
+                          service.getOrCreateActionManagedIdentity(resource, resourceAction, billingProfileId, samRequestContext).map { case (ami, created) =>
+                            val status = if (created) StatusCodes.Created else StatusCodes.OK
+                            status -> ami
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              } ~
+                path(Segment / Segment / Segment) { (resourceTypeName, resourceId, action) =>
+                  val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+                  val resourceAction = ResourceAction(action)
+
+                  withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
+                    if (!resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
+                      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+                    }
+                    pathEndOrSingleSlash {
+                      getWithTelemetry(
+                        samRequestContext,
+                        "resourceType" -> resource.resourceTypeName,
+                        "resource" -> resource.resourceId,
+                        "action" -> resourceAction
+                      ) {
+                        requireAction(resource, resourceAction, samUser.id, samRequestContext) {
+                          complete {
+                            service.getActionManagedIdentity(resource, resourceAction, samRequestContext).map {
+                              case Some(actionManagedIdentity) => StatusCodes.OK -> actionManagedIdentity
+                              case None =>
+                                throw new WorkbenchExceptionWithErrorReport(
+                                  ErrorReport(StatusCodes.NotFound, s"Action Managed identity for [$resourceAction] on [$resource] not found")
+                                )
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
             } ~
             path("billingProfile" / Segment / "managedResourceGroup") { billingProfileId =>
               val billingProfileResourceId = ResourceId(billingProfileId)

@@ -1,6 +1,6 @@
 # Github action to Build Sam artifact, add/promote semantic tagging and then run tests
 
-name: sam-build-tag-publish-and-run-tests
+name: Build, Publish to Sherlock, and Run Integration Tests
 
 on:
   pull_request:

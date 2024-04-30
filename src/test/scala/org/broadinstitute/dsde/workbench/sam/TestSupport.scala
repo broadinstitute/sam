@@ -225,6 +225,7 @@ object TestSupport extends TestSupport {
     if (databaseEnabled) {
       dbRef.inLocalTransaction { implicit session =>
         val tables = List(
+          ActionManagedIdentityTable,
           PolicyActionTable,
           PolicyRoleTable,
           PolicyTable,

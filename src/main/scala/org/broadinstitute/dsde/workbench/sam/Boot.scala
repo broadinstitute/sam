@@ -34,7 +34,7 @@ import org.broadinstitute.dsde.workbench.google.{
 }
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
+import org.broadinstitute.dsde.workbench.oauth2.{ClientId, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -140,8 +140,6 @@ object Boot extends IOApp with LazyLogging {
         OpenIDConnectConfiguration[IO](
           appConfig.oidcConfig.authorityEndpoint,
           ClientId(appConfig.oidcConfig.clientId),
-          oidcClientSecret = appConfig.oidcConfig.clientSecret.map(ClientSecret),
-          extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
           extraAuthParams = Some("prompt=login")
         )
       )
@@ -408,6 +406,9 @@ object Boot extends IOApp with LazyLogging {
   )(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
+    val azureService = config.azureServicesConfig.map { azureConfig =>
+      new AzureService(new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
+    }
     val resourceService = new ResourceService(
       resourceTypeMap,
       policyEvaluatorService,
@@ -415,11 +416,19 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO,
       cloudExtensionsInitializer.cloudExtensions,
       config.emailDomain,
-      config.adminConfig.allowedEmailDomains
+      config.adminConfig.allowedEmailDomains,
+      azureService
     )
     val tosService = new TosService(cloudExtensionsInitializer.cloudExtensions, directoryDAO, config.termsOfServiceConfig)
     val userService =
-      new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService, config.azureServicesConfig)
+      new UserService(
+        directoryDAO,
+        cloudExtensionsInitializer.cloudExtensions,
+        config.blockedEmailDomains,
+        tosService,
+        config.azureServicesConfig,
+        Seq(config.emailDomain)
+      )
     val statusService =
       new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds, 1 minute)
     val managedGroupService =
@@ -433,9 +442,7 @@ object Boot extends IOApp with LazyLogging {
         config.emailDomain
       )
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
-    val azureService = config.azureServicesConfig.map { azureConfig =>
-      new AzureService(new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
-    }
+
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
         val routes = new SamRoutes(

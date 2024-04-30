@@ -180,9 +180,11 @@ object AkkaHttpServerAttributesGetter extends HttpServerAttributesGetter[HttpReq
 
   override def getUrlQuery(request: HttpRequest): String = request.uri.query().toString()
 
-  /** Defaults to the path of the request. Overridden by the `addTelemetry` directive.
+  /** Defaults to the null. Overridden by the `addTelemetry` directive. This defaults to null because the route is used in metrics and we need to prevent a
+    * cardinality explosion. If we defaulted to the uri path, then any request with path parameters would default to a unique route until overridden by
+    * `addTelemetry` which might not happen in the case of errors or bugs.
     */
-  override def getHttpRoute(request: HttpRequest): String = getUrlPath(request)
+  override def getHttpRoute(request: HttpRequest): String = null
 
   override def getHttpRequestMethod(request: HttpRequest): String = request.method.value
 

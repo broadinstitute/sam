@@ -6,7 +6,19 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ActionManagedIdentity,
+  ActionManagedIdentityId,
+  BillingProfileId,
+  ManagedIdentityDisplayName,
+  ManagedIdentityObjectId,
+  ManagedResourceGroupCoordinates,
+  ManagedResourceGroupName,
+  PetManagedIdentity,
+  PetManagedIdentityId,
+  SubscriptionId,
+  TenantId
+}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
@@ -470,46 +482,41 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    // NOTE updating emails and 'enabled' status is currently not supported by this method
     serializableWriteTransaction("updateUser", samRequestContext) { implicit session =>
       val u = UserTable.column
 
-      // NOTE updating emails and 'enabled' status is currently not supported by this method
-      val setColumnsClause = userUpdate match {
-        case AdminUpdateUserRequest(None, None) => throw new WorkbenchException("Cannot update user with no values.")
-        case AdminUpdateUserRequest(Some(newAzureB2CId), None) =>
-          samsqls"(${u.azureB2cId}, ${u.updatedAt})"
-        case AdminUpdateUserRequest(None, Some(newGoogleSubjectId)) =>
-          samsqls"(${u.googleSubjectId}, ${u.updatedAt})"
-        case AdminUpdateUserRequest(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
-          samsqls"(${u.googleSubjectId}, ${u.azureB2cId}, ${u.updatedAt})"
+      if (userUpdate.googleSubjectId.isEmpty && userUpdate.azureB2CId.isEmpty) {
+        throw new WorkbenchException("Cannot update user with no values.")
       }
 
-      var updatedUser =
-        samUser.copy(
-          googleSubjectId = userUpdate.googleSubjectId.orElse(samUser.googleSubjectId),
-          azureB2CId = userUpdate.azureB2CId.orElse(samUser.azureB2CId),
-          updatedAt = Instant.now()
-        )
-      val setColumnValuesClause = userUpdate match {
-        case AdminUpdateUserRequest(None, None) => throw new WorkbenchException("Cannot update user with no values.")
-        case AdminUpdateUserRequest(Some(AzureB2CId("null")), None) =>
-          updatedUser = updatedUser.copy(azureB2CId = None)
-          // string interpolation adds quotes around null so we have to special case it here
-          samsqls"(null, ${Instant.now()})"
-        case AdminUpdateUserRequest(None, Some(GoogleSubjectId("null"))) =>
-          updatedUser = updatedUser.copy(googleSubjectId = None)
-          // string interpolation adds quotes around null so we have to special case it here
-          samsqls"(null, ${Instant.now()})"
-        case AdminUpdateUserRequest(Some(newGoogleSubjectId), None) =>
-          samsqls"($newGoogleSubjectId, ${Instant.now()})"
-        case AdminUpdateUserRequest(None, Some(newAzureB2CId)) =>
-          samsqls"($newAzureB2CId, ${Instant.now()})"
-        case AdminUpdateUserRequest(Some(newGoogleSubjectId), Some(newAzureB2CId)) =>
-          samsqls"($newGoogleSubjectId, $newAzureB2CId, ${Instant.now()})"
+      val (updateGoogleColumn, updateGoogleValue, returnGoogleValue) = userUpdate.googleSubjectId match {
+        case None => (None, None, samUser.googleSubjectId)
+        case Some(GoogleSubjectId("null")) =>
+          (Some(samsqls"${u.googleSubjectId}"), Some(samsqls"null"), None)
+        case Some(newGoogleSubjectId: GoogleSubjectId) =>
+          (Some(samsqls"${u.googleSubjectId}"), Some(samsqls"$newGoogleSubjectId"), Some(newGoogleSubjectId))
       }
+
+      val (updateAzureB2CColumn, updateAzureB2CValue, returnAzureB2CValue) = userUpdate.azureB2CId match {
+        case None => (None, None, samUser.azureB2CId)
+        case Some(AzureB2CId("null")) =>
+          (Some(samsqls"${u.azureB2cId}"), Some(samsqls"null"), None)
+        case Some(newAzureB2CId: AzureB2CId) =>
+          (Some(samsqls"${u.azureB2cId}"), Some(samsqls"$newAzureB2CId"), Some(newAzureB2CId))
+      }
+
+      // This is a little hacky, but is needed because SQLSyntax's `flatten`, `substring`, and other string-manipulation
+      // methods transform the SQLSyntax into a String. Thankfully, since we always have an `updatedAt` value,
+      // we can use it as a base for foldLeft, and then concatenate the rest of the existing values to it
+      // within the `samsqls` interpolation, preserving the SQLSyntax functionality.
+      val updateColumns = List(updateGoogleColumn, updateAzureB2CColumn).flatten
+        .foldLeft(samsqls"${u.updatedAt}")((acc, col) => samsqls"$acc, $col")
+      val updateValues = List(updateGoogleValue, updateAzureB2CValue).flatten
+        .foldLeft(samsqls"${Instant.now()}")((acc, col) => samsqls"$acc, $col")
 
       val results = samsql"""update ${UserTable.table}
-               set ${setColumnsClause} = ${setColumnValuesClause}
+               set ($updateColumns) = ($updateValues)
                where ${u.id} = ${samUser.id}"""
         .update()
         .apply()
@@ -517,7 +524,13 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       if (results != 1) {
         None
       } else {
-        Option(updatedUser)
+        Option(
+          samUser.copy(
+            googleSubjectId = returnGoogleValue,
+            azureB2CId = returnAzureB2CValue,
+            updatedAt = Instant.now()
+          )
+        )
       }
     }
 
@@ -988,6 +1001,263 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userRecordOpt: Option[UserRecord] = loadUserQuery.map(UserTable(userTable)).single().apply()
       userRecordOpt.map(UserTable.unmarshalUserRecord)
     }
+
+  override def createActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] =
+    serializableWriteTransaction("createActionManagedIdentity", samRequestContext) { implicit session =>
+      val actionManagedIdentityColumn = ActionManagedIdentityTable.column
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
+      val resourceActionTable = ResourceActionTable.syntax
+      val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
+
+      samsql"""insert into ${ActionManagedIdentityTable.table}
+                 (
+                   ${actionManagedIdentityColumn.resourceId},
+                   ${actionManagedIdentityColumn.resourceActionId},
+                   ${actionManagedIdentityColumn.managedResourceGroupId},
+                   ${actionManagedIdentityColumn.objectId},
+                   ${actionManagedIdentityColumn.displayName}
+                 )
+             values (
+                      (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentity.id.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName}),
+                      (select ${resourceActionTable.result.id} from ${ResourceActionTable as resourceActionTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceActionTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceActionTable.action} = ${actionManagedIdentity.id.action} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName}),
+                      (select ${managedResourceGroupTable.result.id}
+                      from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+                      where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentity.id.billingProfileId}),
+                      ${actionManagedIdentity.objectId},
+                      ${actionManagedIdentity.displayName}
+                    )"""
+        .update()
+        .apply()
+      actionManagedIdentity
+    }
+
+  type TableSyntax[A] = scalikejdbc.QuerySQLSyntaxProvider[scalikejdbc.SQLSyntaxSupport[A], A]
+
+  override def loadActionManagedIdentity(
+      actionManagedIdentityId: ActionManagedIdentityId,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] =
+    readOnlyTransaction("loadActionManagedIdentity", samRequestContext) { implicit session =>
+      implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord] = AzureManagedResourceGroupTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+      implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
+
+      val loadActionManagedIdentityQuery =
+        samsql"""select ${resourceTable.result.name},
+                 ${resourceTypeTable.result.name},
+                 ${resourceActionTable.result.action},
+                 ${managedResourceGroupTable.result.tenantId},
+                 ${managedResourceGroupTable.result.subscriptionId},
+                 ${managedResourceGroupTable.result.managedResourceGroupName},
+                 ${managedResourceGroupTable.result.billingProfileId},
+                 ${actionManagedIdentityTable.result.objectId},
+                 ${actionManagedIdentityTable.result.displayName}
+        from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+            on ${actionManagedIdentityTable.managedResourceGroupId} = ${managedResourceGroupTable.id}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
+          left join ${ResourceTypeTable as resourceTypeTable}
+            on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+        where ${resourceTable.name} = ${actionManagedIdentityId.resourceId.resourceId}
+          and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName}
+          and ${managedResourceGroupTable.id} = ${actionManagedIdentityTable.managedResourceGroupId}
+          and ${resourceActionTable.action} = ${actionManagedIdentityId.action}"""
+
+      loadActionManagedIdentityQuery.map(unmarshalActionManagedIdentity).single().apply()
+    }
+
+  def loadActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      action: ResourceAction,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] =
+    readOnlyTransaction("loadActionManagedIdentityForResourceAction", samRequestContext) { implicit session =>
+      implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord] = AzureManagedResourceGroupTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+      implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
+
+      val loadActionManagedIdentityQuery =
+        samsql"""select ${resourceTable.result.name},
+                 ${resourceTypeTable.result.name},
+                 ${resourceActionTable.result.action},
+                 ${managedResourceGroupTable.result.tenantId},
+                 ${managedResourceGroupTable.result.subscriptionId},
+                 ${managedResourceGroupTable.result.managedResourceGroupName},
+                 ${managedResourceGroupTable.result.billingProfileId},
+                 ${actionManagedIdentityTable.result.objectId},
+                 ${actionManagedIdentityTable.result.displayName}
+        from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+            on ${actionManagedIdentityTable.managedResourceGroupId} = ${managedResourceGroupTable.id}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
+          left join ${ResourceTypeTable as resourceTypeTable}
+            on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+        where ${resourceTable.name} = ${resource.resourceId}
+          and ${resourceTypeTable.name} = ${resource.resourceTypeName}
+          and ${resourceActionTable.action} = $action"""
+
+      loadActionManagedIdentityQuery.map(unmarshalActionManagedIdentity).single().apply()
+    }
+
+  override def updateActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] =
+    serializableWriteTransaction("updateActionManagedIdentity", samRequestContext) { implicit session =>
+      val actionManagedIdentityColumn = ActionManagedIdentityTable.column
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
+      val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
+
+      val updateAmiQuery =
+        samsql"""
+                 update ${ActionManagedIdentityTable.table}
+                 set
+                   ${actionManagedIdentityColumn.objectId} = ${actionManagedIdentity.objectId},
+                   ${actionManagedIdentityColumn.displayName} = ${actionManagedIdentity.displayName}
+                 where
+                   ${actionManagedIdentityColumn.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentity.id.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName})
+                   and ${actionManagedIdentityColumn.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action})
+                   and ${actionManagedIdentityColumn.managedResourceGroupId} = (select ${managedResourceGroupTable.result.id}
+                                                                                from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+                                                                                where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentity.id.billingProfileId})
+                   """
+      val updated = updateAmiQuery.update().apply()
+      if (updated != 1) {
+        throw new WorkbenchException(s"Update cannot be applied because ${actionManagedIdentity.id} does not exist")
+      }
+
+      actionManagedIdentity
+    }
+
+  override def deleteActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deleteActionManagedIdentity", samRequestContext) { implicit session =>
+      val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
+      val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
+
+      val deleteActionManagedIdentityQuery =
+        samsql"""delete from ${ActionManagedIdentityTable.table}
+                  where ${actionManagedIdentityTable.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentityId.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName})
+                  and ${actionManagedIdentityTable.managedResourceGroupId} = (select ${managedResourceGroupTable.result.id}
+                                                                                        from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+                                                                                        where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentityId.billingProfileId})
+                  and ${actionManagedIdentityTable.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentityId.action})"""
+      if (deleteActionManagedIdentityQuery.update().apply() != 1) {
+        throw new WorkbenchException(s"${actionManagedIdentityId} cannot be deleted because it already does not exist")
+      }
+    }
+
+  override def getAllActionManagedIdentitiesForResource(
+      resourceId: FullyQualifiedResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]] =
+    readOnlyTransaction("loadActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
+      implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord] = AzureManagedResourceGroupTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+      implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
+
+      val listActionManagedIdentitysQuery =
+        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}, ${resourceActionTable.result.action}, ${managedResourceGroupTable.result.tenantId}, ${managedResourceGroupTable.result.subscriptionId}, ${managedResourceGroupTable.result.managedResourceGroupName}, ${managedResourceGroupTable.result.billingProfileId}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+            on ${actionManagedIdentityTable.managedResourceGroupId} = ${managedResourceGroupTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
+          left join ${ResourceTypeTable as resourceTypeTable}
+            on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+        where ${resourceTable.name} = ${resourceId.resourceId}
+        and ${resourceTypeTable.name} = ${resourceId.resourceTypeName}
+        """
+
+      listActionManagedIdentitysQuery.map(unmarshalActionManagedIdentity).list().apply()
+    }
+
+  override def deleteAllActionManagedIdentitiesForResource(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deleteAllActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
+      val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
+      val deleteActionManagedIdentityQuery =
+        samsql"""delete from ${ActionManagedIdentityTable.table}
+                 where ${actionManagedIdentityTable.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${resourceId.resourceId} and ${resourceTypeTable.name} = ${resourceId.resourceTypeName})"""
+      deleteActionManagedIdentityQuery.update().apply()
+    }
+
+  override def getAllActionManagedIdentitiesForBillingProfile(
+      billingProfileId: BillingProfileId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]] =
+    readOnlyTransaction("loadActionManagedIdentitiesForResource", samRequestContext) { implicit session =>
+      implicit val actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord] = ActionManagedIdentityTable.syntax
+      implicit val managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord] = AzureManagedResourceGroupTable.syntax
+      implicit val resourceActionTable: TableSyntax[ResourceActionRecord] = ResourceActionTable.syntax
+      implicit val resourceTable: TableSyntax[ResourceRecord] = ResourceTable.syntax
+      implicit val resourceTypeTable: TableSyntax[ResourceTypeRecord] = ResourceTypeTable.syntax
+
+      val listActionManagedIdentitysQuery =
+        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}, ${resourceActionTable.result.action}, ${managedResourceGroupTable.result.tenantId}, ${managedResourceGroupTable.result.subscriptionId}, ${managedResourceGroupTable.result.managedResourceGroupName}, ${managedResourceGroupTable.result.billingProfileId}, ${actionManagedIdentityTable.result.objectId}, ${actionManagedIdentityTable.result.displayName}
+        from ${ActionManagedIdentityTable as actionManagedIdentityTable}
+          left join ${ResourceActionTable as resourceActionTable}
+            on ${actionManagedIdentityTable.resourceActionId} = ${resourceActionTable.id}
+          left join ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+            on ${actionManagedIdentityTable.managedResourceGroupId} = ${managedResourceGroupTable.id}
+          left join ${ResourceTable as resourceTable}
+            on ${actionManagedIdentityTable.resourceId} = ${resourceTable.id}
+          left join ${ResourceTypeTable as resourceTypeTable}
+            on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+        where ${managedResourceGroupTable.billingProfileId} = $billingProfileId
+        """
+
+      listActionManagedIdentitysQuery.map(unmarshalActionManagedIdentity).list().apply()
+    }
+  override def deleteAllActionManagedIdentitiesForBillingProfile(billingProfileId: BillingProfileId, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("deleteAllActionManagedIdentitiesForManagedResourceGroup", samRequestContext) { implicit session =>
+      val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
+      val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
+      val deleteActionManagedIdentityQuery =
+        samsql"""delete from ${ActionManagedIdentityTable.table}
+                 where ${actionManagedIdentityTable.managedResourceGroupId} = (select ${managedResourceGroupTable.result.id}
+                                                                        from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
+                                                                        where ${managedResourceGroupTable.billingProfileId} = $billingProfileId)
+             """
+      deleteActionManagedIdentityQuery.update().apply()
+    }
+
+  private def unmarshalActionManagedIdentity(rs: WrappedResultSet)(implicit
+      resourceTable: TableSyntax[ResourceRecord],
+      resourceTypeTable: TableSyntax[ResourceTypeRecord],
+      resourceActionTable: TableSyntax[ResourceActionRecord],
+      actionManagedIdentityTable: TableSyntax[ActionManagedIdentityRecord],
+      managedResourceGroupTable: TableSyntax[AzureManagedResourceGroupRecord]
+  ) =
+    ActionManagedIdentity(
+      ActionManagedIdentityId(
+        FullyQualifiedResourceId(rs.get[ResourceTypeName](resourceTypeTable.resultName.name), rs.get[ResourceId](resourceTable.resultName.name)),
+        rs.get[ResourceAction](resourceActionTable.resultName.action),
+        rs.get[BillingProfileId](managedResourceGroupTable.resultName.billingProfileId)
+      ),
+      rs.get[ManagedIdentityObjectId](actionManagedIdentityTable.resultName.objectId),
+      rs.get[ManagedIdentityDisplayName](actionManagedIdentityTable.resultName.displayName),
+      ManagedResourceGroupCoordinates(
+        rs.get[TenantId](managedResourceGroupTable.resultName.tenantId),
+        rs.get[SubscriptionId](managedResourceGroupTable.resultName.subscriptionId),
+        rs.get[ManagedResourceGroupName](managedResourceGroupTable.resultName.managedResourceGroupName)
+      )
+    )
 
   override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("setUserRegisteredAt", samRequestContext) { implicit session =>

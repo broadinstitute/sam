@@ -178,6 +178,9 @@ sudo sh -c "echo '127.0.0.1       local.dsde-dev.broadinstitute.org' >> /etc/hos
 
 You can then start Sam against dev DBs or local DBs following the instructions below.
 
+#### Get on the Broad VPN
+You need to be on the non-split VPN to perform the next steps
+
 #### Credentials
 You'll need to authenticate with Google to run the `kubectl` commands. To run Sam locally, dev credentials are required.
 
@@ -209,6 +212,8 @@ sh docker/run-proxy.sh start
 ```
 
 #### Run Sam!
+You can use sbt, but sometimes it's easier to run from your IDE. To do so, just set up a run configuration as described in the debugging instructions and run it with IntelliJ
+
 ```shell
 sbt run
 ```

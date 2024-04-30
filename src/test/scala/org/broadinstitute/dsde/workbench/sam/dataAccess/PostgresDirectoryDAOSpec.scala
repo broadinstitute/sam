@@ -26,6 +26,7 @@ import scala.concurrent.duration._
 class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   val defaultGroupName: WorkbenchGroupName = WorkbenchGroupName("group")
   val defaultGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
@@ -64,6 +65,27 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
     Set(writeAction, readAction),
     Set.empty,
     public = false
+  )
+
+  val defaultTenantId = TenantId("testTenant")
+  val defaultSubscriptionId = SubscriptionId(UUID.randomUUID().toString)
+  val defaultManagedResourceGroupName = ManagedResourceGroupName("mrg-test")
+  val defaultManagedResourceGroupCoordinates = ManagedResourceGroupCoordinates(defaultTenantId, defaultSubscriptionId, defaultManagedResourceGroupName)
+  val defaultBillingProfileId = BillingProfileId(UUID.randomUUID().toString)
+  val defaultBillingProfileResource = defaultResource.copy(resourceId = defaultBillingProfileId.asResourceId)
+  val defaultManagedResourceGroup = ManagedResourceGroup(defaultManagedResourceGroupCoordinates, defaultBillingProfileId)
+
+  val defaultActionManagedIdentities: Set[ActionManagedIdentity] = Set(readAction, writeAction).map(action =>
+    ActionManagedIdentity(
+      ActionManagedIdentityId(
+        FullyQualifiedResourceId(defaultResource.resourceTypeName, defaultResource.resourceId),
+        action,
+        defaultBillingProfileId
+      ),
+      ManagedIdentityObjectId(UUID.randomUUID().toString),
+      ManagedIdentityDisplayName(s"whoCares-$action"),
+      defaultManagedResourceGroupCoordinates
+    )
   )
 
   override protected def beforeEach(): Unit =
@@ -1343,30 +1365,31 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       "update the googleSubjectId for a user" in {
         assume(databaseEnabled, databaseEnabledClue)
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
-        dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
+        val user = Generator.genWorkbenchUserAzure.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
-        dao.updateUser(defaultUser, AdminUpdateUserRequest(None, Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+        dao.updateUser(user, AdminUpdateUserRequest(None, Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
       }
 
       "update the azureB2CId for a user" in {
         assume(databaseEnabled, databaseEnabledClue)
         val newB2CId = AzureB2CId(UUID.randomUUID().toString)
-        dao.createUser(defaultUser.copy(azureB2CId = None), samRequestContext).unsafeRunSync()
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
-        dao.updateUser(defaultUser, AdminUpdateUserRequest(Option(newB2CId), None), samRequestContext).unsafeRunSync()
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
+        dao.updateUser(user, AdminUpdateUserRequest(Option(newB2CId), None), samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(newB2CId)
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(newB2CId)
       }
 
       "sets the updatedAt datetime to the current datetime" in {
         assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
-          googleSubjectId = None,
           updatedAt = Instant.parse("2020-02-02T20:20:20Z")
         )
         dao.createUser(user, samRequestContext).unsafeRunSync()
@@ -1378,6 +1401,20 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         // Assert
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
         loadedUser.value.updatedAt should beAround(Instant.now())
+      }
+
+      "will update the googleSubjectId and azureB2CId for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val newGoogleSubjectId = GoogleSubjectId("234567890123456789012")
+        val newB2CId = AzureB2CId(UUID.randomUUID().toString)
+        val user = Generator.genWorkbenchUserBoth.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.updateUser(user, AdminUpdateUserRequest(Option(newB2CId), Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
+
+        val updatedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        updatedUser.flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+        updatedUser.flatMap(_.azureB2CId) shouldBe Option(newB2CId)
       }
     }
 
@@ -1869,6 +1906,78 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         // Assert
         retrievedAttributes should be(Some(upsertedAttributes))
+      }
+    }
+
+    "Action Managed Identities" - {
+      "can be individually created, read, updated, and deleted" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val readActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == readAction)
+        val loadedReadActionManagedIdentity = dao.loadActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        loadedReadActionManagedIdentity should be(readActionManagedIdentity)
+
+        val writeActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == writeAction)
+        val loadedWriteActionManagedIdentity = dao.loadActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        loadedWriteActionManagedIdentity should be(writeActionManagedIdentity)
+
+        val updatedActionManagedIdentity = writeActionManagedIdentity.get.copy(
+          objectId = ManagedIdentityObjectId(UUID.randomUUID().toString),
+          displayName = ManagedIdentityDisplayName("newDisplayName")
+        )
+
+        dao.updateActionManagedIdentity(updatedActionManagedIdentity, samRequestContext).unsafeRunSync()
+
+        val loadedUpdatedActionManagedIdentity = dao.loadActionManagedIdentity(updatedActionManagedIdentity.id, samRequestContext).unsafeRunSync()
+        loadedUpdatedActionManagedIdentity should be(Some(updatedActionManagedIdentity))
+
+        dao.deleteActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        dao.deleteActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+
+        dao.loadActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync() should be(None)
+        dao.loadActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync() should be(None)
+      }
+
+      "can be loaded for a resource and action" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val readActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == readAction)
+        val loadedReadActionManagedIdentity = dao.loadActionManagedIdentity(defaultResource.fullyQualifiedId, readAction, samRequestContext).unsafeRunSync()
+        loadedReadActionManagedIdentity should be(readActionManagedIdentity)
+
+        val writeActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == writeAction)
+        val loadedWriteActionManagedIdentity = dao.loadActionManagedIdentity(defaultResource.fullyQualifiedId, writeAction, samRequestContext).unsafeRunSync()
+        loadedWriteActionManagedIdentity should be(writeActionManagedIdentity)
+      }
+
+      "can be read, and deleted en mass for a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val bothLoadedServiceAccounts =
+          dao.getAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync().toSet
+        bothLoadedServiceAccounts should be(defaultActionManagedIdentities)
+
+        dao.deleteAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+
+        dao.getAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should be(Seq.empty)
       }
     }
   }
