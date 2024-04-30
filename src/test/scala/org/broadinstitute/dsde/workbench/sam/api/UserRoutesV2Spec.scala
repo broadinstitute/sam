@@ -7,21 +7,18 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForSamUserResponseMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{
-  SamUser,
-  SamUserAllowances,
-  SamUserAttributes,
-  SamUserAttributesRequest,
-  SamUserRegistrationRequest,
-  SamUserResponse
-}
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAllowances, SamUserAttributes, SamUserAttributesRequest, SamUserCombinedStateResponse, SamUserRegistrationRequest, SamUserResponse}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
+import java.time.Instant
+import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
+
+
+class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
   val otherUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
   val thirdUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
@@ -244,6 +241,49 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRouteTest
     Patch(s"/api/users/v2/self/attributes", userAttributesRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[SamUserAttributes] should be(userAttributes)
+    }
+  }
+
+  "GET /api/users/v2/self/combinedState" should "get the user combined state of the calling user" in {
+    // Arrange
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
+    val userCombinedStateResponse = SamUserCombinedStateResponse(
+      SamUserAllowances(enabled = true, termsOfService = true),
+      SamUserAttributes(defaultUser.id, marketingConsent = true),
+      TermsOfServiceDetails("v1", Instant.now(), permitsSystemUsage = true, isCurrentVersion = true)
+    )
+
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .withUserAttributes(defaultUser, userAttributes)
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[SamUserCombinedStateResponse]
+      response.allowances should be(userCombinedStateResponse.allowances)
+      response.attributes should be(userCombinedStateResponse.attributes)
+      response.termsOfServiceDetails.acceptedOn should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn)
+      response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
+      response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
+      response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
+    }
+  }
+
+  it should "return Not Found if the user has no attributes" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
     }
   }
 }

@@ -2974,6 +2974,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/combinedState:
+    get:
+      tags:
+        - Users
+      summary: Gets a combined attributes, allowances, and terms of service state of the user, used to reduce api calls. If no attributes exists (like for an unregistered user), returns a 404.
+      operationId: getSamUserCombinedState
+      responses:
+        200:
+          description: attributes exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserCombinedState'
+        404:
+          description: attributes/user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/users/v2/{sam_user_id}:
     get:
       tags:
@@ -4336,6 +4355,15 @@ components:
         marketingConsent:
           type: boolean
           description: does the user consent to receiving marketing communications
+    SamUserCombinedState:
+      type: object
+      properties:
+        userAttributes:
+          $ref: '#/components/schemas/SamUserAttributes'
+        userAllowances:
+          $ref: '#/components/schemas/SamUserAllowances'
+        userTermsOfServiceDetails:
+          $ref: '#/components/schemas/UserTermsOfServiceDetails'
     SamUserRegistrationRequest:
       type: object
       properties:
