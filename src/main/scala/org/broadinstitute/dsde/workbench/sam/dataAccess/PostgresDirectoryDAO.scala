@@ -1310,4 +1310,20 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
             ${userAttributesColumns.updatedAt} = ${Instant.now()}
            """.update().apply() > 0
     }
+
+  override def listParentGroups(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] =
+    readOnlyTransaction("listParentGroups", samRequestContext) { implicit session =>
+      val group = GroupTable.syntax("g")
+      val parent = GroupTable.syntax("pg")
+      val groupMember = GroupMemberTable.syntax("gm")
+
+      val loadParentGroupsQuery =
+        samsql"""select ${parent.result.name}
+                 from ${GroupTable as group}
+                 join ${GroupMemberTable as groupMember} on ${group.id} = ${groupMember.memberGroupId}
+                 join ${GroupTable as parent} on ${parent.id} = ${groupMember.groupId}
+                 where ${group.name} = $groupName"""
+
+      loadParentGroupsQuery.map(rs => WorkbenchGroupName(rs.string(parent.resultName.name))).list().apply().toSet
+    }
 }

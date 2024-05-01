@@ -567,4 +567,25 @@ class ManagedGroupServiceSpec
     }
     error.errorReport.statusCode should be(Some(StatusCodes.BadRequest))
   }
+
+  "ManagedGroupService loadManagedGroupSupportSummary" should "return a ManagedGroupSupportRequestSummary" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    val groupName = "myGroup"
+    val managedGroupResource = makeGroup(groupName, managedGroupService)
+    val managedGroupEmail =
+      managedGroupService.loadManagedGroup(managedGroupResource.resourceId, samRequestContext).unsafeRunSync().getOrElse(fail("group not found"))
+    managedGroupService.loadManagedGroupSupportSummary(managedGroupResource.resourceId, samRequestContext).unsafeRunSync() shouldEqual Some(
+      ManagedGroupSupportSummary(
+        WorkbenchGroupName(groupName),
+        managedGroupEmail,
+        Set.empty,
+        Set.empty
+      )
+    )
+  }
+
+  it should "return None if the group does not exist" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    managedGroupService.loadManagedGroupSupportSummary(ResourceId("nonexistentGroup"), samRequestContext).unsafeRunSync() shouldEqual None
+  }
 }
