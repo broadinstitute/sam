@@ -11,14 +11,8 @@ info:
 servers:
   - url: /
 security:
-  - googleoauth:
-      - openid
-      - email
-      - profile
   - oidc:
       - openid
-      - email
-      - profile
 paths:
   /api/admin/v1/user/{userId}:
     get:
@@ -4638,22 +4632,7 @@ components:
           items:
             type: string
   securitySchemes:
-    googleoauth:
-      type: oauth2
-      flows:
-        implicit:
-          authorizationUrl: https://accounts.google.com/o/oauth2/auth
-          scopes:
-            openid: open id authorization
-            email: email authorization
-            profile: profile authorization
     oidc:
-      type: oauth2
-      flows:
-        authorizationCode:
-          authorizationUrl: /oauth2/authorize
-          tokenUrl: /oauth2/token
-          scopes:
-            openid: open id authorization
-            email: email authorization
-            profile: profile authorization
+      type: openIdConnect
+      openIdConnectUrl: OPEN_ID_CONNECT_URL
+      x-tokenName: id_token
