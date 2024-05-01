@@ -50,7 +50,13 @@ class ManagedGroupService(
       )
 
     validateGroupName(groupId.value)
+    val groupEmail = WorkbenchEmail(constructEmail(groupId.value))
     for {
+      _ <- directoryDAO.loadSubjectFromEmail(groupEmail, samRequestContext).flatMap {
+        case Some(_) =>
+          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"subject with email $groupEmail already exists")))
+        case None => IO.pure(())
+      }
       managedGroup <- resourceService.createResource(
         managedGroupType,
         groupId,

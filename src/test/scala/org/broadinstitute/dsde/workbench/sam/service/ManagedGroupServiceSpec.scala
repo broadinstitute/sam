@@ -152,7 +152,7 @@ class ManagedGroupServiceSpec
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUser, samRequestContext = samRequestContext))
     }
-    exception.getMessage should include("A resource of this type and name already exists")
+    exception.getMessage should include(s"subject with email $groupName@$testDomain already exists")
     managedGroupService.loadManagedGroup(resourceId, samRequestContext).unsafeRunSync() shouldEqual None
   }
 
