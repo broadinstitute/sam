@@ -9,7 +9,7 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.RouteResult.Complete
 import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, LoggingMagnet}
-import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
+import akka.http.scaladsl.server.{Directive0, ExceptionHandler, RouteResult}
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
@@ -74,7 +74,7 @@ abstract class SamRoutes(
           userTermsOfServiceRoutes(samRequestContext) ~
           withActiveUser(samRequestContext) { samUser =>
             val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-            logRequestWithSamUser(samUser) {
+            logRequestResultWithSamUser(samUser) {
               resourceRoutes(samUser, samRequestContextWithUser) ~
                 adminRoutes(samUser, samRequestContextWithUser) ~
                 extensionRoutes(samUser, samRequestContextWithUser) ~
@@ -113,17 +113,17 @@ abstract class SamRoutes(
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))
   }
 
-  private def logRequestWithSamUser(samUser: SamUser): Directive0 = {
+  private def logRequestResultWithSamUser(samUser: SamUser): Directive0 = {
 
-    def logSamUserRequest(unusedLogger: LoggingAdapter)(req: HttpRequest): Unit = {
-      logger.info(s"Request from user ${samUser.id} (${samUser.email})", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete"))
+    def logSamUserRequest(unusedLogger: LoggingAdapter)(req: HttpRequest)(res: RouteResult): Unit = {
+      res match {
+        case Complete(resp) =>
+          logger.info(s"Request from user ${samUser.id} (${samUser.email})", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete", "status" -> resp.status.intValue.toString))
+        case _ => logger.warn(s"Request from user ${samUser.id} (${samUser.email})", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:incomplete"))
+      }
     }
-
-    DebuggingDirectives.logRequest(LoggingMagnet(log => logSamUserRequest(log)))
+    DebuggingDirectives.logRequestResult(LoggingMagnet(log => logSamUserRequest(log)))
   }
-
-  def statusCodeCreated[T](response: T): (StatusCode, T) = (StatusCodes.Created, response)
-
 }
 
 object SamRoutes {
