@@ -14,6 +14,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
 import io.sentry.Sentry
+import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam._
@@ -120,12 +121,15 @@ abstract class SamRoutes(
         case Complete(resp) =>
           logger.info(
             s"Request from user ${samUser.id} (${samUser.email})",
-            Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete", "status" -> resp.status.intValue.toString)
+            StructuredArguments.keyValue(
+              "eventMetrics",
+              Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete", "status" -> resp.status.intValue.toString)
+            )
           )
         case _ =>
           logger.warn(
             s"Request from user ${samUser.id} (${samUser.email})",
-            Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:incomplete")
+            StructuredArguments.keyValue("eventMetrics", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:incomplete"))
           )
       }
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => logSamUserRequest(log)))
