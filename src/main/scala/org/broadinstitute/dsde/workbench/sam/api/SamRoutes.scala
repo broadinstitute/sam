@@ -21,6 +21,7 @@ import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -73,12 +74,14 @@ abstract class SamRoutes(
           userTermsOfServiceRoutes(samRequestContext) ~
           withActiveUser(samRequestContext) { samUser =>
             val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-            resourceRoutes(samUser, samRequestContextWithUser) ~
-            adminRoutes(samUser, samRequestContextWithUser) ~
-            extensionRoutes(samUser, samRequestContextWithUser) ~
-            groupRoutes(samUser, samRequestContextWithUser) ~
-            azureRoutes(samUser, samRequestContextWithUser) ~
-            userRoutesV1(samUser, samRequestContextWithUser)
+            logRequestWithSamUser(samUser) {
+              resourceRoutes(samUser, samRequestContextWithUser) ~
+                adminRoutes(samUser, samRequestContextWithUser) ~
+                extensionRoutes(samUser, samRequestContextWithUser) ~
+                groupRoutes(samUser, samRequestContextWithUser) ~
+                azureRoutes(samUser, samRequestContextWithUser) ~
+                userRoutesV1(samUser, samRequestContextWithUser)
+            }
           }
         }
       }
@@ -108,6 +111,15 @@ abstract class SamRoutes(
     }
 
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))
+  }
+
+  private def logRequestWithSamUser(samUser: SamUser): Directive0 = {
+
+    def logSamUserRequest(unusedLogger: LoggingAdapter)(req: HttpRequest): Unit = {
+      logger.info(s"Request from user ${samUser.id} (${samUser.email})", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete"))
+    }
+
+    DebuggingDirectives.logRequest(LoggingMagnet(log => logSamUserRequest(log)))
   }
 
   def statusCodeCreated[T](response: T): (StatusCode, T) = (StatusCodes.Created, response)
