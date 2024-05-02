@@ -1,6 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.dataAccess
 
+import akka.http.scaladsl.model.StatusCodes
 import cats.effect.unsafe.implicits.global
+import org.broadinstitute.dsde.workbench.model.WorkbenchExceptionWithErrorReport
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, samRequestContext}
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model.api.SamLock
@@ -26,6 +28,15 @@ class PostgresLockDAOSpec extends RetryableAnyFreeSpec with Matchers with Before
       "create a lock" in {
         assume(databaseEnabled, databaseEnabledClue)
         dao.create(lock, samRequestContext = samRequestContext).unsafeRunSync() shouldEqual lock
+      }
+      "creating a lock with a duplicate id fails" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.create(lock, samRequestContext = samRequestContext).unsafeRunSync()
+        val exception = intercept[WorkbenchExceptionWithErrorReport] {
+          dao.create(lock, samRequestContext = samRequestContext).unsafeRunSync()
+        }
+        exception.errorReport.statusCode shouldEqual Some(StatusCodes.Conflict)
+
       }
     }
   }
