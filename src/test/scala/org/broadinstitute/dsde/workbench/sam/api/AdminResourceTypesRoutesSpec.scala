@@ -253,7 +253,10 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
     val testAction = ResourceAction("testAction")
 
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(defaultAdminResourceId), mockitoEq(testAction), mockitoEq(firecloudAdmin.id), any[SamRequestContext]))
+    when(
+      samRoutes.policyEvaluatorService
+        .hasPermission(mockitoEq(defaultAdminResourceId), mockitoEq(testAction), mockitoEq(firecloudAdmin.id), any[SamRequestContext])
+    )
       .thenReturn(IO(true))
 
     Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/action/${testAction.value}") ~> samRoutes.route ~> check {
@@ -266,7 +269,10 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     val samRoutes = createSamRoutes(isSamSuperAdmin = false)
     val testAction = ResourceAction("testAction")
 
-    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(defaultAdminResourceId), mockitoEq(testAction), mockitoEq(firecloudAdmin.id), any[SamRequestContext]))
+    when(
+      samRoutes.policyEvaluatorService
+        .hasPermission(mockitoEq(defaultAdminResourceId), mockitoEq(testAction), mockitoEq(firecloudAdmin.id), any[SamRequestContext])
+    )
       .thenReturn(IO(false))
 
     Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/action/${testAction.value}") ~> samRoutes.route ~> check {
