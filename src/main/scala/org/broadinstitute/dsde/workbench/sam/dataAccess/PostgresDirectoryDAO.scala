@@ -1115,6 +1115,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val actionManagedIdentityColumn = ActionManagedIdentityTable.column
       val resourceTable = ResourceTable.syntax
       val resourceTypeTable = ResourceTypeTable.syntax
+      val resourceActionTable = ResourceActionTable.syntax
       val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
 
       val updateAmiQuery =
@@ -1125,7 +1126,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                    ${actionManagedIdentityColumn.displayName} = ${actionManagedIdentity.displayName}
                  where
                    ${actionManagedIdentityColumn.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentity.id.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName})
-                   and ${actionManagedIdentityColumn.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentity.id.action})
+                   and ${actionManagedIdentityColumn.resourceActionId} = (select ${resourceActionTable.result.id}
+                                                                        from ${ResourceActionTable as resourceActionTable}
+                                                                          left join ${ResourceTypeTable as resourceTypeTable} on ${resourceActionTable.resourceTypeId} = ${resourceTypeTable.id}
+                                                                        where ${resourceActionTable.action} = ${actionManagedIdentity.id.action}
+                                                                          and ${resourceTypeTable.name} = ${actionManagedIdentity.id.resourceId.resourceTypeName})
                    and ${actionManagedIdentityColumn.managedResourceGroupId} = (select ${managedResourceGroupTable.result.id}
                                                                                 from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
                                                                                 where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentity.id.billingProfileId})
@@ -1143,15 +1148,25 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val actionManagedIdentityTable = ActionManagedIdentityTable.syntax
       val resourceTable = ResourceTable.syntax
       val resourceTypeTable = ResourceTypeTable.syntax
+      val resourceActionTable = ResourceActionTable.syntax
       val managedResourceGroupTable = AzureManagedResourceGroupTable.syntax
 
       val deleteActionManagedIdentityQuery =
         samsql"""delete from ${ActionManagedIdentityTable.table}
-                  where ${actionManagedIdentityTable.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${actionManagedIdentityId.resourceId.resourceId} and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName})
+                  where ${actionManagedIdentityTable.resourceId} = (select ${resourceTable.result.id}
+                                                                    from ${ResourceTable as resourceTable}
+                                                                      left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+                                                                    where ${resourceTable.name} = ${actionManagedIdentityId.resourceId.resourceId}
+                                                                      and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName})
                   and ${actionManagedIdentityTable.managedResourceGroupId} = (select ${managedResourceGroupTable.result.id}
                                                                                         from ${AzureManagedResourceGroupTable as managedResourceGroupTable}
                                                                                         where ${managedResourceGroupTable.billingProfileId} = ${actionManagedIdentityId.billingProfileId})
-                  and ${actionManagedIdentityTable.resourceActionId} = (select ${ResourceActionTable.column.id} from ${ResourceActionTable.table} where ${ResourceActionTable.column.action} = ${actionManagedIdentityId.action})"""
+                  and ${actionManagedIdentityTable.resourceActionId} = (select ${resourceActionTable.result.id}
+                                                                        from ${ResourceActionTable as resourceActionTable}
+                                                                          left join ${ResourceTypeTable as resourceTypeTable} on ${resourceActionTable.resourceTypeId} = ${resourceTypeTable.id}
+                                                                        where ${resourceActionTable.action} = ${actionManagedIdentityId.action}
+                                                                          and ${resourceTypeTable.name} = ${actionManagedIdentityId.resourceId.resourceTypeName})
+      """
       if (deleteActionManagedIdentityQuery.update().apply() != 1) {
         throw new WorkbenchException(s"${actionManagedIdentityId} cannot be deleted because it already does not exist")
       }
