@@ -22,6 +22,7 @@ import org.scalatest.AppendedClues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
+import spray.json.{JsBoolean, JsValue}
 
 import scala.concurrent.Future
 
@@ -245,6 +246,32 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
 
     Delete(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$fakePolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "GET /api/admin/v1/resourceTypes/{resourceType}/action/{action}" should "return true with access" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = false)
+    val testAction = ResourceAction("testAction")
+
+    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(defaultAdminResourceId), mockitoEq(testAction), mockitoEq(firecloudAdmin.id), any[SamRequestContext]))
+      .thenReturn(IO(true))
+
+    Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/action/${testAction.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(true)
+    }
+  }
+
+  it should "return false without access" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = false)
+    val testAction = ResourceAction("testAction")
+
+    when(samRoutes.policyEvaluatorService.hasPermission(mockitoEq(defaultAdminResourceId), mockitoEq(testAction), mockitoEq(firecloudAdmin.id), any[SamRequestContext]))
+      .thenReturn(IO(false))
+
+    Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/action/${testAction.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(false)
     }
   }
 
