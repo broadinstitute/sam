@@ -76,11 +76,11 @@ abstract class SamRoutes(
             val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
             logRequestResultWithSamUser(samUser) {
               resourceRoutes(samUser, samRequestContextWithUser) ~
-                adminRoutes(samUser, samRequestContextWithUser) ~
-                extensionRoutes(samUser, samRequestContextWithUser) ~
-                groupRoutes(samUser, samRequestContextWithUser) ~
-                azureRoutes(samUser, samRequestContextWithUser) ~
-                userRoutesV1(samUser, samRequestContextWithUser)
+              adminRoutes(samUser, samRequestContextWithUser) ~
+              extensionRoutes(samUser, samRequestContextWithUser) ~
+              groupRoutes(samUser, samRequestContextWithUser) ~
+              azureRoutes(samUser, samRequestContextWithUser) ~
+              userRoutesV1(samUser, samRequestContextWithUser)
             }
           }
         }
@@ -115,13 +115,19 @@ abstract class SamRoutes(
 
   private def logRequestResultWithSamUser(samUser: SamUser): Directive0 = {
 
-    def logSamUserRequest(unusedLogger: LoggingAdapter)(req: HttpRequest)(res: RouteResult): Unit = {
+    def logSamUserRequest(unusedLogger: LoggingAdapter)(req: HttpRequest)(res: RouteResult): Unit =
       res match {
         case Complete(resp) =>
-          logger.info(s"Request from user ${samUser.id} (${samUser.email})", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete", "status" -> resp.status.intValue.toString))
-        case _ => logger.warn(s"Request from user ${samUser.id} (${samUser.email})", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:incomplete"))
+          logger.info(
+            s"Request from user ${samUser.id} (${samUser.email})",
+            Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete", "status" -> resp.status.intValue.toString)
+          )
+        case _ =>
+          logger.warn(
+            s"Request from user ${samUser.id} (${samUser.email})",
+            Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:incomplete")
+          )
       }
-    }
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => logSamUserRequest(log)))
   }
 }
