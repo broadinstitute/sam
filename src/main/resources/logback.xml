@@ -18,6 +18,7 @@
     <appender name="Console-Stackdriver" class="com.google.cloud.logging.logback.LoggingAppender">
         <enhancer>com.google.cloud.logging.logback.TraceLoggingEventEnhancer</enhancer>
         <redirectToStdout>true</redirectToStdout>
+        <log>sam_application_log</log>
     </appender>
 
     <appender name="Console-Standard" class="ch.qos.logback.core.ConsoleAppender">
