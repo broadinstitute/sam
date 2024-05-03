@@ -37,6 +37,6 @@ class PostgresLockDAO(protected val writeDbRef: DbReference, protected val readD
   override def delete(lockId: UUID, samRequestContext: SamRequestContext): IO[Boolean] =
     serializableWriteTransaction("deleteLock", samRequestContext) { implicit session =>
       val lockTableColumn = LockTable.column
-      samsql"delete from ${LockTable} where ${lockTableColumn.id} = $lockId".update().apply() > 0
+      samsql"delete from ${LockTable.table} where ${lockTableColumn.id} = $lockId".update().apply() > 0
     }
 }
