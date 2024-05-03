@@ -39,5 +39,16 @@ class PostgresLockDAOSpec extends RetryableAnyFreeSpec with Matchers with Before
 
       }
     }
+    "delete" - {
+      "delete a lock" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.create(lock, samRequestContext = samRequestContext).unsafeRunSync() shouldEqual lock
+        dao.delete(lock.id, samRequestContext).unsafeRunSync() shouldBe true
+      }
+      "delete a non-existent lock" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.delete(lock.id, samRequestContext).unsafeRunSync() shouldBe false
+      }
+    }
   }
 }
