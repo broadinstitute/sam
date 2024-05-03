@@ -24,6 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
+import scala.jdk.CollectionConverters._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -123,13 +124,13 @@ abstract class SamRoutes(
             s"Request from user ${samUser.id} (${samUser.email})",
             StructuredArguments.keyValue(
               "eventMetrics",
-              Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete", "status" -> resp.status.intValue.toString)
+              Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete", "status" -> resp.status.intValue.toString).asJava
             )
           )
         case _ =>
           logger.warn(
             s"Request from user ${samUser.id} (${samUser.email})",
-            StructuredArguments.keyValue("eventMetrics", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:incomplete"))
+            StructuredArguments.keyValue("eventMetrics", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:incomplete").asJava)
           )
       }
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => logSamUserRequest(log)))
