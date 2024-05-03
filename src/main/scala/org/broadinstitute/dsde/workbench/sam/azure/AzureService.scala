@@ -5,6 +5,7 @@ import bio.terra.cloudres.azure.resourcemanager.common.Defaults
 import bio.terra.cloudres.azure.resourcemanager.msi.data.CreateUserAssignedManagedIdentityRequestData
 import cats.data.OptionT
 import cats.effect.IO
+import cats.implicits.toTraverseOps
 import com.azure.core.management.Region
 import com.azure.core.util.Context
 import com.azure.resourcemanager.managedapplications.models.Application
@@ -14,13 +15,18 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, Wor
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import scala.jdk.CollectionConverters._
 
-class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO) {
+class AzureService(
+    crlService: CrlService,
+    directoryDAO: DirectoryDAO,
+    azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO
+) {
 
   // Tag on the MRG to specify the Sam billing-profile id
   private val billingProfileTag = "terra.billingProfileId"
@@ -31,7 +37,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   private val managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
     ErrorReport(
       StatusCodes.Forbidden,
-      "Specified manged resource group invalid. Possible reasons include resource group does not exist, it is not " +
+      "Specified managed resource group invalid. Possible reasons include resource group does not exist, it is not " +
         "associated to an application, the application's plan is not supported or the user is not listed as authorized."
     )
   )
@@ -71,6 +77,10 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       _ <- IO.raiseWhen(existing.isEmpty)(
         new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"managed resource group for profile ${billingProfileId} not found"))
       )
+      actionManagedIdentities <- directoryDAO.getAllActionManagedIdentitiesForBillingProfile(billingProfileId, samRequestContext)
+      _ <- actionManagedIdentities.toList.traverse { ami =>
+        deleteActionManagedIdentity(ami.id, samRequestContext)
+      }
       _ <- azureManagedResourceGroupDAO.deleteManagedResourceGroup(
         billingProfileId,
         samRequestContext
@@ -126,6 +136,79 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
       createdPet <- directoryDAO.createPetManagedIdentity(petToCreate, samRequestContext)
     } yield (createdPet, true)
 
+  def getOrCreateActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      resourceAction: ResourceAction,
+      billingProfileId: BillingProfileId,
+      samRequestContext: SamRequestContext
+  ): IO[(ActionManagedIdentity, Boolean)] = {
+    val id = ActionManagedIdentityId(resource, resourceAction, billingProfileId)
+    for {
+      existingAmiOpt <- directoryDAO.loadActionManagedIdentity(id, samRequestContext)
+      ami <- existingAmiOpt match {
+        // pet exists in Sam DB - return it
+        case Some(p) => IO.pure((p, false))
+        // pet does not exist in Sam DB - create it
+        case None => createActionManagedIdentity(id, samRequestContext)
+      }
+    } yield ami
+  }
+
+  def getActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      resourceAction: ResourceAction,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] = directoryDAO.loadActionManagedIdentity(resource, resourceAction, samRequestContext)
+
+  private def createActionManagedIdentity(
+      id: ActionManagedIdentityId,
+      samRequestContext: SamRequestContext
+  ): IO[(ActionManagedIdentity, Boolean)] =
+    for {
+      mrgOpt <- azureManagedResourceGroupDAO.getManagedResourceGroupByBillingProfileId(id.billingProfileId, samRequestContext)
+      mrg <- IO.fromOption(mrgOpt)(
+        new WorkbenchExceptionWithErrorReport(
+          ErrorReport(StatusCodes.NotFound, s"Managed Resource Group with Billing Profile ID [${id.billingProfileId}] does not exist")
+        )
+      )
+      mrgCoordinates = mrg.managedResourceGroupCoordinates
+      // mapping the result of the validate call to ensure that validation happens before anything is created in Azure
+      validatedMrgCoordinates <- validateManagedResourceGroup(mrgCoordinates, samRequestContext).map(_ => mrg.managedResourceGroupCoordinates)
+      msiManager <- crlService.buildMsiManager(validatedMrgCoordinates.tenantId, validatedMrgCoordinates.subscriptionId)
+      mrgManager <- crlService.buildResourceManager(validatedMrgCoordinates.tenantId, validatedMrgCoordinates.subscriptionId)
+      amiName = toManagedIdentityNameFromAmiId(id)
+      region <- getRegionFromMrg(validatedMrgCoordinates, mrgManager, samRequestContext)
+      context = managedIdentityContext(validatedMrgCoordinates, amiName, region)
+      azureUami <- traceIOWithContext("createUAMI", samRequestContext) { _ =>
+        IO(
+          // note that this will not fail when the UAMI already exists
+          msiManager
+            .identities()
+            .define(amiName.value)
+            .withRegion(region)
+            .withExistingResourceGroup(validatedMrgCoordinates.managedResourceGroupName.value)
+            .withTags(managedIdentityTags(id).asJava)
+            .create(context)
+        )
+      }
+      amiToCreate = ActionManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()), validatedMrgCoordinates)
+      createdAmi <- directoryDAO.createActionManagedIdentity(amiToCreate, samRequestContext)
+    } yield (createdAmi, true)
+
+  def deleteActionManagedIdentity(id: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit] =
+    for {
+      existing <- directoryDAO.loadActionManagedIdentity(id, samRequestContext)
+      _ <- existing
+        .map { ami =>
+          for {
+            msiManager <- crlService.buildMsiManager(ami.managedResourceGroupCoordinates.tenantId, ami.managedResourceGroupCoordinates.subscriptionId)
+            _ <- IO(msiManager.identities().deleteById(ami.objectId.value))
+            _ <- directoryDAO.deleteActionManagedIdentity(ami.id, samRequestContext)
+          } yield {}
+        }
+        .getOrElse(IO.unit)
+    } yield {}
+
   private def getRegionFromMrg(mrgCoords: ManagedResourceGroupCoordinates, mrgManager: ResourceManager, samRequestContext: SamRequestContext) =
     traceIOWithContext("getRegionFromMrg", samRequestContext) { _ =>
       IO(mrgManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value).region())
@@ -179,7 +262,7 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
         resourceManager <- crlService.buildResourceManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         mrg <- lookupMrg(mrgCoords, resourceManager)
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
-        appsInSubscription <- IO(appManager.applications().list().asScala)
+        appsInSubscription <- IO(appManager.applications().list().asScala.toSeq)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
         _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
@@ -234,6 +317,9 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
   private def managedIdentityTags(user: SamUser): Map[String, String] =
     Map("samUserId" -> user.id.value, "samUserEmail" -> user.email.value)
 
+  private def managedIdentityTags(amiId: ActionManagedIdentityId): Map[String, String] =
+    Map("resourceTypeName" -> amiId.resourceId.resourceTypeName.value, "resourceId" -> amiId.resourceId.resourceId.value, "action" -> amiId.action.value)
+
   private def managedIdentityContext(mrgCoords: ManagedResourceGroupCoordinates, petName: ManagedIdentityDisplayName, region: Region): Context =
     Defaults.buildContext(
       CreateUserAssignedManagedIdentityRequestData
@@ -248,5 +334,13 @@ class AzureService(crlService: CrlService, directoryDAO: DirectoryDAO, azureMana
 
   private def toManagedIdentityNameFromUser(user: SamUser): ManagedIdentityDisplayName =
     ManagedIdentityDisplayName(s"pet-${user.id.value}")
+
+  def toManagedIdentityNameFromAmiId(amiId: ActionManagedIdentityId): ManagedIdentityDisplayName = {
+    // Managed Identity Names are limited to 24 characters
+    val actionPart = if (amiId.action.value.length > 11) amiId.action.value.substring(0, 11) else amiId.action.value
+    val resourceIdPart =
+      if (amiId.resourceId.resourceId.value.length > 12) amiId.resourceId.resourceId.value.substring(0, 12) else amiId.resourceId.resourceId.value
+    ManagedIdentityDisplayName(s"$resourceIdPart-$actionPart")
+  }
 
 }

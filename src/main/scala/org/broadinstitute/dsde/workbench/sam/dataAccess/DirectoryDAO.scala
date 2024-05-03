@@ -3,9 +3,16 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
-import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ActionManagedIdentity,
+  ActionManagedIdentityId,
+  BillingProfileId,
+  ManagedIdentityObjectId,
+  PetManagedIdentity,
+  PetManagedIdentityId
+}
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -88,6 +95,34 @@ trait DirectoryDAO {
   def createPetManagedIdentity(petManagedIdentity: PetManagedIdentity, samRequestContext: SamRequestContext): IO[PetManagedIdentity]
   def loadPetManagedIdentity(petManagedIdentityId: PetManagedIdentityId, samRequestContext: SamRequestContext): IO[Option[PetManagedIdentity]]
   def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
+
+  def createActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity]
+
+  def loadActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Option[ActionManagedIdentity]]
+
+  def loadActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      action: ResourceAction,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]]
+
+  def updateActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity]
+
+  def deleteActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit]
+
+  def getAllActionManagedIdentitiesForResource(
+      resourceId: FullyQualifiedResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]]
+
+  def deleteAllActionManagedIdentitiesForResource(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
+
+  def getAllActionManagedIdentitiesForBillingProfile(
+      billingProfileId: BillingProfileId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]]
+  def deleteAllActionManagedIdentitiesForBillingProfile(billingProfileId: BillingProfileId, samRequestContext: SamRequestContext): IO[Unit]
+
   def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit]
   def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]]
 
