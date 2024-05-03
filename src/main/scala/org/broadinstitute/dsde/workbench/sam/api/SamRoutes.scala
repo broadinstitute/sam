@@ -9,12 +9,11 @@ import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.RouteResult.Complete
 import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, LoggingMagnet}
-import akka.http.scaladsl.server.{Directive0, ExceptionHandler, RouteResult}
+import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import com.typesafe.scalalogging.LazyLogging
 import io.sentry.Sentry
-import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam._
@@ -22,9 +21,7 @@ import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
-import scala.jdk.CollectionConverters._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -76,14 +73,12 @@ abstract class SamRoutes(
           userTermsOfServiceRoutes(samRequestContext) ~
           withActiveUser(samRequestContext) { samUser =>
             val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-            logRequestResultWithSamUser(samUser) {
-              resourceRoutes(samUser, samRequestContextWithUser) ~
-              adminRoutes(samUser, samRequestContextWithUser) ~
-              extensionRoutes(samUser, samRequestContextWithUser) ~
-              groupRoutes(samUser, samRequestContextWithUser) ~
-              azureRoutes(samUser, samRequestContextWithUser) ~
-              userRoutesV1(samUser, samRequestContextWithUser)
-            }
+            resourceRoutes(samUser, samRequestContextWithUser) ~
+            adminRoutes(samUser, samRequestContextWithUser) ~
+            extensionRoutes(samUser, samRequestContextWithUser) ~
+            groupRoutes(samUser, samRequestContextWithUser) ~
+            azureRoutes(samUser, samRequestContextWithUser) ~
+            userRoutesV1(samUser, samRequestContextWithUser)
           }
         }
       }
@@ -113,27 +108,6 @@ abstract class SamRoutes(
     }
 
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))
-  }
-
-  private def logRequestResultWithSamUser(samUser: SamUser): Directive0 = {
-
-    def logSamUserRequest(unusedLogger: LoggingAdapter)(req: HttpRequest)(res: RouteResult): Unit =
-      res match {
-        case Complete(resp) =>
-          logger.info(
-            s"Request from user ${samUser.id} (${samUser.email})",
-            StructuredArguments.keyValue(
-              "eventMetrics",
-              Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:complete", "status" -> resp.status.intValue.toString).asJava
-            )
-          )
-        case _ =>
-          logger.warn(
-            s"Request from user ${samUser.id} (${samUser.email})",
-            StructuredArguments.keyValue("eventMetrics", Map("request" -> req.uri, "metricsLog" -> true, "event" -> "sam:api-request:incomplete").asJava)
-          )
-      }
-    DebuggingDirectives.logRequestResult(LoggingMagnet(log => logSamUserRequest(log)))
   }
 }
 
