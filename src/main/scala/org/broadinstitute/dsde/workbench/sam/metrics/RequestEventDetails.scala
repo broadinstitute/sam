@@ -9,7 +9,7 @@ import scala.jdk.CollectionConverters._
 case class RequestEventDetails(httpRequest: HttpRequest, oidcHeaders: Option[OIDCHeaders]) extends MetricsLoggable {
   override def toLoggableMap: util.Map[String, Any] = {
     val baseMap = Map[String, Any](
-      "uri" -> httpRequest.uri.toString,
+      "path" -> httpRequest.uri.path.toString(),
       "method" -> httpRequest.method.value
     )
     oidcHeaders.map(headers => (baseMap + ("oidcHeaders" -> headers.toLoggableMap)).asJava).getOrElse(baseMap.asJava)

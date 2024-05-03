@@ -111,7 +111,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       res match {
         case Complete(resp) =>
           logger.info(
-            s"Request from Service Admin user ${oidcHeaders.email}",
+            s"${req.method.value} ${req.uri.path} - ${resp.status.value} - Service Admin User: ${oidcHeaders.email} ",
             UnregisteredUserApiEvent(
               "apiRequest:serviceAdmin:complete",
               RequestEventDetails(req, Some(oidcHeaders)),
@@ -120,7 +120,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
           )
         case Rejected(rejections) =>
           logger.warn(
-            s"Request from Service Admin user ${oidcHeaders.email}",
+            s"${req.method.value} ${req.uri.path} - incomplete - Service Admin User: ${oidcHeaders.email} ",
             UnregisteredUserApiEvent(
               "apiRequest:serviceAdmin:incomplete",
               RequestEventDetails(req, Some(oidcHeaders)),
@@ -139,7 +139,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       res match {
         case Complete(resp) =>
           logger.info(
-            s"Request from user ${samUser.id} (${samUser.email})",
+            s"${req.method.value} ${req.uri.path} - ${resp.status.value} - User: ${oidcHeaders.email} (${samUser.id}) ",
             RegisteredUserApiEvent(
               samUser.id,
               "apiRequest:user:complete",
@@ -149,7 +149,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
           )
         case Rejected(rejections) =>
           logger.warn(
-            s"Request from user ${samUser.id} (${samUser.email})",
+            s"${req.method.value} ${req.uri.path} - incomplete - User: ${oidcHeaders.email} (${samUser.id}) ",
             RegisteredUserApiEvent(
               samUser.id,
               "apiRequest:user:incomplete",
@@ -260,10 +260,9 @@ final case class OIDCHeaders(
 ) extends MetricsLoggable {
 
   override def toLoggableMap: java.util.Map[String, Any] = Map[String, Any](
-    "googleSubjectId" -> externalId.left.toOption.map(_.value).orNull,
     "azureB2CId" -> externalId.map(_.value).toOption.orNull,
     "email" -> email.value,
-    "googleSubjectIdFromAzure" -> googleSubjectIdFromAzure.map(_.value).orNull,
+    "googleSubjectId" -> googleSubjectIdFromAzure.map(_.value).orNull,
     "managedIdentityObjectId" -> managedIdentityObjectId.map(_.value).orNull
   ).asJava
 
