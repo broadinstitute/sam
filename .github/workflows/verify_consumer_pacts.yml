@@ -151,7 +151,7 @@ jobs:
           # for publishing the results of provider verification.
           if [[ -z "${{ inputs.pb-event-type }}" ]]; then
             echo "PROVIDER_BRANCH=${{ env.CURRENT_BRANCH }}" >> $GITHUB_ENV
-            echo "PROVIDER_VERSION=${{ needs.regulated-tag-job.outputs.new-tag }}" >> $GITHUB_ENV
+            echo "PROVIDER_VERSION=${{ needs.regulated-tag-job.outputs.app-version }}" >> $GITHUB_ENV
           else
             echo "PROVIDER_VERSION=${{ env.PROVIDER_TAG }}" >> $GITHUB_ENV
           fi
