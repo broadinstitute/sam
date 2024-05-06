@@ -18,6 +18,7 @@ trait ApiEvent extends MetricsLoggable {
 
   protected def toScalaMap: Map[String, Any] = {
     val baseMap = Map[String, Any](
+      "service" -> "sam",
       "warehouse" -> true,
       "event" -> event
     ) + ("request" -> request.toLoggableMap)
