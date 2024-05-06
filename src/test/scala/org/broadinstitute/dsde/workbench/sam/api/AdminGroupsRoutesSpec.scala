@@ -7,8 +7,8 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.adminReadSummaryInformation
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.ManagedGroupModelJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.{ManagedGroupSupportSummary, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar

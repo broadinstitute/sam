@@ -20,6 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, Resou
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
+import org.broadinstitute.dsde.workbench.sam.model.api.ManagedGroupModelJsonSupport._
 
 import scala.concurrent.ExecutionContext
 

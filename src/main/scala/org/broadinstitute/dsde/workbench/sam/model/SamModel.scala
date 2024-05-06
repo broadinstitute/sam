@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.model
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, SamUser}
-import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
 import java.time.Instant
@@ -235,16 +234,6 @@ object BasicWorkbenchGroup {
       case _ => throw new WorkbenchException(s"WorkbenchGroup ${workbenchGroup} cannot be converted to a BasicWorkbenchGroup")
     }
 }
-
-@Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
-@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)
-@Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
-@Lenses final case class ManagedGroupSupportSummary(
-    groupName: WorkbenchGroupName,
-    email: WorkbenchEmail,
-    authDomainFor: Set[FullyQualifiedResourceId],
-    parentGroups: Set[WorkbenchGroupName]
-)
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 

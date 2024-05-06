@@ -8,6 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.ManagedGroupAndRole
 import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
