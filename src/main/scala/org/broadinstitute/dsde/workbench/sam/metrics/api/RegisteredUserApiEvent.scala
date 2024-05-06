@@ -8,6 +8,7 @@ import scala.jdk.CollectionConverters._
 
 case class RegisteredUserApiEvent(
     samUserId: WorkbenchUserId,
+    allowed: Boolean,
     override val event: String,
     override val request: RequestEventDetails,
     override val response: Option[ResponseEventDetails] = None,
@@ -15,5 +16,5 @@ case class RegisteredUserApiEvent(
 ) extends ApiEvent {
 
   override def toLoggableMap: util.Map[String, Any] =
-    (super.toScalaMap + ("samUserId" -> samUserId.value)).asJava
+    (super.toScalaMap + ("samUserId" -> samUserId.value, "allowed" -> allowed)).asJava
 }

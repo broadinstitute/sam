@@ -61,10 +61,14 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
-    }.flatMap { samUser =>
+      for {
+        user <- getSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
+        allowances <- userService.getUserAllowances(user, samRequestContext).unsafeToFuture()
+      } yield (user, allowances.allowed)
+    }.tflatMap { samUserAllowedTuple =>
+      val (samUser, allowed) = samUserAllowedTuple
       logger.debug(s"Handling request for (in)active Sam User: $samUser")
-      logRequestResultWithSamUser(samUser, oidcHeaders)
+      logRequestResultWithSamUser(samUser, oidcHeaders, allowed)
     }
   }
 
@@ -133,7 +137,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => logRequest(log)))
   }
 
-  private def logRequestResultWithSamUser(samUser: SamUser, oidcHeaders: OIDCHeaders): Directive1[SamUser] = {
+  private def logRequestResultWithSamUser(samUser: SamUser, oidcHeaders: OIDCHeaders, allowed: Boolean = true): Directive1[SamUser] = {
 
     def logSamUserRequest(unusedLogger: LoggingAdapter)(req: HttpRequest)(res: RouteResult): Unit =
       res match {
@@ -142,6 +146,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
             s"${req.method.value} ${req.uri.path} - ${resp.status.value} - User: ${oidcHeaders.email} (${samUser.id}) ",
             RegisteredUserApiEvent(
               samUser.id,
+              allowed,
               "apiRequest:user:complete",
               RequestEventDetails(req, Some(oidcHeaders)),
               Option(ResponseEventDetails(resp))
@@ -152,6 +157,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
             s"${req.method.value} ${req.uri.path} - incomplete - User: ${oidcHeaders.email} (${samUser.id}) ",
             RegisteredUserApiEvent(
               samUser.id,
+              allowed,
               "apiRequest:user:incomplete",
               RequestEventDetails(req, Some(oidcHeaders)),
               None,
