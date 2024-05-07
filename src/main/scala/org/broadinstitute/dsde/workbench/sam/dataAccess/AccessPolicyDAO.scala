@@ -59,7 +59,12 @@ trait AccessPolicyDAO {
 
   def listResourcesWithAuthdomains(resourceTypeName: ResourceTypeName, resourceId: Set[ResourceId], samRequestContext: SamRequestContext): IO[Set[Resource]]
 
-  def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]]
+  def listResourceWithAuthDomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]]
+
+  def listResourcesUsingAuthDomain(
+      authDomainGroupName: WorkbenchGroupName,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedResourceId]]
 
 //  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
   def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]]
