@@ -4636,3 +4636,6 @@ components:
       type: openIdConnect
       openIdConnectUrl: OPEN_ID_CONNECT_URL
       x-tokenName: id_token
+    bearerAuth:
+      type: http
+      scheme: bearer
