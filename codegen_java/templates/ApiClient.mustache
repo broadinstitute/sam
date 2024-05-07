@@ -145,11 +145,10 @@ public class ApiClient {
         authentications.put("AWS4Auth", new AWS4Auth());{{/withAWSV4Signature}}
         
         /* 
-         * Terra addition: manually add the oidc authentication method because it is unsupported 
-         * in the OkHttp generated client. The client enforces that all authentication methods
-         * be present in the map.
-         *
-         * See: https://github.com/OpenAPITools/openapi-generator/issues/17682
+         * Terra addition: manually add the oidc authentication because openidConnection security scheme 
+         * is unsupported by openapi-generator. 
+         * See: https://github.com/OpenAPITools/openapi-generator/issues/425.
+         */
         authentications.put("oidc", new HttpBearerAuth("bearer"));
 
         // Prevent the authentications from being modified.
