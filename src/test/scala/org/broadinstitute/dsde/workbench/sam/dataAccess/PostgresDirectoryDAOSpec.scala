@@ -1980,5 +1980,31 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.getAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should be(Seq.empty)
       }
     }
+
+    "listParentGroups" - {
+      "list all of the parent groups of a group" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val subGroup = defaultGroup
+        val members: Set[WorkbenchSubject] = Set(subGroup.id)
+        val parentGroup1 = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup1"), members, WorkbenchEmail("baz@qux.com"))
+        val parentGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup2"), members, WorkbenchEmail("bar@baz.com"))
+        val grandParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("grandParentGroup"), Set(parentGroup1.id), WorkbenchEmail("qux@baz.com"))
+
+        dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createGroup(parentGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createGroup(parentGroup2, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createGroup(grandParentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+        dao.listParentGroups(subGroup.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(parentGroup1.id, parentGroup2.id)
+        dao.listParentGroups(parentGroup1.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(grandParentGroup.id)
+        dao.listParentGroups(parentGroup2.id, samRequestContext).unsafeRunSync() shouldBe empty
+        dao.listParentGroups(grandParentGroup.id, samRequestContext).unsafeRunSync() shouldBe empty
+      }
+
+      "return empty when group does not exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.listParentGroups(WorkbenchGroupName("nonexistentGroup"), samRequestContext).unsafeRunSync() shouldBe empty
+      }
+    }
   }
 }

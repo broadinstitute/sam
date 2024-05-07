@@ -465,4 +465,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case Some(_) =>
         userAttributes.update(samUserAttributes.userId, samUserAttributes)
     }
+
+  override def listParentGroups(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] = IO.pure(Set.empty)
 }

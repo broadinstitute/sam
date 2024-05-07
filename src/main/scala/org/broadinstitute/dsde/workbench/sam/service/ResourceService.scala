@@ -143,7 +143,7 @@ class ResourceService(
 
             _ <- AuditLogger.logAuditEventIO(
               samRequestContext,
-              ResourceEvent(ResourceCreated, FullyQualifiedResourceId(resourceType.name, resourceId), parentOpt.map(ResourceChange))
+              ResourceEvent(ResourceCreated, FullyQualifiedResourceId(resourceType.name, resourceId), parentOpt.map(ResourceChange).toSet)
             )
 
             changeEvents = createAccessChangeEvents(FullyQualifiedResourceId(resourceType.name, resourceId), LazyList.empty, persisted.accessPolicies)
@@ -867,7 +867,7 @@ class ResourceService(
         case LoadResourceAuthDomainResult.NotConstrained =>
           for {
             _ <- accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
-            _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentUpdated, childResource, Option(ResourceChange(parentResource))))
+            _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentUpdated, childResource, Set(ResourceChange(parentResource))))
           } yield ()
         case LoadResourceAuthDomainResult.Constrained(_) =>
           IO.raiseError(
@@ -890,7 +890,7 @@ class ResourceService(
       _ <- maybeOldParent.traverse { oldParent =>
         for {
           _ <- accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
-          _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentRemoved, resourceId, Option(ResourceChange(oldParent))))
+          _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentRemoved, resourceId, Set(ResourceChange(oldParent))))
         } yield ()
       }
     } yield maybeOldParent.isDefined

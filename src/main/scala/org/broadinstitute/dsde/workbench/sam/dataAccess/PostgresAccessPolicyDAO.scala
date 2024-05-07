@@ -1332,8 +1332,30 @@ class PostgresAccessPolicyDAO(
       }
     } else IO.pure(Set.empty)
 
-  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] =
+  override def listResourceWithAuthDomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] =
     listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId), samRequestContext).map(_.headOption)
+
+  override def listResourcesUsingAuthDomain(
+      authDomainGroupName: WorkbenchGroupName,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedResourceId]] =
+    readOnlyTransaction("listResourcesUsingAuthDomain", samRequestContext) { implicit session =>
+      val r = ResourceTable.syntax("r")
+      val ad = AuthDomainTable.syntax("ad")
+      val rt = ResourceTypeTable.syntax("rt")
+      val g = GroupTable.syntax("g")
+
+      samsql"""select ${r.result.name}, ${rt.result.name}
+               from ${GroupTable as g}
+               join ${AuthDomainTable as ad} on ${g.id} = ${ad.groupId}
+               join ${ResourceTable as r} on ${r.id} = ${ad.resourceId}
+               join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+               where ${g.name} = ${authDomainGroupName}"""
+        .map(rs => FullyQualifiedResourceId(rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name)))
+        .list()
+        .apply()
+        .toSet
+    }
 
   override def listAccessPolicies(
       resourceTypeName: ResourceTypeName,

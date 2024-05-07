@@ -1,10 +1,13 @@
 package org.broadinstitute.dsde.workbench.sam
 package api
 
-import akka.http.scaladsl.model.StatusCodes
+import akka.event.LoggingAdapter
+import akka.http.scaladsl.model.{HttpRequest, StatusCodes}
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.RouteResult.{Complete, Rejected}
 import akka.http.scaladsl.server._
+import akka.http.scaladsl.server.directives.{DebuggingDirectives, LoggingMagnet}
 import akka.http.scaladsl.server.directives.OnSuccessMagnet._
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -14,12 +17,20 @@ import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives._
 import org.broadinstitute.dsde.workbench.sam.azure.ManagedIdentityObjectId
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
+import org.broadinstitute.dsde.workbench.sam.metrics.{
+  MetricsLoggable,
+  RegisteredUserApiEvent,
+  RequestEventDetails,
+  ResponseEventDetails,
+  UnregisteredUserApiEvent
+}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 import scala.util.matching.Regex
 
@@ -29,33 +40,46 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def withActiveUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
       getActiveSamUser(oidcHeaders, userService, termsOfServiceConfig, samRequestContext).unsafeToFuture()
-    }.tmap { samUser =>
+    }.flatMap { samUser =>
       logger.debug(s"Handling request for active Sam User: $samUser")
-      samUser
+      logRequestResultWithSamUser(samUser, oidcHeaders)
     }
   }
 
   def asAdminServiceUser: Directive0 = requireOidcHeaders.flatMap { oidcHeaders =>
-    Directives.mapInnerRoute { r =>
-      if (!adminConfig.serviceAccountAdmins.contains(oidcHeaders.email)) {
-        reject(AuthorizationFailedRejection)
-      } else {
-        logger.info(s"Handling request for service admin account: ${oidcHeaders.email}")
-        r
+    Directives
+      .mapInnerRoute { r =>
+        if (!adminConfig.serviceAccountAdmins.contains(oidcHeaders.email)) {
+          reject(AuthorizationFailedRejection)
+        } else {
+          logger.info(s"Handling request for service admin account: ${oidcHeaders.email}")
+          r
+        }
       }
-    }
+      .tflatMap(_ => logAdminServiceAdminUserRequestResult(oidcHeaders))
   }
 
   def withUserAllowInactive(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
     onSuccess {
-      getSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
-    }.tmap { samUser =>
+      for {
+        user <- getSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
+        allowances <- userService.getUserAllowances(user, samRequestContext).unsafeToFuture()
+      } yield (user, allowances.allowed)
+    }.tflatMap { samUserAllowedTuple =>
+      val (samUser, allowed) = samUserAllowedTuple
       logger.debug(s"Handling request for (in)active Sam User: $samUser")
-      samUser
+      logRequestResultWithSamUser(samUser, oidcHeaders, allowed)
     }
   }
 
-  def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.map(buildSamUser)
+  def withNewUser(samRequestContext: SamRequestContext): Directive1[SamUser] = requireOidcHeaders.flatMap { oidcHeaders =>
+    onSuccess {
+      Future.successful(buildSamUser(oidcHeaders))
+    }.flatMap { samUser =>
+      logger.debug(s"Handling request for new Sam User: $samUser")
+      logRequestResultWithSamUser(samUser, oidcHeaders)
+    }
+  }
 
   private def buildSamUser(oidcHeaders: OIDCHeaders): SamUser = {
     // google id can either be in the external id or google id from azure headers, favor the external id as the source
@@ -75,7 +99,7 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       optionalHeaderValueByName(managedIdentityObjectIdHeader).map(_.map(ManagedIdentityObjectId)))
       .as(OIDCHeaders)
       .map { oidcHeaders =>
-        logger.info(s"Auth Headers: $oidcHeaders")
+        logger.debug(s"Auth Headers: $oidcHeaders")
         oidcHeaders
       }
 
@@ -84,6 +108,65 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       _ => Right(AzureB2CId(idString)), // could not parse id as a Long, treat id as b2c id which are uuids
       _ => Left(GoogleSubjectId(idString)) // id is a number which is what google subject ids look like
     )
+  }
+
+  private def logAdminServiceAdminUserRequestResult(oidcHeaders: OIDCHeaders): Directive0 = {
+    def logRequest(unusedLogger: LoggingAdapter)(req: HttpRequest)(res: RouteResult): Unit =
+      res match {
+        case Complete(resp) =>
+          logger.info(
+            s"${req.method.value} ${req.uri.path} - ${resp.status.value} - Service Admin User: ${oidcHeaders.email} ",
+            UnregisteredUserApiEvent(
+              "apiRequest:serviceAdmin:complete",
+              RequestEventDetails(req, Some(oidcHeaders)),
+              Option(ResponseEventDetails(resp))
+            ).toStructuredArguments
+          )
+        case Rejected(rejections) =>
+          logger.warn(
+            s"${req.method.value} ${req.uri.path} - incomplete - Service Admin User: ${oidcHeaders.email} ",
+            UnregisteredUserApiEvent(
+              "apiRequest:serviceAdmin:incomplete",
+              RequestEventDetails(req, Some(oidcHeaders)),
+              None,
+              rejections
+            ).toStructuredArguments
+          )
+      }
+
+    DebuggingDirectives.logRequestResult(LoggingMagnet(log => logRequest(log)))
+  }
+
+  private def logRequestResultWithSamUser(samUser: SamUser, oidcHeaders: OIDCHeaders, allowed: Boolean = true): Directive1[SamUser] = {
+
+    def logSamUserRequest(unusedLogger: LoggingAdapter)(req: HttpRequest)(res: RouteResult): Unit =
+      res match {
+        case Complete(resp) =>
+          logger.info(
+            s"${req.method.value} ${req.uri.path} - ${resp.status.value} - User: ${oidcHeaders.email} (${samUser.id}) ",
+            RegisteredUserApiEvent(
+              samUser.id,
+              allowed,
+              "apiRequest:user:complete",
+              RequestEventDetails(req, Some(oidcHeaders)),
+              Option(ResponseEventDetails(resp))
+            ).toStructuredArguments
+          )
+        case Rejected(rejections) =>
+          logger.warn(
+            s"${req.method.value} ${req.uri.path} - incomplete - User: ${oidcHeaders.email} (${samUser.id}) ",
+            RegisteredUserApiEvent(
+              samUser.id,
+              allowed,
+              "apiRequest:user:incomplete",
+              RequestEventDetails(req, Some(oidcHeaders)),
+              None,
+              rejections
+            ).toStructuredArguments
+          )
+      }
+
+    DebuggingDirectives.logRequestResult(LoggingMagnet(log => logSamUserRequest(log))).tmap(_ => samUser)
   }
 }
 
@@ -180,7 +263,14 @@ final case class OIDCHeaders(
     email: WorkbenchEmail,
     googleSubjectIdFromAzure: Option[GoogleSubjectId],
     managedIdentityObjectId: Option[ManagedIdentityObjectId] = None
-) {
+) extends MetricsLoggable {
+
+  override def toLoggableMap: java.util.Map[String, Any] = Map[String, Any](
+    "azureB2CId" -> externalId.map(_.value).toOption.orNull,
+    "email" -> email.value,
+    "googleSubjectId" -> googleSubjectIdFromAzure.map(_.value).orNull,
+    "managedIdentityObjectId" -> managedIdentityObjectId.map(_.value).orNull
+  ).asJava
 
   // Customized toString method so that fields are labeled and we must ensure that we do not log the Bearer Token
   override def toString: String = {

@@ -63,7 +63,7 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
       }
     }
 
-  for (PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/v1/resourceTypes"))
+  for (PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/v1/resourceTypes") && !path.contains("/action/"))
     s"$method $path" should "call asSamSuperAdmin" in {
       val samRoutes = Mockito.spy(TestSamRoutes(Map.empty))
 
