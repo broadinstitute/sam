@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.OptionT
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
@@ -120,6 +121,15 @@ class ManagedGroupService(
   // Per dvoet, when asking for a group, we will just return the group email
   def loadManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     directoryDAO.loadGroup(WorkbenchGroupName(groupId.value), samRequestContext).map(_.map(_.email))
+
+  /** This function loads summary information about a group used by Terra's Support group
+    */
+  def loadManagedGroupSupportSummary(groupId: ResourceId, samRequestContext: SamRequestContext): IO[Option[ManagedGroupSupportSummary]] =
+    (for {
+      group <- OptionT(directoryDAO.loadGroup(WorkbenchGroupName(groupId.value), samRequestContext))
+      resourcesUsingAuthDomain <- OptionT.liftF(accessPolicyDAO.listResourcesUsingAuthDomain(group.id, samRequestContext))
+      parentGroups <- OptionT.liftF(directoryDAO.listParentGroups(group.id, samRequestContext))
+    } yield ManagedGroupSupportSummary(group.id, group.email, resourcesUsingAuthDomain, parentGroups)).value
 
   def deleteManagedGroup(groupId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
