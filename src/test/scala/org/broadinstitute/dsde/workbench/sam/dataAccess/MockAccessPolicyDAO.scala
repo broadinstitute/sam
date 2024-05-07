@@ -224,7 +224,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
       samRequestContext: SamRequestContext
   ): IO[Set[Resource]] = IO.pure(Set.empty)
 
-  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] = IO.pure(None)
+  override def listResourceWithAuthDomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] = IO.pure(None)
 
   override def listPublicAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithoutMembers]] =
     IO.pure(
@@ -414,4 +414,6 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
       .toSeq
   }
 
+  override def listResourcesUsingAuthDomain(authDomainGroupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
+    IO.pure(Set.empty)
 }

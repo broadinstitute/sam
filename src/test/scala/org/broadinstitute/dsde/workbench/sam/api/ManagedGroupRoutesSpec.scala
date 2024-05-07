@@ -12,9 +12,9 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.api.ManagedGroupRoutesSpec._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.ManagedGroupModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.{ManagedGroupAccessInstructions, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genRandom
 import org.scalatest.BeforeAndAfter
