@@ -13,6 +13,7 @@ servers:
 security:
   - oidc:
       - openid
+  - bearerAuth: []
 paths:
   /api/admin/v1/user/{userId}:
     get:
@@ -4718,3 +4719,6 @@ components:
       type: openIdConnect
       openIdConnectUrl: OPEN_ID_CONNECT_URL
       x-tokenName: id_token
+    bearerAuth:
+      type: http
+      scheme: bearer
