@@ -629,15 +629,12 @@ public class ApiClient {
      * @param accessToken Access token
      */
     public void setAccessToken(String accessToken) {
-        {{#hasOAuthMethods}}
-        for (Authentication auth : authentications.values()) {
-            if (auth instanceof OAuth) {
-                ((OAuth) auth).setAccessToken(accessToken);
-                return;
-            }
-        }
-        {{/hasOAuthMethods}}
-        throw new RuntimeException("No OAuth2 authentication configured!");
+        /*
+         * Terra addition: delegate setAccessToken to setBearerToken to avoid a backwards-incompatible
+         * change. Many Terra services and libraries use setAccessToken, which was removed when we
+         * moved from oauth to oidc in our OpenAPI specs.
+         */
+        return setBearerToken(accessToken);
     }
 
     /**
