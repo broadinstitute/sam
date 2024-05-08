@@ -634,7 +634,7 @@ public class ApiClient {
          * change. Many Terra services and libraries use setAccessToken, which was removed when we
          * moved from oauth to oidc in our OpenAPI specs.
          */
-        return setBearerToken(accessToken);
+        setBearerToken(accessToken);
     }
 
     /**
