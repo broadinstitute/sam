@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.azure.MockCrlService.mockSamSpendProfileResource
-import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
+import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, ManagedAppPlan}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes
 import org.broadinstitute.dsde.workbench.sam.model.api._
@@ -98,7 +98,9 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   it should "return 403 if user has access to the billing profile but the MRG could not be validated" in {
     // Change the managed app plan
     val mockCrlService = MockCrlService()
-    when(mockCrlService.getManagedAppPlans)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
+    when(mockAzureServicesConfig.managedAppPlans)
       .thenReturn(Seq(ManagedAppPlan("some-other-plan", "publisher", "auth"), ManagedAppPlan("yet-another-plan", "publisher", "auth")))
     val samRoutes = genSamRoutes(crlService = Some(mockCrlService))
 

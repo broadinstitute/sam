@@ -12,7 +12,7 @@ import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
 import com.google.auth.oauth2.ServiceAccountCredentials
-import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, JanitorConfig, ManagedAppPlan}
+import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, JanitorConfig}
 
 import java.io.FileInputStream
 import scala.concurrent.duration._
@@ -57,11 +57,6 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
     val (credential, profile) = getCredentialAndProfile(tenantId, subscriptionId)
     IO(ApplicationManager.authenticate(credential, profile))
   }
-
-  def getManagedAppPlans: Seq[ManagedAppPlan] = config.managedAppPlans
-  def getAzureControlPlaneEnabled: Boolean = config.azureControlPlaneEnabled
-  def getAuthorizedUserKey: String = config.authorizedUserKey
-  def getKindServiceCatalog: String = config.kindServiceCatalog
 
   private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (TokenCredential, AzureProfile) = {
 

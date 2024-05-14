@@ -46,16 +46,8 @@ object MockCrlService extends MockitoSugar {
       .thenReturn(IO.pure(mockMsi))
 
     lenient()
-      .when(mockCrlService.getManagedAppPlans)
-      .thenReturn(Seq(managedAppPlan))
-
-    lenient()
       .when(mockCrlService.buildApplicationManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockAppMgr))
-
-    lenient()
-      .when(mockCrlService.getAzureControlPlaneEnabled)
-      .thenReturn(false)
 
     mockCrlService
   }

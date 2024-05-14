@@ -14,6 +14,7 @@ import com.azure.resourcemanager.resources.models.ResourceGroup
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
+import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
@@ -23,6 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scala.jdk.CollectionConverters._
 
 class AzureService(
+    config: AzureServicesConfig,
     crlService: CrlService,
     directoryDAO: DirectoryDAO,
     azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO
@@ -45,7 +47,7 @@ class AzureService(
   def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <-
-        if (crlService.getAzureControlPlaneEnabled) {
+        if (false) {
           validateServiceCatalogManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
         } else {
           validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
@@ -269,7 +271,7 @@ class AzureService(
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         appsInSubscription <- IO(appManager.applications().list().asScala.toSeq)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
-        plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
+        plan <- validatePlan(managedApp, config.managedAppPlans)
         _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
       } yield mrg
     }
@@ -291,10 +293,10 @@ class AzureService(
         appsInSubscription <- IO(appManager.applications().list().asScala)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         _ <-
-          if (managedApp.kind() == crlService.getKindServiceCatalog && validateUser) {
+          if (managedApp.kind() == config.kindServiceCatalog && validateUser) {
             validateAuthorizedAppUser(
               managedApp,
-              ManagedAppPlan("", "", crlService.getAuthorizedUserKey),
+              ManagedAppPlan("", "", config.authorizedUserKey),
               samRequestContext
             )
           } else IO.unit

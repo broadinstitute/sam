@@ -1,9 +1,9 @@
 package org.broadinstitute.dsde.workbench.sam
+import cats.effect._
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
-import cats.effect._
 import cats.effect.unsafe.implicits.global
 import cats.kernel.Eq
 import com.typesafe.config.ConfigFactory
@@ -70,6 +70,8 @@ object TestSupport extends TestSupport {
   val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val adminConfig = config.as[AdminConfig]("admin")
+  // val azureServicesConfig = appConfig.azureServicesConfig.get
+  val azureServicesConfig = config.as[AzureServicesConfig]("azureServices")
   val databaseEnabled = config.getBoolean("db.enabled")
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
 
@@ -149,7 +151,7 @@ object TestSupport extends TestSupport {
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(googleExt, directoryDAO, tosConfig)
-    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    val azureService = new AzureService(azureServicesConfig, MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     SamDependencies(
       mockResourceService,
       policyEvaluatorService,
