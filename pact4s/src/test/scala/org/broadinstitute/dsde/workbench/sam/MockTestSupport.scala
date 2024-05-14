@@ -65,6 +65,7 @@ object MockTestSupport extends MockTestSupport {
   val googleServicesConfig: GoogleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes: Map[ResourceTypeName, ResourceType] = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val adminConfig: AdminConfig = config.as[AdminConfig]("admin")
+  val azureServicesConfig: AzureServicesConfig = config.as[AzureServicesConfig]("azureServices")
   val databaseEnabled: Boolean = config.getBoolean("db.enabled")
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
 
@@ -141,7 +142,7 @@ object MockTestSupport extends MockTestSupport {
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(googleExt, directoryDAO, tosConfig)
-    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    val azureService = new AzureService(azureServicesConfig, MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
     MockSamDependencies(
       mockResourceService,
       policyEvaluatorService,
