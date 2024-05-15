@@ -100,7 +100,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     val mockCrlService = MockCrlService()
     val mockAzureServicesConfig = mock[AzureServicesConfig]
 
-    when(mockAzureServicesConfig.managedAppPlans)
+    when(mockCrlService.getManagedAppPlans)
       .thenReturn(Seq(ManagedAppPlan("some-other-plan", "publisher", "auth"), ManagedAppPlan("yet-another-plan", "publisher", "auth")))
     val samRoutes = genSamRoutes(crlService = Some(mockCrlService))
 

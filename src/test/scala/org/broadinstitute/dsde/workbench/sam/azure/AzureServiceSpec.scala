@@ -285,13 +285,17 @@ class AzureServiceSpec(_system: ActorSystem)
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val mockAzureServicesConfig = mock[AzureServicesConfig]
     val managedAppPlan: ManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
+    val mockCrlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
     val svc =
       new AzureService(
         mockAzureServicesConfig,
-        MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
+        mockCrlService,
         new MockDirectoryDAO(),
         mockMrgDAO
       )
+
+    when(mockCrlService.getManagedAppPlans)
+      .thenReturn(Seq(managedAppPlan))
 
     when(mockAzureServicesConfig.managedAppPlans)
       .thenReturn(Seq(managedAppPlan))
@@ -360,14 +364,18 @@ class AzureServiceSpec(_system: ActorSystem)
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val mockAzureServicesConfig = mock[AzureServicesConfig]
     val managedAppPlan: ManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
+    val mockCrlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
 
     val svc =
       new AzureService(
         mockAzureServicesConfig,
-        MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
+        mockCrlService,
         new MockDirectoryDAO(),
         mockMrgDAO
       )
+
+    when(mockCrlService.getManagedAppPlans)
+      .thenReturn(Seq(managedAppPlan))
 
     when(mockAzureServicesConfig.managedAppPlans)
       .thenReturn(Seq(managedAppPlan))

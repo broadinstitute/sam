@@ -49,6 +49,10 @@ object MockCrlService extends MockitoSugar {
       .when(mockCrlService.buildApplicationManager(any[TenantId], any[SubscriptionId]))
       .thenReturn(IO.pure(mockAppMgr))
 
+    lenient()
+      .when(mockCrlService.getManagedAppPlans)
+      .thenReturn(Seq(managedAppPlan))
+
     mockCrlService
   }
 
