@@ -297,9 +297,6 @@ class AzureServiceSpec(_system: ActorSystem)
     when(mockCrlService.getManagedAppPlans)
       .thenReturn(Seq(managedAppPlan))
 
-    when(mockAzureServicesConfig.managedAppPlans)
-      .thenReturn(Seq(managedAppPlan))
-
     svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
     mockMrgDAO.mrgs should contain(managedResourceGroup)
   }
@@ -347,9 +344,6 @@ class AzureServiceSpec(_system: ActorSystem)
         mockMrgDAO
       )
 
-    when(mockAzureServicesConfig.managedAppPlans)
-      .thenReturn(Seq(managedAppPlan))
-
     mockMrgDAO.insertManagedResourceGroup(managedResourceGroup.copy(billingProfileId = BillingProfileId("no the same")), samRequestContext).unsafeRunSync()
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
@@ -375,9 +369,6 @@ class AzureServiceSpec(_system: ActorSystem)
       )
 
     when(mockCrlService.getManagedAppPlans)
-      .thenReturn(Seq(managedAppPlan))
-
-    when(mockAzureServicesConfig.managedAppPlans)
       .thenReturn(Seq(managedAppPlan))
 
     mockMrgDAO

@@ -174,7 +174,7 @@ object AppConfig {
         if (azureEnabled) {
           Option(
             AzureServicesConfig(
-              config.getBoolean("azureControlPlaneEnabled"),
+              config.getBoolean("azureServiceCatalogAppsEnabled"),
               config.getString("authorizedUserKey"),
               config.getString("kindServiceCatalog"),
               config.getString("managedAppWorkloadClientId"),
