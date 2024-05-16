@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.model
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, SamUser}
-import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
 import java.time.Instant
@@ -41,6 +40,7 @@ object SamResourceActions {
   val adminRemoveMember = ResourceAction("admin_remove_member")
   val link = ResourceAction("link")
   val setManagedResourceGroup = ResourceAction("set_managed_resource_group")
+  val adminReadSummaryInformation = ResourceAction("admin_read_summary_information")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
@@ -234,10 +234,6 @@ object BasicWorkbenchGroup {
       case _ => throw new WorkbenchException(s"WorkbenchGroup ${workbenchGroup} cannot be converted to a BasicWorkbenchGroup")
     }
 }
-
-@Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
-@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)
-@Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 

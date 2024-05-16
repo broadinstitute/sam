@@ -21,8 +21,7 @@ case object ResourceParentUpdated extends ResourceEventType
 case object ResourceParentRemoved extends ResourceEventType
 case object ResourceDeleted extends ResourceEventType
 
-final case class ResourceEvent(eventType: ResourceEventType, resource: FullyQualifiedResourceId, changeDetails: Option[ResourceChange] = None)
-    extends AuditEvent
+final case class ResourceEvent(eventType: ResourceEventType, resource: FullyQualifiedResourceId, changeDetails: Set[ResourceChange] = Set()) extends AuditEvent
 
 case class AccessChange(
     member: WorkbenchSubject,
