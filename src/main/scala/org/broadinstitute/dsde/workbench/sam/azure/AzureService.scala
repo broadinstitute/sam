@@ -47,7 +47,7 @@ class AzureService(
   def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <-
-        if (false) {
+        if (config.azureServiceCatalogAppsEnabled) {
           validateServiceCatalogManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
         } else {
           validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
@@ -272,7 +272,7 @@ class AzureService(
         appsInSubscription <- IO(appManager.applications().list().asScala.toSeq)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
-        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
+        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan.authorizedUserKey, samRequestContext) else IO.unit
       } yield mrg
     }
 
@@ -296,7 +296,7 @@ class AzureService(
           if (managedApp.kind() == config.kindServiceCatalog && validateUser) {
             validateAuthorizedAppUser(
               managedApp,
-              ManagedAppPlan("", "", config.authorizedUserKey),
+              config.authorizedUserKey,
               samRequestContext
             )
           } else IO.unit
@@ -306,15 +306,15 @@ class AzureService(
   /** The users authorized to setup a managed application are stored as a comma separated list of email addresses in the parameters of the application. The
     * azure api is java so this code needs to deal with possible nulls and java Maps. Also the application parameters are untyped, fun.
     * @param app
-    * @param plan
+    * @param authorizedUserKey
     * @param samRequestContext
     * @return
     */
-  private def validateAuthorizedAppUser(app: Application, plan: ManagedAppPlan, samRequestContext: SamRequestContext): IO[Unit] = {
+  private def validateAuthorizedAppUser(app: Application, authorizedUserKey: String, samRequestContext: SamRequestContext): IO[Unit] = {
     val authorizedUsersValue = for {
       parametersObj <- Option(app.parameters()) if parametersObj.isInstanceOf[java.util.Map[_, _]]
       parametersMap = parametersObj.asInstanceOf[java.util.Map[_, _]]
-      paramValuesObj <- Option(parametersMap.get(plan.authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
+      paramValuesObj <- Option(parametersMap.get(authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
       paramValues = paramValuesObj.asInstanceOf[java.util.Map[_, _]]
       authorizedUsersValue <- Option(paramValues.get("value"))
     } yield authorizedUsersValue.toString

@@ -26,6 +26,10 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
   "POST /api/azure/v1/user/petManagedIdentity" should "successfully create a pet managed identity using MRG in db" in {
     val samRoutes = genSamRoutes()
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
+    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+      .thenReturn(false)
 
     val request = GetOrCreatePetManagedIdentityRequest(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
     Post(
@@ -98,7 +102,6 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   it should "return 403 if user has access to the billing profile but the MRG could not be validated" in {
     // Change the managed app plan
     val mockCrlService = MockCrlService()
-    val mockAzureServicesConfig = mock[AzureServicesConfig]
 
     when(mockCrlService.getManagedAppPlans)
       .thenReturn(Seq(ManagedAppPlan("some-other-plan", "publisher", "auth"), ManagedAppPlan("yet-another-plan", "publisher", "auth")))
