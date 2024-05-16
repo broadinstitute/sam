@@ -3091,7 +3091,7 @@ paths:
     get:
       tags:
         - Users
-      summary: Gets a combined attributes, allowances, and terms of service state of the user, used to reduce api calls. If no attributes exists (like for an unregistered user), returns a 404.
+      summary: Gets a combined SamUser, attributes, allowances, terms of service, enterprise features state of the user, used to reduce api calls. If no attributes exists (like for an unregistered user), returns a 404.
       operationId: getSamUserCombinedState
       responses:
         200:
@@ -4495,12 +4495,16 @@ components:
     SamUserCombinedState:
       type: object
       properties:
+        samUser:
+          $ref: '#/components/schemas/SamUserResponse'
         userAttributes:
           $ref: '#/components/schemas/SamUserAttributes'
         userAllowances:
           $ref: '#/components/schemas/SamUserAllowances'
         userTermsOfServiceDetails:
           $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        enterpriseFeatures:
+          $ref: '#/components/schemas/FilteredResourcesFlatResponse'
     SamUserRegistrationRequest:
       type: object
       properties:
