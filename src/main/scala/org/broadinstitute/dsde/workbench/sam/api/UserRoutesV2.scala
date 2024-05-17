@@ -77,7 +77,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
                   patchSamUserAttributes(samUser, samRequestContext)
                 }
               }
-            }
+            } ~
             // api/user/v2/self/combinedState
             pathPrefix("combinedState") {
               withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
