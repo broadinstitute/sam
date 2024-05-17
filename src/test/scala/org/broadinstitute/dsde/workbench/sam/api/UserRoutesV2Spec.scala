@@ -320,6 +320,19 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       .callAsNonAdminUser()
       .build
 
+    lenient()
+      .doReturn(IO.pure(FilteredResourcesFlat(Set.empty[FilteredResourceFlat])))
+      .when(samRoutes.resourceService)
+      .listResourcesFlat(
+        any[WorkbenchUserId],
+        any[Set[ResourceTypeName]],
+        any[Set[AccessPolicyName]],
+        any[Set[ResourceRoleName]],
+        any[Set[ResourceAction]],
+        any[Boolean],
+        any[SamRequestContext]
+      )
+
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
