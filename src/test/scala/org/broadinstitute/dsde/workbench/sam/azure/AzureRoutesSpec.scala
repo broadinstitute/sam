@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.azure.MockCrlService.mockSamSpendProfileResource
-import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, ManagedAppPlan}
+import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes
 import org.broadinstitute.dsde.workbench.sam.model.api._
@@ -26,10 +26,6 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
   "POST /api/azure/v1/user/petManagedIdentity" should "successfully create a pet managed identity using MRG in db" in {
     val samRoutes = genSamRoutes()
-    val mockAzureServicesConfig = mock[AzureServicesConfig]
-
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
 
     val request = GetOrCreatePetManagedIdentityRequest(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
     Post(
