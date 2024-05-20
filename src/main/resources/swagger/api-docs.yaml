@@ -13,6 +13,7 @@ servers:
 security:
   - oidc:
       - openid
+  - bearerAuth: []
 paths:
   /api/admin/v1/user/{userId}:
     get:
@@ -424,6 +425,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v1/resourceTypes/{resourceTypeName}/action/{action}:
+    get:
+      tags:
+        - Admin
+      summary: Query if requesting user may perform the action on the resource type
+      operationId: resourceTypeAdminPermission
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource to query
+          required: true
+          schema:
+            type: string
+        - name: action
+          in: path
+          description: Action to perform
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: true if the user may perform the action, false if they may
+            not or the resource type does not exist
+          content:
+            application/json:
+              schema:
+                type: boolean
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/resourceTypes/{resourceTypeName}/policies:
     get:
       tags:
@@ -531,6 +565,32 @@ paths:
         404:
           description: Policy does not exist or resource type does not exist
           content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v1/groups/{groupName}/supportSummary:
+    get:
+      tags:
+        - Admin
+      summary: Get information about a group useful for Terra support
+      operationId: getAdminGroupSummaryInfo
+      parameters:
+        - name: groupName
+          in: path
+          description: Name of group
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: group summary information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedGroupSupportSummary'
         500:
           description: Internal Server Error
           content:
@@ -3870,6 +3930,29 @@ components:
           description: The email address associated with the group
       description: specification of a managed group with an access policy and the
         email associated with the managed group
+    ManagedGroupSupportSummary:
+      required:
+        - groupName
+        - email
+        - authDomainFor
+        - parentGroups
+      type: object
+      properties:
+        groupName:
+          type: string
+          description: The name of the group
+        email:
+          type: string
+          description: The email address associated with the group
+        authDomainFor:
+          type: array
+          items:
+            $ref: '#/components/schemas/FullyQualifiedResourceId'
+        parentGroups:
+          type: array
+          items:
+            type: string
+          description: The parent groups of the group
     PolicyIdentifiers:
       required:
         - policyName
@@ -4636,3 +4719,6 @@ components:
       type: openIdConnect
       openIdConnectUrl: OPEN_ID_CONNECT_URL
       x-tokenName: id_token
+    bearerAuth:
+      type: http
+      scheme: bearer

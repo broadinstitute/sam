@@ -566,7 +566,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set(authDomain.id))
         dao.createResource(resource, samRequestContext).unsafeRunSync()
 
-        dao.listResourceWithAuthdomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
+        dao.listResourceWithAuthDomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
       }
 
       "loads a resource even if its unconstrained" in {
@@ -577,7 +577,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
 
-        dao.listResourceWithAuthdomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
+        dao.listResourceWithAuthDomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
       }
 
       "loads the correct resource if different resource types have a resource with a common name" in {
@@ -598,14 +598,14 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResource(resource, samRequestContext).unsafeRunSync()
         dao.createResource(otherResource, samRequestContext).unsafeRunSync()
 
-        dao.listResourceWithAuthdomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
+        dao.listResourceWithAuthDomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
       }
 
       "returns None when resource isn't found" in {
         assume(databaseEnabled, databaseEnabledClue)
 
         dao
-          .listResourceWithAuthdomains(FullyQualifiedResourceId(resourceTypeName, ResourceId("terribleResource")), samRequestContext)
+          .listResourceWithAuthDomains(FullyQualifiedResourceId(resourceTypeName, ResourceId("terribleResource")), samRequestContext)
           .unsafeRunSync() shouldBe None
       }
     }
@@ -656,11 +656,11 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
         dao.createResource(resource, samRequestContext).unsafeRunSync()
 
-        dao.listResourceWithAuthdomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
+        dao.listResourceWithAuthDomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
 
         dao.deleteResource(resource.fullyQualifiedId, samRequestContext).unsafeRunSync()
 
-        dao.listResourceWithAuthdomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual None
+        dao.listResourceWithAuthDomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual None
       }
     }
 
@@ -3332,6 +3332,55 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         resource2Results.map(_.inAuthDomain).toSet should be(Set(true, false))
         resource2Results.filter(_.inAuthDomain).head.authDomain should be(Some(authDomainGroup1.id))
         resource2Results.filter(!_.inAuthDomain).head.authDomain should be(Some(authDomainGroup2.id))
+      }
+    }
+
+    "listResourcesUsingAuthDomain" - {
+      "returns resources using auth domain" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName = WorkbenchGroupName("authDomain")
+        val authDomainGroup = BasicWorkbenchGroup(authDomainGroupName, Set(), WorkbenchEmail("authDomain@foo.com"))
+
+        dirDao.createGroup(authDomainGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        // a control resource that is not in the auth domain to make sure we're only getting resources in the auth domain
+        val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
+
+        val resourceWithAuthDomain1 = Resource(resourceType.name, ResourceId("authDomainResource1"), Set(authDomainGroupName))
+        dao.createResource(resourceWithAuthDomain1, samRequestContext).unsafeRunSync() shouldEqual resourceWithAuthDomain1
+        val resourceWithAuthDomain2 = Resource(resourceType.name, ResourceId("authDomainResource2"), Set(authDomainGroupName))
+        dao.createResource(resourceWithAuthDomain2, samRequestContext).unsafeRunSync() shouldEqual resourceWithAuthDomain2
+
+        dao.listResourcesUsingAuthDomain(authDomainGroupName, samRequestContext).unsafeRunSync() shouldEqual Set(
+          resourceWithAuthDomain1.fullyQualifiedId,
+          resourceWithAuthDomain2.fullyQualifiedId
+        )
+      }
+
+      "returns empty when group is not an auth domain" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName = WorkbenchGroupName("authDomain")
+        val authDomainGroup = BasicWorkbenchGroup(authDomainGroupName, Set(), WorkbenchEmail("authDomain@foo.com"))
+
+        dirDao.createGroup(authDomainGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        val resourceWithoutAuthDomain = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResource(resourceWithoutAuthDomain, samRequestContext).unsafeRunSync() shouldEqual resourceWithoutAuthDomain
+
+        dao.listResourcesUsingAuthDomain(authDomainGroupName, samRequestContext).unsafeRunSync() shouldEqual Set.empty
+      }
+
+      "returns empty when group does not exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val authDomainGroupName = WorkbenchGroupName("authDomain")
+        dirDao.loadGroup(authDomainGroupName, samRequestContext).unsafeRunSync() shouldEqual None
+        dao.listResourcesUsingAuthDomain(authDomainGroupName, samRequestContext).unsafeRunSync() shouldEqual Set.empty
       }
     }
   }
