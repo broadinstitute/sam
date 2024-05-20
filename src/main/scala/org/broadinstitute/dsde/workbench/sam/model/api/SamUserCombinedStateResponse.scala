@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.model.api
 
 import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceDetails
 import spray.json.DefaultJsonProtocol._
-import spray.json.RootJsonFormat
+import spray.json._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserAllowances.SamUserAllowedResponseFormat
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserAttributes.SamUserAttributesFormat
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
@@ -15,5 +15,5 @@ final case class SamUserCombinedStateResponse(
     allowances: SamUserAllowances,
     attributes: SamUserAttributes,
     termsOfServiceDetails: TermsOfServiceDetails,
-    enterpriseFeatures: FilteredResourcesFlat
+    additionalDetails: Map[String, JsValue]
 )

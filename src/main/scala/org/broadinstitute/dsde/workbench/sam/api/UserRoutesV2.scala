@@ -18,6 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.{
 }
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import spray.json.enrichAny
 
 /** Created by tlangs on 10/12/2023.
   */
@@ -199,7 +200,9 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
               includePublic = false,
               samRequestContext
             )
-        } yield maybeAttributes.map(SamUserCombinedStateResponse(samUser, allowances, _, termsOfServiceDetails, enterpriseFeatures))
+        } yield maybeAttributes.map(
+          SamUserCombinedStateResponse(samUser, allowances, _, termsOfServiceDetails, Map("enterpriseFeatures" -> enterpriseFeatures.toJson))
+        )
         combinedStateResponse.map {
           case Some(response) => OK -> Some(response)
           case None => NotFound -> None

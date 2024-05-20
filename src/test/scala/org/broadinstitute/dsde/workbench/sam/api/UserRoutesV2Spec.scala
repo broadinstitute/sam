@@ -29,6 +29,7 @@ import java.time.Instant
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito.lenient
+import spray.json.enrichAny
 
 class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
@@ -274,7 +275,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       SamUserAllowances(enabled = true, termsOfService = true),
       SamUserAttributes(defaultUser.id, marketingConsent = true),
       TermsOfServiceDetails("v1", Instant.now(), permitsSystemUsage = true, isCurrentVersion = true),
-      FilteredResourcesFlat(Set(enterpriseFeature))
+      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -308,7 +309,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
-      response.enterpriseFeatures should be(filteresResourcesFlat)
+      response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
     }
   }
 

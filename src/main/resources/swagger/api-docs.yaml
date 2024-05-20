@@ -4586,8 +4586,10 @@ components:
           $ref: '#/components/schemas/SamUserAllowances'
         userTermsOfServiceDetails:
           $ref: '#/components/schemas/UserTermsOfServiceDetails'
-        enterpriseFeatures:
-          $ref: '#/components/schemas/FilteredResourcesFlatResponse'
+        additionalDetails:
+          type: object
+          description: >
+            additional details about the user, such as enterprise features they have access to example: '{ "enterpriseFeatures": ["feature1", "feature2"] }'
     SamUserRegistrationRequest:
       type: object
       properties:
