@@ -249,12 +249,8 @@ class AzureService(
   }
 
   /** Validates a managed resource group. Algorithm:
-    *   1. Resolve the MRG in Azure
-    *   2. Get the managed app id from the MRG
-    *   3. Resolve the managed app
-    *   4. Get the managed app "plan" name and publisher
-    *   5. Validate the plan name and publisher matches a configured value
-    *   6. Validate that the caller is on the list of authorized users for the app
+    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Get the managed app "plan" name and publisher 5.
+    *      Validate the plan name and publisher matches a configured value 6. Validate that the caller is on the list of authorized users for the app
     */
   private def validateManagedResourceGroup(
       mrgCoords: ManagedResourceGroupCoordinates,
