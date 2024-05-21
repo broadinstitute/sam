@@ -16,7 +16,7 @@ import java.util.UUID
 class PostgresLockDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresLockDAO(TestSupport.dbRef, TestSupport.dbRef)
   val description = "Test lock"
-  val lockType = "duos"
+  val lockType = "DUOS"
   val lockDetails: JsObject = JsObject("datasetId" -> JsString("DUOS_123"))
   val lockNoDescription: SamLock = SamLock(UUID.randomUUID(), null, lockType, lockDetails)
 
