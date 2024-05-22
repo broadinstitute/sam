@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
 import org.broadinstitute.dsde.workbench.sam.model.api.{
+  FilteredResourcesFlat,
   SamUser,
   SamUserAttributesRequest,
   SamUserCombinedStateResponse,
@@ -200,6 +201,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
               includePublic = false,
               samRequestContext
             )
+            .recover(_ => FilteredResourcesFlat(Set.empty))
         } yield maybeAttributes.map(
           SamUserCombinedStateResponse(samUser, allowances, _, termsOfServiceDetails, Map("enterpriseFeatures" -> enterpriseFeatures.toJson))
         )
