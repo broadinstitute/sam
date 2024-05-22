@@ -2067,6 +2067,30 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
   }
 
+  it should "403 if user only has create_with_parent on child resource" in {
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
+
+    setupParentRoutes(
+      samRoutes,
+      fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      actionsOnChild = Set(SamResourceActions.readPolicies, SamResourceActions.createWithParent),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      actionsOnNewParent = Set(SamResourceActions.addChild)
+    )
+
+    Put(
+      s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent",
+      newParentResource
+    ) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
   it should "403 if user is missing add_child on new parent resource" in {
     val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
     val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
