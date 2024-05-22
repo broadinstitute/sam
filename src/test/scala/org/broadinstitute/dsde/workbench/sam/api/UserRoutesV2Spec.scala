@@ -313,8 +313,26 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
     }
   }
 
-  it should "return Not Found if the user has no attributes" in {
+  it should "return null attributes if the user has no attributes" in {
     // Arrange
+    val enterpriseFeature = FilteredResourceFlat(
+      resourceType = ResourceTypeName("enterprise-feature"),
+      resourceId = ResourceId("enterprise-feature"),
+      policies = Set.empty,
+      roles = Set(ResourceRoleName("user")),
+      actions = Set.empty,
+      authDomainGroups = Set.empty,
+      missingAuthDomainGroups = Set.empty
+    )
+    val filteresResourcesFlat = FilteredResourcesFlat(Set(enterpriseFeature))
+    val userCombinedStateResponse = SamUserCombinedStateResponse(
+      defaultUser,
+      SamUserAllowances(enabled = true, termsOfService = true),
+      Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
+      TermsOfServiceDetails("v1", Instant.now(), permitsSystemUsage = true, isCurrentVersion = true),
+      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
+    )
+
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
       .withAllowedUser(defaultUser) // "allowed" user we will check the status of
@@ -322,7 +340,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       .build
 
     lenient()
-      .doReturn(IO.pure(FilteredResourcesFlat(Set.empty[FilteredResourceFlat])))
+      .doReturn(IO.pure(FilteredResourcesFlat(Set(enterpriseFeature))))
       .when(samRoutes.resourceService)
       .listResourcesFlat(
         any[WorkbenchUserId],
@@ -336,7 +354,16 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.NotFound
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[SamUserCombinedStateResponse]
+      response.samUser should be(defaultUser)
+      response.allowances should be(userCombinedStateResponse.allowances)
+      response.attributes should be(None)
+      response.termsOfServiceDetails.acceptedOn should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn)
+      response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
+      response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
+      response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
+      response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
     }
   }
 }
