@@ -3151,17 +3151,17 @@ paths:
     get:
       tags:
         - Users
-      summary: Gets a combined SamUser, attributes, allowances, terms of service, enterprise features state of the user, used to reduce api calls. If no attributes exists (like for an unregistered user), returns a 404.
+      summary: Gets a combined SamUser, attributes, allowances, terms of service, enterprise features state of the user, used to reduce api calls.
       operationId: getSamUserCombinedState
       responses:
         200:
-          description: attributes exists
+          description: user exists
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SamUserCombinedState'
-        404:
-          description: attributes/user not found
+        403:
+          description: user not found
           content:
             application/json:
               schema:
