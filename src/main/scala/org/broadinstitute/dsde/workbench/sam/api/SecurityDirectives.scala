@@ -75,7 +75,9 @@ trait SecurityDirectives {
       case None => Directives.pass // no parent specified, proceed
       case Some(parent) =>
         // parents are allowed for a resource type if the owner role contains the SamResourceActions.setParent action
-        val parentAllowed = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).exists(_.actions.contains(SamResourceActions.setParent))
+        val parentAllowed = resourceType.roles
+          .find(_.roleName == resourceType.ownerRoleName)
+          .exists(role => role.actions.contains(SamResourceActions.setParent) || role.actions.contains(SamResourceActions.createWithParent))
         if (!parentAllowed) {
           Directives.failWith(
             new WorkbenchExceptionWithErrorReport(
