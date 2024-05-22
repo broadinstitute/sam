@@ -213,6 +213,37 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
   }
 
+  it should "204 create resource with content with parent with create_with_parent action" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(ResourceActionPattern(SamResourceActions.setParent.value, "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.createWithParent, SamResourceActions.addChild))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createParentResourceRequest = CreateResourceRequest(
+      ResourceId("parent"),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Set.empty,
+      Some(false)
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createParentResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val createResourceRequest = CreateResourceRequest(
+      ResourceId("foo"),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Set.empty,
+      Some(false),
+      Some(FullyQualifiedResourceId(resourceType.name, createParentResourceRequest.resourceId))
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
   it should "400 with parent when parents not allowed" in {
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
