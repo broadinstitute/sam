@@ -273,7 +273,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
     val userCombinedStateResponse = SamUserCombinedStateResponse(
       defaultUser,
       SamUserAllowances(enabled = true, termsOfService = true),
-      SamUserAttributes(defaultUser.id, marketingConsent = true),
+      Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
       TermsOfServiceDetails("v1", Instant.now(), permitsSystemUsage = true, isCurrentVersion = true),
       Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
     )

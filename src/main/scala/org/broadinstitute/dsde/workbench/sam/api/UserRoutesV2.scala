@@ -10,7 +10,6 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
 import org.broadinstitute.dsde.workbench.sam.model.api.{
-  FilteredResourcesFlat,
   SamUser,
   SamUserAttributesRequest,
   SamUserCombinedStateResponse,
@@ -187,7 +186,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
   private def getSamUserCombinedState(samUser: SamUser, samRequestContext: SamRequestContext): Route =
     get {
       complete {
-        val combinedStateResponse = for {
+        for {
           allowances <- userService.getUserAllowances(samUser, samRequestContext)
           maybeAttributes <- userService.getUserAttributes(samUser.id, samRequestContext)
           termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
@@ -201,14 +200,13 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
               includePublic = false,
               samRequestContext
             )
-            .recover(_ => FilteredResourcesFlat(Set.empty))
-        } yield maybeAttributes.map(
-          SamUserCombinedStateResponse(samUser, allowances, _, termsOfServiceDetails, Map("enterpriseFeatures" -> enterpriseFeatures.toJson))
+        } yield SamUserCombinedStateResponse(
+          samUser,
+          allowances,
+          maybeAttributes,
+          termsOfServiceDetails,
+          Map("enterpriseFeatures" -> enterpriseFeatures.toJson)
         )
-        combinedStateResponse.map {
-          case Some(response) => OK -> Some(response)
-          case None => NotFound -> None
-        }
       }
     }
 

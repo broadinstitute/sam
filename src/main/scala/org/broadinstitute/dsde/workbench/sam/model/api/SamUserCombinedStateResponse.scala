@@ -13,7 +13,7 @@ object SamUserCombinedStateResponse {
 final case class SamUserCombinedStateResponse(
     samUser: SamUser,
     allowances: SamUserAllowances,
-    attributes: SamUserAttributes,
+    attributes: Option[SamUserAttributes],
     termsOfServiceDetails: TermsOfServiceDetails,
     additionalDetails: Map[String, JsValue]
 )
