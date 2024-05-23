@@ -27,6 +27,8 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   private val userServiceBuilder: MockUserServiceBuilder = MockUserServiceBuilder()
   private val mockTosServiceBuilder = MockTosServiceBuilder()
 
+  val mockResourceService = mock[ResourceService]
+
   // Needing to keep track of the enabled user is kind of gross.  But this is a single user that exists in the DB.  This
   // is used when we need to test admin routes that look up stuff about _another_ user (the `enabledUser`) when called
   // as the Admin User.  We can only set 1 enabledUser at a time because of the SamUserDirectives implemented with
@@ -132,7 +134,6 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
   //  this one just builds and implements a trait, instead of just mocking out the dependencies that we then inject into
   //  the real object under test. I think the key here would be refactoring `SamRoutes`.
   def build: SamRoutes = {
-    val mockResourceService = mock[ResourceService]
     val mockUserService = userServiceBuilder.build
     val mockCloudExtensions = cloudExtensionsBuilder.build
     val mockTosService = mockTosServiceBuilder.build
