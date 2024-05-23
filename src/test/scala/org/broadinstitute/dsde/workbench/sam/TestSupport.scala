@@ -69,7 +69,7 @@ object TestSupport extends TestSupport {
   val googleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val adminConfig = config.as[AdminConfig]("admin")
-  val azureServicesConfig = appConfig.azureServicesConfig.orNull
+  val azureServicesConfig = appConfig.azureServicesConfig
   val databaseEnabled = config.getBoolean("db.enabled")
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
 

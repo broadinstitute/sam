@@ -24,7 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scala.jdk.CollectionConverters._
 
 class AzureService(
-    config: AzureServicesConfig,
+    config: Option[AzureServicesConfig],
     crlService: CrlService,
     directoryDAO: DirectoryDAO,
     azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO
@@ -47,12 +47,14 @@ class AzureService(
   def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <-
-        if (Option(config).isDefined && config.azureServiceCatalogAppsEnabled) {
-          validateServiceCatalogManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
-        } else {
-          validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+        config match {
+          case Some(c) if c.azureServiceCatalogAppsEnabled =>
+            validateServiceCatalogManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+          case Some(_) =>
+            validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+          case None =>
+            validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
         }
-
       existingByCoords <- azureManagedResourceGroupDAO.getManagedResourceGroupByCoordinates(
         managedResourceGroup.managedResourceGroupCoordinates,
         samRequestContext
@@ -293,10 +295,10 @@ class AzureService(
         appsInSubscription <- IO(appManager.applications().list().asScala)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         _ <-
-          if (managedApp.kind() == config.kindServiceCatalog && validateUser) {
+          if (managedApp.kind() == config.get.kindServiceCatalog && validateUser) {
             validateAuthorizedAppUser(
               managedApp,
-              config.authorizedUserKey,
+              config.get.authorizedUserKey,
               samRequestContext
             )
           } else IO.unit

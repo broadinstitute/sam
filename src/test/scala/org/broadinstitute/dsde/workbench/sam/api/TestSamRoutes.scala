@@ -207,15 +207,16 @@ object TestSamRoutes {
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
-    val mockAzureServicesConfig = appConfig.azureServicesConfig.orNull
+    val azureServicesConfig = appConfig.azureServicesConfig
 
     val azureService =
       new AzureService(
-        mockAzureServicesConfig,
+        azureServicesConfig,
         crlService.getOrElse(MockCrlService(Option(user))),
         directoryDAO,
         new MockAzureManagedResourceGroupDAO
       )
+
     new TestSamRoutes(
       mockResourceService,
       policyEvaluatorService,
@@ -225,7 +226,7 @@ object TestSamRoutes {
       user,
       tosService = mockTosService,
       cloudExtensions = cloudXtns,
-      azureService = Some(azureService)
+      azureService = Option(azureService)
     )
   }
 }

@@ -13,7 +13,7 @@ import com.azure.resourcemanager.msi.models.{Identities, Identity}
 import com.azure.resourcemanager.resources.ResourceManager
 import com.azure.resourcemanager.resources.models.{ResourceGroup, ResourceGroups}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.appConfig
-import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, ManagedAppPlan}
+import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceId, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
@@ -49,8 +49,8 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockIdentityWithGroup = mock[DefinitionStages.WithGroup]
         val mockIdentityWithCreate = mock[DefinitionStages.WithCreate]
         val mockIdentity = mock[Identity]
-        val mockAzureServicesConfig = mock[AzureServicesConfig]
-        val azureService = new AzureService(mockAzureServicesConfig, mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
+        val azureServicesConfig = appConfig.azureServicesConfig
+        val azureService = new AzureService(azureServicesConfig, mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
 
         val testMrgCoordinates = ManagedResourceGroupCoordinates(
           TenantId(UUID.randomUUID().toString),
@@ -112,7 +112,7 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockDirectoryDAO = mock[DirectoryDAO]
         val mockAzureManagedResourceGroupDAO = mock[AzureManagedResourceGroupDAO]
 
-        val azureService = new AzureService(appConfig.azureServicesConfig.orNull, mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
+        val azureService = new AzureService(appConfig.azureServicesConfig, mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
 
         val testMrgCoordinates = ManagedResourceGroupCoordinates(
           TenantId(UUID.randomUUID().toString),
@@ -147,7 +147,7 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockMsiManager = mock[MsiManager]
         val mockIdentities = mock[Identities]
 
-        val azureService = new AzureService(appConfig.azureServicesConfig.orNull, mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
+        val azureService = new AzureService(appConfig.azureServicesConfig, mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
 
         val testMrgCoordinates = ManagedResourceGroupCoordinates(
           TenantId(UUID.randomUUID().toString),
@@ -182,7 +182,7 @@ class AzureServiceUnitSpec extends AnyFreeSpec with Matchers with ScalaFutures w
         val mockMsiManager = mock[MsiManager]
         val mockIdentities = mock[Identities]
 
-        val azureService = new AzureService(appConfig.azureServicesConfig.orNull, mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
+        val azureService = new AzureService(appConfig.azureServicesConfig, mockCrlService, mockDirectoryDAO, mockAzureManagedResourceGroupDAO)
 
         val testMrgCoordinates = ManagedResourceGroupCoordinates(
           TenantId(UUID.randomUUID().toString),

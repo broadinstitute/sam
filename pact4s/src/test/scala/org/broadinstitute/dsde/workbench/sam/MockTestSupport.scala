@@ -65,7 +65,7 @@ object MockTestSupport extends MockTestSupport {
   val googleServicesConfig: GoogleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes: Map[ResourceTypeName, ResourceType] = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val adminConfig: AdminConfig = config.as[AdminConfig]("admin")
-  val azureServicesConfig: AzureServicesConfig = appConfig.azureServicesConfig.orNull
+  val azureServicesConfig: Option[AzureServicesConfig] = appConfig.azureServicesConfig
   val databaseEnabled: Boolean = config.getBoolean("db.enabled")
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
 
