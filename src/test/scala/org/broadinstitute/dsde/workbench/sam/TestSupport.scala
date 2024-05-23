@@ -149,7 +149,11 @@ object TestSupport extends TestSupport {
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(googleExt, directoryDAO, tosConfig)
-    val azureService = new AzureService(azureServicesConfig, MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+
+    val azureService = azureServicesConfig.map { azureConfig =>
+      new AzureService(azureConfig, MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    }
+
     SamDependencies(
       mockResourceService,
       policyEvaluatorService,
@@ -182,7 +186,7 @@ object TestSupport extends TestSupport {
     LiquibaseConfig("", false),
     samDependencies.oauth2Config,
     samDependencies.adminConfig,
-    Some(samDependencies.azureService)
+    samDependencies.azureService
   ) with MockSamUserDirectives with GoogleExtensionRoutes {
     override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
     override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
@@ -293,5 +297,5 @@ final case class SamDependencies(
     cloudExtensions: CloudExtensions,
     oauth2Config: OpenIDConnectConfiguration,
     adminConfig: AdminConfig,
-    azureService: AzureService
+    azureService: Option[AzureService]
 )

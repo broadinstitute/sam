@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfigurat
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, LiquibaseConfig, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, AzureServicesConfig, LiquibaseConfig, ManagedAppPlan, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -207,11 +207,22 @@ object TestSamRoutes {
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
-    val azureServicesConfig = appConfig.azureServicesConfig
+    val defaultManagedAppPlan: ManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
+    val mockAzureServicesConfig = AzureServicesConfig(
+      azureServiceCatalogAppsEnabled = false,
+      "mock-auth-user-key",
+      "mock-kind",
+      "mock-managedapp-workload-clientid",
+      "mock-managedapp-clientid",
+      "mock-managedapp-clientsecret",
+      "mock-managedapp-tenantid",
+      Seq(defaultManagedAppPlan),
+      allowManagedIdentityUserCreation = true
+    )
 
     val azureService =
       new AzureService(
-        azureServicesConfig,
+        mockAzureServicesConfig,
         crlService.getOrElse(MockCrlService(Option(user))),
         directoryDAO,
         new MockAzureManagedResourceGroupDAO
