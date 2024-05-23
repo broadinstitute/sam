@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-# The CloudSQL console simply states "PostgreSQL 9.6" so we may not match the minor version number
+# NOTE this script has to be run from the root of the project or else it wont work.
+
+# The CloudSQL console simply states "PostgreSQL 15" so we may not match the minor version number
 POSTGRES_VERSION=15
 start() {
 
@@ -11,6 +13,8 @@ start() {
     # start up postgres
     echo "starting up postgres container..."
     docker run --name $CONTAINER -e POSTGRES_USER=sam-test -e POSTGRES_PASSWORD=sam-test -e POSTGRES_DB=testdb -d -p "$POSTGRES_PORT:5432" postgres:$POSTGRES_VERSION
+
+    echo "Created DB: testdb"
 
     # validate postgres
     echo "running postgres validation..."
