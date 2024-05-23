@@ -7,15 +7,25 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributesRequest, SamUserRegistrationRequest, SamUserResponse}
-import org.broadinstitute.dsde.workbench.sam.service.UserService
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  SamUser,
+  SamUserAttributesRequest,
+  SamUserCombinedStateResponse,
+  SamUserRegistrationRequest,
+  SamUserResponse
+}
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import spray.json.enrichAny
 
 /** Created by tlangs on 10/12/2023.
   */
 trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
   val userService: UserService
+  val tosService: TosService
+  val resourceService: ResourceService
 
   /** Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where a user is not found. In most routes that is appropriate
     * but in the user routes it should be a 404.
@@ -66,6 +76,15 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
                 pathEndOrSingleSlash {
                   getSamUserAttributes(samUser, samRequestContext) ~
                   patchSamUserAttributes(samUser, samRequestContext)
+                }
+              }
+            } ~
+            // api/user/v2/self/combinedState
+            pathPrefix("combinedState") {
+              withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+                pathEndOrSingleSlash {
+                  getSamUserCombinedState(samUser, samRequestContext)
                 }
               }
             }
@@ -161,6 +180,33 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
         complete {
           userService.setUserAttributesFromRequest(samUser.id, userAttributesRequest, samRequestContext).map(OK -> _)
         }
+      }
+    }
+
+  private def getSamUserCombinedState(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    get {
+      complete {
+        for {
+          allowances <- userService.getUserAllowances(samUser, samRequestContext)
+          maybeAttributes <- userService.getUserAttributes(samUser.id, samRequestContext)
+          termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
+          enterpriseFeatures <- resourceService
+            .listResourcesFlat(
+              samUser.id,
+              Set(ResourceTypeName("enterprise-feature")),
+              Set.empty,
+              Set(ResourceRoleName("user")),
+              Set.empty,
+              includePublic = false,
+              samRequestContext
+            )
+        } yield SamUserCombinedStateResponse(
+          samUser,
+          allowances,
+          maybeAttributes,
+          termsOfServiceDetails,
+          Map("enterpriseFeatures" -> enterpriseFeatures.toJson)
+        )
       }
     }
 
