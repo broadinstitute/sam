@@ -31,6 +31,7 @@ object SamResourceActions {
   val testAnyActionAccess = ResourceAction("test_any_action_access")
   val getParent = ResourceAction("get_parent")
   val setParent = ResourceAction("set_parent")
+  val createWithParent = ResourceAction("create_with_parent")
   val addChild = ResourceAction("add_child")
   val removeChild = ResourceAction("remove_child")
   val listChildren = ResourceAction("list_children")
