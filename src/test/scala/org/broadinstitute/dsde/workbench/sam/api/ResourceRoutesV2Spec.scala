@@ -213,6 +213,37 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
   }
 
+  it should "204 create resource with content with parent with create_with_parent action" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(ResourceActionPattern(SamResourceActions.setParent.value, "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.createWithParent, SamResourceActions.addChild))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createParentResourceRequest = CreateResourceRequest(
+      ResourceId("parent"),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Set.empty,
+      Some(false)
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createParentResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    val createResourceRequest = CreateResourceRequest(
+      ResourceId("foo"),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set.empty, Set(resourceType.ownerRoleName))),
+      Set.empty,
+      Some(false),
+      Some(FullyQualifiedResourceId(resourceType.name, createParentResourceRequest.resourceId))
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
   it should "400 with parent when parents not allowed" in {
     val resourceType = ResourceType(
       ResourceTypeName("rt"),
@@ -2024,6 +2055,30 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       currentParentOpt = Option(currentParentResource),
       newParentOpt = Option(newParentResource),
       actionsOnChild = Set(SamResourceActions.readPolicies),
+      actionsOnCurrentParent = Set(SamResourceActions.removeChild),
+      actionsOnNewParent = Set(SamResourceActions.addChild)
+    )
+
+    Put(
+      s"/api/resources/v2/${defaultResourceType.name}/${fullyQualifiedChildResource.resourceId.value}/parent",
+      newParentResource
+    ) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "403 if user only has create_with_parent on child resource" in {
+    val fullyQualifiedChildResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("child"))
+    val newParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("newParent"))
+    val currentParentResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("currentParent"))
+    val samRoutes = createSamRoutes()
+
+    setupParentRoutes(
+      samRoutes,
+      fullyQualifiedChildResource,
+      currentParentOpt = Option(currentParentResource),
+      newParentOpt = Option(newParentResource),
+      actionsOnChild = Set(SamResourceActions.readPolicies, SamResourceActions.createWithParent),
       actionsOnCurrentParent = Set(SamResourceActions.removeChild),
       actionsOnNewParent = Set(SamResourceActions.addChild)
     )
