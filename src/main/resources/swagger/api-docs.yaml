@@ -3147,6 +3147,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/combinedState:
+    get:
+      tags:
+        - Users
+      summary: Gets a combined SamUser, attributes, allowances, terms of service, enterprise features state of the user, used to reduce api calls.
+      operationId: getSamUserCombinedState
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserCombinedState'
+        403:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/users/v2/{sam_user_id}:
     get:
       tags:
@@ -4556,6 +4575,21 @@ components:
         marketingConsent:
           type: boolean
           description: does the user consent to receiving marketing communications
+    SamUserCombinedState:
+      type: object
+      properties:
+        samUser:
+          $ref: '#/components/schemas/SamUserResponse'
+        userAttributes:
+          $ref: '#/components/schemas/SamUserAttributes'
+        userAllowances:
+          $ref: '#/components/schemas/SamUserAllowances'
+        userTermsOfServiceDetails:
+          $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        additionalDetails:
+          type: object
+          description: >
+            additional details about the user, such as enterprise features they have access to example: '{ "enterpriseFeatures": ["feature1", "feature2"] }'
     SamUserRegistrationRequest:
       type: object
       properties:
