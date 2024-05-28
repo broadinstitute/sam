@@ -98,6 +98,7 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
   it should "return 403 if user has access to the billing profile but the MRG could not be validated" in {
     // Change the managed app plan
     val mockCrlService = MockCrlService()
+
     when(mockCrlService.getManagedAppPlans)
       .thenReturn(Seq(ManagedAppPlan("some-other-plan", "publisher", "auth"), ManagedAppPlan("yet-another-plan", "publisher", "auth")))
     val samRoutes = genSamRoutes(crlService = Some(mockCrlService))
