@@ -5,7 +5,7 @@ final case class ManagedAppPlan(name: String, publisher: String, authorizedUserK
 final case class AzureServicesConfig(
     azureServiceCatalogAppsEnabled: Boolean,
     authorizedUserKey: String,
-    kindServiceCatalog: String,
+    managedAppTypeServiceCatalog: String,
     managedAppWorkloadClientId: String,
     managedAppClientId: String,
     managedAppClientSecret: String,

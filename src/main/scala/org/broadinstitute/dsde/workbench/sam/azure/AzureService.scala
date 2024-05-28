@@ -293,7 +293,7 @@ class AzureService(
         appsInSubscription <- IO(appManager.applications().list().asScala)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         _ <-
-          if (managedApp.kind() == config.kindServiceCatalog && validateUser) {
+          if (managedApp.kind() == config.managedAppTypeServiceCatalog && validateUser) {
             validateAuthorizedAppUser(
               managedApp,
               config.authorizedUserKey,
