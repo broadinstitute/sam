@@ -174,10 +174,6 @@ object AppConfig {
         if (azureEnabled) {
           Option(
             AzureServicesConfig(
-              config.getBoolean("azureServiceCatalogAppsEnabled"),
-              config.getString("authorizedUserKey"),
-              config.getString("kindServiceCatalog"),
-              config.getString("managedAppWorkloadClientId"),
               config.getString("managedAppClientId"),
               config.getString("managedAppClientSecret"),
               config.getString("managedAppTenantId"),

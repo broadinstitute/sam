@@ -22,16 +22,16 @@ import org.mockito.scalatest.MockitoSugar
 import scala.jdk.CollectionConverters._
 
 object MockCrlService extends MockitoSugar {
-  val mockMrgName: ManagedResourceGroupName = ManagedResourceGroupName("test-mrg")
-  val mockSamSpendProfileResource: FullyQualifiedResourceId = FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId("test-spend-profile"))
-  val defaultManagedAppPlan: ManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
+  val mockMrgName = ManagedResourceGroupName("test-mrg")
+  val mockSamSpendProfileResource = FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId("test-spend-profile"))
+  val defaultManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
 
   def apply(
       user: Option[SamUser] = None,
       mrgName: ManagedResourceGroupName = mockMrgName,
       managedAppPlan: ManagedAppPlan = defaultManagedAppPlan,
       includeBillingProfileTag: Boolean = false
-  ): CrlService = {
+  ) = {
     val mockCrlService = mock[CrlService](RETURNS_SMART_NULLS)
     val mockRm = mockResourceManager(mrgName, includeBillingProfileTag)
     val mockAppMgr = mockApplicationManager(user, mrgName, managedAppPlan)
@@ -46,12 +46,12 @@ object MockCrlService extends MockitoSugar {
       .thenReturn(IO.pure(mockMsi))
 
     lenient()
-      .when(mockCrlService.buildApplicationManager(any[TenantId], any[SubscriptionId]))
-      .thenReturn(IO.pure(mockAppMgr))
-
-    lenient()
       .when(mockCrlService.getManagedAppPlans)
       .thenReturn(Seq(managedAppPlan))
+
+    lenient()
+      .when(mockCrlService.buildApplicationManager(any[TenantId], any[SubscriptionId]))
+      .thenReturn(IO.pure(mockAppMgr))
 
     mockCrlService
   }

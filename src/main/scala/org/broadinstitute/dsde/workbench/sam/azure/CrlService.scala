@@ -4,10 +4,9 @@ import bio.terra.cloudres.azure.resourcemanager.common.Defaults
 import bio.terra.cloudres.common.ClientConfig
 import bio.terra.cloudres.common.cleanup.CleanupConfig
 import cats.effect.IO
-import com.azure.core.credential.TokenCredential
 import com.azure.core.management.AzureEnvironment
 import com.azure.core.management.profile.AzureProfile
-import com.azure.identity.{ChainedTokenCredentialBuilder, ClientSecretCredentialBuilder, ManagedIdentityCredentialBuilder}
+import com.azure.identity.{ClientSecretCredential, ClientSecretCredentialBuilder}
 import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
@@ -60,31 +59,15 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
 
   def getManagedAppPlans: Seq[ManagedAppPlan] = config.managedAppPlans
 
-  private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (TokenCredential, AzureProfile) = {
-
-    val managedIdentityCredential = new ManagedIdentityCredentialBuilder()
-      .clientId(config.managedAppWorkloadClientId)
-      .build
-
-    val servicePrincipalCredential = new ClientSecretCredentialBuilder()
+  private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (ClientSecretCredential, AzureProfile) = {
+    val credential = new ClientSecretCredentialBuilder()
       .clientId(config.managedAppClientId)
       .clientSecret(config.managedAppClientSecret)
       .tenantId(config.managedAppTenantId)
-      .build
-
-    // When an access token is requested, the chain will try each
-    // credential in order, stopping when one provides a token
-    //
-    // For Managed Identity auth, SAM must be deployed to an Azure service
-    // other platforms will fall through to Service Principal auth
-    val credential = new ChainedTokenCredentialBuilder()
-      .addLast(managedIdentityCredential)
-      .addLast(servicePrincipalCredential)
       .build
 
     val profile = new AzureProfile(tenantId.value, subscriptionId.value, AzureEnvironment.AZURE)
 
     (credential, profile)
   }
-
 }
