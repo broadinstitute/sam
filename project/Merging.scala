@@ -7,6 +7,7 @@ object Merging {
     case PathList("javax", "activation", _ @_*) => MergeStrategy.first
     case PathList("javax", "xml", _ @_*) => MergeStrategy.first
     case PathList("google", "protobuf", _ @_*) => MergeStrategy.first
+    case PathList("org", "bouncycastle", _ @_*) => MergeStrategy.first
     case x if x.endsWith("/ModuleUtil.class") => MergeStrategy.first
     case PathList("META-INF", "versions", "9", "module-info.class") => MergeStrategy.first
     case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.first
@@ -14,6 +15,7 @@ object Merging {
     case PathList("META-INF", "kotlin-stdlib.kotlin_module") => MergeStrategy.first
     case PathList("META-INF", "kotlin-stdlib-common.kotlin_module") => MergeStrategy.first
     case PathList("META-INF", "okio.kotlin_module") => MergeStrategy.first
+    case PathList("META-INF", "versions", "9", "OSGI-INF", "MANIFEST.MF") => MergeStrategy.first
     case PathList("mozilla", "public-suffix-list.txt") => MergeStrategy.first
     case "module-info.class" =>
       MergeStrategy.discard
