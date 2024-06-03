@@ -302,50 +302,26 @@ object Boot extends IOApp with LazyLogging {
     )
   }
 
-  private def createGoogleDirDaos(config: GoogleConfig, workspaceMetricBaseName: String, lastQuotaErrorDAO: LastQuotaErrorDAO)(implicit
-      actorSystem: ActorSystem
-  ): NonEmptyList[HttpGoogleDirectoryDAO] = {
-    val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
-    val samSaJson =
-      Files.readAllLines(Paths.get(config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)).asScala.mkString
+ private def createGoogleDirDaos(config: GoogleConfig, workspaceMetricBaseName: String, lastQuotaErrorDAO: LastQuotaErrorDAO)(implicit
+    actorSystem: ActorSystem
+): NonEmptyList[HttpGoogleDirectoryDAO] = {
+  val serviceAccountEmails = config.googleServicesConfig.adminSdkServiceAccountEmails.getOrElse(NonEmptyList.one(config.googleServicesConfig.subEmail))
 
-    val googleCredentials = serviceAccountJsons match {
-      case None =>
-        config.googleServicesConfig.directoryApiAccounts match {
-          case Some(directoryApiAccounts) =>
-            logger.info(s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate $directoryApiAccounts to talk to Google Directory API")
-            directoryApiAccounts.map(directoryApiAccount => Json(samSaJson, Some(directoryApiAccount)))
-          case None =>
-            logger.info(
-              s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API"
-            )
-            NonEmptyList.one(Json(samSaJson, Some(config.googleServicesConfig.subEmail)))
-        }
-      case Some(accounts) =>
-        config.googleServicesConfig.directoryApiAccounts match {
-          case Some(directoryApiAccounts) =>
-            logger.info(
-              s"Using ${config.googleServicesConfig.adminSdkServiceAccountPaths} to impersonate $directoryApiAccounts to talk to Google Directory API"
-            )
-            directoryApiAccounts.flatMap(directoryApiAccount => accounts.map(account => Json(account, Option(directoryApiAccount))))
-          case None =>
-            logger.info(
-              s"Using ${config.googleServicesConfig.adminSdkServiceAccountPaths} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API"
-            )
-            accounts.map(account => Json(account, Option(config.googleServicesConfig.subEmail)))
-        }
-    }
+  val googleCredentials = serviceAccountEmails.map { email =>
+    val sourceCredentials = GoogleCredentials.getApplicationDefault()
+    ImpersonatedCredentials.create(sourceCredentials, email, Collections.emptyList[String](), Collections.emptyList[String](), 3600)
+  }
 
-    googleCredentials.map(credentials =>
-      new CoordinatedBackoffHttpGoogleDirectoryDAO(
-        config.googleServicesConfig.appName,
-        credentials,
-        workspaceMetricBaseName,
-        lastQuotaErrorDAO,
-        backoffDuration = config.coordinatedAdminSdkBackoffDuration
-      )
+  googleCredentials.map { credentials =>
+    new CoordinatedBackoffHttpGoogleDirectoryDAO(
+      config.googleServicesConfig.appName,
+      credentials,
+      workspaceMetricBaseName,
+      lastQuotaErrorDAO,
+      backoffDuration = config.coordinatedAdminSdkBackoffDuration
     )
   }
+}
 
   private def instantiateOpenTelemetry(appConfig: AppConfig)(implicit system: ActorSystem): OpenTelemetry = {
     val maybeVersion = Option(getClass.getPackage.getImplementationVersion)
