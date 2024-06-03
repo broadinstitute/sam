@@ -7,7 +7,7 @@ import cats.effect.IO
 import com.azure.core.credential.TokenCredential
 import com.azure.core.management.AzureEnvironment
 import com.azure.core.management.profile.AzureProfile
-import com.azure.identity.{ChainedTokenCredentialBuilder, ClientSecretCredentialBuilder, ManagedIdentityCredentialBuilder}
+import com.azure.identity.{ChainedTokenCredentialBuilder, ClientSecretCredentialBuilder}
 import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
@@ -62,9 +62,9 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
 
   private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (TokenCredential, AzureProfile) = {
 
-    val managedIdentityCredential = new ManagedIdentityCredentialBuilder()
-      .clientId(config.managedAppWorkloadClientId)
-      .build
+    // val managedIdentityCredential = new ManagedIdentityCredentialBuilder()
+    //  .clientId(config.managedAppWorkloadClientId)
+    //  .build
 
     val servicePrincipalCredential = new ClientSecretCredentialBuilder()
       .clientId(config.managedAppClientId)
@@ -78,7 +78,7 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
     // For Managed Identity auth, SAM must be deployed to an Azure service
     // other platforms will fall through to Service Principal auth
     val credential = new ChainedTokenCredentialBuilder()
-      .addLast(managedIdentityCredential)
+      // .addLast(managedIdentityCredential)
       .addLast(servicePrincipalCredential)
       .build
 
