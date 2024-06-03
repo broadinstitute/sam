@@ -11,9 +11,7 @@ info:
 servers:
   - url: /
 security:
-  - oidc:
-      - openid
-  - bearerAuth: []
+  - oidc: []
 paths:
   /api/admin/v1/user/{userId}:
     get:
@@ -4750,9 +4748,10 @@ components:
             type: string
   securitySchemes:
     oidc:
-      type: openIdConnect
-      openIdConnectUrl: OPEN_ID_CONNECT_URL
+      type: oauth2
       x-tokenName: id_token
-    bearerAuth:
-      type: http
-      scheme: bearer
+      flows:
+        authorizationCode:
+          authorizationUrl: OAUTH_AUTHORIZATION_URL
+          scopes: {}
+          tokenUrl: OAUTH_TOKEN_URL
