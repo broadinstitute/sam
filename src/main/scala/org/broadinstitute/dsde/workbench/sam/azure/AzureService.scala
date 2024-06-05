@@ -47,7 +47,7 @@ class AzureService(
   def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <-
-        if (config.azureServiceCatalogAppsEnabled && false) {
+        if (false) {
           validateServiceCatalogManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
         } else {
           validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)

@@ -295,8 +295,8 @@ class AzureServiceSpec(_system: ActorSystem)
         mockMrgDAO
       )
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //   .thenReturn(false)
 
     when(mockCrlService.getManagedAppPlans)
       .thenReturn(Seq(MockCrlService.defaultManagedAppPlan))
@@ -346,8 +346,8 @@ class AzureServiceSpec(_system: ActorSystem)
         mockMrgDAO
       )
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    //   when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //     .thenReturn(false)
 
     mockMrgDAO.insertManagedResourceGroup(managedResourceGroup.copy(billingProfileId = BillingProfileId("no the same")), samRequestContext).unsafeRunSync()
     val err = intercept[WorkbenchExceptionWithErrorReport] {
@@ -372,8 +372,8 @@ class AzureServiceSpec(_system: ActorSystem)
         mockMrgDAO
       )
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //  .thenReturn(false)
 
     when(mockCrlService.getManagedAppPlans)
       .thenReturn(Seq(MockCrlService.defaultManagedAppPlan))
@@ -399,8 +399,8 @@ class AzureServiceSpec(_system: ActorSystem)
     val mockAzureServicesConfig = mock[AzureServicesConfig]
     val svc = new AzureService(mockAzureServicesConfig, MockCrlService(user), new MockDirectoryDAO(), mockMrgDAO)
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //  .thenReturn(false)
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
@@ -431,8 +431,8 @@ class AzureServiceSpec(_system: ActorSystem)
 
     when(mockApplication.managedResourceGroupId()).thenReturn("something else")
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //  .thenReturn(false)
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
@@ -463,8 +463,8 @@ class AzureServiceSpec(_system: ActorSystem)
     when(mockApplication.plan())
       .thenReturn(null)
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //  .thenReturn(false)
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
@@ -492,8 +492,8 @@ class AzureServiceSpec(_system: ActorSystem)
       .asScala
       .head
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //   .thenReturn(false)
 
     when(mockApplication.plan())
       .thenReturn(new Plan().withName(MockCrlService.defaultManagedAppPlan.name).withPublisher("other publisher"))
@@ -524,8 +524,8 @@ class AzureServiceSpec(_system: ActorSystem)
       .asScala
       .head
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //  .thenReturn(false)
 
     when(mockApplication.plan())
       .thenReturn(new Plan().withName("other name").withPublisher(MockCrlService.defaultManagedAppPlan.publisher))
@@ -550,8 +550,8 @@ class AzureServiceSpec(_system: ActorSystem)
         mockMrgDAO
       )
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //   .thenReturn(false)
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc
@@ -570,8 +570,8 @@ class AzureServiceSpec(_system: ActorSystem)
     val mockAzureServicesConfig = mock[AzureServicesConfig]
     val svc = new AzureService(mockAzureServicesConfig, crlService, new MockDirectoryDAO(), mockMrgDAO)
 
-    when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
-      .thenReturn(false)
+    // when(mockAzureServicesConfig.azureServiceCatalogAppsEnabled)
+    //  .thenReturn(false)
 
     val mockApplication = crlService
       .buildApplicationManager(
