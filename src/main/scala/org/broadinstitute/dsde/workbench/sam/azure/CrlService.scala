@@ -62,7 +62,7 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
 
   private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (TokenCredential, AzureProfile) = {
 
-    //temp change to test how create-bee-workflow handles failure on MI auth and fall through to SP auth
+    // temp change to test how create-bee-workflow handles failure on MI auth and fall through to SP auth
     val managedIdentityCredential = new ManagedIdentityCredentialBuilder()
       .clientId("00000000-0000-0000-0000-000000000000")
       .build
