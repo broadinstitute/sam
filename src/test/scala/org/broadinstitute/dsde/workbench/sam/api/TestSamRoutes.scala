@@ -209,7 +209,7 @@ object TestSamRoutes {
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
     val defaultManagedAppPlan: ManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
     val mockAzureServicesConfig = AzureServicesConfig(
-      azureServiceCatalogAppsEnabled = false,
+      // azureServiceCatalogAppsEnabled = false,
       "mock-auth-user-key",
       "mock-kind",
       "mock-managedapp-workload-clientid",
