@@ -109,6 +109,8 @@ class TestSamTosEnabledRoutes(
 
 object TestSamRoutes {
   val defaultUserInfo = Generator.genWorkbenchUserGoogle.sample.get
+  val config = ConfigFactory.load()
+  val appConfig = AppConfig.readConfig(config)
 
   object SamResourceActionPatterns {
     val config = ConfigFactory.load()
@@ -237,7 +239,7 @@ object TestSamRoutes {
       user,
       tosService = mockTosService,
       cloudExtensions = cloudXtns,
-      azureService = Some(azureService)
+      azureService = Option(azureService)
     )
   }
 }

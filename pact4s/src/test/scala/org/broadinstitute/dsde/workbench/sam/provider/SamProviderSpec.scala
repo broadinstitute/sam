@@ -192,7 +192,7 @@ class SamProviderSpec
       accessPolicyDAO,
       googleExt,
       FakeOpenIDConnectConfiguration,
-      azureService
+      Option(azureService)
     )
 
   override def beforeAll(): Unit = {
