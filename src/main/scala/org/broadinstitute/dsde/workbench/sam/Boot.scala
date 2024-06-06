@@ -407,7 +407,7 @@ object Boot extends IOApp with LazyLogging {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
     val azureService = config.azureServicesConfig.map { azureConfig =>
-      new AzureService(new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
+      new AzureService(azureConfig, new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
     }
     val resourceService = new ResourceService(
       resourceTypeMap,

@@ -19,10 +19,12 @@ import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, Re
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
 
 import scala.jdk.CollectionConverters._
 
 class AzureService(
+    config: AzureServicesConfig,
     crlService: CrlService,
     directoryDAO: DirectoryDAO,
     azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO
