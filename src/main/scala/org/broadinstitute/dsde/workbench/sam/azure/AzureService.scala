@@ -46,7 +46,12 @@ class AzureService(
 
   def createManagedResourceGroup(managedResourceGroup: ManagedResourceGroup, samRequestContext: SamRequestContext): IO[Unit] =
     for {
-      _ <- validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+      _ <-
+        if (config.azureServiceCatalogAppsEnabled) {
+          validateServiceCatalogManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+        } else {
+          validateManagedResourceGroup(managedResourceGroup.managedResourceGroupCoordinates, samRequestContext)
+        }
 
       existingByCoords <- azureManagedResourceGroupDAO.getManagedResourceGroupByCoordinates(
         managedResourceGroup.managedResourceGroupCoordinates,
@@ -267,22 +272,49 @@ class AzureService(
         appsInSubscription <- IO(appManager.applications().list().asScala.toSeq)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
         plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
-        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
+        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan.authorizedUserKey, samRequestContext) else IO.unit
+      } yield mrg
+    }
+
+  /** Validates a managed resource group deployed from Azure Service Catalog. Service Catalog apps do not contain a "plan" or publisher. Algorithm:
+    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Validate the app kind is "ServiceCatalog" 5. Validate
+    *      that the caller is on the list of authorized users for the app
+    */
+  private def validateServiceCatalogManagedResourceGroup(
+      mrgCoords: ManagedResourceGroupCoordinates,
+      samRequestContext: SamRequestContext,
+      validateUser: Boolean = true
+  ): IO[ResourceGroup] =
+    traceIOWithContext("validateServiceCatalogManagedResourceGroup", samRequestContext) { _ =>
+      for {
+        resourceManager <- crlService.buildResourceManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
+        mrg <- lookupMrg(mrgCoords, resourceManager)
+        appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
+        appsInSubscription <- IO(appManager.applications().list().asScala)
+        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
+        _ <-
+          if (managedApp.kind() == config.managedAppTypeServiceCatalog && validateUser) {
+            validateAuthorizedAppUser(
+              managedApp,
+              config.authorizedUserKey,
+              samRequestContext
+            )
+          } else IO.unit
       } yield mrg
     }
 
   /** The users authorized to setup a managed application are stored as a comma separated list of email addresses in the parameters of the application. The
     * azure api is java so this code needs to deal with possible nulls and java Maps. Also the application parameters are untyped, fun.
     * @param app
-    * @param plan
+    * @param authorizedUserKey
     * @param samRequestContext
     * @return
     */
-  private def validateAuthorizedAppUser(app: Application, plan: ManagedAppPlan, samRequestContext: SamRequestContext): IO[Unit] = {
+  private def validateAuthorizedAppUser(app: Application, authorizedUserKey: String, samRequestContext: SamRequestContext): IO[Unit] = {
     val authorizedUsersValue = for {
       parametersObj <- Option(app.parameters()) if parametersObj.isInstanceOf[java.util.Map[_, _]]
       parametersMap = parametersObj.asInstanceOf[java.util.Map[_, _]]
-      paramValuesObj <- Option(parametersMap.get(plan.authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
+      paramValuesObj <- Option(parametersMap.get(authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
       paramValues = paramValuesObj.asInstanceOf[java.util.Map[_, _]]
       authorizedUsersValue <- Option(paramValues.get("value"))
     } yield authorizedUsersValue.toString
