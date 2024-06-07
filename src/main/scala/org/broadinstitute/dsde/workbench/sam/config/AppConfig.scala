@@ -177,7 +177,7 @@ object AppConfig {
               config.as[Option[Boolean]]("azureServiceCatalogAppsEnabled").getOrElse(false),
               config.getString("authorizedUserKey"),
               config.getString("managedAppTypeServiceCatalog"),
-              config.getString("managedAppWorkloadClientId"),
+              // config.getString("managedAppWorkloadClientId"),
               config.getString("managedAppClientId"),
               config.getString("managedAppClientSecret"),
               config.getString("managedAppTenantId"),

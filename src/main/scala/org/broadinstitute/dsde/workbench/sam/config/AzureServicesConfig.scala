@@ -5,7 +5,7 @@ case class AzureServicesConfig(
     azureServiceCatalogAppsEnabled: Boolean,
     authorizedUserKey: String,
     managedAppTypeServiceCatalog: String,
-    managedAppWorkloadClientId: String,
+    // managedAppWorkloadClientId: String,
     managedAppClientId: String,
     managedAppClientSecret: String,
     managedAppTenantId: String,

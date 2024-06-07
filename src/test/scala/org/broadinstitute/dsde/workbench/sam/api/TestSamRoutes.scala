@@ -214,7 +214,7 @@ object TestSamRoutes {
       azureServiceCatalogAppsEnabled = false,
       "mock-auth-user-key",
       "mock-kind",
-      "mock-managedapp-workload-clientid",
+      // "mock-managedapp-workload-clientid",
       "mock-managedapp-clientid",
       "mock-managedapp-clientsecret",
       "mock-managedapp-tenantid",
