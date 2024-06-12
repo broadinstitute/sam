@@ -1007,7 +1007,7 @@ class ResourceService(
       samRequestContext: SamRequestContext
   ): IO[Iterable[UserResourcesResponse]] =
     for {
-      resources <- listResourcesHierarchical(userId, Set(resourceTypeName), Set.empty, Set.empty, Set.empty, true, samRequestContext)
+      resources <- listResourcesHierarchical(userId, Set(resourceTypeName), Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext)
     } yield resources.resources.map(toUserResourcesResponse)
 
   def listResourcesFlat(
@@ -1016,10 +1016,11 @@ class ResourceService(
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
+      parentResourceIds: Set[FullyQualifiedResourceId],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesFlat] =
-    accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupFlat)
+    accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, actions, parentResourceIds, includePublic, samRequestContext).map(groupFlat)
 
   def listResourcesHierarchical(
       samUserId: WorkbenchUserId,
@@ -1027,10 +1028,11 @@ class ResourceService(
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
+      parentResourceIds: Set[FullyQualifiedResourceId],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesHierarchical] =
     accessPolicyDAO
-      .filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+      .filterResources(samUserId, resourceTypeNames, policies, roles, actions, parentResourceIds, includePublic, samRequestContext)
       .map(groupHierarchical)
 }

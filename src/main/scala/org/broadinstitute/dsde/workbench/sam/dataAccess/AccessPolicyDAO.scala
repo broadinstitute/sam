@@ -118,6 +118,7 @@ trait AccessPolicyDAO {
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
+      parentResourceIds: Set[FullyQualifiedResourceId],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]]

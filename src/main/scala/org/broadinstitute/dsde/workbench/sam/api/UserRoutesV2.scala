@@ -197,6 +197,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
               Set.empty,
               Set(ResourceRoleName("user")),
               Set.empty,
+              Set.empty,
               includePublic = false,
               samRequestContext
             )

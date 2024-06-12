@@ -368,6 +368,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
       actions: Set[ResourceAction],
+      parentResourceIds: Set[FullyQualifiedResourceId],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]] = IO {
@@ -383,6 +384,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
                   FilterResourcesResult(
                     fqPolicyId.resource.resourceId,
                     fqPolicyId.resource.resourceTypeName,
+                    None,
                     Some(fqPolicyId.accessPolicyName),
                     Some(role),
                     None,
@@ -397,6 +399,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
                   FilterResourcesResult(
                     fqPolicyId.resource.resourceId,
                     fqPolicyId.resource.resourceTypeName,
+                    None,
                     Some(fqPolicyId.accessPolicyName),
                     Some(role),
                     Some(action),
