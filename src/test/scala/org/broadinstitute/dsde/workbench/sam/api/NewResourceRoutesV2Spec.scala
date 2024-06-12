@@ -146,10 +146,12 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       eqTo(Set(AccessPolicyName("fooPolicy"))),
       eqTo(Set(ResourceRoleName("fooRole"), ResourceRoleName("barRole"), ResourceRoleName("bazRole"))),
       eqTo(Set(ResourceAction("fooAction"), ResourceAction("barAction"))),
-      eqTo(Set(
-        FullyQualifiedResourceId(ResourceTypeName("barType"), ResourceId("barResource")),
-        FullyQualifiedResourceId(ResourceTypeName("bazType"), ResourceId("bazResource"))
-      )),
+      eqTo(
+        Set(
+          FullyQualifiedResourceId(ResourceTypeName("barType"), ResourceId("barResource")),
+          FullyQualifiedResourceId(ResourceTypeName("bazType"), ResourceId("bazResource"))
+        )
+      ),
       eqTo(true),
       any[SamRequestContext]
     )

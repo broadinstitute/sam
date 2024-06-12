@@ -1775,7 +1775,9 @@ class PostgresAccessPolicyDAO(
               FilterResourcesResult(
                 rs.get[ResourceId](resource.resultName.name),
                 resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
-                rs.longOpt(resourceParent.resultName.resourceTypeId).map(rtid => resourceTypeNamesByPK(ResourceTypePK(rtid))).flatMap(rtn => rs.stringOpt(resourceParent.resultName.name).map(rid => FullyQualifiedResourceId(rtn, ResourceId(rid)))),
+                rs.longOpt(resourceParent.resultName.resourceTypeId)
+                  .map(rtid => resourceTypeNamesByPK(ResourceTypePK(rtid)))
+                  .flatMap(rtn => rs.stringOpt(resourceParent.resultName.name).map(rid => FullyQualifiedResourceId(rtn, ResourceId(rid)))),
                 rs.stringOpt(resourcePolicy.resultName.name).map(AccessPolicyName(_)),
                 rs.stringOpt(resourceRole.resultName.role).map(ResourceRoleName(_)),
                 rs.stringOpt(resourceAction.resultName.action).map(ResourceAction(_)),
@@ -1822,8 +1824,11 @@ class PostgresAccessPolicyDAO(
     val notNullConstraintRoleAction =
       samsqls"and not (${resourceRole.role} is null and ${resourceAction.action} is null)"
     val notNullConstraintPolicyAction = samsqls"and not (${resourceAction.action} is null)"
-    val resourceParentsConstraint = if (parentResourceIds.nonEmpty) samsqls"and ${parentResourceIds.map(parentResourceId => samsqls"(${resourceParent.resourceTypeId} = ${resourceTypePKsByName(parentResourceId.resourceTypeName)} and ${resourceParent.name} = ${parentResourceId.resourceId})")
-      .reduce((acc, clause) => samsqls"$acc or $clause")}" else samsqls""
+    val resourceParentsConstraint =
+      if (parentResourceIds.nonEmpty) samsqls"and ${parentResourceIds
+          .map(parentResourceId => samsqls"(${resourceParent.resourceTypeId} = ${resourceTypePKsByName(parentResourceId.resourceTypeName)} and ${resourceParent.name} = ${parentResourceId.resourceId})")
+          .reduce((acc, clause) => samsqls"$acc or $clause")}"
+      else samsqls""
 
     val policyRoleActionQuery =
       samsqls"""
@@ -1881,7 +1886,9 @@ class PostgresAccessPolicyDAO(
           FilterResourcesResult(
             rs.get[ResourceId](resource.resultName.name),
             resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
-            rs.longOpt(resourceParent.resultName.resourceTypeId).map(rtid => resourceTypeNamesByPK(ResourceTypePK(rtid))).flatMap(rtn => rs.stringOpt(resourceParent.resultName.name).map(rid => FullyQualifiedResourceId(rtn, ResourceId(rid)))),
+            rs.longOpt(resourceParent.resultName.resourceTypeId)
+              .map(rtid => resourceTypeNamesByPK(ResourceTypePK(rtid)))
+              .flatMap(rtn => rs.stringOpt(resourceParent.resultName.name).map(rid => FullyQualifiedResourceId(rtn, ResourceId(rid)))),
             rs.stringOpt(resourcePolicy.resultName.name).map(AccessPolicyName(_)),
             rs.stringOpt(resourceRole.resultName.role).map(ResourceRoleName(_)),
             rs.stringOpt(resourceAction.resultName.action).map(ResourceAction(_)),
