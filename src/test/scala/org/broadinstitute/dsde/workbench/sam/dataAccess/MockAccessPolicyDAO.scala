@@ -417,6 +417,9 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
       .toSeq
   }
 
+  override def getResourceCreator(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUserId]] =
+    IO.pure(resources.get(resource).flatMap(_.createdBy))
+
   override def listResourcesUsingAuthDomain(authDomainGroupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
     IO.pure(Set.empty)
 }

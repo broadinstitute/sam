@@ -510,8 +510,8 @@ class PostgresAccessPolicyDAO(
     // note that when setting the parent we are not checking for circular hierarchies but that should be ok
     // since this is a new resource and should not be a parent of another so no circles can be possible
     val insertResourceQuery =
-      samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId}, ${resourceTableColumn.resourceParentId})
-               values (${resource.resourceId}, ${resourceTypePKsByName(resource.resourceTypeName)}, $parentPK)"""
+      samsql"""insert into ${ResourceTable.table} (${resourceTableColumn.name}, ${resourceTableColumn.resourceTypeId}, ${resourceTableColumn.resourceParentId}, ${resourceTableColumn.createdBy})
+               values (${resource.resourceId}, ${resourceTypePKsByName(resource.resourceTypeName)}, $parentPK, ${resource.createdBy})"""
 
     Try {
       ResourcePK(insertResourceQuery.updateAndReturnGeneratedKey().apply())
@@ -552,6 +552,25 @@ class PostgresAccessPolicyDAO(
       .getOrElse(
         throw new WorkbenchException(s"resource $resourceId not found")
       )
+  }
+
+  override def getResourceCreator(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUserId]] = {
+    val r = ResourceTable.syntax("r")
+    val loadResourcePKQuery =
+      samsql"""select ${r.result.createdBy}
+              | from ${ResourceTable as r}
+              | where ${r.name} = ${resource.resourceId}
+              | and ${r.resourceTypeId} = ${resourceTypePKsByName(resource.resourceTypeName)}""".stripMargin
+
+    readOnlyTransaction("getResourceCreator", samRequestContext) { implicit session =>
+      loadResourcePKQuery
+        .map(rs => rs.stringOpt(r.resultName.createdBy).map(WorkbenchUserId))
+        .single()
+        .apply()
+        .getOrElse(
+          throw new WorkbenchException(s"resource $resource not found")
+        )
+    }
   }
 
   override def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =

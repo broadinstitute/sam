@@ -252,6 +252,16 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                     }
                   }
                 }
+              } ~
+              pathPrefix("creator") {
+                requireAction(resource, SamResourceActions.readCreator, samUser.id, samRequestContext) {
+                  pathEndOrSingleSlash {
+                    complete(resourceService.getResourceCreator(resource, samRequestContext).map {
+                      case Some(response) => StatusCodes.OK -> response.email
+                      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource creator not found"))
+                    })
+                  }
+                }
               }
             }
           }
@@ -605,7 +615,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       "policies".as[String].?,
       "roles".as[String].?,
       "actions".as[String].?,
-      "parentResources".as[String] ?,
+      "parentResources".as[String].?,
       "includePublic" ? false,
       "format".as[String] ? "hierarchical"
     ) {

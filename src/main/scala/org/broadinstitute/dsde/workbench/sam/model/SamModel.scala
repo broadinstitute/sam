@@ -42,6 +42,7 @@ object SamResourceActions {
   val link = ResourceAction("link")
   val setManagedResourceGroup = ResourceAction("set_managed_resource_group")
   val adminReadSummaryInformation = ResourceAction("admin_read_summary_information")
+  val readCreator = ResourceAction("read_creator")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
@@ -111,7 +112,8 @@ object UserStatusDetails {
     resourceId: ResourceId,
     authDomain: Set[WorkbenchGroupName],
     accessPolicies: Set[AccessPolicy] = Set.empty,
-    parent: Option[FullyQualifiedResourceId] = None
+    parent: Option[FullyQualifiedResourceId] = None,
+    createdBy: Option[WorkbenchUserId] = None
 ) {
   val fullyQualifiedId = FullyQualifiedResourceId(resourceTypeName, resourceId)
 }

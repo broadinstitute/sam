@@ -85,7 +85,7 @@ class ResourceService(
             )
             // note that this skips all validations and just creates a resource with owner policies with no members
             // it will require someone with direct database access to bootstrap
-            persistResource(resourceTypeAdmin, ResourceId(rtName.value), Set(policy), Set.empty, None, samRequestContext).recover {
+            persistResource(resourceTypeAdmin, ResourceId(rtName.value), Set(policy), Set.empty, None, None, samRequestContext).recover {
               case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.Conflict) =>
                 // ok if the resource already exists
                 Resource(resourceTypeAdmin.name, ResourceId(rtName.value), Set.empty)
@@ -139,7 +139,7 @@ class ResourceService(
       validateCreateResource(resourceType, resourceId, policies, authDomain, userId, parentOpt, samRequestContext).flatMap {
         case Seq() =>
           for {
-            persisted <- persistResource(resourceType, resourceId, policies, authDomain, parentOpt, samRequestContext)
+            persisted <- persistResource(resourceType, resourceId, policies, authDomain, parentOpt, Some(userId), samRequestContext)
 
             _ <- AuditLogger.logAuditEventIO(
               samRequestContext,
@@ -172,10 +172,14 @@ class ResourceService(
       policies: Set[ValidatableAccessPolicy],
       authDomain: Set[WorkbenchGroupName],
       parentOpt: Option[FullyQualifiedResourceId],
+      userId: Option[WorkbenchUserId],
       samRequestContext: SamRequestContext
   ) = {
     val accessPolicies = policies.map(constructAccessPolicy(resourceType, resourceId, _, public = false)) // can't set public at create time
-    accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain, accessPolicies = accessPolicies, parent = parentOpt), samRequestContext)
+    accessPolicyDAO.createResource(
+      Resource(resourceType.name, resourceId, authDomain, accessPolicies = accessPolicies, parent = parentOpt, createdBy = userId),
+      samRequestContext
+    )
   }
 
   private def constructAccessPolicy(resourceType: ResourceType, resourceId: ResourceId, validatableAccessPolicy: ValidatableAccessPolicy, public: Boolean) =
@@ -268,6 +272,14 @@ class ResourceService(
     if (authDomain.nonEmpty && !resourceType.isAuthDomainConstrainable) {
       Option(ErrorReport(s"Auth Domain is not permitted on resource of type: ${resourceType.name}"))
     } else None
+
+  def getResourceCreator(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    for {
+      resourceCreator <- accessPolicyDAO.getResourceCreator(resource, samRequestContext)
+      samUser <- resourceCreator.flatTraverse { creator =>
+        directoryDAO.loadUser(creator, samRequestContext)
+      }
+    } yield samUser
 
   def loadResourceAuthDomain(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] =
     accessPolicyDAO

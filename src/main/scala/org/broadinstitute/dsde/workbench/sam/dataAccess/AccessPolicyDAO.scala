@@ -123,6 +123,8 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]]
 
+  def getResourceCreator(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[WorkbenchUserId]]
+
 }
 
 sealed abstract class LoadResourceAuthDomainResult

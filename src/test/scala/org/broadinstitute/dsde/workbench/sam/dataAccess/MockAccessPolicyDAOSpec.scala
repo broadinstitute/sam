@@ -98,7 +98,7 @@ class MockAccessPolicyDAOSpec(_system: ActorSystem)
 
     val groupName = "fooGroup"
 
-    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName), Set.empty)
+    val intendedResource = Resource(ManagedGroupService.managedGroupTypeName, ResourceId(groupName), Set.empty, createdBy = Some(dummyUser.id))
 
     // just compare top level fields because createResource returns the policies, including the default one
     runAndWait(real.managedGroupService.createManagedGroup(ResourceId(groupName), dummyUser, samRequestContext = samRequestContext))

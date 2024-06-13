@@ -321,6 +321,23 @@ class ResourceServiceSpec
     err.errorReport.statusCode should equal(Some(StatusCodes.BadRequest))
   }
 
+  it should "get the resource creator, if one exists" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    runAndWait(service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext))
+    val creator = service.getResourceCreator(resource, samRequestContext).unsafeRunSync()
+
+    creator shouldEqual Some(dummyUser)
+
+    // cleanup
+    runAndWait(service.deleteResource(resource, samRequestContext))
+  }
+
   "listUserResourceActions" should "list the user's actions for a resource" in {
     assume(databaseEnabled, databaseEnabledClue)
 
