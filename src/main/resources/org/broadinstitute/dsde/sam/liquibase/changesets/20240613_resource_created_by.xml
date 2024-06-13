@@ -8,9 +8,10 @@
     <changeSet logicalFilePath="dummy" author="tlangs" id="resource_created_by">
         <addColumn tableName="sam_resource">
             <column name="created_by" type="VARCHAR">
-                <constraints nullable="true" foreignKeyName="FK_SR_CREATOR" referencedTableName="SAM_USER" referencedColumnNames="id"/>
+                <constraints nullable="true"/>
             </column>
         </addColumn>
+        <addForeignKeyConstraint baseTableName="sam_resource" baseColumnNames="created_by"  constraintName="FK_SR_CREATOR" referencedTableName="SAM_USER" referencedColumnNames="id" onDelete="SET NULL" />
     </changeSet>
 
 </databaseChangeLog>
