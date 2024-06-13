@@ -37,9 +37,7 @@ object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
     OidcConfig(
       config.getString("authorityEndpoint"),
-      config.getString("oidcClientId"),
-      config.as[Option[String]]("oidcClientSecret"),
-      config.as[Option[String]]("legacyGoogleClientId")
+      config.getString("oidcClientId")
     )
   }
 

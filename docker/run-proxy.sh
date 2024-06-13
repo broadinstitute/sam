@@ -11,6 +11,7 @@ start() {
     docker create --name "${CONTAINER}" \
         --restart "always" \
         -p 40080:80 -p 50443:443 \
+        -e "B2C_APPLICATION_ID=${OIDC_CLIENT_ID}" \
         us.gcr.io/broad-dsp-gcr-public/httpd-terra-proxy:v0.1.17
 
     docker cp "${SECRETS_DIR}/server.crt" sam-proxy:/etc/ssl/certs/server.crt

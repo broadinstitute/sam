@@ -11,6 +11,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.audit._
+import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{
@@ -39,7 +40,8 @@ class ResourceService(
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
     val emailDomain: String,
-    private val allowedAdminEmailDomains: Set[String]
+    private val allowedAdminEmailDomains: Set[String],
+    private val azureService: Option[AzureService] = None
 )(implicit val executionContext: ExecutionContext)
     extends LazyLogging {
 
@@ -141,7 +143,7 @@ class ResourceService(
 
             _ <- AuditLogger.logAuditEventIO(
               samRequestContext,
-              ResourceEvent(ResourceCreated, FullyQualifiedResourceId(resourceType.name, resourceId), parentOpt.map(ResourceChange))
+              ResourceEvent(ResourceCreated, FullyQualifiedResourceId(resourceType.name, resourceId), parentOpt.map(ResourceChange).toSet)
             )
 
             changeEvents = createAccessChangeEvents(FullyQualifiedResourceId(resourceType.name, resourceId), LazyList.empty, persisted.accessPolicies)
@@ -333,12 +335,26 @@ class ResourceService(
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
+      _ <- deleteActionManagedIdentitiesForResource(resource, samRequestContext)
 
       _ <- accessPolicyDAO.deleteAllResourcePolicies(resource, samRequestContext)
       _ <- maybeDeleteResource(resource, samRequestContext)
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
     } yield ()
+
+  private def deleteActionManagedIdentitiesForResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    azureService
+      .map { service =>
+        for {
+          actionManagedIdentities <- directoryDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext)
+          _ <- actionManagedIdentities.toList.traverse { ami =>
+            service.deleteActionManagedIdentity(ami.id, samRequestContext)
+          }
+          _ <- directoryDAO.deleteAllActionManagedIdentitiesForResource(resource, samRequestContext)
+        } yield ()
+      }
+      .getOrElse(IO.unit)
 
   /** Check if a resource has any children. If so, then throw a 400. */
   def checkNoChildren(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
@@ -851,7 +867,7 @@ class ResourceService(
         case LoadResourceAuthDomainResult.NotConstrained =>
           for {
             _ <- accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
-            _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentUpdated, childResource, Option(ResourceChange(parentResource))))
+            _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentUpdated, childResource, Set(ResourceChange(parentResource))))
           } yield ()
         case LoadResourceAuthDomainResult.Constrained(_) =>
           IO.raiseError(
@@ -874,7 +890,7 @@ class ResourceService(
       _ <- maybeOldParent.traverse { oldParent =>
         for {
           _ <- accessPolicyDAO.deleteResourceParent(resourceId, samRequestContext)
-          _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentRemoved, resourceId, Option(ResourceChange(oldParent))))
+          _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentRemoved, resourceId, Set(ResourceChange(oldParent))))
         } yield ()
       }
     } yield maybeOldParent.isDefined

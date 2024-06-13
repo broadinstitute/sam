@@ -11,8 +11,6 @@ import org.broadinstitute.dsde.workbench.sam.model.{
   FullyQualifiedPolicyId,
   FullyQualifiedResourceId,
   GroupSyncResponse,
-  ManagedGroupAccessInstructions,
-  ManagedGroupMembershipEntry,
   OldTermsOfServiceDetails,
   PolicyIdentifiers,
   RequesterPaysSignedUrlRequest,
@@ -106,10 +104,6 @@ object SamJsonSupport {
   implicit val UserResourcesResponseFormat = jsonFormat6(UserResourcesResponse.apply)
 
   implicit val FullyQualifiedPolicyIdFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
-
-  implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
-
-  implicit val ManagedGroupAccessInstructionsFormat = ValueObjectFormat(ManagedGroupAccessInstructions.apply)
 
   implicit val GroupSyncResponseFormat = jsonFormat2(GroupSyncResponse.apply)
 
