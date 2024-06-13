@@ -2985,6 +2985,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2/{resourceTypeName}/{resourceId}/creator:
+    get:
+      tags:
+        - Resources
+      summary: Get the creator of a resource
+      operationId: getResourceCreator
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource to query
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource to query
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: email address of the creator of this resource
+          content:
+            application/json:
+              schema:
+                type: string
+        403:
+          description: You do not have permission get the creator of this resource
+          content: { }
+        404:
+          description: You do not have access to this resource or it does not exist
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/users/v1/{email}:
     get:
       tags:
