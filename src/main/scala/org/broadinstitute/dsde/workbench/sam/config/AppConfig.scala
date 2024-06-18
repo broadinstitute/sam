@@ -185,6 +185,14 @@ object AppConfig {
     }
   }
 
+  implicit val azureServicePrincipalConfigReader: ValueReader[Option[AzureServicePrincipalConfig]] = ValueReader.relative { config =>
+    for {
+      clientId <- config.getAs[String]("clientId")
+      clientSecret <- config.getAs[String]("clientSecret")
+      tenantId <- config.getAs[String]("tenantId")
+    } yield AzureServicePrincipalConfig(clientId, clientSecret, tenantId)
+  }
+
   implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
     config
       .getAs[Boolean]("azureEnabled")
@@ -192,10 +200,8 @@ object AppConfig {
         if (azureEnabled) {
           Option(
             AzureServicesConfig(
-              config.getString("managedAppWorkloadClientId"),
-              config.getString("managedAppClientId"),
-              config.getString("managedAppClientSecret"),
-              config.getString("managedAppTenantId"),
+              config.as[Option[String]]("managedAppWorkloadClientId"),
+              config.as[Option[AzureServicePrincipalConfig]]("managedAppServicePrincipal"),
               config.as[Option[AzureMarketPlace]]("azureMarketPlace"),
               config.as[Option[AzureServiceCatalog]]("azureServiceCatalog"),
               config.as[Option[Boolean]]("allowManagedIdentityUserCreation").getOrElse(false)
