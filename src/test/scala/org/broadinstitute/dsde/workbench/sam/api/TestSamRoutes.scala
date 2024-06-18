@@ -14,7 +14,14 @@ import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfigurat
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, AzureServicesConfig, LiquibaseConfig, ManagedAppPlan, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{
+  AppConfig,
+  AzureMarketPlace,
+  AzureServiceCatalog,
+  AzureServicesConfig,
+  LiquibaseConfig,
+  TermsOfServiceConfig
+}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -169,7 +176,9 @@ object TestSamRoutes {
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None,
-      acceptTermsOfService: Boolean = true
+      acceptTermsOfService: Boolean = true,
+      azureMarketPlace: Option[AzureMarketPlace] = None,
+      azureServiceCatalog: Option[AzureServiceCatalog] = None
   )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
@@ -209,16 +218,13 @@ object TestSamRoutes {
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
-    val defaultManagedAppPlan: ManagedAppPlan = ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")
     val mockAzureServicesConfig = AzureServicesConfig(
-      azureServiceCatalogAppsEnabled = false,
-      "mock-auth-user-key",
-      "mock-kind",
-      // "mock-managedapp-workload-clientid",
+      "mock-managedapp-workload-clientid",
       "mock-managedapp-clientid",
       "mock-managedapp-clientsecret",
       "mock-managedapp-tenantid",
-      Seq(defaultManagedAppPlan),
+      azureMarketPlace,
+      azureServiceCatalog,
       allowManagedIdentityUserCreation = true
     )
 
