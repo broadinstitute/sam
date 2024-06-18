@@ -18,6 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.config.{
   AppConfig,
   AzureMarketPlace,
   AzureServiceCatalog,
+  AzureServicePrincipalConfig,
   AzureServicesConfig,
   LiquibaseConfig,
   TermsOfServiceConfig
@@ -219,10 +220,8 @@ object TestSamRoutes {
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
     val mockAzureServicesConfig = AzureServicesConfig(
-      "mock-managedapp-workload-clientid",
-      "mock-managedapp-clientid",
-      "mock-managedapp-clientsecret",
-      "mock-managedapp-tenantid",
+      Option("mock-managedapp-workload-clientid"),
+      Option(AzureServicePrincipalConfig("mock-managedapp-clientid", "mock-managedapp-clientsecret", "mock-managedapp-tenantid")),
       azureMarketPlace,
       azureServiceCatalog,
       allowManagedIdentityUserCreation = true
