@@ -72,6 +72,7 @@ object TestSupport extends TestSupport {
   val adminConfig = config.as[AdminConfig]("admin")
   val databaseEnabled = config.getBoolean("db.enabled")
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
+  val azureServicesConfig = appConfig.azureServicesConfig
 
   lazy val distributedLock = PostgresDistributedLockDAO[IO](dbRef, dbRef, appConfig.distributedLockConfig)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
@@ -149,7 +150,11 @@ object TestSupport extends TestSupport {
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
     val tosService = new TosService(googleExt, directoryDAO, tosConfig)
-    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+
+    val azureService = azureServicesConfig.map { azureConfig =>
+      new AzureService(azureConfig, MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    }
+
     SamDependencies(
       mockResourceService,
       policyEvaluatorService,
@@ -182,7 +187,7 @@ object TestSupport extends TestSupport {
     LiquibaseConfig("", false),
     samDependencies.oauth2Config,
     samDependencies.adminConfig,
-    Some(samDependencies.azureService)
+    samDependencies.azureService
   ) with MockSamUserDirectives with GoogleExtensionRoutes {
     override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
     override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
@@ -293,5 +298,5 @@ final case class SamDependencies(
     cloudExtensions: CloudExtensions,
     oauth2Config: OpenIDConnectConfiguration,
     adminConfig: AdminConfig,
-    azureService: AzureService
+    azureService: Option[AzureService]
 )

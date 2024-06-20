@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.azure
 import akka.http.scaladsl.model.StatusCodes
 import bio.terra.cloudres.azure.resourcemanager.common.Defaults
 import bio.terra.cloudres.azure.resourcemanager.msi.data.CreateUserAssignedManagedIdentityRequestData
-import cats.data.OptionT
 import cats.effect.IO
 import cats.implicits.toTraverseOps
 import com.azure.core.management.Region
@@ -13,7 +12,7 @@ import com.azure.resourcemanager.resources.ResourceManager
 import com.azure.resourcemanager.resources.models.ResourceGroup
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchException, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
+import org.broadinstitute.dsde.workbench.sam.config.{AzureMarketPlace, AzureServiceCatalog, AzureServicesConfig, ManagedAppPlan}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AzureManagedResourceGroupDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
@@ -23,6 +22,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import scala.jdk.CollectionConverters._
 
 class AzureService(
+    config: AzureServicesConfig,
     crlService: CrlService,
     directoryDAO: DirectoryDAO,
     azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO
@@ -228,31 +228,41 @@ class AzureService(
   /** Resolves a managed resource group in Azure and returns the terra.billingProfileId tag value. This is used for access control checks during route handling.
     */
   def getBillingProfileId(request: GetOrCreatePetManagedIdentityRequest, samRequestContext: SamRequestContext): IO[Option[BillingProfileId]] =
-    // get the billing profile id from the database
-    // if not there, for backwards compatibility, get the billing profile id from a tag on the Azure resource
-    OptionT(getBillingProfileIdFromSamDb(request, samRequestContext))
-      .orElseF(getBillingProfileIdFromAzureTag(request, samRequestContext))
-      .value
+    getBillingProfileIdFromSamDb(request, samRequestContext)
 
   private def getBillingProfileIdFromSamDb(request: GetOrCreatePetManagedIdentityRequest, samRequestContext: SamRequestContext): IO[Option[BillingProfileId]] =
     for {
       maybeMrg <- azureManagedResourceGroupDAO.getManagedResourceGroupByCoordinates(request.toManagedResourceGroupCoordinates, samRequestContext)
     } yield maybeMrg.map(_.billingProfileId)
 
-  private def getBillingProfileIdFromAzureTag(
-      request: GetOrCreatePetManagedIdentityRequest,
-      samRequestContext: SamRequestContext
-  ): IO[Option[BillingProfileId]] = traceIOWithContext("getBillingProfileIdFromAzureTag", samRequestContext) { _ =>
+  private def validateManagedResourceGroup(
+      mrgCoords: ManagedResourceGroupCoordinates,
+      samRequestContext: SamRequestContext,
+      validateUser: Boolean = true
+  ): IO[Unit] =
     for {
-      mrg <- validateManagedResourceGroup(request.toManagedResourceGroupCoordinates, samRequestContext, false)
-    } yield getBillingProfileFromTag(mrg)
-  }
+      _ <- IO.raiseWhen(config.azureServiceCatalog.isEmpty && config.azureMarketPlace.isEmpty)(
+        new WorkbenchException("Either azure service catalog or azure market place must be configured")
+      )
+      _ <- config.azureServiceCatalog
+        .map { serviceCatalog =>
+          validateServiceCatalogManagedResourceGroup(serviceCatalog, mrgCoords, samRequestContext, validateUser)
+        }
+        .getOrElse(IO.unit)
+
+      _ <- config.azureMarketPlace
+        .map { marketPlace =>
+          validateMarketPlaceManagedResourceGroup(marketPlace, mrgCoords, samRequestContext, validateUser)
+        }
+        .getOrElse(IO.unit)
+    } yield ()
 
   /** Validates a managed resource group. Algorithm:
     *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Get the managed app "plan" name and publisher 5.
     *      Validate the plan name and publisher matches a configured value 6. Validate that the caller is on the list of authorized users for the app
     */
-  private def validateManagedResourceGroup(
+  private def validateMarketPlaceManagedResourceGroup(
+      marketPlace: AzureMarketPlace,
       mrgCoords: ManagedResourceGroupCoordinates,
       samRequestContext: SamRequestContext,
       validateUser: Boolean = true
@@ -264,23 +274,51 @@ class AzureService(
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         appsInSubscription <- IO(appManager.applications().list().asScala.toSeq)
         managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
-        plan <- validatePlan(managedApp, crlService.getManagedAppPlans)
-        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan, samRequestContext) else IO.unit
+        plan <- validatePlan(managedApp, marketPlace.managedAppPlans)
+        _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan.authorizedUserKey, samRequestContext) else IO.unit
+      } yield mrg
+    }
+
+  /** Validates a managed resource group deployed from Azure Service Catalog. Service Catalog apps do not contain a "plan" or publisher. Algorithm:
+    *   1. Resolve the MRG in Azure 2. Get the managed app id from the MRG 3. Resolve the managed app 4. Validate the app kind is "ServiceCatalog" 5. Validate
+    *      that the caller is on the list of authorized users for the app
+    */
+  private def validateServiceCatalogManagedResourceGroup(
+      serviceCatalog: AzureServiceCatalog,
+      mrgCoords: ManagedResourceGroupCoordinates,
+      samRequestContext: SamRequestContext,
+      validateUser: Boolean = true
+  ): IO[ResourceGroup] =
+    traceIOWithContext("validateServiceCatalogManagedResourceGroup", samRequestContext) { _ =>
+      for {
+        resourceManager <- crlService.buildResourceManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
+        mrg <- lookupMrg(mrgCoords, resourceManager)
+        appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
+        appsInSubscription <- IO(appManager.applications().list().asScala)
+        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
+        _ <-
+          if (managedApp.kind() == serviceCatalog.managedAppTypeServiceCatalog && validateUser) {
+            validateAuthorizedAppUser(
+              managedApp,
+              serviceCatalog.authorizedUserKey,
+              samRequestContext
+            )
+          } else IO.unit
       } yield mrg
     }
 
   /** The users authorized to setup a managed application are stored as a comma separated list of email addresses in the parameters of the application. The
     * azure api is java so this code needs to deal with possible nulls and java Maps. Also the application parameters are untyped, fun.
     * @param app
-    * @param plan
+    * @param authorizedUserKey
     * @param samRequestContext
     * @return
     */
-  private def validateAuthorizedAppUser(app: Application, plan: ManagedAppPlan, samRequestContext: SamRequestContext): IO[Unit] = {
+  private def validateAuthorizedAppUser(app: Application, authorizedUserKey: String, samRequestContext: SamRequestContext): IO[Unit] = {
     val authorizedUsersValue = for {
       parametersObj <- Option(app.parameters()) if parametersObj.isInstanceOf[java.util.Map[_, _]]
       parametersMap = parametersObj.asInstanceOf[java.util.Map[_, _]]
-      paramValuesObj <- Option(parametersMap.get(plan.authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
+      paramValuesObj <- Option(parametersMap.get(authorizedUserKey)) if paramValuesObj.isInstanceOf[java.util.Map[_, _]]
       paramValues = paramValuesObj.asInstanceOf[java.util.Map[_, _]]
       authorizedUsersValue <- Option(paramValues.get("value"))
     } yield authorizedUsersValue.toString

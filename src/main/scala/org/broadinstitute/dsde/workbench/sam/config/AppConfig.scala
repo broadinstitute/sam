@@ -167,6 +167,32 @@ object AppConfig {
     ManagedAppPlan(config.getString("name"), config.getString("publisher"), config.getString("authorizedUserKey"))
   }
 
+  implicit val azureMarketPlaceReader: ValueReader[Option[AzureMarketPlace]] = ValueReader.relative { config =>
+    // enabled by default
+    if (config.as[Option[Boolean]]("enabled").getOrElse(true)) {
+      Option(AzureMarketPlace(config.as[Seq[ManagedAppPlan]]("managedAppPlans")))
+    } else {
+      None
+    }
+  }
+
+  implicit val azureServiceCatalogReader: ValueReader[Option[AzureServiceCatalog]] = ValueReader.relative { config =>
+    // disabled by default
+    if (config.as[Option[Boolean]]("enabled").getOrElse(false)) {
+      Option(AzureServiceCatalog(config.getString("authorizedUserKey"), config.getString("managedAppTypeServiceCatalog")))
+    } else {
+      None
+    }
+  }
+
+  implicit val azureServicePrincipalConfigReader: ValueReader[Option[AzureServicePrincipalConfig]] = ValueReader.relative { config =>
+    for {
+      clientId <- config.getAs[String]("clientId")
+      clientSecret <- config.getAs[String]("clientSecret")
+      tenantId <- config.getAs[String]("tenantId")
+    } yield AzureServicePrincipalConfig(clientId, clientSecret, tenantId)
+  }
+
   implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
     config
       .getAs[Boolean]("azureEnabled")
@@ -174,10 +200,10 @@ object AppConfig {
         if (azureEnabled) {
           Option(
             AzureServicesConfig(
-              config.getString("managedAppClientId"),
-              config.getString("managedAppClientSecret"),
-              config.getString("managedAppTenantId"),
-              config.as[Seq[ManagedAppPlan]]("managedAppPlans"),
+              config.as[Option[String]]("managedAppWorkloadClientId"),
+              config.as[Option[AzureServicePrincipalConfig]]("managedAppServicePrincipal"),
+              config.as[Option[AzureMarketPlace]]("azureMarketPlace"),
+              config.as[Option[AzureServiceCatalog]]("azureServiceCatalog"),
               config.as[Option[Boolean]]("allowManagedIdentityUserCreation").getOrElse(false)
             )
           )
