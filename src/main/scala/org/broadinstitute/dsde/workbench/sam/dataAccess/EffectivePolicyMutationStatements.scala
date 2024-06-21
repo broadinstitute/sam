@@ -16,6 +16,7 @@ import scalikejdbc.{DBSession, _}
   * affecting the same resource structure.
   */
 trait EffectivePolicyMutationStatements {
+  protected val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK]
 
   /** Delete all effective policies on the specified resource.
     * @param resource
@@ -86,6 +87,9 @@ trait EffectivePolicyMutationStatements {
     * @return
     */
   private def insertEffectivePolicyRolesForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
+    // Note that there is no special logic for resource type admin because resource type admin may not have parents
+    // and must exist before any resources of that type are created. This function is called only when a resource
+    // is created or when a resource's parent is changed.
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
     val descendantResource = descendantResourceTable.syntax("descendantResource")
 
@@ -122,6 +126,9 @@ trait EffectivePolicyMutationStatements {
     * @return
     */
   private def insertEffectivePolicyActionsForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
+    // Note that there is no special logic for resource type admin because resource type admin may not have parents
+    // and must exist before any resources of that type are created. This function is called only when a resource
+    // is created or when a resource's parent is changed.
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
     val descendantResource = descendantResourceTable.syntax("descendantResource")
 
@@ -155,6 +162,9 @@ trait EffectivePolicyMutationStatements {
     * @return
     */
   private def insertEffectivePoliciesForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
+    // Note that there is no special logic for resource type admin because resource type admin may not have parents
+    // and must exist before any resources of that type are created. This function is called only when a resource
+    // is created or when a resource's parent is changed.
     val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
     val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
 
@@ -251,6 +261,42 @@ trait EffectivePolicyMutationStatements {
               on conflict do nothing""".update().apply()
   }
 
+  protected def insertResourceTypeAdminEffectivePolicyRoles(policyId: PolicyPK, resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    val erCol = EffectivePolicyRoleTable.column
+
+    val ep = EffectiveResourcePolicyTable.syntax("ep")
+    val pr = PolicyRoleTable.syntax("pr")
+    val r = ResourceTable.syntax("r")
+    val fr = FlattenedRoleMaterializedView.syntax("fr")
+    val rr = ResourceRoleTable.syntax("rr")
+
+    val policy = PolicyTable.syntax("policy")
+
+    samsql"""insert into ${EffectivePolicyRoleTable.table} (${erCol.effectiveResourcePolicyId}, ${erCol.resourceRoleId})
+              select ${ep.id}, ${rr.id}
+              from ${PolicyTable as policy}
+              join ${EffectiveResourcePolicyTable as ep} on ${policy.resourceId} = ${ep.resourceId} and ${ep.sourcePolicyId} = ${policyId}
+              join ${PolicyRoleTable as pr} on ${pr.resourcePolicyId} = ${policyId}
+              join ${FlattenedRoleMaterializedView as fr} on ${pr.resourceRoleId} = ${fr.baseRoleId}
+              join ${ResourceRoleTable as rr} on ${fr.nestedRoleId} = ${rr.id}
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
+              where ${r.resourceTypeId} = ${rr.resourceTypeId}
+              and ${roleAppliesToResource(pr, fr, ep, policy)}
+              on conflict do nothing""".update().apply()
+
+    samsql"""insert into ${EffectivePolicyRoleTable.table} (${erCol.effectiveResourcePolicyId}, ${erCol.resourceRoleId})
+              select ${ep.id}, ${rr.id}
+              from ${ResourceTable as r}
+              join ${EffectiveResourcePolicyTable as ep} on ${r.id} = ${ep.resourceId} and ${ep.sourcePolicyId} = ${policyId}
+              join ${PolicyRoleTable as pr} on ${pr.resourcePolicyId} = ${policyId}
+              join ${FlattenedRoleMaterializedView as fr} on ${pr.resourceRoleId} = ${fr.baseRoleId}
+              join ${ResourceRoleTable as rr} on ${fr.nestedRoleId} = ${rr.id}
+              join ${PolicyTable as policy} on ${policy.id} = ${ep.sourcePolicyId}
+              where ${r.resourceTypeId} = ${resourceTypePK}
+              and ${roleAppliesToResource(pr, fr, ep, policy)}
+              on conflict do nothing""".update().apply()
+  }
+
   /** Insert effective policy actions from the specified policy for all descendants.
     * @param policyId
     * @param session
@@ -283,6 +329,38 @@ trait EffectivePolicyMutationStatements {
               on conflict do nothing""".update().apply()
   }
 
+  protected def insertResourceTypeAdminEffectivePolicyActions(policyId: PolicyPK, resourceTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
+    val eaCol = EffectivePolicyActionTable.column
+
+    val ep = EffectiveResourcePolicyTable.syntax("ep")
+    val pa = PolicyActionTable.syntax("pa")
+    val r = ResourceTable.syntax("r")
+    val ra = ResourceActionTable.syntax("ra")
+    val policy = PolicyTable.syntax("policy")
+
+    samsql"""insert into ${EffectivePolicyActionTable.table} (${eaCol.effectiveResourcePolicyId}, ${eaCol.resourceActionId})
+              select ${ep.id}, ${ra.id}
+              from ${PolicyTable as policy}
+              join ${EffectiveResourcePolicyTable as ep} on ${policy.resourceId} = ${ep.resourceId} and ${ep.sourcePolicyId} = ${policyId}
+              join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${policyId}
+              join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id}
+              join ${ResourceTable as r} on ${ep.resourceId} = ${r.id}
+              where not ${pa.descendantsOnly}
+              and ${policy.id} = ${policyId}
+              and ${r.resourceTypeId} = ${ra.resourceTypeId}
+              on conflict do nothing""".update().apply()
+
+    samsql"""insert into ${EffectivePolicyActionTable.table} (${eaCol.effectiveResourcePolicyId}, ${eaCol.resourceActionId})
+              select ${ep.id}, ${ra.id}
+              from ${ResourceTable as r}
+              join ${EffectiveResourcePolicyTable as ep} on ${r.id} = ${ep.resourceId} and ${ep.sourcePolicyId} = ${policyId}
+              join ${PolicyActionTable as pa} on ${pa.resourcePolicyId} = ${policyId}
+              join ${ResourceActionTable as ra} on ${pa.resourceActionId} = ${ra.id} and ${ra.resourceTypeId} = ${resourceTypePK}
+              where ${pa.descendantsOnly}
+              and ${r.resourceTypeId} = ${resourceTypePK}
+              on conflict do nothing""".update().apply()
+  }
+
   /** Insert effective policy records for descendants of resource associated to policyPK. This does not include roles or actions.
     * @param policy
     * @param policyPK
@@ -299,6 +377,24 @@ trait EffectivePolicyMutationStatements {
             select ${ar.resourceId}, ${policyPK}
             from ${ancestorResourceTable as ar}
             """.update().apply()
+  }
+
+  /** Insert effective policy records for resource type admin policies. A resource type admin resource is a logical parent of all resources of that type. This does not include roles or actions.
+    */
+  protected def insertResourceTypeAdminEffectivePolicies(policy: AccessPolicy, policyPK: PolicyPK)(implicit session: DBSession): Int = {
+    val epCol = EffectiveResourcePolicyTable.column
+    val r = ResourceTable.syntax("r")
+
+    // insert for resource type admin resource itself
+    samsql"""insert into ${EffectiveResourcePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId})
+             values (${resourceTypePKsByName(policy.id.resource.resourceTypeName)}, $policyPK)""".update().apply()
+
+    // insert for all resources of the type
+    samsql"""insert into ${EffectiveResourcePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId})
+          select ${r.id}, ${policyPK}
+          from ${ResourceTable as r}
+          where ${r.resourceTypeId} = ${resourceTypePKsByName(policy.id.resource.resourceTypeName)}
+          """.update().apply()
   }
 
   /** Returns a recursive query to be used in a with clause (CTE) whose result includes thePK of the resource of the given policyPK and PKs of all of its

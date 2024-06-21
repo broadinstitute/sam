@@ -49,8 +49,19 @@ class PolicyEvaluatorService(
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
   ): IO[Boolean] = traceIOWithContext("hasPermissionOneOf", samRequestContext) { samRequestContext =>
-    listUserResourceActions(resource, userId, samRequestContext).map { userActions =>
-      actions.toSet.intersect(userActions).nonEmpty
+    listUserResourceActions(resource, userId, samRequestContext).flatMap { userActions =>
+      if (actions.toSet.intersect(userActions).nonEmpty) {
+        IO.pure(true)
+      } else if (resource.resourceTypeName == SamResourceTypes.resourceTypeAdminName) {
+        IO.pure(false)
+      } else {
+        val resourceType = resource.resourceTypeName.value
+        hasPermissionOneOf(
+          FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceType)),
+          actions.map(a => ResourceAction(s"$resourceType::${a.value}")),
+          userId,
+          samRequestContext)
+      }
     }
   }
 

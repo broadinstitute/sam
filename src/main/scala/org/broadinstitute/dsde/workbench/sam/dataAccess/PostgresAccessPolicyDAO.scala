@@ -43,8 +43,8 @@ class PostgresAccessPolicyDAO(
     * serializable transactions will collide (since the resource type table is small and will probably have a seq scan instead of an index scan, meaning all
     * serializable transactions would read all rows of the resource type table and thus always collide with each other).
     */
-  private val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK] = new TrieMap()
-  private val resourceTypeNamesByPK: scala.collection.concurrent.Map[ResourceTypePK, ResourceTypeName] = new TrieMap()
+  protected val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK] = new TrieMap()
+  protected val resourceTypeNamesByPK: scala.collection.concurrent.Map[ResourceTypePK, ResourceTypeName] = new TrieMap()
 
   /** Creates or updates all given resource types.
     *
@@ -695,21 +695,23 @@ class PostgresAccessPolicyDAO(
       session: DBSession
   ) = {
     insertGroupMemberPKs(groupPK, memberGroupPKs, collectUserIds(policy.members))
-    insertPolicyRoles(FullyQualifiedResourceRole.fullyQualify(policy.roles, policy.id.resource.resourceTypeName), policyPK, false)
+    insertPolicyRoles(FullyQualifiedResourceRole.fullyQualify(policy.roles, policy.id.resource.resourceTypeName), policyPK, false, policy)
     insertPolicyRoles(
       policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRole.fullyQualify(permissions.roles, permissions.resourceType)),
       policyPK,
-      true
+      true,
+      policy
     )
-    insertPolicyActions(FullyQualifiedResourceAction.fullyQualify(policy.actions, policy.id.resource.resourceTypeName), policyPK, false)
+    insertPolicyActions(FullyQualifiedResourceAction.fullyQualify(policy.actions, policy.id.resource.resourceTypeName), policyPK, false, policy)
     insertPolicyActions(
       policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType)),
       policyPK,
-      true
+      true,
+      policy
     )
   }
 
-  private def insertPolicyActions(actions: Set[FullyQualifiedResourceAction], policyId: PolicyPK, descendantsOnly: Boolean)(implicit
+  private def insertPolicyActions(actions: Set[FullyQualifiedResourceAction], policyId: PolicyPK, descendantsOnly: Boolean, policy: AccessPolicy)(implicit
       session: DBSession
   ): Int = {
     val ra = ResourceActionTable.syntax("ra")
@@ -746,14 +748,18 @@ class PostgresAccessPolicyDAO(
       } else {
         inserted
       }
-      insertEffectivePolicyActions(policyId)
+      if (policy.id.resource.resourceTypeName.isResourceTypeAdmin) {
+        insertResourceTypeAdminEffectivePolicyActions(policyId, resourceTypePKsByName(ResourceTypeName(policy.id.resource.resourceId.value)))
+      } else {
+        insertEffectivePolicyActions(policyId)
+      }
       fullInsertCount
     } else {
       0
     }
   }
 
-  private def insertPolicyRoles(roles: Set[FullyQualifiedResourceRole], policyId: PolicyPK, descendantsOnly: Boolean)(implicit session: DBSession): Int = {
+  private def insertPolicyRoles(roles: Set[FullyQualifiedResourceRole], policyId: PolicyPK, descendantsOnly: Boolean, policy: AccessPolicy)(implicit session: DBSession): Int = {
     val rr = ResourceRoleTable.syntax("rr")
     val prCol = PolicyRoleTable.column
     if (roles.nonEmpty) {
@@ -770,7 +776,11 @@ class PostgresAccessPolicyDAO(
       if (insertedRolesCount != roles.size) {
         throw new WorkbenchException("Some roles have been deprecated or were not found.")
       }
-      insertEffectivePolicyRoles(policyId)
+      if (policy.id.resource.resourceTypeName.isResourceTypeAdmin) {
+        insertResourceTypeAdminEffectivePolicyRoles(policyId, resourceTypePKsByName(ResourceTypeName(policy.id.resource.resourceId.value)))
+      } else {
+        insertEffectivePolicyRoles(policyId)
+      }
       insertedRolesCount
     } else {
       0
@@ -788,7 +798,11 @@ class PostgresAccessPolicyDAO(
     val policyPK = PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public}, ${pCol.name})
               values (${resourcePKFragment}, ${groupPK}, ${policy.public}, ${policy.id.accessPolicyName})""".updateAndReturnGeneratedKey().apply())
 
-    insertEffectivePolicies(policy, policyPK)
+    if (policy.id.resource.resourceTypeName.isResourceTypeAdmin) {
+      insertResourceTypeAdminEffectivePolicies(policy, policyPK)
+    } else {
+      insertEffectivePolicies(policy, policyPK)
+    }
 
     policyPK
   }
@@ -991,40 +1005,42 @@ class PostgresAccessPolicyDAO(
       overwritePolicyRolesInternal(
         policyPK,
         FullyQualifiedResourceRole.fullyQualify(newPolicy.roles, newPolicy.id.resource.resourceTypeName),
-        newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRole.fullyQualify(permissions.roles, permissions.resourceType))
+        newPolicy
       )
       overwritePolicyActionsInternal(
         policyPK,
         FullyQualifiedResourceAction.fullyQualify(newPolicy.actions, newPolicy.id.resource.resourceTypeName),
-        newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType))
+        newPolicy
       )
       setPolicyIsPublicInternal(policyPK, newPolicy.public)
 
       newPolicy
     }
 
-  private def overwritePolicyRolesInternal(policyPK: PolicyPK, roles: Set[FullyQualifiedResourceRole], descendantRoles: Set[FullyQualifiedResourceRole])(
+  private def overwritePolicyRolesInternal(policyPK: PolicyPK, roles: Set[FullyQualifiedResourceRole], policy: AccessPolicy)(
       implicit session: DBSession
   ): Int = {
     val pr = PolicyRoleTable.syntax("pr")
     samsql"delete from ${PolicyRoleTable as pr} where ${pr.resourcePolicyId} = $policyPK".update().apply()
     deleteEffectivePolicyRoles(policyPK)
 
-    insertPolicyRoles(roles, policyPK, false)
-    insertPolicyRoles(descendantRoles, policyPK, true)
+    val descendantRoles = policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRole.fullyQualify(permissions.roles, permissions.resourceType))
+    insertPolicyRoles(roles, policyPK, false, policy)
+    insertPolicyRoles(descendantRoles, policyPK, true, policy)
   }
 
   private def overwritePolicyActionsInternal(
       policyPK: PolicyPK,
       actions: Set[FullyQualifiedResourceAction],
-      descendantActions: Set[FullyQualifiedResourceAction]
+      policy: AccessPolicy
   )(implicit session: DBSession): Int = {
     val pa = PolicyActionTable.syntax("pa")
     samsql"delete from ${PolicyActionTable as pa} where ${pa.resourcePolicyId} = $policyPK".update().apply()
     deleteEffectivePolicyActions(policyPK)
 
-    insertPolicyActions(actions, policyPK, false)
-    insertPolicyActions(descendantActions, policyPK, true)
+    val descendantActions = policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType))
+    insertPolicyActions(actions, policyPK, false, policy)
+    insertPolicyActions(descendantActions, policyPK, true, policy)
   }
 
   private def loadPolicyPK(id: FullyQualifiedPolicyId)(implicit session: DBSession): PolicyPK = {
