@@ -102,7 +102,7 @@ object UserStatusDetails {
 )
 
 @Lenses final case class ResourceTypeName(value: String) extends ValueObject {
-  val isResourceTypeAdmin: Boolean = value == SamResourceTypes.resourceTypeAdminName.value
+  def isResourceTypeAdmin: Boolean = value == SamResourceTypes.resourceTypeAdminName.value
 }
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId) {

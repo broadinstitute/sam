@@ -658,7 +658,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         dao.listResourceWithAuthDomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual Option(resource)
 
-        dao.deleteResource(resource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        dao.deleteResource(resource.fullyQualifiedId, false, samRequestContext).unsafeRunSync()
 
         dao.listResourceWithAuthDomains(resource.fullyQualifiedId, samRequestContext).unsafeRunSync() shouldEqual None
       }

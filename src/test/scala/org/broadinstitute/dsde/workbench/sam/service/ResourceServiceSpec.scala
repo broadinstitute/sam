@@ -1317,10 +1317,12 @@ class ResourceServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
-    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
+    val resourceType = defaultResourceType.copy(name = ResourceTypeName("my-resource"))
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value))
     val newAdminUser = Generator.genFirecloudUser.sample.get
 
     service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
     runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUser, samRequestContext))
     dirDAO.createUser(newAdminUser, samRequestContext).unsafeRunSync()
 
@@ -1355,9 +1357,11 @@ class ResourceServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
-    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
+    val resourceType = defaultResourceType.copy(name = ResourceTypeName("my-resource"))
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value))
 
     service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
     runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUser, samRequestContext))
 
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))

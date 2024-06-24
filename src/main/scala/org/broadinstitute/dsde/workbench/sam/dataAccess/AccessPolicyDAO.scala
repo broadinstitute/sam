@@ -18,7 +18,10 @@ trait AccessPolicyDAO {
 
   def createResource(resource: Resource, samRequestContext: SamRequestContext): IO[Resource]
 
-  def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
+  /** Deletes a resource. If leaveTombStone is true, a record of the resource will be kept in the database to prevent the resource name from being reused. If
+    * leaveTombStone is false, the resource will be completely removed from the database.
+    */
+  def deleteResource(resource: FullyQualifiedResourceId, leaveTombStone: Boolean, samRequestContext: SamRequestContext): IO[Unit]
 
   def loadResourceAuthDomain(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LoadResourceAuthDomainResult]
 
@@ -33,13 +36,9 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedPolicyId]]
 
-  def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
-
   def createPolicy(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy]
 
   def deletePolicy(policy: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Unit]
-
-  def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
 
   def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]]
 
@@ -66,7 +65,7 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedResourceId]]
 
-//  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
+  //  @deprecated("listing policies for resource type removed", since = "ResourceRoutes v2")
   def listAccessPolicies(resourceTypeName: ResourceTypeName, userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[ResourceIdAndPolicyName]]
 
   def listAccessPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]]
@@ -112,6 +111,7 @@ trait AccessPolicyDAO {
         ResourceIdWithRolesAndActions(resourceId, left.direct ++ right.direct, left.inherited ++ right.inherited, left.public ++ right.public)
       }
     }
+
   def filterResources(
       samUserId: WorkbenchUserId,
       resourceTypeNames: Set[ResourceTypeName],
@@ -122,6 +122,7 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]]
 
+  def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]]
 }
 
 sealed abstract class LoadResourceAuthDomainResult

@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, FullyQualifiedResourceId, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, FullyQualifiedResourceId, ResourceTypeName, SamResourceTypes}
 import scalikejdbc.{DBSession, _}
 
 /** Resources can specify access policies that affect their descendants. Checking these inherited policies at query time is expensive as it requires a recursive
@@ -16,7 +16,6 @@ import scalikejdbc.{DBSession, _}
   * affecting the same resource structure.
   */
 trait EffectivePolicyMutationStatements {
-  protected val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK]
 
   /** Delete all effective policies on the specified resource.
     * @param resource
@@ -379,15 +378,24 @@ trait EffectivePolicyMutationStatements {
             """.update().apply()
   }
 
-  /** Insert effective policy records for resource type admin policies. A resource type admin resource is a logical parent of all resources of that type. This does not include roles or actions.
+  /** Insert effective policy records for resource type admin policies. A resource type admin resource is a logical parent of all resources of that type. This
+    * does not include roles or actions.
     */
-  protected def insertResourceTypeAdminEffectivePolicies(policy: AccessPolicy, policyPK: PolicyPK)(implicit session: DBSession): Int = {
+  protected def insertResourceTypeAdminEffectivePolicies(
+      policy: AccessPolicy,
+      policyPK: PolicyPK,
+      resourceTypePKsByName: collection.Map[ResourceTypeName, ResourceTypePK]
+  )(implicit session: DBSession): Int = {
     val epCol = EffectiveResourcePolicyTable.column
     val r = ResourceTable.syntax("r")
 
     // insert for resource type admin resource itself
     samsql"""insert into ${EffectiveResourcePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId})
-             values (${resourceTypePKsByName(policy.id.resource.resourceTypeName)}, $policyPK)""".update().apply()
+          select ${r.id}, ${policyPK}
+          from ${ResourceTable as r}
+          where ${r.resourceTypeId} = ${resourceTypePKsByName(SamResourceTypes.resourceTypeAdminName)}
+          and ${r.name} = ${policy.id.resource.resourceTypeName}
+          """.update().apply()
 
     // insert for all resources of the type
     samsql"""insert into ${EffectiveResourcePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId})
