@@ -40,6 +40,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     FilterResourcesResult(
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
+      None,
       Some(AccessPolicyName(UUID.randomUUID().toString)),
       Some(readerRoleName),
       Some(readAction),
@@ -51,6 +52,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     FilterResourcesResult(
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
+      None,
       Some(AccessPolicyName(UUID.randomUUID().toString)),
       None,
       None,
@@ -62,6 +64,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     FilterResourcesResult(
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
+      None,
       Some(AccessPolicyName(UUID.randomUUID().toString)),
       Some(readerRoleName),
       Some(readAction),
@@ -73,6 +76,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     FilterResourcesResult(
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
+      None,
       Some(AccessPolicyName(UUID.randomUUID().toString)),
       None,
       None,
@@ -82,10 +86,11 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       false
     ),
     // Testable DB Results
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, None, Some(testPolicy1), Some(readerRoleName), Some(readAction), false, None, false, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
+      None,
       Some(testPolicy1),
       Some(readerRoleName),
       Some(readAction),
@@ -97,6 +102,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
+      None,
       Some(testPolicy1),
       Some(readerRoleName),
       Some(readAction),
@@ -105,14 +111,15 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       false,
       false
     ), // testing duplicate row results
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, true, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, false, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), false, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), None, Some(readAction), true, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, None, Some(testPolicy2), Some(nothingRoleName), None, true, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, None, Some(testPolicy3), None, None, false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, None, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, None, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, None, Some(testPolicy5), None, Some(readAction), true, None, false, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
+      None,
       Some(testPolicy5),
       None,
       Some(readAction),
@@ -125,6 +132,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     FilterResourcesResult(
       testResourceId2,
       resourceTypeName,
+      None,
       Some(testPolicy6),
       Some(readerRoleName),
       Some(readAction),
@@ -136,6 +144,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     FilterResourcesResult(
       testResourceId2,
       resourceTypeName,
+      None,
       Some(testPolicy6),
       Some(readerRoleName),
       Some(readAction),
@@ -154,6 +163,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       any[Set[AccessPolicyName]],
       any[Set[ResourceRoleName]],
       any[Set[ResourceAction]],
+      any[Set[FullyQualifiedResourceId]],
       any[Boolean],
       any[SamRequestContext]
     )
@@ -171,7 +181,8 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   )
 
   "ResourceService" should "group filtered resources from the database appropriately flatly" in {
-    val filteredResources = resourceService.listResourcesFlat(dummyUser.id, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+    val filteredResources =
+      resourceService.listResourcesFlat(dummyUser.id, Set.empty, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
 
     val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
     oneResource.resourceType should be(resourceTypeName)
@@ -199,7 +210,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   it should "group filtered resources from the database appropriately hierarchically" in {
 
     val filteredResources =
-      resourceService.listResourcesHierarchical(dummyUser.id, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+      resourceService.listResourcesHierarchical(dummyUser.id, Set.empty, Set.empty, Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
 
     val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
     oneResource.resourceType should be(resourceTypeName)

@@ -24,7 +24,7 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalatest.AppendedClues
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
-import spray.json.{JsBoolean, JsValue}
+import spray.json.{JsBoolean, JsString, JsValue}
 
 //TODO This test is flaky. It looks like the tests run too fast and cause some sort of timeout error or race condition
 class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
@@ -2638,6 +2638,53 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
 
     Get(s"/api/resources/v2/${resource.resourceTypeName}/${resource.resourceId}/policies") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "GET /api/resources/v2/{resourceType}/{resourceId}/creator" should "200 and return the resource creator, if the caller has permission to do so" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(ResourceActionPattern("run", "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run"), SamResourceActions.readCreator))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createResourceRequest = CreateResourceRequest(
+      ResourceId("foo"),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Set.empty
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resources/v2/${resourceType.name}/foo/creator") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsString(defaultUserInfo.email.value)
+    }
+  }
+
+  it should "403 if the caller does not have permission to read the resource creator" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(ResourceActionPattern("run", "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(ResourceAction("run")))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+
+    val createResourceRequest = CreateResourceRequest(
+      ResourceId("foo"),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(defaultUserInfo.email), Set(ResourceAction("run")), Set(resourceType.ownerRoleName))),
+      Set.empty
+    )
+    Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+
+    Get(s"/api/resources/v2/${resourceType.name}/foo/creator") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
     }
   }
 }

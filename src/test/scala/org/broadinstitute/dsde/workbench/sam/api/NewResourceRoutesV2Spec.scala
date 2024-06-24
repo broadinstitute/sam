@@ -36,6 +36,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
         any[Set[AccessPolicyName]],
         any[Set[ResourceRoleName]],
         any[Set[ResourceAction]],
+        any[Set[FullyQualifiedResourceId]],
         any[Boolean],
         any[SamRequestContext]
       )
@@ -63,6 +64,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
         any[Set[AccessPolicyName]],
         any[Set[ResourceRoleName]],
         any[Set[ResourceAction]],
+        any[Set[FullyQualifiedResourceId]],
         any[Boolean],
         any[SamRequestContext]
       )
@@ -96,6 +98,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       eqTo(Set.empty),
       eqTo(Set.empty),
       eqTo(Set.empty),
+      eqTo(Set.empty),
       eqTo(false),
       any[SamRequestContext]
     )
@@ -111,6 +114,7 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       eqTo(Set(AccessPolicyName("fooPolicy"))),
       eqTo(Set(ResourceRoleName("fooRole"), ResourceRoleName("barRole"), ResourceRoleName("bazRole"))),
       eqTo(Set(ResourceAction("fooAction"), ResourceAction("barAction"))),
+      eqTo(Set.empty),
       eqTo(true),
       any[SamRequestContext]
     )
@@ -126,6 +130,28 @@ class NewResourceRoutesV2Spec extends AnyFlatSpec with Matchers with ScalatestRo
       eqTo(Set(AccessPolicyName("fooPolicy"))),
       eqTo(Set(ResourceRoleName("fooRole"), ResourceRoleName("barRole"), ResourceRoleName("bazRole"))),
       eqTo(Set(ResourceAction("fooAction"), ResourceAction("barAction"))),
+      eqTo(Set.empty),
+      eqTo(true),
+      any[SamRequestContext]
+    )
+
+    Get(
+      s"/api/resources/v2?format=hierarchical&resourceTypes=fooType,barType&policies=fooPolicy&roles=fooRole,barRole,bazRole&actions=fooAction,barAction&includePublic=true&parentResources=barType:barResource,bazType:bazResource"
+    ) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+    }
+    verify(samRoutes.resourceService).listResourcesHierarchical(
+      any[WorkbenchUserId],
+      eqTo(Set(ResourceTypeName("fooType"), ResourceTypeName("barType"))),
+      eqTo(Set(AccessPolicyName("fooPolicy"))),
+      eqTo(Set(ResourceRoleName("fooRole"), ResourceRoleName("barRole"), ResourceRoleName("bazRole"))),
+      eqTo(Set(ResourceAction("fooAction"), ResourceAction("barAction"))),
+      eqTo(
+        Set(
+          FullyQualifiedResourceId(ResourceTypeName("barType"), ResourceId("barResource")),
+          FullyQualifiedResourceId(ResourceTypeName("bazType"), ResourceId("bazResource"))
+        )
+      ),
       eqTo(true),
       any[SamRequestContext]
     )

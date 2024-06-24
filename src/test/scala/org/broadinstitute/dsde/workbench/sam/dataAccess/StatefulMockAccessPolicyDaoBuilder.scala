@@ -93,6 +93,7 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         ArgumentMatchers.eq(Set.empty),
         ArgumentMatchers.eq(Set.empty),
         ArgumentMatchers.eq(Set.empty),
+        ArgumentMatchers.eq(Set.empty),
         ArgumentMatchers.eq(true),
         any[SamRequestContext]
       )
@@ -121,6 +122,7 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         FilterResourcesResult(
           accessPolicy.id.resource.resourceId,
           accessPolicy.id.resource.resourceTypeName,
+          None,
           Some(accessPolicy.id.accessPolicyName),
           None,
           None,
@@ -136,6 +138,7 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
           FilterResourcesResult(
             accessPolicy.id.resource.resourceId,
             accessPolicy.id.resource.resourceTypeName,
+            None,
             Some(accessPolicy.id.accessPolicyName),
             Some(role),
             None,
@@ -151,6 +154,7 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
              FilterResourcesResult(
                accessPolicy.id.resource.resourceId,
                accessPolicy.id.resource.resourceTypeName,
+               None,
                Some(accessPolicy.id.accessPolicyName),
                None,
                None,
@@ -165,6 +169,7 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
              FilterResourcesResult(
                accessPolicy.id.resource.resourceId,
                accessPolicy.id.resource.resourceTypeName,
+               None,
                Some(accessPolicy.id.accessPolicyName),
                None,
                Some(action),

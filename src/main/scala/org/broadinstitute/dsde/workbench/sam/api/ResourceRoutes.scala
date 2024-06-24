@@ -252,6 +252,16 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                     }
                   }
                 }
+              } ~
+              pathPrefix("creator") {
+                requireAction(resource, SamResourceActions.readCreator, samUser.id, samRequestContext) {
+                  pathEndOrSingleSlash {
+                    complete(resourceService.getResourceCreator(resource, samRequestContext).map {
+                      case Some(response) => StatusCodes.OK -> response.email
+                      case None => throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "resource creator not found"))
+                    })
+                  }
+                }
               }
             }
           }
@@ -605,38 +615,65 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
       "policies".as[String].?,
       "roles".as[String].?,
       "actions".as[String].?,
+      "parentResources".as[String].?,
       "includePublic" ? false,
       "format".as[String] ? "hierarchical"
-    ) { (resourceTypes: Option[String], policies: Option[String], roles: Option[String], actions: Option[String], includePublic: Boolean, format: String) =>
-      format match {
-        case "flat" =>
-          complete {
-            resourceService
-              .listResourcesFlat(
-                samUser.id,
-                resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
-                policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
-                roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
-                actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
-                includePublic,
-                samRequestContext
-              )
-              .map(StatusCodes.OK -> _)
-          }
-        case "hierarchical" =>
-          complete {
-            resourceService
-              .listResourcesHierarchical(
-                samUser.id,
-                resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty),
-                policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty),
-                roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty),
-                actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty),
-                includePublic,
-                samRequestContext
-              )
-              .map(StatusCodes.OK -> _)
-          }
-      }
+    ) {
+      (
+          resourceTypes: Option[String],
+          policies: Option[String],
+          roles: Option[String],
+          actions: Option[String],
+          parentResources: Option[String],
+          includePublic: Boolean,
+          format: String
+      ) =>
+        val parsedResourceTypes = resourceTypes.map(_.split(",").map(ResourceTypeName(_)).toSet).getOrElse(Set.empty)
+        val parsedPolicies = policies.map(_.split(",").map(AccessPolicyName(_)).toSet).getOrElse(Set.empty)
+        val parsedRoles = roles.map(_.split(",").map(ResourceRoleName(_)).toSet).getOrElse(Set.empty)
+        val parsedActions = actions.map(_.split(",").map(ResourceAction(_)).toSet).getOrElse(Set.empty)
+        val parsedParentResourceIds = parentResources
+          .map(
+            _.split(",")
+              .map { r =>
+                val splitted = r.split(":")
+                FullyQualifiedResourceId(ResourceTypeName(splitted(0)), ResourceId(splitted(1)))
+              }
+              .toSet
+          )
+          .getOrElse(Set.empty)
+        format match {
+          case "flat" =>
+            complete {
+              resourceService
+                .listResourcesFlat(
+                  samUser.id,
+                  parsedResourceTypes,
+                  parsedPolicies,
+                  parsedRoles,
+                  parsedActions,
+                  parsedParentResourceIds,
+                  includePublic,
+                  samRequestContext
+                )
+                .map(StatusCodes.OK -> _)
+            }
+          case "hierarchical" =>
+            complete {
+              resourceService
+                .listResourcesHierarchical(
+                  samUser.id,
+                  parsedResourceTypes,
+                  parsedPolicies,
+                  parsedRoles,
+                  parsedActions,
+                  parsedParentResourceIds,
+                  includePublic,
+                  samRequestContext
+                )
+                .map(StatusCodes.OK -> _)
+            }
+        }
+
     }
 }

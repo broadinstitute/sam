@@ -5,6 +5,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
 case class FilterResourcesResult(
     resourceId: ResourceId,
     resourceTypeName: ResourceTypeName,
+    parentResourceId: Option[FullyQualifiedResourceId],
     policy: Option[AccessPolicyName],
     role: Option[ResourceRoleName],
     action: Option[ResourceAction],

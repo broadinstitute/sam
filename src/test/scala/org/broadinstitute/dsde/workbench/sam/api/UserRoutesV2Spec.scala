@@ -294,6 +294,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         any[Set[AccessPolicyName]],
         any[Set[ResourceRoleName]],
         any[Set[ResourceAction]],
+        any[Set[FullyQualifiedResourceId]],
         any[Boolean],
         any[SamRequestContext]
       )
@@ -348,6 +349,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         any[Set[AccessPolicyName]],
         any[Set[ResourceRoleName]],
         any[Set[ResourceAction]],
+        any[Set[FullyQualifiedResourceId]],
         any[Boolean],
         any[SamRequestContext]
       )
