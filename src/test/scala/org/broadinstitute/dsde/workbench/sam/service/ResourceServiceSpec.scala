@@ -1950,22 +1950,36 @@ class ResourceServiceSpec
   }
 
   "validateResourceTypeAdminDescendantPermissions" should "succeed if resource type admin matches resource" in {
-    service.validateResourceTypeAdminDescendantPermissions(resourceTypeAdmin, ResourceId(defaultResourceType.name.value), Set(
-      AccessPolicyDescendantPermissions(defaultResourceType.name, defaultResourceTypeActions, Set.empty)
-    )) shouldBe empty
+    service.validateResourceTypeAdminDescendantPermissions(
+      resourceTypeAdmin,
+      ResourceId(defaultResourceType.name.value),
+      Set(
+        AccessPolicyDescendantPermissions(defaultResourceType.name, defaultResourceTypeActions, Set.empty)
+      )
+    ) shouldBe empty
   }
 
   it should "succeed if resource type is not admin" in {
-    service.validateResourceTypeAdminDescendantPermissions(defaultResourceType, ResourceId(defaultResourceType.name.value), Set(
-      AccessPolicyDescendantPermissions(defaultResourceType.name, defaultResourceTypeActions, Set.empty)
-    )) shouldBe empty
+    service.validateResourceTypeAdminDescendantPermissions(
+      defaultResourceType,
+      ResourceId(defaultResourceType.name.value),
+      Set(
+        AccessPolicyDescendantPermissions(defaultResourceType.name, defaultResourceTypeActions, Set.empty)
+      )
+    ) shouldBe empty
   }
 
   it should "fail if resource type admin does not match resource" in {
-    service.validateResourceTypeAdminDescendantPermissions(resourceTypeAdmin, ResourceId(defaultResourceType.name.value), Set(
-      AccessPolicyDescendantPermissions(otherResourceType.name, defaultResourceTypeActions, Set.empty)
-    )) should contain theSameElementsAs Set(
-      ErrorReport(s"Resource type admin policies can only have descendant permissions for their matching resource type, ${otherResourceType.name} is a different type")
+    service.validateResourceTypeAdminDescendantPermissions(
+      resourceTypeAdmin,
+      ResourceId(defaultResourceType.name.value),
+      Set(
+        AccessPolicyDescendantPermissions(otherResourceType.name, defaultResourceTypeActions, Set.empty)
+      )
+    ) should contain theSameElementsAs Set(
+      ErrorReport(
+        s"Resource type admin policies can only have descendant permissions for their matching resource type, ${otherResourceType.name} is a different type"
+      )
     )
   }
 

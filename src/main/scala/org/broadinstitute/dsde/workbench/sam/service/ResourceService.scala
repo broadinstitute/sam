@@ -609,12 +609,13 @@ class ResourceService(
       resourceType: ResourceType,
       resourceId: ResourceId,
       descendantPermissions: Set[AccessPolicyDescendantPermissions]
-  ): Set[ErrorReport] = {
-      descendantPermissions.collect {
-        case descendantPermissions if resourceType.name.isResourceTypeAdmin && !descendantPermissions.resourceType.value.equalsIgnoreCase(resourceId.value) =>
-          ErrorReport(s"Resource type admin policies can only have descendant permissions for their matching resource type, ${descendantPermissions.resourceType} is a different type")
-      }
-  }
+  ): Set[ErrorReport] =
+    descendantPermissions.collect {
+      case descendantPermissions if resourceType.name.isResourceTypeAdmin && !descendantPermissions.resourceType.value.equalsIgnoreCase(resourceId.value) =>
+        ErrorReport(
+          s"Resource type admin policies can only have descendant permissions for their matching resource type, ${descendantPermissions.resourceType} is a different type"
+        )
+    }
 
   /** A valid email is one that matches the email address for a previously persisted WorkbenchSubject.
     *
