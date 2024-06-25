@@ -8,6 +8,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
@@ -77,6 +78,13 @@ class ResourceServiceSpec
 
   private val dummyUser = Generator.genWorkbenchUserBoth.sample.get
 
+  private val resourceTypeAdmin = ResourceType(
+    SamResourceTypes.resourceTypeAdminName,
+    Set.empty,
+    Set.empty,
+    ownerRoleName
+  )
+
   private val defaultResourceTypeActions =
     Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
   private val defaultResourceTypeActionPatterns = Set(
@@ -143,6 +151,7 @@ class ResourceServiceSpec
 
   private val emailDomain = "example.com"
   private val resourceTypes = Map(
+    resourceTypeAdmin.name -> resourceTypeAdmin,
     defaultResourceType.name -> defaultResourceType,
     otherResourceType.name -> otherResourceType,
     parentResourceType.name -> parentResourceType,
@@ -1748,50 +1757,51 @@ class ResourceServiceSpec
     policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync() should not be empty
   }
 
-  it should "allow for auth domain groups on a deleted resource to be deleted" in {
-    assume(databaseEnabled, databaseEnabledClue)
+  List(true, false).foreach { reuseIds =>
+    it should s"allow for auth domain groups on a deleted resource to be deleted, reuseIds = $reuseIds" in {
+      assume(databaseEnabled, databaseEnabledClue)
+      val resourceType = constrainableResourceType.copy(reuseIds = reuseIds)
+      val authDomainGroupToDelete = "fooGroup"
+      val otherAuthDomainGroup = "barGroup"
+      constrainableService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+      constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+      managedGroupService.createManagedGroup(ResourceId(authDomainGroupToDelete), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+      managedGroupService.createManagedGroup(ResourceId(otherAuthDomainGroup), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+      val resourceToDelete = constrainableService
+        .createResource(
+          resourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership),
+          Set(WorkbenchGroupName(authDomainGroupToDelete)),
+          None,
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
+      val otherResource = constrainableService
+        .createResource(
+          resourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership),
+          Set(WorkbenchGroupName(otherAuthDomainGroup)),
+          None,
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
 
-    val resourceType = constrainableResourceType.copy(reuseIds = false)
-    val authDomainGroupToDelete = "fooGroup"
-    val otherAuthDomainGroup = "barGroup"
-    constrainableService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
-    managedGroupService.createManagedGroup(ResourceId(authDomainGroupToDelete), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
-    managedGroupService.createManagedGroup(ResourceId(otherAuthDomainGroup), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
-    val resourceToDelete = constrainableService
-      .createResource(
-        resourceType,
-        ResourceId(UUID.randomUUID().toString),
-        Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership),
-        Set(WorkbenchGroupName(authDomainGroupToDelete)),
-        None,
-        dummyUser.id,
-        samRequestContext
+      runAndWait(constrainableService.deleteResource(resourceToDelete.fullyQualifiedId, samRequestContext))
+      runAndWait(managedGroupService.deleteManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext))
+      managedGroupService.loadManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext).unsafeRunSync() shouldBe None
+
+      // Other constrained resources and managed groups should be unaffected
+      constrainableService.loadResourceAuthDomain(otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(
+        WorkbenchGroupName(otherAuthDomainGroup)
       )
-      .unsafeRunSync()
-    val otherResource = constrainableService
-      .createResource(
-        resourceType,
-        ResourceId(UUID.randomUUID().toString),
-        Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership),
-        Set(WorkbenchGroupName(otherAuthDomainGroup)),
-        None,
-        dummyUser.id,
-        samRequestContext
+      managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup), samRequestContext).unsafeRunSync() shouldBe Some(
+        WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain")
       )
-      .unsafeRunSync()
-
-    runAndWait(constrainableService.deleteResource(resourceToDelete.fullyQualifiedId, samRequestContext))
-    runAndWait(managedGroupService.deleteManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext))
-    managedGroupService.loadManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext).unsafeRunSync() shouldBe None
-
-    // Other constrained resources and managed groups should be unaffected
-    constrainableService.loadResourceAuthDomain(otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(
-      WorkbenchGroupName(otherAuthDomainGroup)
-    )
-    managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup), samRequestContext).unsafeRunSync() shouldBe Some(
-      WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain")
-    )
+    }
   }
 
   it should "delete a child resource that has a parent - reuse ids is false" in {
@@ -1911,14 +1921,14 @@ class ResourceServiceSpec
   "validatePolicy" should "succeed with a correct policy" in {
     val emailToMaybeSubject = Map(dummyUser.email -> Option(dummyUser.id.asInstanceOf[WorkbenchSubject]))
     val policy = service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ownerRoleName), Set(ResourceAction("alter_policies")), Set())
-    runAndWait(service.validatePolicy(defaultResourceType, policy)) shouldBe empty
+    runAndWait(service.validatePolicy(defaultResourceType, ResourceId(""), policy)) shouldBe empty
   }
 
   "validatePolicy" should "fail with an incorrect policy" in {
     val emailToMaybeSubject = Map(dummyUser.email -> Option(dummyUser.id.asInstanceOf[WorkbenchSubject]))
     val policy =
       service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ResourceRoleName("bad_name")), Set(ResourceAction("bad_action")), Set())
-    val maybeErrorReport = runAndWait(service.validatePolicy(defaultResourceType, policy))
+    val maybeErrorReport = runAndWait(service.validatePolicy(defaultResourceType, ResourceId(""), policy))
     maybeErrorReport.value.message should include("invalid policy")
   }
 
@@ -1937,6 +1947,26 @@ class ResourceServiceSpec
       service.validateActions(defaultResourceType, Set(ResourceAction("asdf")))
     maybeErrorReport shouldBe defined
     maybeErrorReport.value.message should include("invalid action")
+  }
+
+  "validateResourceTypeAdminDescendantPermissions" should "succeed if resource type admin matches resource" in {
+    service.validateResourceTypeAdminDescendantPermissions(resourceTypeAdmin, ResourceId(defaultResourceType.name.value), Set(
+      AccessPolicyDescendantPermissions(defaultResourceType.name, defaultResourceTypeActions, Set.empty)
+    )) shouldBe empty
+  }
+
+  it should "succeed if resource type is not admin" in {
+    service.validateResourceTypeAdminDescendantPermissions(defaultResourceType, ResourceId(defaultResourceType.name.value), Set(
+      AccessPolicyDescendantPermissions(defaultResourceType.name, defaultResourceTypeActions, Set.empty)
+    )) shouldBe empty
+  }
+
+  it should "fail if resource type admin does not match resource" in {
+    service.validateResourceTypeAdminDescendantPermissions(resourceTypeAdmin, ResourceId(defaultResourceType.name.value), Set(
+      AccessPolicyDescendantPermissions(otherResourceType.name, defaultResourceTypeActions, Set.empty)
+    )) should contain theSameElementsAs Set(
+      ErrorReport(s"Resource type admin policies can only have descendant permissions for their matching resource type, ${otherResourceType.name} is a different type")
+    )
   }
 
   "validateActions" should "succeed with action included in listed actions" in {

@@ -1407,6 +1407,116 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         }
       }
 
+      "lists the actions on a resource that a user is a member of via resource type admin" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+
+        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
+
+        val adminResource = Resource(SamResourceTypes.resourceTypeAdminName, ResourceId(resourceType.name.value), Set.empty)
+        // this resource should get policies from adminResource because adminResource's name matches the resource type
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        // this resource should not get policies from adminResource because it is a different resource type
+        val otherResource = Resource(otherResourceType.name, ResourceId("otherResource"), Set.empty)
+
+        dirDao.createUser(user, samRequestContext).unsafeRunSync()
+        dirDao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dirDao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+        dao.createResourceType(resourceType.copy(name = SamResourceTypes.resourceTypeAdminName), samRequestContext).unsafeRunSync()
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        dao.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
+        dao.createResource(adminResource, samRequestContext).unsafeRunSync()
+        dao.createResource(resource, samRequestContext).unsafeRunSync()
+        dao.createResource(otherResource, samRequestContext).unsafeRunSync()
+
+        val probePolicies = List(
+          // user with role
+          AccessPolicy(
+            FullyQualifiedPolicyId(adminResource.fullyQualifiedId, AccessPolicyName("probe")),
+            Set(user.id),
+            WorkbenchEmail("probe@policy.com"),
+            Set.empty,
+            Set.empty,
+            Set(AccessPolicyDescendantPermissions(resourceType.name, Set.empty, Set(readerRole.roleName))),
+            false
+          ),
+
+          // user with action
+          AccessPolicy(
+            FullyQualifiedPolicyId(adminResource.fullyQualifiedId, AccessPolicyName("probe")),
+            Set(user.id),
+            WorkbenchEmail("probe@policy.com"),
+            Set.empty,
+            Set.empty,
+            Set(AccessPolicyDescendantPermissions(resourceType.name, Set(readAction), Set.empty)),
+            false
+          ),
+
+          // public with role
+          AccessPolicy(
+            FullyQualifiedPolicyId(adminResource.fullyQualifiedId, AccessPolicyName("probe")),
+            Set.empty,
+            WorkbenchEmail("probe@policy.com"),
+            Set.empty,
+            Set.empty,
+            Set(AccessPolicyDescendantPermissions(resourceType.name, Set.empty, Set(readerRole.roleName))),
+            true
+          ),
+
+          // public with action
+          AccessPolicy(
+            FullyQualifiedPolicyId(adminResource.fullyQualifiedId, AccessPolicyName("probe")),
+            Set.empty,
+            WorkbenchEmail("probe@policy.com"),
+            Set.empty,
+            Set.empty,
+            Set(AccessPolicyDescendantPermissions(resourceType.name, Set(readAction), Set.empty)),
+            true
+          ),
+
+          // group with role
+          AccessPolicy(
+            FullyQualifiedPolicyId(adminResource.fullyQualifiedId, AccessPolicyName("probe")),
+            Set(parentGroup.id),
+            WorkbenchEmail("probe@policy.com"),
+            Set.empty,
+            Set.empty,
+            Set(AccessPolicyDescendantPermissions(resourceType.name, Set.empty, Set(readerRole.roleName))),
+            false
+          ),
+
+          // group with action
+          AccessPolicy(
+            FullyQualifiedPolicyId(adminResource.fullyQualifiedId, AccessPolicyName("probe")),
+            Set(parentGroup.id),
+            WorkbenchEmail("probe@policy.com"),
+            Set.empty,
+            Set.empty,
+            Set(AccessPolicyDescendantPermissions(resourceType.name, Set(readAction), Set.empty)),
+            false
+          )
+        )
+
+        probePolicies.foreach { probePolicy =>
+          (for {
+            _ <- dao.deletePolicy(probePolicy.id, samRequestContext)
+            childResultNoPolicies <- dao.listUserResourceActions(resource.fullyQualifiedId, user.id, samRequestContext)
+            _ <- dao.createPolicy(probePolicy, samRequestContext)
+            childResult <- dao.listUserResourceActions(resource.fullyQualifiedId, user.id, samRequestContext)
+            parentResult <- dao.listUserResourceActions(adminResource.fullyQualifiedId, user.id, samRequestContext)
+            otherResult <- dao.listUserResourceActions(otherResource.fullyQualifiedId, user.id, samRequestContext)
+          } yield withClue(probePolicy) {
+            childResultNoPolicies shouldBe empty
+            childResult should contain theSameElementsAs Set(readAction)
+            parentResult shouldBe empty
+            otherResult shouldBe empty
+          }).unsafeRunSync()
+        }
+      }
+
       "lists actions granted by nested roles on a resource a user is a member of" in {
         assume(databaseEnabled, databaseEnabledClue)
 

@@ -201,7 +201,7 @@ class ResourceService(
     for {
       resourceIdErrors <- IO.pure(validateUrlSafe(resourceId.value))
       ownerPolicyErrors <- IO.pure(validateOwnerPolicyExists(resourceType, policies, parentOpt))
-      policyErrors <- policies.toList.traverse(policy => validatePolicy(resourceType, policy)).map(_.flatten)
+      policyErrors <- policies.toList.traverse(policy => validatePolicy(resourceType, resourceId, policy)).map(_.flatten)
       authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId, samRequestContext)
     } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
 
@@ -418,7 +418,7 @@ class ResourceService(
   ): IO[AccessPolicy] =
     for {
       policy <- makeValidatablePolicy(policyName, policyMembership, samRequestContext)
-      _ <- validatePolicy(resourceType, policy).map {
+      _ <- validatePolicy(resourceType, resource.resourceId, policy).map {
         case Some(errorReport) =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
         case None =>
@@ -588,7 +588,7 @@ class ResourceService(
     * @param policy
     * @return
     */
-  private[service] def validatePolicy(resourceType: ResourceType, policy: ValidatableAccessPolicy): IO[Option[ErrorReport]] =
+  private[service] def validatePolicy(resourceType: ResourceType, resourceId: ResourceId, policy: ValidatableAccessPolicy) =
     for {
       descendantPermissionsErrors <- validateDescendantPermissions(policy.descendantPermissions)
     } yield {
@@ -597,12 +597,24 @@ class ResourceService(
           validateActions(resourceType, policy.actions) ++
           validateRoles(resourceType, policy.roles) ++
           validateUrlSafe(policy.policyName.value) ++
-          descendantPermissionsErrors
+          descendantPermissionsErrors ++
+          validateResourceTypeAdminDescendantPermissions(resourceType, resourceId, policy.descendantPermissions)
 
       if (validationErrors.nonEmpty) {
         Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
       } else None
     }
+
+  private[service] def validateResourceTypeAdminDescendantPermissions(
+      resourceType: ResourceType,
+      resourceId: ResourceId,
+      descendantPermissions: Set[AccessPolicyDescendantPermissions]
+  ): Set[ErrorReport] = {
+      descendantPermissions.collect {
+        case descendantPermissions if resourceType.name.isResourceTypeAdmin && !descendantPermissions.resourceType.value.equalsIgnoreCase(resourceId.value) =>
+          ErrorReport(s"Resource type admin policies can only have descendant permissions for their matching resource type, ${descendantPermissions.resourceType} is a different type")
+      }
+  }
 
   /** A valid email is one that matches the email address for a previously persisted WorkbenchSubject.
     *

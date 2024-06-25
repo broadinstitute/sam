@@ -561,21 +561,17 @@ class PostgresAccessPolicyDAO(
       removeAuthDomainFromResource(resource, samRequestContext)
 
       val r = ResourceTable.syntax("r")
-      samsql"""delete from ${ResourceTable as r}
-              where ${r.name} = ${resource.resourceId}
-              and ${r.resourceTypeId} = ${resourceTypePKsByName(resource.resourceTypeName)}""".update().apply()
-
       if (leaveTombStone) {
+        // if leaving a tombstone, we need to orphan the resource
         val resourceTableColumn = ResourceTable.column
         samsql"""update ${ResourceTable as r}
           set ${resourceTableColumn.resourceParentId} = null
               where ${r.name} = ${resource.resourceId}
               and ${r.resourceTypeId} = ${resourceTypePKsByName(resource.resourceTypeName)}""".update().apply()
-        // if we are leaving a tombstone, add the record back. The prior delete is necessary so that any
-        // cascading deletes happen and we can be sure that the tombstone is the only record left
-        val rCol = ResourceTable.column
-        samsql"""insert into ${ResourceTable.table} (${rCol.name}, ${rCol.resourceTypeId})
-                values (${resource.resourceId}, ${resourceTypePKsByName(resource.resourceTypeName)})""".update().apply()
+      } else {
+        samsql"""delete from ${ResourceTable as r}
+              where ${r.name} = ${resource.resourceId}
+              and ${r.resourceTypeId} = ${resourceTypePKsByName(resource.resourceTypeName)}""".update().apply()
       }
     }
 
@@ -678,7 +674,7 @@ class PostgresAccessPolicyDAO(
     }
 
   private def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext)(implicit
-                                                                                                                      session: DBSession
+      session: DBSession
   ): Int = {
     val r = ResourceTable.syntax("r")
     val ad = AuthDomainTable.syntax("ad")

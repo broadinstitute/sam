@@ -271,6 +271,7 @@ trait EffectivePolicyMutationStatements {
 
     val policy = PolicyTable.syntax("policy")
 
+    // insert for resource type admin resource itself
     samsql"""insert into ${EffectivePolicyRoleTable.table} (${erCol.effectiveResourcePolicyId}, ${erCol.resourceRoleId})
               select ${ep.id}, ${rr.id}
               from ${PolicyTable as policy}
@@ -283,6 +284,7 @@ trait EffectivePolicyMutationStatements {
               and ${roleAppliesToResource(pr, fr, ep, policy)}
               on conflict do nothing""".update().apply()
 
+    // insert for all resources of the type
     samsql"""insert into ${EffectivePolicyRoleTable.table} (${erCol.effectiveResourcePolicyId}, ${erCol.resourceRoleId})
               select ${ep.id}, ${rr.id}
               from ${ResourceTable as r}
@@ -337,6 +339,7 @@ trait EffectivePolicyMutationStatements {
     val ra = ResourceActionTable.syntax("ra")
     val policy = PolicyTable.syntax("policy")
 
+    // insert for resource type admin resource itself
     samsql"""insert into ${EffectivePolicyActionTable.table} (${eaCol.effectiveResourcePolicyId}, ${eaCol.resourceActionId})
               select ${ep.id}, ${ra.id}
               from ${PolicyTable as policy}
@@ -349,6 +352,7 @@ trait EffectivePolicyMutationStatements {
               and ${r.resourceTypeId} = ${ra.resourceTypeId}
               on conflict do nothing""".update().apply()
 
+    // insert for all resources of the type
     samsql"""insert into ${EffectivePolicyActionTable.table} (${eaCol.effectiveResourcePolicyId}, ${eaCol.resourceActionId})
               select ${ep.id}, ${ra.id}
               from ${ResourceTable as r}
@@ -394,14 +398,14 @@ trait EffectivePolicyMutationStatements {
           select ${r.id}, ${policyPK}
           from ${ResourceTable as r}
           where ${r.resourceTypeId} = ${resourceTypePKsByName(SamResourceTypes.resourceTypeAdminName)}
-          and ${r.name} = ${policy.id.resource.resourceTypeName}
+          and ${r.name} = ${policy.id.resource.resourceId}
           """.update().apply()
 
     // insert for all resources of the type
     samsql"""insert into ${EffectiveResourcePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId})
           select ${r.id}, ${policyPK}
           from ${ResourceTable as r}
-          where ${r.resourceTypeId} = ${resourceTypePKsByName(policy.id.resource.resourceTypeName)}
+          where ${r.resourceTypeId} = ${resourceTypePKsByName(ResourceTypeName(policy.id.resource.resourceId.value))}
           """.update().apply()
   }
 
