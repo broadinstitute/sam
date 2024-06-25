@@ -68,7 +68,8 @@ trait EffectivePolicyMutationStatements {
         and ${p.id} = ${ep.sourcePolicyId}""".update().apply()
   }
 
-  /** Calculate and store all effective policies for resource for given resource and its descendants.
+  /** Calculate and store all effective policies for resource for given resource and its descendants. Called when setting a resource's parent. This function
+    * does not handle resource type admin because resource type admins may not have parents.
     * @param childResourcePK
     * @param session
     * @return
@@ -86,9 +87,6 @@ trait EffectivePolicyMutationStatements {
     * @return
     */
   private def insertEffectivePolicyRolesForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
-    // Note that there is no special logic for resource type admin because resource type admin may not have parents
-    // and must exist before any resources of that type are created. This function is called only when a resource
-    // is created or when a resource's parent is changed.
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
     val descendantResource = descendantResourceTable.syntax("descendantResource")
 
@@ -125,9 +123,6 @@ trait EffectivePolicyMutationStatements {
     * @return
     */
   private def insertEffectivePolicyActionsForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
-    // Note that there is no special logic for resource type admin because resource type admin may not have parents
-    // and must exist before any resources of that type are created. This function is called only when a resource
-    // is created or when a resource's parent is changed.
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
     val descendantResource = descendantResourceTable.syntax("descendantResource")
 
@@ -161,9 +156,6 @@ trait EffectivePolicyMutationStatements {
     * @return
     */
   private def insertEffectivePoliciesForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
-    // Note that there is no special logic for resource type admin because resource type admin may not have parents
-    // and must exist before any resources of that type are created. This function is called only when a resource
-    // is created or when a resource's parent is changed.
     val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
     val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
 
