@@ -1503,15 +1503,20 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         probePolicies.foreach { probePolicy =>
           (for {
             _ <- dao.deletePolicy(probePolicy.id, samRequestContext)
+            // test that deleting resource type admin policies remove access
             childResultNoPolicies <- dao.listUserResourceActions(resource.fullyQualifiedId, user.id, samRequestContext)
             _ <- dao.createPolicy(probePolicy, samRequestContext)
+            // test the case where a policy is created after the resource
             childResult <- dao.listUserResourceActions(resource.fullyQualifiedId, user.id, samRequestContext)
-            parentResult <- dao.listUserResourceActions(adminResource.fullyQualifiedId, user.id, samRequestContext)
+            newResource <- dao.createResource(Resource(resourceType.name, ResourceId(UUID.randomUUID().toString), Set.empty), samRequestContext)
+            // test the case where a resource is created after the policy
+            newResult <- dao.listUserResourceActions(newResource.fullyQualifiedId, user.id, samRequestContext)
+            // test that the resource type admin policies don't apply to other resources
             otherResult <- dao.listUserResourceActions(otherResource.fullyQualifiedId, user.id, samRequestContext)
           } yield withClue(probePolicy) {
             childResultNoPolicies shouldBe empty
             childResult should contain theSameElementsAs Set(readAction)
-            parentResult shouldBe empty
+            newResult should contain theSameElementsAs Set(readAction)
             otherResult shouldBe empty
           }).unsafeRunSync()
         }

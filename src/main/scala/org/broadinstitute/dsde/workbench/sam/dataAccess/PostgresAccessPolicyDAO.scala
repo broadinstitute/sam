@@ -480,6 +480,19 @@ class PostgresAccessPolicyDAO(
           populateInheritedEffectivePolicies(resourcePK)
         }
 
+        if (
+          !resource.fullyQualifiedId.resourceTypeName.isResourceTypeAdmin
+          // check that the resource type admin resource type exists
+          // many tests don't create it but it should be there irl, but if it isn't there, can't be any policies to inherit
+          && resourceTypePKsByName.contains(SamResourceTypes.resourceTypeAdminName)
+        ) {
+          populateResourceTypeAdminEffectivePolicies(
+            resourcePK,
+            resourceTypePKsByName(SamResourceTypes.resourceTypeAdminName),
+            ResourceId(resource.resourceTypeName.value)
+          )
+        }
+
         resource.accessPolicies.foreach { policy =>
           val groupPK = insertPolicyGroup(policy)
           val policyPK = insertPolicy(resourcePK, policy, groupPK)
