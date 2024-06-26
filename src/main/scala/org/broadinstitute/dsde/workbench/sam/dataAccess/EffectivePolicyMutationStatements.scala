@@ -45,10 +45,10 @@ trait EffectivePolicyMutationStatements {
     */
   protected def deleteDescendantInheritedEffectivePolicies(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
     val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
-    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
+    val ancestorResource = ancestorResourceTable.syntax("ancestor_resource")
 
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
-    val descendantResource = descendantResourceTable.syntax("descendantResource")
+    val descendantResource = descendantResourceTable.syntax("descendant_resource")
 
     val ep = EffectiveResourcePolicyTable.syntax("ep")
     val p = PolicyTable.syntax("p")
@@ -97,7 +97,7 @@ trait EffectivePolicyMutationStatements {
     */
   private def insertEffectivePolicyRolesForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
-    val descendantResource = descendantResourceTable.syntax("descendantResource")
+    val descendantResource = descendantResourceTable.syntax("descendant_resource")
 
     val erCol = EffectivePolicyRoleTable.column
     val pr = PolicyRoleTable.syntax("pr")
@@ -133,8 +133,8 @@ trait EffectivePolicyMutationStatements {
     val rr = ResourceRoleTable.syntax("rr")
     val ep = EffectiveResourcePolicyTable.syntax("ep")
     val sourcePolicy = PolicyTable.syntax("source_policy")
-    val newResource = ResourceTable.syntax("newResource")
-    val adminResource = ResourceTable.syntax("adminResource")
+    val newResource = ResourceTable.syntax("new_resource")
+    val adminResource = ResourceTable.syntax("admin_resource")
 
     samsql"""insert into ${EffectivePolicyRoleTable.table} (${erCol.effectiveResourcePolicyId}, ${erCol.resourceRoleId})
               select ${ep.id}, ${rr.id}
@@ -157,8 +157,8 @@ trait EffectivePolicyMutationStatements {
   private def insertEffectivePolicyActionsFromResourceTypeAdmin(newResourcePK: ResourcePK, adminTypePK: ResourceTypePK)(implicit session: DBSession): Int = {
     val eaCol = EffectivePolicyActionTable.column
     val pa = PolicyActionTable.syntax("pa")
-    val newResource = ResourceTable.syntax("newResource")
-    val adminResource = ResourceTable.syntax("adminResource")
+    val newResource = ResourceTable.syntax("new_resource")
+    val adminResource = ResourceTable.syntax("admin_resource")
     val ra = ResourceActionTable.syntax("ra")
     val ep = EffectiveResourcePolicyTable.syntax("ep")
     val sourcePolicy = PolicyTable.syntax("source_policy")
@@ -187,7 +187,7 @@ trait EffectivePolicyMutationStatements {
     */
   private def insertEffectivePolicyActionsForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
-    val descendantResource = descendantResourceTable.syntax("descendantResource")
+    val descendantResource = descendantResourceTable.syntax("descendant_resource")
 
     val eaCol = EffectivePolicyActionTable.column
     val pa = PolicyActionTable.syntax("pa")
@@ -220,10 +220,10 @@ trait EffectivePolicyMutationStatements {
     */
   private def insertEffectivePoliciesForChildAndDescendants(childResourcePK: ResourcePK)(implicit session: DBSession): Int = {
     val ancestorResourceTable = AncestorResourceTable("ancestor_resource")
-    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
+    val ancestorResource = ancestorResourceTable.syntax("ancestor_resource")
 
     val descendantResourceTable = AncestorResourceTable("descendant_resource")
-    val descendantResource = descendantResourceTable.syntax("descendantResource")
+    val descendantResource = descendantResourceTable.syntax("descendant_resource")
 
     val p = PolicyTable.syntax("p")
     val epCol = EffectiveResourcePolicyTable.column
@@ -246,8 +246,8 @@ trait EffectivePolicyMutationStatements {
   ): Int = {
     val p = PolicyTable.syntax("p")
     val epCol = EffectiveResourcePolicyTable.column
-    val adminResource = ResourceTable.syntax("adminResource")
-    val newResource = ResourceTable.syntax("newResource")
+    val adminResource = ResourceTable.syntax("admin_resource")
+    val newResource = ResourceTable.syntax("new_resource")
 
     samsql"""insert into ${EffectiveResourcePolicyTable.table} (${epCol.resourceId}, ${epCol.sourcePolicyId})
         select ${newResource.id}, ${p.id}
@@ -267,9 +267,9 @@ trait EffectivePolicyMutationStatements {
     */
   private def ancestorsRecursiveQuery(childResourcePK: ResourcePK, ancestorResourceTable: AncestorResourceTable) = {
     val resource = ResourceTable.syntax("resource")
-    val parentResource = ResourceTable.syntax("parentResource")
+    val parentResource = ResourceTable.syntax("parent_resource")
     val arColumn = ancestorResourceTable.column
-    val ancestorResource = ancestorResourceTable.syntax("ancestorResource")
+    val ancestorResource = ancestorResourceTable.syntax("ancestor_resource")
     samsqls"""
         ${ancestorResourceTable.table}(${arColumn.resourceId}) as (
           select ${resource.resourceParentId}
@@ -291,7 +291,7 @@ trait EffectivePolicyMutationStatements {
   private def descendantsRecursiveQuery(resourcePK: ResourcePK, descendantResourceTable: AncestorResourceTable) = {
     val resource = ResourceTable.syntax("resource")
     val drColumn = descendantResourceTable.column
-    val descendantResource = descendantResourceTable.syntax("descendantResource")
+    val descendantResource = descendantResourceTable.syntax("descendant_resource")
     samsqls"""
         ${descendantResourceTable.table}(${drColumn.resourceId}) as (
             select ${resourcePK}
