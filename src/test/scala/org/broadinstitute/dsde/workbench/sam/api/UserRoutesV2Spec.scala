@@ -274,7 +274,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       defaultUser,
       SamUserAllowances(enabled = true, termsOfService = true),
       Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
-      TermsOfServiceDetails("v1", Instant.now(), permitsSystemUsage = true, isCurrentVersion = true),
+      TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
       Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
     )
 
@@ -305,7 +305,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.samUser should be(defaultUser)
       response.allowances should be(userCombinedStateResponse.allowances)
       response.attributes should be(userCombinedStateResponse.attributes)
-      response.termsOfServiceDetails.acceptedOn should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn)
+      response.termsOfServiceDetails.acceptedOn.get should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn.get)
       response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
@@ -329,7 +329,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       defaultUser,
       SamUserAllowances(enabled = true, termsOfService = true),
       Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
-      TermsOfServiceDetails("v1", Instant.now(), permitsSystemUsage = true, isCurrentVersion = true),
+      TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
       Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
     )
 
@@ -359,7 +359,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.samUser should be(defaultUser)
       response.allowances should be(userCombinedStateResponse.allowances)
       response.attributes should be(None)
-      response.termsOfServiceDetails.acceptedOn should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn)
+      response.termsOfServiceDetails.acceptedOn.get should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn.get)
       response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)

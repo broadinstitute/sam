@@ -96,27 +96,16 @@ class TosService(
   ): IO[TermsOfServiceDetails] =
     ensureAdminIfNeeded[TermsOfServiceDetails](userId, samRequestContext) {
       for {
-        latestTermsOfServiceAcceptance <- getLatestTermsOfServiceAcceptance(userId, samRequestContext)
+        latestTermsOfServiceAcceptance <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
         latestTermsOfServiceAction <- directoryDao.getUserTermsOfService(userId, samRequestContext)
         requestedUser <- loadUser(userId, samRequestContext)
       } yield TermsOfServiceDetails(
-        latestTermsOfServiceAcceptance.version,
-        latestTermsOfServiceAcceptance.createdAt,
+        latestTermsOfServiceAcceptance.map(_.version),
+        latestTermsOfServiceAcceptance.map(_.createdAt),
         tosAcceptancePermitsSystemUsage(requestedUser, latestTermsOfServiceAction),
-        latestTermsOfServiceAcceptance.version.equals(tosConfig.version)
+        latestTermsOfServiceAcceptance.exists(_.version.equals(tosConfig.version))
       )
     }
-
-  private def getLatestTermsOfServiceAcceptance(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
-    maybeTermsOfServiceRecord <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
-    latestUserTermsOfService <- maybeTermsOfServiceRecord
-      .map(IO.pure)
-      .getOrElse(
-        IO.raiseError(
-          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find current terms of service for user:${userId}"))
-        )
-      )
-  } yield latestUserTermsOfService
 
   private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     directoryDao.loadUser(userId, samRequestContext).map {
