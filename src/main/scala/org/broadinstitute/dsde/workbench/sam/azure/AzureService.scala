@@ -173,12 +173,11 @@ class AzureService(
       )
       mrgCoordinates = mrg.managedResourceGroupCoordinates
       // mapping the result of the validate call to ensure that validation happens before anything is created in Azure
-      validatedMrgCoordinates <- validateManagedResourceGroup(mrgCoordinates, samRequestContext).map(_ => mrg.managedResourceGroupCoordinates)
-      msiManager <- crlService.buildMsiManager(validatedMrgCoordinates.tenantId, validatedMrgCoordinates.subscriptionId)
-      mrgManager <- crlService.buildResourceManager(validatedMrgCoordinates.tenantId, validatedMrgCoordinates.subscriptionId)
+      msiManager <- crlService.buildMsiManager(mrgCoordinates.tenantId, mrgCoordinates.subscriptionId)
+      mrgManager <- crlService.buildResourceManager(mrgCoordinates.tenantId, mrgCoordinates.subscriptionId)
       amiName = toManagedIdentityNameFromAmiId(id)
-      region <- getRegionFromMrg(validatedMrgCoordinates, mrgManager, samRequestContext)
-      context = managedIdentityContext(validatedMrgCoordinates, amiName, region)
+      region <- getRegionFromMrg(mrgCoordinates, mrgManager, samRequestContext)
+      context = managedIdentityContext(mrgCoordinates, amiName, region)
       azureUami <- traceIOWithContext("createUAMI", samRequestContext) { _ =>
         IO(
           // note that this will not fail when the UAMI already exists
@@ -186,12 +185,12 @@ class AzureService(
             .identities()
             .define(amiName.value)
             .withRegion(region)
-            .withExistingResourceGroup(validatedMrgCoordinates.managedResourceGroupName.value)
+            .withExistingResourceGroup(mrgCoordinates.managedResourceGroupName.value)
             .withTags(managedIdentityTags(id).asJava)
             .create(context)
         )
       }
-      amiToCreate = ActionManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()), validatedMrgCoordinates)
+      amiToCreate = ActionManagedIdentity(id, ManagedIdentityObjectId(azureUami.id()), ManagedIdentityDisplayName(azureUami.name()), mrgCoordinates)
       createdAmi <- directoryDAO.createActionManagedIdentity(amiToCreate, samRequestContext)
     } yield (createdAmi, true)
 
