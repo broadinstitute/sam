@@ -9,7 +9,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.configResourceTypes
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes
 import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.azure.MockCrlService.mockSamSpendProfileResource
-import org.broadinstitute.dsde.workbench.sam.config.ManagedAppPlan
+import org.broadinstitute.dsde.workbench.sam.config.{AzureMarketPlace, AzureServiceCatalog, ManagedAppPlan}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes
 import org.broadinstitute.dsde.workbench.sam.model.api._
@@ -51,25 +51,6 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     }
   }
 
-  it should "successfully create a pet managed identity using MRG Azure tag for backwards compatibility" in {
-    val samRoutes = genSamRoutes(crlService = Option(MockCrlService(includeBillingProfileTag = true)))
-
-    // Create a pet managed identity, should return 201 created
-    val request = GetOrCreatePetManagedIdentityRequest(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
-    Post("/api/azure/v1/user/petManagedIdentity", request) ~> samRoutes.route ~> check {
-      handled shouldBe true
-      status shouldEqual StatusCodes.Created
-      contentType shouldEqual ContentTypes.`application/json`
-    }
-
-    // Create again, should return 200
-    Post("/api/azure/v1/user/petManagedIdentity", request) ~> samRoutes.route ~> check {
-      handled shouldBe true
-      status shouldEqual StatusCodes.OK
-      contentType shouldEqual ContentTypes.`application/json`
-    }
-  }
-
   it should "return 403 if the MRG does not exist" in {
     val samRoutes = genSamRoutes()
 
@@ -97,10 +78,9 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
 
   it should "return 403 if user has access to the billing profile but the MRG could not be validated" in {
     // Change the managed app plan
-    val mockCrlService = MockCrlService()
-    when(mockCrlService.getManagedAppPlans)
-      .thenReturn(Seq(ManagedAppPlan("some-other-plan", "publisher", "auth"), ManagedAppPlan("yet-another-plan", "publisher", "auth")))
-    val samRoutes = genSamRoutes(crlService = Some(mockCrlService))
+    val samRoutes = genSamRoutes(azureMarketPlace =
+      Some(AzureMarketPlace(Seq(ManagedAppPlan("some-other-plan", "publisher", "auth"), ManagedAppPlan("yet-another-plan", "publisher", "auth"))))
+    )
 
     // User has no access
     val request = GetOrCreatePetManagedIdentityRequest(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
@@ -125,26 +105,6 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
     }
 
     // Create a pet managed identity, should return 201 created
-    Post(s"/api/azure/v1/petManagedIdentity/${newUser.email.value}", request) ~> samRoutes.route ~> check {
-      handled shouldBe true
-      status shouldEqual StatusCodes.Created
-      contentType shouldEqual ContentTypes.`application/json`
-    }
-
-    // Create again, should return 200
-    Post(s"/api/azure/v1/petManagedIdentity/${newUser.email.value}", request) ~> samRoutes.route ~> check {
-      handled shouldBe true
-      status shouldEqual StatusCodes.OK
-      contentType shouldEqual ContentTypes.`application/json`
-    }
-  }
-
-  it should "successfully create a pet managed identity for a user using MRG Azure tag for backwards compatibility" in {
-    val samRoutes = genSamRoutes(crlService = Option(MockCrlService(includeBillingProfileTag = true)))
-    val newUser = createSecondUser(samRoutes)
-
-    // Create a pet managed identity for the second user, should return 201 created
-    val request = GetOrCreatePetManagedIdentityRequest(TenantId("some-tenant"), SubscriptionId("some-sub"), MockCrlService.mockMrgName)
     Post(s"/api/azure/v1/petManagedIdentity/${newUser.email.value}", request) ~> samRoutes.route ~> check {
       handled shouldBe true
       status shouldEqual StatusCodes.Created
@@ -266,10 +226,12 @@ class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest 
       createSpendProfile: Boolean = true,
       createAzurePolicy: Boolean = true,
       crlService: Option[CrlService] = None,
-      createMrg: Boolean = false
+      createMrg: Boolean = false,
+      azureMarketPlace: Option[AzureMarketPlace] = Option(AzureMarketPlace(Seq(ManagedAppPlan("mock-plan", "mock-publisher", "mock-auth-user-key")))),
+      azureServiceCatalog: Option[AzureServiceCatalog] = None
   ): TestSamRoutes = {
     val resourceTypes = configResourceTypes.view.filterKeys(k => k == SamResourceTypes.spendProfile || k == CloudExtensions.resourceTypeName)
-    val samRoutes = TestSamRoutes(resourceTypes.toMap, crlService = crlService)
+    val samRoutes = TestSamRoutes(resourceTypes.toMap, crlService = crlService, azureMarketPlace = azureMarketPlace, azureServiceCatalog = azureServiceCatalog)
 
     // Create mock spend-profile resource
     if (createSpendProfile) {
