@@ -52,6 +52,7 @@ class TosServiceSpec(_system: ActorSystem)
   private val defaultUser = Generator.genWorkbenchUserBoth.sample.get
   private val serviceAccountUser = Generator.genWorkbenchUserServiceAccount.sample.get
   private val uamiUser = Generator.genWorkbenchUserAzureUami.sample.get
+  private val samRequestContextWithUser: SamRequestContext = SamRequestContext(None, None, Some(defaultUser))
 
   before {
     clearDatabase()
@@ -265,12 +266,21 @@ class TosServiceSpec(_system: ActorSystem)
       * | 10   | true                 | true                     | null             | "2"             | false                | false                |
       * | 11   | true                 | true                     | "1"              | "2"             | false                | true                 |
       * | 12   | true                 | true                     | "2"              | "2"             | true                 | true                 |
+      *
+      * These following test cases both test the getTermsOfServiceComplianceStatus without a user in the request context, and getTermsOfServiceDetailsForUser
+      * with the requested user in the request context.
       */
 
     "when the user has not accepted any ToS version" - {
       withoutGracePeriod - {
         withoutRollingAcceptanceWindow - {
           cannotUseTheSystem in {
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(None))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(None))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
               .thenReturn(IO.pure(None))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
@@ -279,12 +289,25 @@ class TosServiceSpec(_system: ActorSystem)
             val complianceStatus =
               tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe None
+            userTosDetails.latestAcceptedVersion shouldBe None
           }
         }
       }
       withGracePeriod - {
         withoutRollingAcceptanceWindow - {
           cannotUseTheSystem in {
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(None))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(None))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
               .thenReturn(IO.pure(None))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
@@ -293,12 +316,25 @@ class TosServiceSpec(_system: ActorSystem)
             val complianceStatus =
               tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe None
+            userTosDetails.latestAcceptedVersion shouldBe None
           }
         }
       }
       withoutGracePeriod - {
         withRollingAcceptanceWindow - {
           cannotUseTheSystem in {
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(None))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(None))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
               .thenReturn(IO.pure(None))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
@@ -307,12 +343,25 @@ class TosServiceSpec(_system: ActorSystem)
             val complianceStatus =
               tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe None
+            userTosDetails.latestAcceptedVersion shouldBe None
           }
         }
       }
       withGracePeriod - {
         withRollingAcceptanceWindow - {
           cannotUseTheSystem in {
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(None))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(None))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
               .thenReturn(IO.pure(None))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
@@ -321,6 +370,13 @@ class TosServiceSpec(_system: ActorSystem)
             val complianceStatus =
               tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe None
+            userTosDetails.latestAcceptedVersion shouldBe None
           }
         }
       }
@@ -329,56 +385,112 @@ class TosServiceSpec(_system: ActorSystem)
       withoutGracePeriod - {
         withoutRollingAcceptanceWindow - {
           cannotUseTheSystem in {
+            val acceptedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             // CASE 2
             val complianceStatus =
               tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }
       withGracePeriod - {
         withoutRollingAcceptanceWindow - {
           canUseTheSystem in {
+            val acceptedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             // CASE 5
             val complianceStatus =
               tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe true
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe true
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }
       withoutGracePeriod - {
         withRollingAcceptanceWindow - {
           canUseTheSystem in {
+            val acceptedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             // CASE 8
             val complianceStatus =
               tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe true
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe true
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }
       withGracePeriod - {
         withRollingAcceptanceWindow - {
           canUseTheSystem in {
+            val acceptedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             // CASE 11
             val complianceStatus =
               tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe true
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe true
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }
@@ -387,56 +499,112 @@ class TosServiceSpec(_system: ActorSystem)
       withoutGracePeriod - {
         withoutRollingAcceptanceWindow - {
           canUseTheSystem in {
+            val acceptedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             // CASE 3
             val complianceStatus =
               tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe true
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe true
+            userTosDetails.permitsSystemUsage shouldBe true
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(tosVersion)
           }
         }
       }
       withGracePeriod - {
         withoutRollingAcceptanceWindow - {
           canUseTheSystem in {
+            val acceptedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             // CASE 6
             val complianceStatus =
               tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe true
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe true
+            userTosDetails.permitsSystemUsage shouldBe true
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(tosVersion)
           }
         }
       }
       withoutGracePeriod - {
         withRollingAcceptanceWindow - {
           canUseTheSystem in {
+            val acceptedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             // CASE 9
             val complianceStatus =
               tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe true
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe true
+            userTosDetails.permitsSystemUsage shouldBe true
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(tosVersion)
           }
         }
       }
       withGracePeriod - {
         withRollingAcceptanceWindow - {
           canUseTheSystem in {
+            val acceptedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.ACCEPT, acceptedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
             // CASE 12
             val complianceStatus =
               tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe true
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe true
+            userTosDetails.permitsSystemUsage shouldBe true
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(tosVersion)
           }
         }
       }
@@ -446,56 +614,124 @@ class TosServiceSpec(_system: ActorSystem)
       withoutGracePeriod - {
         withoutRollingAcceptanceWindow - {
           cannotUseTheSystem in {
+            val acceptedOn = Instant.now().minusSeconds(60)
+            val rejectedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.REJECT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
 
             val complianceStatus =
               tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }
       withGracePeriod - {
         withoutRollingAcceptanceWindow - {
           cannotUseTheSystem in {
+            val acceptedOn = Instant.now().minusSeconds(60)
+            val rejectedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.REJECT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
 
             val complianceStatus =
               tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }
       withoutGracePeriod - {
         withRollingAcceptanceWindow - {
-          canUseTheSystem in {
+          cannotUseTheSystem in {
+            val acceptedOn = Instant.now().minusSeconds(60)
+            val rejectedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.REJECT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
 
             val complianceStatus =
               tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }
       withGracePeriod - {
         withRollingAcceptanceWindow - {
           cannotUseTheSystem in {
+            val acceptedOn = Instant.now().minusSeconds(60)
+            val rejectedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.REJECT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+
             when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
             when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, samRequestContext))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
 
             val complianceStatus =
               tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }
@@ -503,19 +739,26 @@ class TosServiceSpec(_system: ActorSystem)
       withGracePeriod - {
         withRollingAcceptanceWindow - {
           cannotUseTheSystem + " according to their ToS details" in {
-            val requestContextWithUser = samRequestContext.copy(samUser = Some(defaultUser))
-            when(dirDAO.loadUser(defaultUser.id, requestContextWithUser))
-              .thenReturn(IO.pure(Option(defaultUser)))
-            when(dirDAO.getUserTermsOfService(defaultUser.id, requestContextWithUser))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, Instant.now()))))
-            when(dirDAO.getUserTermsOfService(defaultUser.id, requestContextWithUser, Some(TosTable.ACCEPT)))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
-            when(dirDAO.getUserTermsOfServiceVersion(defaultUser.id, previousVersionOpt, requestContextWithUser))
-              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, Instant.now()))))
+            val acceptedOn = Instant.now().minusSeconds(60)
+            val rejectedOn = Instant.now()
+            when(dirDAO.loadUser(defaultUser.id, samRequestContextWithUser)).thenReturn(IO.pure(Some(defaultUser)))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.REJECT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser, Option(TosTable.ACCEPT)))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, previousVersion, TosTable.ACCEPT, acceptedOn))))
+            when(dirDAO.getUserTermsOfService(defaultUser.id, samRequestContextWithUser))
+              .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
 
             val complianceStatus =
-              tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, requestContextWithUser).unsafeRunSync()
+              tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
+
+            val userTosDetails: TermsOfServiceDetails =
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+            userTosDetails.isCurrentVersion shouldBe false
+            userTosDetails.permitsSystemUsage shouldBe false
+            userTosDetails.acceptedOn shouldBe Option(acceptedOn)
+            userTosDetails.latestAcceptedVersion shouldBe Option(previousVersion)
           }
         }
       }

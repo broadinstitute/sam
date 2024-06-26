@@ -1,8 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.model.{TermsOfServiceComplianceStatus, TermsOfServiceDetails, TermsOfServiceHistory, TermsOfServiceHistoryRecord}
@@ -50,11 +49,11 @@ case class MockTosServiceBuilder() extends MockitoSugar {
       .getTermsOfServiceComplianceStatus(any[SamUser], any[SamRequestContext])
 
     lenient()
-      .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
+      .doReturn(IO.pure(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)))
       .when(tosService)
       .getTermsOfServiceDetailsForUser(any[WorkbenchUserId], any[SamRequestContext])
     lenient()
-      .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
+      .doReturn(IO.pure(TermsOfServiceHistory(List.empty)))
       .when(tosService)
       .getTermsOfServiceHistoryForUser(any[WorkbenchUserId], any[SamRequestContext], any[Integer])
   }

@@ -139,7 +139,7 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       }
     }
 
-    it("should return 404 when USER_ID is does not exist") {
+    it("should not 404 when USER_ID is does not exist") {
       val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
       val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
@@ -147,7 +147,14 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
         .withAllowedUser(defaultUser)
 
       Get("/api/termsOfService/v1/user/12345abc") ~> mockSamRoutesBuilder.build.route ~> check {
-        status shouldEqual StatusCodes.NotFound
+        status shouldEqual StatusCodes.OK
+        withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceDetails`.") {
+          val response = responseAs[TermsOfServiceDetails]
+          response.isCurrentVersion shouldBe false
+          response.permitsSystemUsage shouldBe false
+          response.latestAcceptedVersion shouldBe None
+          response.acceptedOn shouldBe None
+        }
       }
     }
 
@@ -189,7 +196,11 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
         .withAllowedUser(defaultUser)
 
       Get("/api/termsOfService/v1/user/12345abc/history") ~> mockSamRoutesBuilder.build.route ~> check {
-        status shouldEqual StatusCodes.NotFound
+        status shouldEqual StatusCodes.OK
+        withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceHistory`.") {
+          val response = responseAs[TermsOfServiceHistory]
+          response.history shouldBe empty
+        }
       }
     }
   }
@@ -222,7 +233,11 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
         .withDisabledUser(Generator.genWorkbenchUserGoogle.sample.get)
 
       Get("/api/termsOfService/v1/user/self/history") ~> mockSamRoutesBuilder.build.route ~> check {
-        status shouldEqual StatusCodes.NotFound
+        status shouldEqual StatusCodes.OK
+        withClue(s"${responseAs[String]} is not parsable as an instance of `TermsOfServiceHistory`.") {
+          val response = responseAs[TermsOfServiceHistory]
+          response.history shouldBe empty
+        }
       }
     }
   }
