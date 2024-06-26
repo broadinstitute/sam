@@ -57,7 +57,7 @@
     </appender>
 
 
-    <logger name="org.broadinstitute.dsde" level="info" additivity="false">
+    <logger name="org.broadinstitute.dsde" level="debug" additivity="false">
         <appender-ref ref="file"/>
         <appender-ref ref="${SAM_LOG_APPENDER}"/>
         <appender-ref ref="SYSLOG"/>
@@ -65,7 +65,7 @@
     </logger>
 
 
-    <logger name="akka" level="info" additivity="false">
+    <logger name="akka" level="debug" additivity="false">
         <appender-ref ref="file"/>
         <appender-ref ref="${SAM_LOG_APPENDER}"/>
         <appender-ref ref="SYSLOG"/>
@@ -87,7 +87,7 @@
         <appender-ref ref="Sentry" />
     </logger>
 
-    <root level="warn">
+    <root level="debug">
         <appender-ref ref="file"/>
         <appender-ref ref="${SAM_LOG_APPENDER}"/>
         <appender-ref ref="SYSLOG"/>
