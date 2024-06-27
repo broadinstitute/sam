@@ -106,7 +106,9 @@ object UserStatusDetails {
     descendantRoles: Map[ResourceTypeName, Set[ResourceRoleName]] = Map.empty
 )
 
-@Lenses final case class ResourceTypeName(value: String) extends ValueObject
+@Lenses final case class ResourceTypeName(value: String) extends ValueObject {
+  def isResourceTypeAdmin: Boolean = value == SamResourceTypes.resourceTypeAdminName.value
+}
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId) {
   override def toString: String = s"$resourceTypeName/$resourceId"

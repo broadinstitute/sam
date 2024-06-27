@@ -59,7 +59,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     resource
   } <* resource.accessPolicies.toList.traverse(createPolicy(_, samRequestContext))
 
-  override def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
+  override def deleteResource(resource: FullyQualifiedResourceId, leaveTombStone: Boolean, samRequestContext: SamRequestContext): IO[Unit] = IO {
     val toRemove = policies
       .collect { case (riapn @ FullyQualifiedPolicyId(`resource`, _), policy: AccessPolicy) =>
         riapn
@@ -93,11 +93,6 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     }
   }
 
-  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
-    val resourceToRemoveOpt = resources.get(resource)
-    resourceToRemoveOpt.map(resourceToRemove => resources += resource -> resourceToRemove.copy(authDomain = Set.empty))
-  }
-
   override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
       groupId: WorkbenchGroupIdentity,
       samRequestContext: SamRequestContext
@@ -127,12 +122,8 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     policies -= policy
   }
 
-  override def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO {
-    val deletePolicies = policies.collect {
-      case (policyId @ FullyQualifiedPolicyId(toDelete, _), _) if toDelete == resourceId => policyId
-    }
-    policies.subtractAll(deletePolicies)
-  }
+  override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] =
+    IO.pure(List.empty)
 
   override def listAccessPolicies(
       resourceTypeName: ResourceTypeName,

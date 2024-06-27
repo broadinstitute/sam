@@ -201,7 +201,7 @@ class ResourceService(
     for {
       resourceIdErrors <- IO.pure(validateUrlSafe(resourceId.value))
       ownerPolicyErrors <- IO.pure(validateOwnerPolicyExists(resourceType, policies, parentOpt))
-      policyErrors <- policies.toList.traverse(policy => validatePolicy(resourceType, policy)).map(_.flatten)
+      policyErrors <- policies.toList.traverse(policy => validatePolicy(resourceType, resourceId, policy)).map(_.flatten)
       authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId, samRequestContext)
     } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
 
@@ -332,16 +332,29 @@ class ResourceService(
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- checkNoChildren(resource, samRequestContext)
+      _ <- checkNoPoliciesInUse(resource, samRequestContext)
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
       _ <- deleteActionManagedIdentitiesForResource(resource, samRequestContext)
 
-      _ <- accessPolicyDAO.deleteAllResourcePolicies(resource, samRequestContext)
-      _ <- maybeDeleteResource(resource, samRequestContext)
+      // leave a tomb stone if the resource type does not allow reuse
+      leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
+      _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
     } yield ()
+
+  private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
+      if (problematicGroups.nonEmpty)
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
+            ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")
+          )
+        )
+      else IO.unit
+    }
 
   private def deleteActionManagedIdentitiesForResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     azureService
@@ -384,17 +397,6 @@ class ResourceService(
       }
     } yield policiesToDelete
 
-  private def maybeDeleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    resourceTypes.get(resource.resourceTypeName) match {
-      case Some(resourceType) if resourceType.reuseIds => accessPolicyDAO.deleteResource(resource, samRequestContext)
-      case _ =>
-        for {
-          _ <- accessPolicyDAO.removeAuthDomainFromResource(resource, samRequestContext)
-          // orphan the resource so it disappears from the parent
-          _ <- accessPolicyDAO.deleteResourceParent(resource, samRequestContext)
-        } yield ()
-    }
-
   def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] =
     accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext)
 
@@ -416,7 +418,7 @@ class ResourceService(
   ): IO[AccessPolicy] =
     for {
       policy <- makeValidatablePolicy(policyName, policyMembership, samRequestContext)
-      _ <- validatePolicy(resourceType, policy).map {
+      _ <- validatePolicy(resourceType, resource.resourceId, policy).map {
         case Some(errorReport) =>
           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "You have specified an invalid policy", errorReport))
         case None =>
@@ -586,7 +588,7 @@ class ResourceService(
     * @param policy
     * @return
     */
-  private[service] def validatePolicy(resourceType: ResourceType, policy: ValidatableAccessPolicy): IO[Option[ErrorReport]] =
+  private[service] def validatePolicy(resourceType: ResourceType, resourceId: ResourceId, policy: ValidatableAccessPolicy) =
     for {
       descendantPermissionsErrors <- validateDescendantPermissions(policy.descendantPermissions)
     } yield {
@@ -595,11 +597,24 @@ class ResourceService(
           validateActions(resourceType, policy.actions) ++
           validateRoles(resourceType, policy.roles) ++
           validateUrlSafe(policy.policyName.value) ++
-          descendantPermissionsErrors
+          descendantPermissionsErrors ++
+          validateResourceTypeAdminDescendantPermissions(resourceType, resourceId, policy.descendantPermissions)
 
       if (validationErrors.nonEmpty) {
         Some(ErrorReport("You have specified an invalid policy", validationErrors.toSeq))
       } else None
+    }
+
+  private[service] def validateResourceTypeAdminDescendantPermissions(
+      resourceType: ResourceType,
+      resourceId: ResourceId,
+      descendantPermissions: Set[AccessPolicyDescendantPermissions]
+  ): Set[ErrorReport] =
+    descendantPermissions.collect {
+      case descendantPermissions if resourceType.name.isResourceTypeAdmin && !descendantPermissions.resourceType.value.equalsIgnoreCase(resourceId.value) =>
+        ErrorReport(
+          s"Resource type admin policies can only have descendant permissions for their matching resource type, ${descendantPermissions.resourceType} is a different type"
+        )
     }
 
   /** A valid email is one that matches the email address for a previously persisted WorkbenchSubject.
