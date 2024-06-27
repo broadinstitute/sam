@@ -290,12 +290,9 @@ class TosServiceSpec(_system: ActorSystem)
               tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
 
-            val userTosDetails: TermsOfServiceDetails =
+            val userTosDetails: Option[TermsOfServiceDetails] =
               runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
-            userTosDetails.isCurrentVersion shouldBe false
-            userTosDetails.permitsSystemUsage shouldBe false
-            userTosDetails.acceptedOn shouldBe None
-            userTosDetails.latestAcceptedVersion shouldBe None
+            userTosDetails shouldBe None
           }
         }
       }
@@ -317,12 +314,9 @@ class TosServiceSpec(_system: ActorSystem)
               tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
 
-            val userTosDetails: TermsOfServiceDetails =
+            val userTosDetails: Option[TermsOfServiceDetails] =
               runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
-            userTosDetails.isCurrentVersion shouldBe false
-            userTosDetails.permitsSystemUsage shouldBe false
-            userTosDetails.acceptedOn shouldBe None
-            userTosDetails.latestAcceptedVersion shouldBe None
+            userTosDetails shouldBe None
           }
         }
       }
@@ -344,12 +338,9 @@ class TosServiceSpec(_system: ActorSystem)
               tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
 
-            val userTosDetails: TermsOfServiceDetails =
+            val userTosDetails: Option[TermsOfServiceDetails] =
               runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
-            userTosDetails.isCurrentVersion shouldBe false
-            userTosDetails.permitsSystemUsage shouldBe false
-            userTosDetails.acceptedOn shouldBe None
-            userTosDetails.latestAcceptedVersion shouldBe None
+            userTosDetails shouldBe None
           }
         }
       }
@@ -371,12 +362,9 @@ class TosServiceSpec(_system: ActorSystem)
               tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContext).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
 
-            val userTosDetails: TermsOfServiceDetails =
+            val userTosDetails: Option[TermsOfServiceDetails] =
               runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
-            userTosDetails.isCurrentVersion shouldBe false
-            userTosDetails.permitsSystemUsage shouldBe false
-            userTosDetails.acceptedOn shouldBe None
-            userTosDetails.latestAcceptedVersion shouldBe None
+            userTosDetails shouldBe None
           }
         }
       }
@@ -402,7 +390,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe false
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe false
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -430,7 +418,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe true
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe true
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -458,7 +446,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe true
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe true
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -486,7 +474,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe true
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe true
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -516,7 +504,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe true
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe true
             userTosDetails.permitsSystemUsage shouldBe true
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -544,7 +532,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe true
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe true
             userTosDetails.permitsSystemUsage shouldBe true
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -572,7 +560,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe true
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe true
             userTosDetails.permitsSystemUsage shouldBe true
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -600,7 +588,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe true
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe true
             userTosDetails.permitsSystemUsage shouldBe true
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -634,7 +622,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe false
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe false
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -665,7 +653,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe false
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowDisabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe false
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -696,7 +684,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe false
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodDisabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe false
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -727,7 +715,7 @@ class TosServiceSpec(_system: ActorSystem)
             complianceStatus.permitsSystemUsage shouldBe false
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe false
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -750,11 +738,11 @@ class TosServiceSpec(_system: ActorSystem)
               .thenReturn(IO.pure(Option(SamUserTos(defaultUser.id, tosVersion, TosTable.REJECT, rejectedOn))))
 
             val complianceStatus =
-              tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser).unsafeRunSync()
+              tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceComplianceStatus(defaultUser, samRequestContextWithUser).unsafeRunSync()
             complianceStatus.permitsSystemUsage shouldBe false
 
             val userTosDetails: TermsOfServiceDetails =
-              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser))
+              runAndWait(tosServiceV2GracePeriodEnabledAcceptanceWindowEnabled.getTermsOfServiceDetailsForUser(defaultUser.id, samRequestContextWithUser)).get
             userTosDetails.isCurrentVersion shouldBe false
             userTosDetails.permitsSystemUsage shouldBe false
             userTosDetails.acceptedOn shouldBe Option(acceptedOn)
@@ -791,7 +779,7 @@ class TosServiceSpec(_system: ActorSystem)
 
         // Act
         val userTosDetails: TermsOfServiceDetails =
-          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, SamRequestContext(None, None, Some(adminUser))))
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, SamRequestContext(None, None, Some(adminUser)))).get
 
         // Assert
         userTosDetails should have {
@@ -814,7 +802,7 @@ class TosServiceSpec(_system: ActorSystem)
 
         // Act
         val userTosDetails: TermsOfServiceDetails =
-          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, SamRequestContext(None, None, Some(defaultUser))))
+          runAndWait(tosService.getTermsOfServiceDetailsForUser(defaultUser.id, SamRequestContext(None, None, Some(defaultUser)))).get
 
         // Assert
         userTosDetails should have {

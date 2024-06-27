@@ -49,7 +49,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
       .getTermsOfServiceComplianceStatus(any[SamUser], any[SamRequestContext])
 
     lenient()
-      .doReturn(IO.pure(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)))
+      .doReturn(IO.pure(None))
       .when(tosService)
       .getTermsOfServiceDetailsForUser(any[WorkbenchUserId], any[SamRequestContext])
     lenient()
@@ -71,7 +71,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     val action = if (isAccepted) TosTable.ACCEPT else TosTable.REJECT
     val rightNow = Instant.now
     lenient()
-      .doReturn(IO.pure(TermsOfServiceDetails(Option(version), Option(rightNow), permitsSystemUsage = isAccepted, true)))
+      .doReturn(IO.pure(Option(TermsOfServiceDetails(Option(version), Option(rightNow), permitsSystemUsage = isAccepted, true))))
       .when(tosService)
       .getTermsOfServiceDetailsForUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 
