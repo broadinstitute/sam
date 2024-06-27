@@ -93,30 +93,21 @@ class TosService(
   def getTermsOfServiceDetailsForUser(
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
-  ): IO[TermsOfServiceDetails] =
-    ensureAdminIfNeeded[TermsOfServiceDetails](userId, samRequestContext) {
+  ): IO[Option[TermsOfServiceDetails]] =
+    ensureAdminIfNeeded[Option[TermsOfServiceDetails]](userId, samRequestContext) {
       for {
-        latestTermsOfServiceAcceptance <- getLatestTermsOfServiceAcceptance(userId, samRequestContext)
+        latestTermsOfServiceAcceptance <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
         latestTermsOfServiceAction <- directoryDao.getUserTermsOfService(userId, samRequestContext)
         requestedUser <- loadUser(userId, samRequestContext)
-      } yield TermsOfServiceDetails(
-        latestTermsOfServiceAcceptance.version,
-        latestTermsOfServiceAcceptance.createdAt,
-        tosAcceptancePermitsSystemUsage(requestedUser, latestTermsOfServiceAction),
-        latestTermsOfServiceAcceptance.version.equals(tosConfig.version)
-      )
-    }
-
-  private def getLatestTermsOfServiceAcceptance(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUserTos] = for {
-    maybeTermsOfServiceRecord <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
-    latestUserTermsOfService <- maybeTermsOfServiceRecord
-      .map(IO.pure)
-      .getOrElse(
-        IO.raiseError(
-          new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"Could not find current terms of service for user:${userId}"))
+      } yield latestTermsOfServiceAcceptance.map(tosDetails =>
+        TermsOfServiceDetails(
+          Option(tosDetails.version),
+          Option(tosDetails.createdAt),
+          tosAcceptancePermitsSystemUsage(requestedUser, latestTermsOfServiceAction),
+          latestTermsOfServiceAcceptance.exists(_.version.equals(tosConfig.version))
         )
       )
-  } yield latestUserTermsOfService
+    }
 
   private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     directoryDao.loadUser(userId, samRequestContext).map {
