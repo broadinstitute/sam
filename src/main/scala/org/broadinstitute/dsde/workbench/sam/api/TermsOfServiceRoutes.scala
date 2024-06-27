@@ -79,10 +79,8 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
               val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
               pathEndOrSingleSlash {
                 getWithTelemetry(samRequestContext) {
-                  rejectEmptyResponse {
-                    complete {
-                      tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
-                    }
+                  complete {
+                    tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
                   }
                 }
               } ~
@@ -121,10 +119,8 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
                 val requestUserId = WorkbenchUserId(userId)
                 pathEndOrSingleSlash {
                   getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
-                    rejectEmptyResponse {
-                      complete {
-                        tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
-                      }
+                    complete {
+                      tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
                     }
                   }
                 } ~

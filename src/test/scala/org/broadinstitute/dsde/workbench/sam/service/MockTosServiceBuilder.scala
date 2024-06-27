@@ -1,7 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
+import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.model.{TermsOfServiceComplianceStatus, TermsOfServiceDetails, TermsOfServiceHistory, TermsOfServiceHistoryRecord}
@@ -49,11 +50,11 @@ case class MockTosServiceBuilder() extends MockitoSugar {
       .getTermsOfServiceComplianceStatus(any[SamUser], any[SamRequestContext])
 
     lenient()
-      .doReturn(IO.pure(None))
+      .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
       .when(tosService)
       .getTermsOfServiceDetailsForUser(any[WorkbenchUserId], any[SamRequestContext])
     lenient()
-      .doReturn(IO.pure(TermsOfServiceHistory(List.empty)))
+      .doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"")(new ErrorReportSource("MockTosServiceBuilder")))))
       .when(tosService)
       .getTermsOfServiceHistoryForUser(any[WorkbenchUserId], any[SamRequestContext], any[Integer])
   }
@@ -71,7 +72,7 @@ case class MockTosServiceBuilder() extends MockitoSugar {
     val action = if (isAccepted) TosTable.ACCEPT else TosTable.REJECT
     val rightNow = Instant.now
     lenient()
-      .doReturn(IO.pure(Option(TermsOfServiceDetails(Option(version), Option(rightNow), permitsSystemUsage = isAccepted, true))))
+      .doReturn(IO.pure(TermsOfServiceDetails(version, rightNow, permitsSystemUsage = isAccepted, true)))
       .when(tosService)
       .getTermsOfServiceDetailsForUser(ArgumentMatchers.eq(samUser.id), any[SamRequestContext])
 

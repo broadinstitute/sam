@@ -7,9 +7,15 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceRoleName, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
-import org.broadinstitute.dsde.workbench.sam.model.api._
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceRoleName, ResourceTypeName, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.api.{
+  SamUser,
+  SamUserAttributesRequest,
+  SamUserCombinedStateResponse,
+  SamUserRegistrationRequest,
+  SamUserResponse
+}
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.enrichAny
@@ -198,7 +204,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
           samUser,
           allowances,
           maybeAttributes,
-          termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
+          termsOfServiceDetails,
           Map("enterpriseFeatures" -> enterpriseFeatures.toJson)
         )
       }
@@ -217,4 +223,5 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
         }
       }
     }
+
 }

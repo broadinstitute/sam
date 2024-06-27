@@ -2078,9 +2078,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     googleExtensions.fireAndForgetNotifications(messages)
 
-    // fireAndForgetNotifications is asynchronous, so we need to wait for the future to complete
-    Thread.sleep(500)
-
     val messageLog: ConcurrentLinkedQueue[String] = mockGoogleNotificationPubSubDAO.messageLog
     val formattedMessages: Set[String] = messages.map(m => topicName + "|" + NotificationFormat.write(m).toString())
     messageLog should contain theSameElementsAs formattedMessages
