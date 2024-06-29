@@ -67,6 +67,8 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
     import WorkbenchIdentityJsonSupport._
     import org.broadinstitute.dsde.workbench.sam.google.SamGoogleModelJsonSupport._
 
+    val foo = report.map { case (group, syncReportItems) => (group, syncReportItems.groupBy(_.operation)) }
+
     if (errorReports.isEmpty) {
       logger.info(s"synchronized google group", StructuredArguments.raw("syncDetail", report.toJson.compactPrint))
       consumer.ack()

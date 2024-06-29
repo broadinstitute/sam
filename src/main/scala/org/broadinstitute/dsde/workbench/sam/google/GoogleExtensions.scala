@@ -718,6 +718,39 @@ class GoogleExtensions(
   }
 
   override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
+
+  def synchronouslyRemoveMemberFromGoogleGroup(
+      policyIdentity: FullyQualifiedPolicyId,
+      subject: WorkbenchSubject,
+      samRequestContext: SamRequestContext
+  ): IO[Unit] = {
+    val maybeEmail = subject match {
+      case userIdentity: WorkbenchUserId =>
+        directoryDAO.loadUser(userIdentity, samRequestContext).flatMap {
+          case Some(user) => IO.some(user.email)
+          case None => IO.none
+        }
+      case groupIdentity: WorkbenchGroupName =>
+        directoryDAO.loadGroupEmail(groupIdentity, samRequestContext)
+      case _ =>
+        IO(logger.info(s"Subject $subject is not a user or group, skipping removal from google group")).map(_ => None)
+
+    }
+    val maybePolicy = accessPolicyDAO.loadPolicy(policyIdentity, samRequestContext)
+
+    (maybeEmail, maybePolicy).tupled.flatMap {
+      case (Some(email), Some(policy)) =>
+        for {
+          _ <- IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(policy.email, email)))
+        } yield logger.info(s"Synchronously removed $email from google group ${policy.email}")
+      case _ =>
+        IO(
+          logger.warn(
+            s"Could not remove $subject from google group for policy $policyIdentity because either the policy or subject could not be found. Policy: ${maybePolicy}, Subject: ${maybeEmail}."
+          )
+        )
+    }
+  }
 }
 
 case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {

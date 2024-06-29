@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.audit.SamAuditModelJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.audit._
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
+import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{
   AccessPolicyMembershipRequest,
@@ -27,7 +28,6 @@ import org.broadinstitute.dsde.workbench.sam.model.api.{
   SamUser
 }
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-
 import java.util.UUID
 import scala.concurrent.ExecutionContext
 
@@ -472,8 +472,10 @@ class ResourceService(
               case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"policy $policyId does not exist")))
               case Some(existingPolicy) =>
                 Applicative[IO].whenA(existingPolicy.members != newMembers) {
+                  val membersToRemove = existingPolicy.members -- newMembers
                   for {
                     _ <- accessPolicyDAO.overwritePolicyMembers(policyId, newMembers, samRequestContext)
+                    _ <- membersToRemove.toList.map(member => removeSubjectFromPolicyGoogleGroupsIfChanged(policyId, member, samRequestContext)).sequence_
                     _ <- onPolicyUpdate(policyId, originalPolicies, samRequestContext)
                   } yield ()
                 }
@@ -526,7 +528,9 @@ class ResourceService(
             // short cut if access policy is unchanged
             IO.pure(newAccessPolicy)
           } else {
+            val membersToRemove = existingAccessPolicy.members -- newAccessPolicy.members
             for {
+              _ <- membersToRemove.toList.map(member => removeSubjectFromPolicyGoogleGroupsIfChanged(policyIdentity, member, samRequestContext)).sequence_
               result <- accessPolicyDAO.overwritePolicy(newAccessPolicy, samRequestContext)
               _ <- onPolicyUpdate(policyIdentity, originalPolicies, samRequestContext)
             } yield result
@@ -713,8 +717,19 @@ class ResourceService(
       originalPolicies <- accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext)
       _ <- failWhenPolicyNotExists(originalPolicies, policyIdentity)
       policyChanged <- directoryDAO.removeGroupMember(policyIdentity, subject, samRequestContext)
+      _ <- Applicative[IO].whenA(policyChanged)(removeSubjectFromPolicyGoogleGroupsIfChanged(policyIdentity, subject, samRequestContext))
       _ <- onPolicyUpdateIfChanged(policyIdentity, originalPolicies, samRequestContext)(policyChanged)
     } yield policyChanged
+
+  private def removeSubjectFromPolicyGoogleGroupsIfChanged(
+      policyId: FullyQualifiedPolicyId,
+      subject: WorkbenchSubject,
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    cloudExtensions match {
+      case extensions: GoogleExtensions => extensions.synchronouslyRemoveMemberFromGoogleGroup(policyId, subject, samRequestContext)
+      case _ => IO.unit
+    }
 
   def failWhenPolicyNotExists(policies: Iterable[AccessPolicy], policyId: FullyQualifiedPolicyId): IO[Unit] =
     IO.raiseUnless(policies.exists(_.id == policyId)) {
