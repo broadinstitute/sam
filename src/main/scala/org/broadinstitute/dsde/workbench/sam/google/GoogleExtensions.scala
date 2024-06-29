@@ -726,10 +726,7 @@ class GoogleExtensions(
   ): IO[Unit] = {
     val maybeEmail = subject match {
       case userIdentity: WorkbenchUserId =>
-        directoryDAO.loadUser(userIdentity, samRequestContext).flatMap {
-          case Some(user) => IO.some(user.email)
-          case None => IO.none
-        }
+        getUserProxy(userIdentity)
       case groupIdentity: WorkbenchGroupName =>
         directoryDAO.loadGroupEmail(groupIdentity, samRequestContext)
       case _ =>
@@ -742,7 +739,7 @@ class GoogleExtensions(
       case (Some(email), Some(policy)) =>
         for {
           _ <- IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(policy.email, email)))
-        } yield logger.info(s"Synchronously removed $email from google group ${policy.email}")
+        } yield logger.info(s"Synchronously removed $email for subject $subject from google group ${policy.email}")
       case _ =>
         IO(
           logger.warn(
