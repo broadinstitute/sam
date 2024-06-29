@@ -28,6 +28,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.{
   SamUser
 }
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+
 import java.util.UUID
 import scala.concurrent.ExecutionContext
 
