@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchEmail}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource}
 import spray.json.DefaultJsonProtocol
 
 object SamGoogleModelJsonSupport {
@@ -9,7 +9,6 @@ object SamGoogleModelJsonSupport {
   import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 
   implicit val SyncReportItemFormat = jsonFormat4(SyncReportItem.apply)
-  implicit val SyncReportLogItemFormat = jsonFormat5(SyncReportLogItem.apply)
 }
 
 /** A SyncReportItem represents the results of synchronizing a single member of a google group. Synchronizing a google group will result in a collection of
@@ -32,9 +31,3 @@ object SyncReportItem {
       _ => SyncReportItem(operation, email, workbenchGroupIdentity, None)
     )
 }
-
-object SyncReportLogItem {
-  def fromSyncReportItem(group: WorkbenchEmail, syncReportItem: SyncReportItem): SyncReportLogItem =
-    SyncReportLogItem(group.value, syncReportItem.operation, syncReportItem.email, syncReportItem.workbenchGroupIdentity, syncReportItem.errorReport)
-}
-final case class SyncReportLogItem(group: String, operation: String, email: String, workbenchGroupIdentity: String, errorReport: Option[ErrorReport])
