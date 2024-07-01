@@ -7,7 +7,15 @@ import scalikejdbc._
 import java.time.Instant
 
 final case class GroupPK(value: Long) extends DatabaseKey
-final case class GroupRecord(id: GroupPK, name: WorkbenchGroupName, email: WorkbenchEmail, updatedDate: Option[Instant], synchronizedDate: Option[Instant])
+final case class GroupRecord(
+    id: GroupPK,
+    name: WorkbenchGroupName,
+    email: WorkbenchEmail,
+    version: Integer,
+    lastSynchronizedVersion: Option[Integer],
+    updatedDate: Option[Instant],
+    synchronizedDate: Option[Instant]
+)
 
 object GroupTable extends SQLSyntaxSupportWithDefaultSamDB[GroupRecord] {
   override def tableName: String = "SAM_GROUP"
@@ -17,6 +25,8 @@ object GroupTable extends SQLSyntaxSupportWithDefaultSamDB[GroupRecord] {
     rs.get(e.id),
     rs.get(e.name),
     rs.get(e.email),
+    rs.get(e.version),
+    rs.get(e.lastSynchronizedVersion),
     rs.timestampOpt(e.updatedDate).map(_.toInstant),
     rs.timestampOpt(e.synchronizedDate).map(_.toInstant)
   )

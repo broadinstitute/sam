@@ -257,10 +257,13 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     }.toSeq
   }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] = {
-    groupSynchronizedDates += groupId -> new Date()
+  override def updateSynchronizedDateAndVersion(group: WorkbenchGroup, samRequestContext: SamRequestContext): IO[Unit] = {
+    groupSynchronizedDates += group.id -> new Date()
     IO.unit
   }
+
+  override def updateGroupUpdatedDateAndVersionWithSession(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] =
+    IO.unit
 
   override def loadSubjectEmail(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = IO {
     subject match {

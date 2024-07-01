@@ -15,6 +15,8 @@ import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 
+class GroupAlreadySynchronized extends Throwable
+
 /** This class makes sure that our google groups have the right members.
   *
   * For the simple case it merely compares group membership given by directoryDAO against group membership given by googleDirectoryDAO and does the appropriate
@@ -51,7 +53,15 @@ class GoogleGroupSynchronizer(
       IO.pure(Map.empty)
     } else {
       for {
-        group <- loadSamGroup(groupId, samRequestContext)
+        group: WorkbenchGroup <- loadSamGroup(groupId, samRequestContext)
+        // If group.version > group.lastSynchronizedVersion, then the group has been updated since the last sync
+        // Else Noop
+        _ <-
+          if (group.version <= group.lastSynchronizedVersion.getOrElse(Integer.valueOf(0))) {
+            IO.unit
+          } else {
+            IO.raiseError(new GroupAlreadySynchronized)
+          }
         members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
         subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
         googleMemberEmails <- loadGoogleGroupMemberEmailsMaybeCreateGroup(group, samRequestContext)
@@ -63,7 +73,7 @@ class GoogleGroupSynchronizer(
         addedUserSyncReports <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
         removedUserSyncReports <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
 
-        _ <- directoryDAO.updateSynchronizedDate(groupId, samRequestContext)
+        _ <- directoryDAO.updateSynchronizedDateAndVersion(group, samRequestContext)
       } yield Map(group.email -> Seq(addedUserSyncReports, removedUserSyncReports).flatten) ++ subGroupSyncs.flatten
     }
 

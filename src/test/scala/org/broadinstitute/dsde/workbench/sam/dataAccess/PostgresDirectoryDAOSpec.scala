@@ -248,6 +248,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         loadedGroup.members should contain theSameElementsAs Set(subGroup.id)
+
+        loadedGroup.version shouldEqual 2
       }
 
       "add users to groups" in {
@@ -259,6 +261,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         loadedGroup.members should contain theSameElementsAs Set(defaultUser.id)
+
+        loadedGroup.version shouldEqual 2
       }
 
       "add policies to groups" in {
@@ -272,6 +276,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         loadedGroup.members should contain theSameElementsAs Set(defaultPolicy.id)
+
+        loadedGroup.version shouldEqual 2
       }
 
       "add groups to policies" in {
@@ -286,6 +292,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(defaultGroup.id)
+
+        loadedPolicy.version shouldEqual 2
       }
 
       "add users to policies" in {
@@ -300,6 +308,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(defaultUser.id)
+
+        loadedPolicy.version shouldEqual 2
       }
 
       "add policies to other policies" in {
@@ -316,6 +326,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(memberPolicy.id)
+
+        loadedPolicy.version shouldEqual 2
       }
 
       "trying to add a group that does not exist will fail" in {
@@ -373,10 +385,13 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.addGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
         val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterAdd.members should contain theSameElementsAs Set(subGroup.id)
+        afterAdd.version shouldEqual 2
+
         dao.removeGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
 
         val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterRemove.members shouldBe empty
+        afterRemove.version shouldEqual 3
       }
 
       "remove users from groups" in {
@@ -387,10 +402,13 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.addGroupMember(defaultGroup.id, defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
         val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterAdd.members should contain theSameElementsAs Set(defaultUser.id)
+        afterAdd.version shouldEqual 2
+
         dao.removeGroupMember(defaultGroup.id, defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
 
         val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterRemove.members shouldBe empty
+        afterRemove.version shouldEqual 3
       }
 
       "remove policies from groups" in {
@@ -403,10 +421,13 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.addGroupMember(defaultGroup.id, defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe true
         val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterAdd.members should contain theSameElementsAs Set(defaultPolicy.id)
+        afterAdd.version shouldEqual 2
+
         dao.removeGroupMember(defaultGroup.id, defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe true
 
         val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterRemove.members shouldBe empty
+        afterRemove.version shouldEqual 3
       }
 
       "remove groups from policies" in {
@@ -420,12 +441,16 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.addGroupMember(defaultPolicy.id, defaultGroup.id, samRequestContext).unsafeRunSync()
         val afterAdd = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         afterAdd.members should contain theSameElementsAs Set(defaultGroup.id)
+        afterAdd.version shouldEqual 2
+
         policyDAO.listFlattenedPolicyMembers(defaultPolicy.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(defaultUser)
         dao.removeGroupMember(defaultPolicy.id, defaultGroup.id, samRequestContext).unsafeRunSync()
 
         val afterRemove =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         afterRemove.members shouldBe empty
+        afterRemove.version shouldEqual 3
+
         policyDAO.listFlattenedPolicyMembers(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe empty
       }
 
@@ -442,6 +467,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members shouldBe empty
+        loadedPolicy.version shouldBe 3
       }
 
       "remove policies from other policies" in {
@@ -459,6 +485,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members shouldBe empty
+        loadedPolicy.version shouldBe 3
       }
     }
 
@@ -1320,7 +1347,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        dao.updateSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(defaultGroup, samRequestContext).unsafeRunSync()
 
         val loadedDate = dao.getSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail("failed to load date"))
         loadedDate.getTime should equal(new Date().getTime +- 2.seconds.toMillis)
@@ -1332,7 +1359,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
 
-        dao.updateSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(defaultPolicy, samRequestContext).unsafeRunSync()
 
         val loadedDate = dao.getSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail("failed to load date"))
         loadedDate.getTime should equal(new Date().getTime +- 2.seconds.toMillis)

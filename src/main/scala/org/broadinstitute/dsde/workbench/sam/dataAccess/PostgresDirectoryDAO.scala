@@ -85,7 +85,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         val r = ResourceTable.syntax("r")
         val rt = ResourceTypeTable.syntax("rt")
 
-        samsql"""select ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+        samsql"""select ${g.result.email}, ${gm.result.memberUserId}, ${sg.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.version}, ${g.result.lastSynchronizedVersion}
                   from ${GroupTable as g}
                   left join ${GroupMemberTable as gm} on ${g.id} = ${gm.groupId}
                   left join ${GroupTable as sg} on ${gm.memberGroupId} = ${sg.id}
@@ -100,7 +100,9 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
               rs.stringOpt(sg.resultName.name).map(WorkbenchGroupName),
               rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
               rs.stringOpt(r.resultName.name).map(ResourceId(_)),
-              rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_))
+              rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)),
+              rs.get[Integer](g.resultName.version),
+              rs.get[Option[Integer]](g.resultName.lastSynchronizedVersion)
             )
           }
           .list()
@@ -112,13 +114,16 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       } else {
         val email = results.head._1
         val members: Set[WorkbenchSubject] = results.collect {
-          case (_, Some(userId), None, None, None, None) => userId
-          case (_, None, Some(subGroupName), None, None, None) => subGroupName
-          case (_, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName)) =>
+          case (_, Some(userId), None, None, None, None, _, _) => userId
+          case (_, None, Some(subGroupName), None, None, None, _, _) => subGroupName
+          case (_, None, Some(_), Some(policyName), Some(resourceName), Some(resourceTypeName), _, _) =>
             FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceName), policyName)
         }.toSet
 
-        Option(BasicWorkbenchGroup(groupName, members, email))
+        val version = results.head._7
+        val lastSynchronized = results.head._8
+
+        Option(BasicWorkbenchGroup(groupName, members, email, version, lastSynchronized))
       }
 
   override def loadGroupEmail(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
@@ -154,7 +159,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     serializableWriteTransaction("addGroupMember", samRequestContext) { implicit session =>
       val numberAdded = insertGroupMembers(queryForGroupPKs(Set(groupId)).head, Set(addMember))
       if (numberAdded > 0) {
-        updateGroupUpdatedDate(groupId)
+        updateGroupUpdatedDateAndVersion(groupId)
         true
       } else {
         false
@@ -169,10 +174,15 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val removed = removeGroupMember(groupId, removeMember)
 
       if (removed) {
-        updateGroupUpdatedDate(groupId)
+        updateGroupUpdatedDateAndVersion(groupId)
       }
 
       removed
+    }
+
+  override def updateGroupUpdatedDateAndVersionWithSession(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("updateGroupUpdatedDateAndVersionWithSession", samRequestContext) { implicit session =>
+      updateGroupUpdatedDateAndVersion(groupId)
     }
 
   override def isGroupMember(groupId: WorkbenchGroupIdentity, member: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Boolean] =
@@ -180,10 +190,13 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       isGroupMember(groupId, member)
     }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] =
-    serializableWriteTransaction("updateSynchronizedDate", samRequestContext) { implicit session =>
+  override def updateSynchronizedDateAndVersion(group: WorkbenchGroup, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("updateSynchronizedDateAndVersion", samRequestContext) { implicit session =>
       val g = GroupTable.column
-      samsql"update ${GroupTable.table} set ${g.synchronizedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})"
+      samsql"""update ${GroupTable.table}
+              set ${g.synchronizedDate} = ${Instant.now()},
+                  ${g.lastSynchronizedVersion} = ${group.version}
+              where ${g.id} = (${workbenchGroupIdentityToGroupPK(group.id)})"""
         .update()
         .apply()
     }
