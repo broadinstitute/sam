@@ -12,22 +12,22 @@ trait TermsOfServiceDetailsMatchers {
     new HavePropertyMatcher[TermsOfServiceDetails, String] {
       def apply(termsOfServiceDetails: TermsOfServiceDetails): HavePropertyMatchResult[String] =
         HavePropertyMatchResult(
-          termsOfServiceDetails.latestAcceptedVersion == expectedValue,
+          termsOfServiceDetails.latestAcceptedVersion.get == expectedValue,
           "latestAcceptedVersion",
           expectedValue,
-          termsOfServiceDetails.latestAcceptedVersion
+          termsOfServiceDetails.latestAcceptedVersion.get
         )
     }
 
   def acceptedOn(expectedValue: Instant): HavePropertyMatcher[TermsOfServiceDetails, Instant] =
     new HavePropertyMatcher[TermsOfServiceDetails, Instant] {
       def apply(termsOfServiceDetails: TermsOfServiceDetails): HavePropertyMatchResult[Instant] = {
-        val diff = MILLIS.between(termsOfServiceDetails.acceptedOn, expectedValue)
+        val diff = MILLIS.between(termsOfServiceDetails.acceptedOn.get, expectedValue)
         HavePropertyMatchResult(
           diff < 1000,
           "acceptedOn",
           expectedValue,
-          termsOfServiceDetails.acceptedOn
+          termsOfServiceDetails.acceptedOn.get
         )
       }
     }

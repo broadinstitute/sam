@@ -85,7 +85,12 @@ object UserStatusDetails {
     userAcceptedVersion: Option[String]
 )
 
-@Lenses final case class TermsOfServiceDetails(latestAcceptedVersion: String, acceptedOn: Instant, permitsSystemUsage: Boolean, isCurrentVersion: Boolean)
+@Lenses final case class TermsOfServiceDetails(
+    latestAcceptedVersion: Option[String],
+    acceptedOn: Option[Instant],
+    permitsSystemUsage: Boolean,
+    isCurrentVersion: Boolean
+)
 @Lenses final case class TermsOfServiceHistory(history: List[TermsOfServiceHistoryRecord])
 @Lenses final case class TermsOfServiceHistoryRecord(action: String, version: String, timestamp: Instant)
 
@@ -101,7 +106,9 @@ object UserStatusDetails {
     descendantRoles: Map[ResourceTypeName, Set[ResourceRoleName]] = Map.empty
 )
 
-@Lenses final case class ResourceTypeName(value: String) extends ValueObject
+@Lenses final case class ResourceTypeName(value: String) extends ValueObject {
+  def isResourceTypeAdmin: Boolean = value == SamResourceTypes.resourceTypeAdminName.value
+}
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId) {
   override def toString: String = s"$resourceTypeName/$resourceId"
