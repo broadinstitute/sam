@@ -209,7 +209,7 @@ jobs:
         env:
           rawls_base_test_entrypoint: "testOnly -- -l ProdTest -l NotebooksCanaryTest"
           test-context: ${{ needs.prepare-configs.outputs.test-context }}
-        uses: broadinstitute/workflow-dispatch@v3
+        uses: broadinstitute/workflow-dispatch@v4
         with:
           workflow: .github/workflows/rawls-swat-tests.yaml
           repo: broadinstitute/terra-github-workflows
