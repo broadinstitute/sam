@@ -2216,7 +2216,7 @@ class ResourceServiceSpec
     policyDAO.overwritePolicy(policy.get.copy(members = Set(dummyUser.id)), samRequestContext).unsafeRunSync()
     val policy2 = policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync()
     policy2.map(_.copy(email = WorkbenchEmail(""))) should equal(
-      Some(AccessPolicy(resourceAndPolicyName, Set(dummyUser.id), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false))
+      Some(AccessPolicy(resourceAndPolicyName, Set(dummyUser.id), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false, version = 2))
     )
 
     // call it again to ensure it does not fail
@@ -2225,7 +2225,7 @@ class ResourceServiceSpec
     // verify the policy has not changed
     val policy3 = policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync()
     policy3.map(_.copy(email = WorkbenchEmail(""))) should equal(
-      Some(AccessPolicy(resourceAndPolicyName, Set(dummyUser.id), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false))
+      Some(AccessPolicy(resourceAndPolicyName, Set(dummyUser.id), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false, version = 2))
     )
   }
 
