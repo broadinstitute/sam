@@ -735,9 +735,9 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResource(resource1, samRequestContext).unsafeRunSync()
         dao.createResource(resource2, samRequestContext).unsafeRunSync()
 
-        dirDao.updateSynchronizedDateAndVersion(policy1.id, samRequestContext).unsafeRunSync()
-        dirDao.updateSynchronizedDateAndVersion(policy3.id, samRequestContext).unsafeRunSync()
-        dirDao.updateSynchronizedDateAndVersion(policy4.id, samRequestContext).unsafeRunSync()
+        dirDao.updateSynchronizedDateAndVersion(policy1, samRequestContext).unsafeRunSync()
+        dirDao.updateSynchronizedDateAndVersion(policy3, samRequestContext).unsafeRunSync()
+        dirDao.updateSynchronizedDateAndVersion(policy4, samRequestContext).unsafeRunSync()
 
         // finds all synced policies when no members specified
         dao
