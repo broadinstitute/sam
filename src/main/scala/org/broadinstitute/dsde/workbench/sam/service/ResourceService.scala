@@ -287,7 +287,7 @@ class ResourceService(
         } else IO.unit
       policies <- listResourcePolicies(resource, samRequestContext)
       _ <- accessPolicyDAO.addResourceAuthDomain(resource, authDomains, samRequestContext)
-      _ = policies.foreach(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(FullyQualifiedPolicyId(resource, p.policyName), samRequestContext))
+      _ <- policies.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(FullyQualifiedPolicyId(resource, p.policyName), samRequestContext))
       _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), samRequestContext)
       authDomains <- loadResourceAuthDomain(resource, samRequestContext)
     } yield authDomains

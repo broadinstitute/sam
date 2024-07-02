@@ -11,8 +11,8 @@ final case class GroupRecord(
     id: GroupPK,
     name: WorkbenchGroupName,
     email: WorkbenchEmail,
-    version: Integer,
-    lastSynchronizedVersion: Option[Integer],
+    version: Int,
+    lastSynchronizedVersion: Option[Int],
     updatedDate: Option[Instant],
     synchronizedDate: Option[Instant]
 )

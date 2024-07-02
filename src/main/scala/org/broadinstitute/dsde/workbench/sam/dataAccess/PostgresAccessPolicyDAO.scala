@@ -1108,8 +1108,8 @@ class PostgresAccessPolicyDAO(
               rs.get[ResourceTypeName](rt.resultName.name),
               rs.get[WorkbenchEmail](g.resultName.email),
               rs.boolean(p.resultName.public),
-              rs.get[Integer](g.resultName.version),
-              rs.get[Option[Integer]](g.resultName.lastSynchronizedVersion)
+              rs.get[Int](g.resultName.version),
+              rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
             ),
             (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)))
           )
@@ -1240,8 +1240,8 @@ class PostgresAccessPolicyDAO(
           resource.resourceTypeName,
           rs.get[WorkbenchEmail](g.resultName.email),
           rs.boolean(p.resultName.public),
-          rs.get[Integer](g.resultName.version),
-          rs.get[Option[Integer]](g.resultName.lastSynchronizedVersion)
+          rs.get[Int](g.resultName.version),
+          rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
         ),
         (
           RoleResult(
@@ -1498,8 +1498,8 @@ class PostgresAccessPolicyDAO(
               rs.get[ResourceTypeName](rt.resultName.name),
               rs.get[WorkbenchEmail](g.resultName.email),
               rs.boolean(p.resultName.public),
-              rs.get[Integer](g.resultName.version),
-              rs.get[Option[Integer]](g.resultName.lastSynchronizedVersion)
+              rs.get[Int](g.resultName.version),
+              rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
             ),
             (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)))
           )
@@ -2072,8 +2072,8 @@ private final case class PolicyInfo(
     resourceTypeName: ResourceTypeName,
     email: WorkbenchEmail,
     public: Boolean,
-    version: Integer,
-    lastSynchronizedVersion: Option[Integer]
+    version: Int,
+    lastSynchronizedVersion: Option[Int]
 )
 private final case class RoleResult(resourceTypeName: Option[ResourceTypeName], role: Option[ResourceRoleName], descendantsOnly: Option[Boolean])
 private final case class ActionResult(resourceTypeName: Option[ResourceTypeName], action: Option[ResourceAction], descendantsOnly: Option[Boolean])

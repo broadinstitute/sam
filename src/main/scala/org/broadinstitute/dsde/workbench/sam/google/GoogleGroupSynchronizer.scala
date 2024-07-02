@@ -15,7 +15,8 @@ import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 
-class GroupAlreadySynchronized extends Throwable
+class GroupAlreadySynchronized(errorReport: ErrorReport = ErrorReport(StatusCodes.Conflict, "Group has already been synchronized"))
+    extends WorkbenchExceptionWithErrorReport(errorReport)
 
 /** This class makes sure that our google groups have the right members.
   *
@@ -54,10 +55,10 @@ class GoogleGroupSynchronizer(
     } else {
       for {
         group: WorkbenchGroup <- loadSamGroup(groupId, samRequestContext)
-        // If group.version > group.lastSynchronizedVersion, then the group has been updated since the last sync
+        // If group.version > group.lastSynchronizedVersion, then the group needs to be synchronized
         // Else Noop
         _ <-
-          if (group.version <= group.lastSynchronizedVersion.getOrElse(Integer.valueOf(0))) {
+          if (group.version > group.lastSynchronizedVersion.getOrElse(0)) {
             IO.unit
           } else {
             IO.raiseError(new GroupAlreadySynchronized)

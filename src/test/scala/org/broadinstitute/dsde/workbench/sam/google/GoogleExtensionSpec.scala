@@ -192,7 +192,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
       added.foreach(email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email.value.toLowerCase)))
       removed.foreach(email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchEmail(email.value.toLowerCase)))
-      verify(mockDirectoryDAO).updateSynchronizedDateAndVersion(target, samRequestContext)
+
+      target match {
+        case _: BasicWorkbenchGroup => verify(mockDirectoryDAO).updateSynchronizedDateAndVersion(target, samRequestContext)
+        case p: AccessPolicy =>
+          verify(mockDirectoryDAO).updateSynchronizedDateAndVersion(p.copy(members = p.members + CloudExtensions.allUsersGroupName), samRequestContext)
+      }
     }
   }
 

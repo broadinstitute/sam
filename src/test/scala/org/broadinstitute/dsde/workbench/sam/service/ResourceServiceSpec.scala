@@ -951,6 +951,48 @@ class ResourceServiceSpec
     }
   }
 
+  "addResourceAuthDomain" should "increment the group version of policy groups associated with the resource" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+    val managedGroupName = "fooGroup"
+    val secondMGroupName = "barGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUser, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(secondMGroupName), dummyUser, samRequestContext = samRequestContext))
+
+    val authDomain = NonEmptyList.of(WorkbenchGroupName(managedGroupName), WorkbenchGroupName(secondMGroupName))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+    )
+
+    val resourceAndPolicyName =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(constrainableResourceType.name, resource.resourceId), viewPolicyName)
+    val policy =
+      policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${resourceAndPolicyName}"))
+    policy.version shouldEqual 1
+
+    val resourceWithAuthDomain =
+      runAndWait(constrainableService.addResourceAuthDomain(resource.fullyQualifiedId, authDomain.toList.toSet, dummyUser.id, samRequestContext))
+    resourceWithAuthDomain shouldEqual authDomain.toList.toSet
+
+    val updatedPolicy =
+      policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${resourceAndPolicyName}"))
+    updatedPolicy.version shouldEqual 2
+
+  }
+
   "listUserResourceRoles" should "list the user's role when they have at least one role" in {
     assume(databaseEnabled, databaseEnabledClue)
 

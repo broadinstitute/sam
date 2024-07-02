@@ -101,8 +101,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
               rs.stringOpt(p.resultName.name).map(AccessPolicyName(_)),
               rs.stringOpt(r.resultName.name).map(ResourceId(_)),
               rs.stringOpt(rt.resultName.name).map(ResourceTypeName(_)),
-              rs.get[Integer](g.resultName.version),
-              rs.get[Option[Integer]](g.resultName.lastSynchronizedVersion)
+              rs.get[Int](g.resultName.version),
+              rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
             )
           }
           .list()
@@ -201,7 +201,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       samsql"""update ${GroupTable.table}
               set ${g.synchronizedDate} = ${Instant.now()},
                   ${g.lastSynchronizedVersion} = ${group.version}
-              where ${g.id} = (${workbenchGroupIdentityToGroupPK(group.id)}) and (COALESCE(${g.lastSynchronizedVersion}, 0) < ${group.version}"""
+              where ${g.id} = (${workbenchGroupIdentityToGroupPK(group.id)}) and COALESCE(${g.lastSynchronizedVersion}, 0) < ${group.version}"""
         .update()
         .apply()
     }
