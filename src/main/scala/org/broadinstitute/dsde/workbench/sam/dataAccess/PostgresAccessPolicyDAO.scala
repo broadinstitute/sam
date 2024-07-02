@@ -995,6 +995,7 @@ class PostgresAccessPolicyDAO(
     }
     removeAllGroupMembers(groupId)
     insertGroupMembers(groupId, memberList)
+    updateGroupUpdatedDateAndVersion(id)
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] =
@@ -1084,7 +1085,7 @@ class PostgresAccessPolicyDAO(
     val ra = ResourceActionTable.syntax("ra")
 
     val listPoliciesQuery =
-      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
+      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${g.result.version}, ${g.result.lastSynchronizedVersion}, ${rr.result.role}, ${ra.result.action}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
@@ -1106,7 +1107,9 @@ class PostgresAccessPolicyDAO(
               rs.get[ResourceId](r.resultName.name),
               rs.get[ResourceTypeName](rt.resultName.name),
               rs.get[WorkbenchEmail](g.resultName.email),
-              rs.boolean(p.resultName.public)
+              rs.boolean(p.resultName.public),
+              rs.get[Int](g.resultName.version),
+              rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
             ),
             (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)))
           )
@@ -1163,7 +1166,9 @@ class PostgresAccessPolicyDAO(
             policyRoles,
             policyActions,
             policyDescendantPermissions,
-            policyInfo.public
+            policyInfo.public,
+            policyInfo.version,
+            policyInfo.lastSynchronizedVersion
           )
         }
         .to(LazyList)
@@ -1215,7 +1220,7 @@ class PostgresAccessPolicyDAO(
     val part = ResourceTypeTable.syntax("part") // policy action resource type
 
     val listPoliciesQuery =
-      samsql"""select ${p.result.name}, ${g.result.email}, ${p.result.public}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descendantsOnly}, ${part.result.name}, ${ra.result.action}, ${pa.result.descendantsOnly}
+      samsql"""select ${p.result.name}, ${g.result.email}, ${p.result.public}, ${g.result.version}, ${g.result.lastSynchronizedVersion}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descendantsOnly}, ${part.result.name}, ${ra.result.action}, ${pa.result.descendantsOnly}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
@@ -1234,7 +1239,9 @@ class PostgresAccessPolicyDAO(
           resource.resourceId,
           resource.resourceTypeName,
           rs.get[WorkbenchEmail](g.resultName.email),
-          rs.boolean(p.resultName.public)
+          rs.boolean(p.resultName.public),
+          rs.get[Int](g.resultName.version),
+          rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
         ),
         (
           RoleResult(
@@ -1469,7 +1476,7 @@ class PostgresAccessPolicyDAO(
       val ra = ResourceActionTable.syntax("ra")
 
       val listPoliciesQuery =
-        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
+        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${g.result.version}, ${g.result.lastSynchronizedVersion}, ${rr.result.role}, ${ra.result.action}
           from ${GroupTable as g}
           join ${GroupMemberFlatTable as f} on ${f.groupId} = ${g.id}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
@@ -1490,7 +1497,9 @@ class PostgresAccessPolicyDAO(
               rs.get[ResourceId](r.resultName.name),
               rs.get[ResourceTypeName](rt.resultName.name),
               rs.get[WorkbenchEmail](g.resultName.email),
-              rs.boolean(p.resultName.public)
+              rs.boolean(p.resultName.public),
+              rs.get[Int](g.resultName.version),
+              rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
             ),
             (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)))
           )
@@ -2057,7 +2066,15 @@ class PostgresAccessPolicyDAO(
   }
 }
 
-private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
+private final case class PolicyInfo(
+    name: AccessPolicyName,
+    resourceId: ResourceId,
+    resourceTypeName: ResourceTypeName,
+    email: WorkbenchEmail,
+    public: Boolean,
+    version: Int,
+    lastSynchronizedVersion: Option[Int]
+)
 private final case class RoleResult(resourceTypeName: Option[ResourceTypeName], role: Option[ResourceRoleName], descendantsOnly: Option[Boolean])
 private final case class ActionResult(resourceTypeName: Option[ResourceTypeName], action: Option[ResourceAction], descendantsOnly: Option[Boolean])
 

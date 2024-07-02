@@ -142,7 +142,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
         case p: AccessPolicy =>
           when(mockAccessPolicyDAO.loadPolicy(p.id, samRequestContext)).thenReturn(IO.pure(Option(testPolicy)))
       }
-      when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.unit)
+      when(mockDirectoryDAO.updateSynchronizedDateAndVersion(any[WorkbenchGroup], any[SamRequestContext])).thenReturn(IO.unit)
       when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext]))
         .thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
 
@@ -192,7 +192,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
       added.foreach(email => verify(mockGoogleDirectoryDAO).addMemberToGroup(target.email, WorkbenchEmail(email.value.toLowerCase)))
       removed.foreach(email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(target.email, WorkbenchEmail(email.value.toLowerCase)))
-      verify(mockDirectoryDAO).updateSynchronizedDate(target.id, samRequestContext)
+
+      target match {
+        case _: BasicWorkbenchGroup => verify(mockDirectoryDAO).updateSynchronizedDateAndVersion(target, samRequestContext)
+        case p: AccessPolicy =>
+          verify(mockDirectoryDAO).updateSynchronizedDateAndVersion(p.copy(members = p.members + CloudExtensions.allUsersGroupName), samRequestContext)
+      }
     }
   }
 
@@ -299,7 +304,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.listIntersectionGroupUsers(Set(managedGroupId, testPolicy.id), samRequestContext))
       .thenReturn(IO.pure(Set(intersectionSamUserId, authorizedGoogleUserId, subIntersectionSamGroupUserId, subAuthorizedGoogleGroupUserId, addError)))
 
-    when(mockDirectoryDAO.updateSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockDirectoryDAO.updateSynchronizedDateAndVersion(any[WorkbenchGroup], any[SamRequestContext])).thenReturn(IO.unit)
     when(mockDirectoryDAO.getSynchronizedDate(any[WorkbenchGroupIdentity], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2017, 11, 22).getTime())))
 
@@ -331,7 +336,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     added.foreach(email => verify(mockGoogleDirectoryDAO).addMemberToGroup(testPolicy.email, WorkbenchEmail(email.value.toLowerCase)))
     removed.foreach(email => verify(mockGoogleDirectoryDAO).removeMemberFromGroup(testPolicy.email, WorkbenchEmail(email.value.toLowerCase)))
-    verify(mockDirectoryDAO).updateSynchronizedDate(testPolicy.id, samRequestContext)
+    verify(mockDirectoryDAO).updateSynchronizedDateAndVersion(testPolicy, samRequestContext)
   }
 
   it should "break out of cycle" in {

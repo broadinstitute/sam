@@ -93,8 +93,8 @@ class MockUserService(
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]] =
     directoryDAO.getAllPetServiceAccountsForUser(userId, samRequestContext)
 
-  def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] =
-    directoryDAO.updateSynchronizedDate(groupId, samRequestContext)
+  def updateSynchronizedDateAndVersion(group: WorkbenchGroup, samRequestContext: SamRequestContext): IO[Unit] =
+    directoryDAO.updateSynchronizedDateAndVersion(group, samRequestContext)
 
   def loadSubjectEmail(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     directoryDAO.loadSubjectEmail(subject, samRequestContext)
