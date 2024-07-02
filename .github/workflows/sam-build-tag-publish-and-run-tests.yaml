@@ -13,6 +13,7 @@ on:
 env:
   BEE_CREATE_RUN_NAME: 'bee-create-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
   BEE_DESTROY_RUN_NAME: 'bee-destroy-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
+  RAWLS_SWAT_TESTS_RUN_NAME: 'rawls-swat-tests-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
 
 jobs:
   tag:
@@ -211,6 +212,7 @@ jobs:
           test-context: ${{ needs.prepare-configs.outputs.test-context }}
         uses: broadinstitute/workflow-dispatch@v4
         with:
+          run-name: "${{ env.RAWLS_SWAT_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}-${{ matrix.test-group.group_name }}"
           workflow: .github/workflows/rawls-swat-tests.yaml
           repo: broadinstitute/terra-github-workflows
           ref: refs/heads/main
@@ -218,6 +220,7 @@ jobs:
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{
             "additional-args": "{\"logging\":\"true\",\"java-version\":\"17\",\"billing-project\":\"\"}",
+            "run-name": "${{ env.RAWLS_SWAT_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}-${{ matrix.test-group.group_name }}",
             "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}",
             "ENV": "${{ matrix.testing-env }}",
             "test-group-name": "${{ matrix.test-group.group_name }}",
