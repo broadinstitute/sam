@@ -217,7 +217,9 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
     descendantPermissions: Set[AccessPolicyDescendantPermissions],
-    public: Boolean
+    public: Boolean,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
 ) extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
@@ -233,10 +235,18 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     email: WorkbenchEmail,
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
-    public: Boolean
+    public: Boolean,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
 )
 
-@Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
+@Lenses final case class BasicWorkbenchGroup(
+    id: WorkbenchGroupName,
+    members: Set[WorkbenchSubject],
+    email: WorkbenchEmail,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
+) extends WorkbenchGroup
 object BasicWorkbenchGroup {
   def apply(workbenchGroup: WorkbenchGroup): BasicWorkbenchGroup =
     workbenchGroup.id match {

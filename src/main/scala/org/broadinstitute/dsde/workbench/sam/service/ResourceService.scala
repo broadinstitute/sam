@@ -15,18 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{
-  AccessPolicyMembershipRequest,
-  AccessPolicyMembershipResponse,
-  FilteredResourceFlat,
-  FilteredResourceFlatPolicy,
-  FilteredResourceHierarchical,
-  FilteredResourceHierarchicalPolicy,
-  FilteredResourceHierarchicalRole,
-  FilteredResourcesFlat,
-  FilteredResourcesHierarchical,
-  SamUser
-}
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.util.UUID
@@ -298,6 +287,7 @@ class ResourceService(
         } else IO.unit
       policies <- listResourcePolicies(resource, samRequestContext)
       _ <- accessPolicyDAO.addResourceAuthDomain(resource, authDomains, samRequestContext)
+      _ <- policies.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(FullyQualifiedPolicyId(resource, p.policyName), samRequestContext))
       _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), Set.empty, samRequestContext)
       authDomains <- loadResourceAuthDomain(resource, samRequestContext)
     } yield authDomains
@@ -873,6 +863,10 @@ class ResourceService(
           for {
             originalPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
             policyChanged <- accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext)
+            _ <- directoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+              FullyQualifiedPolicyId(policyId.resource, policyId.accessPolicyName),
+              samRequestContext
+            )
             _ <- onPolicyUpdateIfChanged(policyId, originalPolicies, samRequestContext)(policyChanged)
           } yield ()
       }

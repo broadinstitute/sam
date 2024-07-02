@@ -184,7 +184,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
         val newPolicy = policy.copy(public = isPublic)
         IO {
           policies.put(resourceAndPolicyName, newPolicy) match {
-            case Some(AccessPolicy(_, _, _, _, _, _, public)) => public != isPublic
+            case Some(AccessPolicy(_, _, _, _, _, _, public, _, _)) => public != isPublic
             case _ => false
           }
         }

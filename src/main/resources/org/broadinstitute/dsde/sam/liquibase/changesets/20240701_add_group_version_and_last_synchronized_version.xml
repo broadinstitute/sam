@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" author="tgarwood" id="add_group_version_and_last_synchronized_version">
+
+        <addColumn tableName="sam_group">
+            <!-- Default value initially set to 1 for all existing records -->
+            <column name="version" type="BIGINT" defaultValue="1">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <!-- Default value initially set to null for all existing records -->
+        <addColumn tableName="sam_group">
+            <column name="last_synchronized_version" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+
+    </changeSet>
+</databaseChangeLog>

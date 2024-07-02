@@ -49,6 +49,12 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
         logger.info(s"group to synchronize not found: ${groupNotFound.errorReport}")
         consumer.ack()
 
+      case groupAlreadySynchronized: GroupAlreadySynchronized =>
+        // this can happen if a group is synchronized multiple times in quick succession
+        // acknowledge it so we don't have to handle it again
+        logger.info(s"group already previously synchronized: ${groupAlreadySynchronized.getMessage}")
+        consumer.ack()
+
       case regrets: Throwable =>
         logger.error("failure synchronizing google group", regrets)
         consumer.nack() // redeliver message to hopefully rectify the failure

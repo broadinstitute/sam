@@ -735,9 +735,9 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createResource(resource1, samRequestContext).unsafeRunSync()
         dao.createResource(resource2, samRequestContext).unsafeRunSync()
 
-        dirDao.updateSynchronizedDate(policy1.id, samRequestContext).unsafeRunSync()
-        dirDao.updateSynchronizedDate(policy3.id, samRequestContext).unsafeRunSync()
-        dirDao.updateSynchronizedDate(policy4.id, samRequestContext).unsafeRunSync()
+        dirDao.updateSynchronizedDateAndVersion(policy1.id, samRequestContext).unsafeRunSync()
+        dirDao.updateSynchronizedDateAndVersion(policy3.id, samRequestContext).unsafeRunSync()
+        dirDao.updateSynchronizedDateAndVersion(policy4.id, samRequestContext).unsafeRunSync()
 
         // finds all synced policies when no members specified
         dao
@@ -2950,7 +2950,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.createPolicy(policy, samRequestContext).unsafeRunSync()
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(policy)
 
-        val newPolicy = policy.copy(members = Set(defaultUser.id, secondUser.id), actions = Set(readAction), roles = Set.empty, public = true)
+        val newPolicy = policy.copy(members = Set(defaultUser.id, secondUser.id), actions = Set(readAction), roles = Set.empty, public = true, version = 2)
         dao.overwritePolicy(newPolicy, samRequestContext).unsafeRunSync()
 
         dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync() shouldEqual Option(newPolicy)
@@ -3023,7 +3023,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           actions = Set(readAction),
           roles = Set.empty,
           descendantPermissions = updatedDescendantPermissions,
-          public = true
+          public = true,
+          version = 2
         )
 
         val testResult = for {
