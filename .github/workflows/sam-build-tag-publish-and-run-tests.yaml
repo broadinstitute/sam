@@ -196,8 +196,8 @@ jobs:
         terra-env: [ dev ] # what versions of apps do we use to emulate types of environments
         testing-env: [ qa ] # what env resources to use, e.g. SA keys
         test-group: [
-          { group_name: workspaces, tag: "-n org.broadinstitute.dsde.test.api.AuthDomainsTest -n org.broadinstitute.dsde.test.api.BillingsTest -n org.broadinstitute.dsde.test.api.WorkspacesTest" },
-          { group_name: analysis_journeys, tag: "-n org.broadinstitute.dsde.test.api.DataRepoSnapshotsTest" },
+          { group_name: workspaces, tag: "-n org.broadinstitute.dsde.test.api.BillingsTest -n org.broadinstitute.dsde.test.api.WorkspacesTest" },
+          { group_name: workspacesAuthDomains, tag: "-n org.broadinstitute.dsde.test.api.AuthDomainsTest" },
           { group_name: workflows, tag: "-n org.broadinstitute.dsde.test.api.MethodsTest" }
         ] # Rawls test groups
     runs-on: ubuntu-latest
