@@ -190,13 +190,18 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       isGroupMember(groupId, member)
     }
 
+  /*
+    Update last synchronized version only when it is less than the current group version. This is to avoid
+    threads stepping over each other and causing sam to become out of sync with google. The last synchronized version
+    should only be set to the version of the group that is help in memory from when the sync started.
+   */
   override def updateSynchronizedDateAndVersion(group: WorkbenchGroup, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("updateSynchronizedDateAndVersion", samRequestContext) { implicit session =>
       val g = GroupTable.column
       samsql"""update ${GroupTable.table}
               set ${g.synchronizedDate} = ${Instant.now()},
                   ${g.lastSynchronizedVersion} = ${group.version}
-              where ${g.id} = (${workbenchGroupIdentityToGroupPK(group.id)})"""
+              where ${g.id} = (${workbenchGroupIdentityToGroupPK(group.id)}) and (COALESCE(${g.lastSynchronizedVersion}, 0) < ${group.version}"""
         .update()
         .apply()
     }

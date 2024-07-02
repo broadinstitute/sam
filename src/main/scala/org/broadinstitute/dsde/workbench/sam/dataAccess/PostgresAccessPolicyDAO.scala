@@ -995,6 +995,7 @@ class PostgresAccessPolicyDAO(
     }
     removeAllGroupMembers(groupId)
     insertGroupMembers(groupId, memberList)
+    updateGroupUpdatedDateAndVersion(id)
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] =
