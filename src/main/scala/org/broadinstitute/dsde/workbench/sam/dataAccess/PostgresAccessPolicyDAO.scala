@@ -641,6 +641,7 @@ class PostgresAccessPolicyDAO(
 
   override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
       groupId: WorkbenchGroupIdentity,
+      relevantMembers: Set[WorkbenchSubject],
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedPolicyId]] =
     readOnlyTransaction("listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup", samRequestContext) { implicit session =>
@@ -667,14 +668,40 @@ class PostgresAccessPolicyDAO(
            and ${policy.resource.resourceTypeName} = ${rt.name}"""
       }
 
+      // if relevantMembers is empty, assume all members are relevant and don't join on GroupMemberFlatTable
+      // otherwise, only include policies where the member is in the relevantMembers set
+      // need to account for both member groups and users
+      val pu = GroupMemberFlatTable.syntax("pu")
+      val (relevantMembersJoin, relevantMembersCondition) = if (relevantMembers.isEmpty) {
+        (samsqls"", samsqls"")
+      } else {
+        val groupPKs = queryForGroupPKs(relevantMembers)
+        val groupCondition = if (groupPKs.isEmpty) {
+          samsqls"false"
+        } else {
+          samsqls"${pu.memberGroupId} in (${groupPKs})"
+        }
+
+        val userIds = collectUserIds(relevantMembers)
+        val userCondition = if (userIds.isEmpty) {
+          samsqls"false"
+        } else {
+          samsqls"${pu.memberUserId} in (${userIds})"
+        }
+
+        (samsqls"""join ${GroupMemberFlatTable as pu} on ${pu.groupId} = ${p.groupId}""", samsqls"""and (${userCondition} or ${groupCondition})""")
+      }
+
       samsql"""
           select ${rt.result.name}, ${r.result.name}, ${p.result.name}
            from ${ResourceTable as r}
            join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
            join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
            join ${GroupTable as g} on ${p.groupId} = ${g.id}
+           ${relevantMembersJoin}
            where ${r.id} in (${constrainedResourcesPKs})
-           and ${g.synchronizedDate} is not null"""
+           and ${g.synchronizedDate} is not null
+           ${relevantMembersCondition}"""
         .map(rs =>
           FullyQualifiedPolicyId(
             FullyQualifiedResourceId(rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name)),

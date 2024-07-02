@@ -227,7 +227,7 @@ class UserService(
     for {
       _ <- updateInvitedUser(userToRegister, samRequestContext)
       groups <- directoryDAO.listUserDirectMemberships(userToRegister.id, samRequestContext)
-      _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
+      _ <- cloudExtensions.onGroupUpdate(groups, Set(invitedUserId), samRequestContext)
     } yield userToRegister
   }
 

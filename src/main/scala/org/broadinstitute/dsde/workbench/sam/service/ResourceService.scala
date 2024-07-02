@@ -298,7 +298,7 @@ class ResourceService(
         } else IO.unit
       policies <- listResourcePolicies(resource, samRequestContext)
       _ <- accessPolicyDAO.addResourceAuthDomain(resource, authDomains, samRequestContext)
-      _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), samRequestContext)
+      _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), Set.empty, samRequestContext)
       authDomains <- loadResourceAuthDomain(resource, samRequestContext)
     } yield authDomains
 
@@ -688,11 +688,13 @@ class ResourceService(
   private def onPolicyUpdate(policyId: FullyQualifiedPolicyId, originalPolicies: Iterable[AccessPolicy], samRequestContext: SamRequestContext): IO[Unit] =
     for {
       updatedPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
-      changeEvents = createAccessChangeEvents(policyId.resource, originalPolicies, updatedPolicies)
+      removedMembers = originalPolicies.flatMap(_.members).toSet -- updatedPolicies.flatMap(_.members).toSet
+      addedMembers = updatedPolicies.flatMap(_.members).toSet -- originalPolicies.flatMap(_.members).toSet
 
+      changeEvents = createAccessChangeEvents(policyId.resource, originalPolicies, updatedPolicies)
       _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq: _*)
 
-      _ <- cloudExtensions.onGroupUpdate(Seq(policyId), samRequestContext).attempt.flatMap {
+      _ <- cloudExtensions.onGroupUpdate(Seq(policyId), removedMembers ++ addedMembers, samRequestContext).attempt.flatMap {
         case Left(regrets) => IO(logger.error(s"error calling cloudExtensions.onGroupUpdate for $policyId", regrets))
         case Right(_) => IO.unit
       }

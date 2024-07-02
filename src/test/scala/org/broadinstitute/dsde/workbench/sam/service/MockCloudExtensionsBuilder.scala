@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -22,7 +22,7 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
   mockedCloudExtensions.getUserStatus(any[SamUser]) returns IO(false)
   mockedCloudExtensions.onUserEnable(any[SamUser], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.onUserDisable(any[SamUser], any[SamRequestContext]) returns IO.unit
-  mockedCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext]) returns IO.unit
+  mockedCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.allSubSystems returns Set.empty
   mockedCloudExtensions.checkStatus returns Map.empty

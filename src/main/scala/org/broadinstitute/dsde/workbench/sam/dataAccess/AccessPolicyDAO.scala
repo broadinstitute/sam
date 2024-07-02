@@ -31,8 +31,16 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[Unit]
 
+  /** Lists policies on resources that are constrained by the given group. If relevantMembers is provided, only policies that contain any of the relevantMembers
+    * (directly or indirectly) will be returned.
+    * @param groupId
+    *   the group to constrain by
+    * @param relevantMembers
+    *   if provided, only policies that contain any of the relevantMembers (directly or indirectly) will be returned, if empty, all policies will be returned
+    */
   def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
       groupId: WorkbenchGroupIdentity,
+      relevantMembers: Set[WorkbenchSubject],
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedPolicyId]]
 

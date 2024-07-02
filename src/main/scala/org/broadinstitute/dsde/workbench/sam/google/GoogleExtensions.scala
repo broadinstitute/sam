@@ -188,7 +188,7 @@ class GoogleExtensions(
 
   /*
     - managed groups and access policies are both "groups"
-    - You can have a bunch of resources constrained an auth domain (a collection of managed groups).
+    - You can have a bunch of resources constrained by an auth domain (a collection of managed groups).
     - A user must be a member of the auth domain in order to access some actions on the resources in that auth domain.
     - The user must be a member of all groups in an auth domain in order to access a resource
     - An access policy is specific to a single resource
@@ -207,7 +207,11 @@ class GoogleExtensions(
 
      see GoogleGroupSynchronizer for the background process that does the group synchronization
    */
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit] =
+  override def onGroupUpdate(
+      groupIdentities: Seq[WorkbenchGroupIdentity],
+      relevantMembers: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
     for {
       start <- clock.monotonic
       // only sync groups that have been synchronized in the past
@@ -219,14 +223,14 @@ class GoogleExtensions(
       messages <- previouslySyncedIds.traverse {
         // it is a group that isn't an access policy, could be a managed group
         case groupName: WorkbenchGroupName =>
-          makeConstrainedResourceAccessPolicyMessages(groupName, samRequestContext).map(_ :+ groupName.toJson.compactPrint)
+          makeConstrainedResourceAccessPolicyMessages(groupName, relevantMembers, samRequestContext).map(_ :+ groupName.toJson.compactPrint)
 
         // it is the admin or member access policy of a managed group
         case accessPolicyId @ FullyQualifiedPolicyId(
               FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id),
               ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName
             ) =>
-          makeConstrainedResourceAccessPolicyMessages(accessPolicyId, samRequestContext).map(_ :+ accessPolicyId.toJson.compactPrint)
+          makeConstrainedResourceAccessPolicyMessages(accessPolicyId, relevantMembers, samRequestContext).map(_ :+ accessPolicyId.toJson.compactPrint)
 
         // it is an access policy on a resource that's not a managed group
         case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
@@ -245,7 +249,11 @@ class GoogleExtensions(
       )
     }
 
-  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[List[String]] =
+  private def makeConstrainedResourceAccessPolicyMessages(
+      groupIdentity: WorkbenchGroupIdentity,
+      relevantMembers: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[List[String]] =
     // start with a group
     for {
       // get all the ancestors of that group
@@ -262,7 +270,7 @@ class GoogleExtensions(
 
       // get all access policies on any resource that is constrained by the groups
       constrainedResourceAccessPolicyIds <- managedGroupIds.toList.traverse(
-        accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, samRequestContext)
+        accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, relevantMembers, samRequestContext)
       )
 
       // return messages for all the affected access policies and the original group we started with

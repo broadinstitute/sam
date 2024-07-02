@@ -95,6 +95,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
 
   override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
       groupId: WorkbenchGroupIdentity,
+      relevantMembers: Set[WorkbenchSubject],
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedPolicyId]] = IO {
     val groupName: WorkbenchGroupName = groupId match {
