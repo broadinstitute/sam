@@ -861,6 +861,10 @@ class ResourceService(
           for {
             originalPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
             policyChanged <- accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext)
+            _ <- directoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+              FullyQualifiedPolicyId(policyId.resource, policyId.accessPolicyName),
+              samRequestContext
+            )
             _ <- onPolicyUpdateIfChanged(policyId, originalPolicies, samRequestContext)(policyChanged)
           } yield ()
       }
