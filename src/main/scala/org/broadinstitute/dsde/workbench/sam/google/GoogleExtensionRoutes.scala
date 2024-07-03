@@ -17,8 +17,8 @@ import org.broadinstitute.dsde.workbench.sam.api.{
   SecurityDirectives,
   ioMarshaller
 }
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -245,9 +245,15 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               postWithTelemetry(samRequestContext, params: _*) {
                 complete {
                   import SamGoogleModelJsonSupport._
-                  googleGroupSynchronizer.synchronizeGroupMembers(policyId, samRequestContext = samRequestContext).map { syncReport =>
-                    StatusCodes.OK -> syncReport
-                  }
+                  googleGroupSynchronizer
+                    .synchronizeGroupMembers(policyId, samRequestContext = samRequestContext)
+                    .recover {
+                      // If the group sync was already done previously, then no need to return any sync report items, just return 200
+                      case _: GroupAlreadySynchronized => Map.empty[WorkbenchEmail, Seq[SyncReportItem]]
+                    }
+                    .map { syncReport =>
+                      StatusCodes.OK -> syncReport
+                    }
                 }
               } ~
                 getWithTelemetry(samRequestContext, params: _*) {
