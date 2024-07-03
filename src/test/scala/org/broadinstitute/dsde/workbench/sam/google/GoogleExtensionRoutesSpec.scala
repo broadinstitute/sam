@@ -286,6 +286,31 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     }
   }
 
+  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with empty response when deduping sync requests" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val (user, samDep, routes) = createTestUser(resourceTypes)
+
+    Post(s"/api/resource/${resourceType.name}/foo") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+      assertResult("") {
+        responseAs[String]
+      }
+    }
+
+    import spray.json.DefaultJsonProtocol._
+    import SamGoogleModelJsonSupport._
+    Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]] should not be empty
+    }
+
+    // A duplicate call should return OK and an empty response
+    Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]] shouldBe empty
+    }
+  }
+
   "GET /api/google/user/petServiceAccount/{project}/key" should "200 with a new key" in {
     assume(databaseEnabled, databaseEnabledClue)
 
