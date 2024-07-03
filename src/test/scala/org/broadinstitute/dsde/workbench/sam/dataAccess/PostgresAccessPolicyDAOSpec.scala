@@ -668,6 +668,14 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
       "can find all synced policies for resources with the group in its auth domain" in {
         assume(databaseEnabled, databaseEnabledClue)
 
+        val user = Generator.genWorkbenchUserBoth.sample.get
+        dirDao.createUser(user, samRequestContext).unsafeRunSync()
+        val groupUser = Generator.genWorkbenchUserBoth.sample.get
+        dirDao.createUser(groupUser, samRequestContext).unsafeRunSync()
+
+        val group = BasicWorkbenchGroup(Generator.genWorkbenchGroupName.sample.get, Set(groupUser.id), Generator.genNonPetEmail.sample.get)
+        dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
+
         dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         val secondResourceType = resourceType.copy(name = ResourceTypeName("superAwesomeResourceType"))
         dao.createResourceType(secondResourceType, samRequestContext).unsafeRunSync()
@@ -681,7 +689,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource2FullyQualifiedId = FullyQualifiedResourceId(secondResourceType.name, ResourceId("resource2"))
         val policy1 = AccessPolicy(
           FullyQualifiedPolicyId(resource1FullyQualifiedId, AccessPolicyName("policyName1")),
-          Set.empty,
+          Set(user.id),
           WorkbenchEmail("policy1@email.com"),
           resourceType.roles.map(_.roleName),
           Set(readAction, writeAction),
@@ -690,7 +698,7 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         )
         val policy2 = AccessPolicy(
           FullyQualifiedPolicyId(resource1FullyQualifiedId, AccessPolicyName("policyName2")),
-          Set.empty,
+          Set(group.id, user.id),
           WorkbenchEmail("policy2@email.com"),
           resourceType.roles.map(_.roleName),
           Set(readAction, writeAction),
@@ -699,8 +707,17 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         )
         val policy3 = AccessPolicy(
           FullyQualifiedPolicyId(resource2FullyQualifiedId, AccessPolicyName("policyName3")),
-          Set.empty,
+          Set(group.id),
           WorkbenchEmail("policy3@email.com"),
+          secondResourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+        val policy4 = AccessPolicy(
+          FullyQualifiedPolicyId(resource2FullyQualifiedId, AccessPolicyName("policyName4")),
+          Set.empty,
+          WorkbenchEmail("policy4@email.com"),
           secondResourceType.roles.map(_.roleName),
           Set(readAction, writeAction),
           Set.empty,
@@ -709,15 +726,50 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val resource1 =
           Resource(resource1FullyQualifiedId.resourceTypeName, resource1FullyQualifiedId.resourceId, Set(sharedAuthDomain.id), Set(policy1, policy2))
         val resource2 =
-          Resource(resource2FullyQualifiedId.resourceTypeName, resource2FullyQualifiedId.resourceId, Set(sharedAuthDomain.id, otherGroup.id), Set(policy3))
+          Resource(
+            resource2FullyQualifiedId.resourceTypeName,
+            resource2FullyQualifiedId.resourceId,
+            Set(sharedAuthDomain.id, otherGroup.id),
+            Set(policy3, policy4)
+          )
         dao.createResource(resource1, samRequestContext).unsafeRunSync()
         dao.createResource(resource2, samRequestContext).unsafeRunSync()
 
         dirDao.updateSynchronizedDateAndVersion(policy1, samRequestContext).unsafeRunSync()
         dirDao.updateSynchronizedDateAndVersion(policy3, samRequestContext).unsafeRunSync()
+        dirDao.updateSynchronizedDateAndVersion(policy4, samRequestContext).unsafeRunSync()
 
-        dao.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(sharedAuthDomain.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(
+        // finds all synced policies when no members specified
+        dao
+          .listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(sharedAuthDomain.id, Set.empty, samRequestContext)
+          .unsafeRunSync() should contain theSameElementsAs Set(
           policy1.id,
+          policy3.id,
+          policy4.id
+        )
+        // finds only relevant synced policies when user and group specified
+        dao
+          .listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(sharedAuthDomain.id, Set(user.id, group.id), samRequestContext)
+          .unsafeRunSync() should contain theSameElementsAs Set(
+          policy1.id,
+          policy3.id
+        )
+        // finds only relevant synced policies when user specified
+        dao
+          .listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(sharedAuthDomain.id, Set(user.id), samRequestContext)
+          .unsafeRunSync() should contain theSameElementsAs Set(
+          policy1.id
+        )
+        // finds only relevant synced policies when group specified
+        dao
+          .listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(sharedAuthDomain.id, Set(group.id), samRequestContext)
+          .unsafeRunSync() should contain theSameElementsAs Set(
+          policy3.id
+        )
+        // finds only relevant synced policies when user in group specified
+        dao
+          .listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(sharedAuthDomain.id, Set(groupUser.id), samRequestContext)
+          .unsafeRunSync() should contain theSameElementsAs Set(
           policy3.id
         )
       }
@@ -728,13 +780,15 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val group = BasicWorkbenchGroup(WorkbenchGroupName("boringGroup"), Set.empty, WorkbenchEmail("notAnAuthDomain@insecure.biz"))
         dirDao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
 
-        dao.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(group.id, samRequestContext).unsafeRunSync() shouldEqual Set.empty
+        dao.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(group.id, Set.empty, samRequestContext).unsafeRunSync() shouldEqual Set.empty
       }
 
       "returns an empty list if group doesn't exist" in {
         assume(databaseEnabled, databaseEnabledClue)
 
-        dao.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName("notEvenReal"), samRequestContext).unsafeRunSync() shouldEqual Set.empty
+        dao
+          .listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName("notEvenReal"), Set.empty, samRequestContext)
+          .unsafeRunSync() shouldEqual Set.empty
       }
     }
 

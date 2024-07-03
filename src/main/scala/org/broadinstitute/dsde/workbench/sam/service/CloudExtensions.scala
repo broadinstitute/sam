@@ -31,7 +31,13 @@ trait CloudExtensions {
 
   def publishGroup(id: WorkbenchGroupName): Future[Unit]
 
-  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit]
+  /** This method is called when a group is updated.
+    * @param groupIdentities
+    *   the identities of the groups that were updated
+    * @param relevantMembers
+    *   the members of the groups that were added or removed or empty if the members are not known
+    */
+  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], relevantMembers: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Unit]
 
   def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit]
 
@@ -74,7 +80,11 @@ trait NoExtensions extends CloudExtensions {
 
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+  override def onGroupUpdate(
+      groupIdentities: Seq[WorkbenchGroupIdentity],
+      relevantMembers: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] = IO.unit
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit] = IO.unit
 

@@ -1082,10 +1082,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext))
+    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), Set.empty, samRequestContext))
       .thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
 
-    runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN), samRequestContext))
+    runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN), Set.empty, samRequestContext))
 
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
@@ -1136,10 +1136,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
       .thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext))
+    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), Set.empty, samRequestContext))
       .thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
 
-    runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), samRequestContext))
+    runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), Set.empty, samRequestContext))
 
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
@@ -1190,10 +1190,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
       .thenReturn(IO.pure(Set(managedGroupRPN).asInstanceOf[Set[WorkbenchGroupIdentity]]))
 
     // mock responses for onManagedGroupUpdate
-    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), samRequestContext))
+    when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), Set.empty, samRequestContext))
       .thenReturn(IO.pure(Set(ownerRPN, readerRPN)))
 
-    runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), samRequestContext))
+    runAndWait(googleExtensions.onGroupUpdate(Seq(WorkbenchGroupName(subGroupId)), Set.empty, samRequestContext))
 
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }

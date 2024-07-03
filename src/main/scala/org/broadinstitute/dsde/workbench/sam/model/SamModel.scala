@@ -192,7 +192,9 @@ object RolesAndActions {
     policyName: AccessPolicyName,
     resourceTypeName: ResourceTypeName,
     resourceId: ResourceId
-)
+) {
+  def toFullyQualifiedPolicyId: FullyQualifiedPolicyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), policyName)
+}
 
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(

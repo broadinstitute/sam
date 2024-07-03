@@ -1264,19 +1264,27 @@ class ResourceServiceSpec
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
 
-    // setup existing policy with no members
-    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(accessPolicy)))
-
-    // function calls that should pass but what they return does not matter
-    when(mockAccessPolicyDAO.overwritePolicy(any[AccessPolicy], any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
-
     // overwrite policy with members in memberPolicy
     val memberPolicy = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testMemberR")), AccessPolicyName("testB"))
     val memberPolicyIdSet =
       Set(
         PolicyIdentifiers(memberPolicy.accessPolicyName, memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId)
       )
+
+    val updatedPolicy = accessPolicy.copy(members = memberPolicyIdSet.map(_.toFullyQualifiedPolicyId))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(
+      IO.pure(LazyList(accessPolicy)), // first call with empty membership
+      IO.pure(LazyList(updatedPolicy)) // second call with updated membership
+    )
+    when(mockAccessPolicyDAO.overwritePolicy(any[AccessPolicy], any[SamRequestContext])).thenReturn(IO.pure(updatedPolicy))
+    when(
+      mockCloudExtensions.onGroupUpdate(
+        ArgumentMatchers.eq(Seq(policyId)),
+        ArgumentMatchers.eq(memberPolicyIdSet.map(_.toFullyQualifiedPolicyId)),
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
+
     runAndWait(
       resourceService.overwritePolicy(
         defaultResourceType,
@@ -1287,7 +1295,8 @@ class ResourceServiceSpec
       )
     )
 
-    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(500))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(memberPolicyIdSet.map(_.toFullyQualifiedPolicyId)), any[SamRequestContext])
   }
 
   it should "call CloudExtensions.onGroupUpdate when members change" in {
@@ -1308,13 +1317,14 @@ class ResourceServiceSpec
     val member = WorkbenchUserId("testU")
     val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
 
-    // setup existing policy with a member
+    // setup existing policy with a member and second call without that member
+    val originalAccessPolicy = AccessPolicy.members.set(Set(member))(accessPolicy)
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
-      .thenReturn(IO.pure(LazyList(AccessPolicy.members.set(Set(member))(accessPolicy))))
+      .thenReturn(IO.pure(LazyList(originalAccessPolicy)), IO.pure(LazyList(accessPolicy)))
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
 
     // overwrite policy with no members
     runAndWait(
@@ -1327,7 +1337,8 @@ class ResourceServiceSpec
       )
     )
 
-    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(500))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
   it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
@@ -1361,7 +1372,7 @@ class ResourceServiceSpec
       )
     )
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
   }
 
   "overwriteAdminPolicy" should "succeed with a valid request" in {
@@ -1495,18 +1506,22 @@ class ResourceServiceSpec
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val member = WorkbenchUserId("testU")
 
-    // setup existing policy with a member
+    // setup existing policy with a member and second call without that member
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
-      .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+      .thenReturn(
+        IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))),
+        IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)))
+      )
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
 
     // overwrite policy members with empty set
     runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(500))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
   it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
@@ -1532,7 +1547,7 @@ class ResourceServiceSpec
     // overwrite policy members with empty set
     runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
   }
 
   it should "succeed with a regex action" in {
@@ -2086,12 +2101,16 @@ class ResourceServiceSpec
 
     // return value true at the end indicates group changed
     when(mockDirectoryDAO.addGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
-      .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+      .thenReturn(
+        IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))),
+        IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)))
+      )
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(500))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
   it should "not call CloudExtensions.onGroupUpdate when member added but is already there" in {
@@ -2117,7 +2136,7 @@ class ResourceServiceSpec
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
   }
 
   "removeSubjectFromPolicy" should "call CloudExtensions.onGroupUpdate when member removed" in {
@@ -2139,12 +2158,16 @@ class ResourceServiceSpec
 
     // return value true at the end indicates group changed
     when(mockDirectoryDAO.removeGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
-      .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+      .thenReturn(
+        IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))),
+        IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)))
+      )
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.timeout(1000)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(1000))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
   it should "not call CloudExtensions.onGroupUpdate when member removed but wasn't there to start with" in {
@@ -2170,7 +2193,7 @@ class ResourceServiceSpec
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
   }
 
   "initResourceTypes" should "do the happy path" in {
