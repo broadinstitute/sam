@@ -259,6 +259,11 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def updateSynchronizedDateAndVersion(group: WorkbenchGroup, samRequestContext: SamRequestContext): IO[Unit] = {
     groupSynchronizedDates += group.id -> new Date()
+    groups.get(group.id).foreach {
+      case g: BasicWorkbenchGroup => groups.put(g.id, g.copy(lastSynchronizedVersion = Option(g.lastSynchronizedVersion.getOrElse(0) + 1)))
+      case p: AccessPolicy => groups.put(p.id, p.copy(lastSynchronizedVersion = Option(p.lastSynchronizedVersion.getOrElse(0) + 1)))
+      case _ => ()
+    }
     IO.unit
   }
 
