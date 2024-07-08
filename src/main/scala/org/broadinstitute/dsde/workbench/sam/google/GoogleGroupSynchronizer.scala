@@ -15,8 +15,10 @@ import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
 
-class GroupAlreadySynchronized(errorReport: ErrorReport = ErrorReport(StatusCodes.Conflict, "Group has already been synchronized"))
-    extends WorkbenchExceptionWithErrorReport(errorReport)
+case class GroupAlreadySynchronized(
+    group: WorkbenchGroup,
+    override val errorReport: ErrorReport = ErrorReport(StatusCodes.Conflict, "Group has already been synchronized")
+) extends WorkbenchExceptionWithErrorReport(errorReport)
 
 /** This class makes sure that our google groups have the right members.
   *
@@ -61,7 +63,7 @@ class GoogleGroupSynchronizer(
           if (group.version > group.lastSynchronizedVersion.getOrElse(0)) {
             IO.unit
           } else {
-            IO.raiseError(new GroupAlreadySynchronized)
+            IO.raiseError(new GroupAlreadySynchronized(group))
           }
         members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
         subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)

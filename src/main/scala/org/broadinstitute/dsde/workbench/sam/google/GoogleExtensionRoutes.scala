@@ -249,7 +249,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     .synchronizeGroupMembers(policyId, samRequestContext = samRequestContext)
                     .recover {
                       // If the group sync was already done previously, then no need to return any sync report items, just return 200
-                      case _: GroupAlreadySynchronized => Map.empty[WorkbenchEmail, Seq[SyncReportItem]]
+                      case exception: GroupAlreadySynchronized => Map(exception.group.email -> Seq.empty[SyncReportItem])
                     }
                     .map { syncReport =>
                       StatusCodes.OK -> syncReport
