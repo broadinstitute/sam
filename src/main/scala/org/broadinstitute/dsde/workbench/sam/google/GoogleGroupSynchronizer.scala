@@ -54,8 +54,8 @@ class GoogleGroupSynchronizer(
       IO.pure(Map.empty)
     } else {
       loadSamGroupForSynchronization(groupId, samRequestContext).flatMap {
-        case None => IO.pure(Map.empty)
-        case Some(group) =>
+        case Left(group) => IO.pure(Map(group.email -> Seq.empty))
+        case Right(group) =>
           for {
             members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
             subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
@@ -160,12 +160,16 @@ class GoogleGroupSynchronizer(
       case group: BasicWorkbenchGroup => IO.pure(group.members)
     }
 
-  /** Loads the group whether a policy or basic group. If it is a public policy add the all users group to members.
+  /** Loads the group whether a policy or basic group. If it is a public policy add the all users group to members. If the response is a `Right`, the group
+    * needs synchronization. If it is a `Left`, then the group does not need synchronization.
     * @param groupId
     * @param samRequestContext
     * @return
     */
-  private def loadSamGroupForSynchronization(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[WorkbenchGroup]] =
+  private def loadSamGroupForSynchronization(
+      groupId: WorkbenchGroupIdentity,
+      samRequestContext: SamRequestContext
+  ): IO[Either[WorkbenchGroup, WorkbenchGroup]] =
     for {
       groupOption <- groupId match {
         case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName, samRequestContext)
@@ -187,9 +191,9 @@ class GoogleGroupSynchronizer(
     // If group.version > group.lastSynchronizedVersion, then the group needs to be synchronized
     // Else Noop
     if (group.version > group.lastSynchronizedVersion.getOrElse(0)) {
-      Some(group)
+      Either.right(group)
     } else {
-      None
+      Either.left(group)
     }
 
   /** An access policy is constrainable if it contains an action or a role that contains an action that is configured as constrainable in the resource type
