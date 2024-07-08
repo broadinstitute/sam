@@ -286,7 +286,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     }
   }
 
-  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with empty response when deduping sync requests" in {
+  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with group email when deduping sync requests" in {
     val resourceTypes = Map(resourceType.name -> resourceType)
     val (user, samDep, routes) = createTestUser(resourceTypes)
 
@@ -295,6 +295,14 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
       assertResult("") {
         responseAs[String]
       }
+    }
+
+    import spray.json.DefaultJsonProtocol._
+    val createdPolicy = Get(s"/api/resource/${resourceType.name}/foo/policies") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Seq[AccessPolicyResponseEntry]]
+        .find(_.policyName == AccessPolicyName(resourceType.ownerRoleName.value))
+        .getOrElse(fail("created policy not returned by get request"))
     }
 
     import spray.json.DefaultJsonProtocol._
@@ -307,7 +315,9 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     // A duplicate call should return OK and an empty response
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]] shouldBe empty
+      responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]] shouldEqual Map(
+        createdPolicy.email -> Seq.empty
+      )
     }
   }
 
