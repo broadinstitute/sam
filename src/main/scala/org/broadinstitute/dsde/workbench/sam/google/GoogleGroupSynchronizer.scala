@@ -53,29 +53,24 @@ class GoogleGroupSynchronizer(
     if (visitedGroups.contains(groupId)) {
       IO.pure(Map.empty)
     } else {
-      for {
-        group: WorkbenchGroup <- loadSamGroup(groupId, samRequestContext)
-        // If group.version > group.lastSynchronizedVersion, then the group needs to be synchronized
-        // Else Noop
-        _ <-
-          if (group.version > group.lastSynchronizedVersion.getOrElse(0)) {
-            IO.unit
-          } else {
-            IO.raiseError(new GroupAlreadySynchronized)
-          }
-        members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
-        subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
-        googleMemberEmails <- loadGoogleGroupMemberEmailsMaybeCreateGroup(group, samRequestContext)
-        samMemberEmails <- loadSamMemberEmails(members, samRequestContext)
+      loadSamGroupForSynchronization(groupId, samRequestContext).flatMap {
+        case None => IO.pure(Map.empty)
+        case Some(group) =>
+          for {
+            members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
+            subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
+            googleMemberEmails <- loadGoogleGroupMemberEmailsMaybeCreateGroup(group, samRequestContext)
+            samMemberEmails <- loadSamMemberEmails(members, samRequestContext)
 
-        toAdd = samMemberEmails -- googleMemberEmails
-        toRemove = googleMemberEmails -- samMemberEmails
+            toAdd = samMemberEmails -- googleMemberEmails
+            toRemove = googleMemberEmails -- samMemberEmails
 
-        addedUserSyncReports <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
-        removedUserSyncReports <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
+            addedUserSyncReports <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
+            removedUserSyncReports <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
 
-        _ <- directoryDAO.updateSynchronizedDateAndVersion(group, samRequestContext)
-      } yield Map(group.email -> Seq(addedUserSyncReports, removedUserSyncReports).flatten) ++ subGroupSyncs.flatten
+            _ <- directoryDAO.updateSynchronizedDateAndVersion(group, samRequestContext)
+          } yield Map(group.email -> Seq(addedUserSyncReports, removedUserSyncReports).flatten) ++ subGroupSyncs.flatten
+      }
     }
 
   private def removeMemberFromGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(removeEmail: String) =
@@ -170,7 +165,7 @@ class GoogleGroupSynchronizer(
     * @param samRequestContext
     * @return
     */
-  private def loadSamGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[WorkbenchGroup] =
+  private def loadSamGroupForSynchronization(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Option[WorkbenchGroup]] =
     for {
       groupOption <- groupId match {
         case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName, samRequestContext)
@@ -188,7 +183,14 @@ class GoogleGroupSynchronizer(
       }
 
       group <- OptionT.fromOption[IO](groupOption).getOrRaise(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
-    } yield group
+    } yield
+    // If group.version > group.lastSynchronizedVersion, then the group needs to be synchronized
+    // Else Noop
+    if (group.version > group.lastSynchronizedVersion.getOrElse(0)) {
+      Some(group)
+    } else {
+      None
+    }
 
   /** An access policy is constrainable if it contains an action or a role that contains an action that is configured as constrainable in the resource type
     * definition.
