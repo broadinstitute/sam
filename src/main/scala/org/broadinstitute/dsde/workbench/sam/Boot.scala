@@ -44,6 +44,7 @@ import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.util.Sentry.initSentry
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.typelevel.log4cats.StructuredLogger
@@ -79,6 +80,20 @@ object Boot extends IOApp with LazyLogging {
         }
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
+
+        // make sure all users referenced by resourceAccessPolicies exist
+        _ <- appConfig.resourceAccessPolicies.flatMap { case (_, policy) => policy.memberEmails }.toList.traverse { email =>
+          dependencies.samApplication.userService.inviteUser(email, SamRequestContext()).attempt
+        }
+
+        // create resourceAccessPolicies but don't prevent startup if any fail
+        policyTrials <- dependencies.samApplication.resourceService.upsertResourceAccessPolicies(appConfig.resourceAccessPolicies)
+        _ = policyTrials.map {
+          case Left(t) =>
+            logger.error("NON-FATAL - failure creating configured policy on startup, continuing", t)
+          case Right(policy) =>
+            logger.info(s"Upserted policy ${policy.id} at startup")
+        }
 
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
 

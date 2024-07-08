@@ -84,6 +84,42 @@ class ResourceService(
         } yield resourceTypes.values
     }
 
+  /** Called at startup to create any policies in configuration. Does not create users or resources.
+    * @return
+    *   for each requested policy, either the policy created or an error
+    */
+  def upsertResourceAccessPolicies(
+      resourceAccessPolicies: Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest],
+      samRequestContext: SamRequestContext = SamRequestContext()
+  ): IO[List[Either[Throwable, AccessPolicy]]] =
+    resourceAccessPolicies.toList.traverse { case (fullyQualifiedPolicyId, accessPolicyMembershipRequest) =>
+      val upsertIO = for {
+        resourceTypeOption <- getResourceType(fullyQualifiedPolicyId.resource.resourceTypeName)
+        resourceType = resourceTypeOption.getOrElse(
+          throw new WorkbenchException(s"Resource type ${fullyQualifiedPolicyId.resource.resourceTypeName} not found")
+        )
+        upsertedPolicy <-
+          if (resourceType.name.isResourceTypeAdmin) {
+            overwriteAdminPolicy(
+              resourceType,
+              fullyQualifiedPolicyId.accessPolicyName,
+              fullyQualifiedPolicyId.resource,
+              accessPolicyMembershipRequest,
+              samRequestContext
+            )
+          } else {
+            overwritePolicy(
+              resourceType,
+              fullyQualifiedPolicyId.accessPolicyName,
+              fullyQualifiedPolicyId.resource,
+              accessPolicyMembershipRequest,
+              samRequestContext
+            )
+          }
+      } yield upsertedPolicy
+      upsertIO.attempt
+    }
+
   def createResourceType(resourceType: ResourceType, samRequestContext: SamRequestContext): IO[ResourceType] =
     accessPolicyDAO.createResourceType(resourceType, samRequestContext)
 
