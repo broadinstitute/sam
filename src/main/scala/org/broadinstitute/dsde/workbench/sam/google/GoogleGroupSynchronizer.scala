@@ -53,29 +53,24 @@ class GoogleGroupSynchronizer(
     if (visitedGroups.contains(groupId)) {
       IO.pure(Map.empty)
     } else {
-      for {
-        group: WorkbenchGroup <- loadSamGroup(groupId, samRequestContext)
-        // If group.version > group.lastSynchronizedVersion, then the group needs to be synchronized
-        // Else Noop
-        _ <-
-          if (group.version > group.lastSynchronizedVersion.getOrElse(0)) {
-            IO.unit
-          } else {
-            IO.raiseError(new GroupAlreadySynchronized)
-          }
-        members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
-        subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
-        googleMemberEmails <- loadGoogleGroupMemberEmailsMaybeCreateGroup(group, samRequestContext)
-        samMemberEmails <- loadSamMemberEmails(members, samRequestContext)
+      loadSamGroupForSynchronization(groupId, samRequestContext).flatMap {
+        case Left(group) => IO.pure(Map(group.email -> Seq.empty))
+        case Right(group) =>
+          for {
+            members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
+            subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
+            googleMemberEmails <- loadGoogleGroupMemberEmailsMaybeCreateGroup(group, samRequestContext)
+            samMemberEmails <- loadSamMemberEmails(members, samRequestContext)
 
-        toAdd = samMemberEmails -- googleMemberEmails
-        toRemove = googleMemberEmails -- samMemberEmails
+            toAdd = samMemberEmails -- googleMemberEmails
+            toRemove = googleMemberEmails -- samMemberEmails
 
-        addedUserSyncReports <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
-        removedUserSyncReports <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
+            addedUserSyncReports <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
+            removedUserSyncReports <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
 
-        _ <- directoryDAO.updateSynchronizedDateAndVersion(group, samRequestContext)
-      } yield Map(group.email -> Seq(addedUserSyncReports, removedUserSyncReports).flatten) ++ subGroupSyncs.flatten
+            _ <- directoryDAO.updateSynchronizedDateAndVersion(group, samRequestContext)
+          } yield Map(group.email -> Seq(addedUserSyncReports, removedUserSyncReports).flatten) ++ subGroupSyncs.flatten
+      }
     }
 
   private def removeMemberFromGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(removeEmail: String) =
@@ -165,12 +160,16 @@ class GoogleGroupSynchronizer(
       case group: BasicWorkbenchGroup => IO.pure(group.members)
     }
 
-  /** Loads the group whether a policy or basic group. If it is a public policy add the all users group to members.
+  /** Loads the group whether a policy or basic group. If it is a public policy add the all users group to members. If the response is a `Right`, the group
+    * needs synchronization. If it is a `Left`, then the group does not need synchronization.
     * @param groupId
     * @param samRequestContext
     * @return
     */
-  private def loadSamGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[WorkbenchGroup] =
+  private def loadSamGroupForSynchronization(
+      groupId: WorkbenchGroupIdentity,
+      samRequestContext: SamRequestContext
+  ): IO[Either[WorkbenchGroup, WorkbenchGroup]] =
     for {
       groupOption <- groupId match {
         case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName, samRequestContext)
@@ -188,7 +187,14 @@ class GoogleGroupSynchronizer(
       }
 
       group <- OptionT.fromOption[IO](groupOption).getOrRaise(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
-    } yield group
+    } yield
+    // If group.version > group.lastSynchronizedVersion, then the group needs to be synchronized
+    // Else Noop
+    if (group.version > group.lastSynchronizedVersion.getOrElse(0)) {
+      Either.right(group)
+    } else {
+      Either.left(group)
+    }
 
   /** An access policy is constrainable if it contains an action or a role that contains an action that is configured as constrainable in the resource type
     * definition.
