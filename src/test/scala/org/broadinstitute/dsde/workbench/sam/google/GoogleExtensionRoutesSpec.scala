@@ -304,10 +304,15 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
       responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]] should not be empty
     }
 
-    // A duplicate call should return OK and an empty response
+    // A duplicate call should return OK and the email with no sync report items
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]] shouldBe empty
+      val response = responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
+      response.keys should have size 1
+      val email = response.keys.head.value
+      email should startWith("policy-")
+      email should endWith("example.com")
+      response.values.flatten shouldBe empty
     }
   }
 

@@ -245,15 +245,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               postWithTelemetry(samRequestContext, params: _*) {
                 complete {
                   import SamGoogleModelJsonSupport._
-                  googleGroupSynchronizer
-                    .synchronizeGroupMembers(policyId, samRequestContext = samRequestContext)
-                    .recover {
-                      // If the group sync was already done previously, then no need to return any sync report items, just return 200
-                      case _: GroupAlreadySynchronized => Map.empty[WorkbenchEmail, Seq[SyncReportItem]]
-                    }
-                    .map { syncReport =>
-                      StatusCodes.OK -> syncReport
-                    }
+                  googleGroupSynchronizer.synchronizeGroupMembers(policyId, samRequestContext = samRequestContext).map { syncReport =>
+                    StatusCodes.OK -> syncReport
+                  }
                 }
               } ~
                 getWithTelemetry(samRequestContext, params: _*) {
