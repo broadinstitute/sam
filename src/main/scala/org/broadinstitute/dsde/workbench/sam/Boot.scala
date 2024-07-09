@@ -33,7 +33,7 @@ import org.broadinstitute.dsde.workbench.google.{
   HttpGoogleStorageDAO
 }
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
@@ -86,14 +86,17 @@ object Boot extends IOApp with LazyLogging {
           dependencies.samApplication.userService.inviteUser(email, SamRequestContext()).attempt
         }
 
-        // create resourceAccessPolicies but don't prevent startup if any fail
+        // create resourceAccessPolicies
         policyTrials <- dependencies.samApplication.resourceService.upsertResourceAccessPolicies(appConfig.resourceAccessPolicies)
         _ = policyTrials.map {
-          case Left(t) =>
-            logger.error("NON-FATAL - failure creating configured policy on startup, continuing", t)
-          case Right(policy) =>
-            logger.info(s"Upserted policy ${policy.id} at startup")
+          case (policyId, Left(t)) =>
+            logger.error(s"FATAL - failure creating configured policy [$policyId] on startup", t)
+          case (policyId, Right(_)) =>
+            logger.info(s"Upserted configured policy [$policyId] at startup")
         }
+        _ <- IO.raiseWhen(policyTrials.values.exists(_.isLeft))(
+          new WorkbenchException("FATAL - failure creating configured policy on startup, see above errors")
+        )
 
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
 

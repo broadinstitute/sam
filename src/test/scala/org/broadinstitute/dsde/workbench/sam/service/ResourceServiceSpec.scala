@@ -3116,7 +3116,7 @@ class ResourceServiceSpec
         )
       )
       .unsafeRunSync()
-      .collect { case Right(policy) =>
+      .collect { case (_, Right(policy)) =>
         policy.copy(email = WorkbenchEmail(""))
       }
 
@@ -3151,7 +3151,7 @@ class ResourceServiceSpec
       .unsafeRunSync()
 
     returnedPolicies.size shouldBe 1
-    returnedPolicies.head.isLeft shouldBe true
+    returnedPolicies.head._2.isLeft shouldBe true
   }
 
   /** Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures that `events` were appended. If tryTwice` run `test` again to make
