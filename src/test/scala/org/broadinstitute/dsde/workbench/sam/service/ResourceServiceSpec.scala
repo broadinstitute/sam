@@ -81,7 +81,7 @@ class ResourceServiceSpec
   private val resourceTypeAdmin = ResourceType(
     SamResourceTypes.resourceTypeAdminName,
     Set.empty,
-    Set.empty,
+    Set(ResourceRole(ownerRoleName, Set.empty)),
     ownerRoleName
   )
 
@@ -3091,6 +3091,67 @@ class ResourceServiceSpec
       .unsafeRunSync()
 
     runAuditLogTest(service.overwritePolicyMembers(policy.id, Set(dummyUser.email), samRequestContext), List(AccessAdded))
+  }
+
+  "upsertResourceAccessPolicies" should "upsert a policy" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+
+    val testPolicyId = FullyQualifiedPolicyId(resource, AccessPolicyName(UUID.randomUUID().toString))
+    val expectedPolicy = AccessPolicy(testPolicyId, Set(dummyUser.id), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
+    val returnedPolicies = service
+      .upsertResourceAccessPolicies(
+        Map(
+          testPolicyId -> AccessPolicyMembershipRequest(
+            Set(dummyUser.email),
+            Set.empty,
+            Set.empty
+          )
+        )
+      )
+      .unsafeRunSync()
+      .collect { case (_, Right(policy)) =>
+        policy.copy(email = WorkbenchEmail(""))
+      }
+
+    returnedPolicies should contain theSameElementsAs Set(expectedPolicy)
+
+    policyDAO.loadPolicy(testPolicyId, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail(""))) shouldBe Some(expectedPolicy)
+  }
+
+  it should "validate admin policies" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName = ResourceId(defaultResourceType.name.value)
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, resourceName)
+
+    service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(resourceTypeAdmin, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+
+    val testPolicyId = FullyQualifiedPolicyId(resource, AccessPolicyName(UUID.randomUUID().toString))
+    val returnedPolicies = service
+      .upsertResourceAccessPolicies(
+        Map(
+          testPolicyId -> AccessPolicyMembershipRequest(
+            Set(dummyUser.email),
+            Set.empty,
+            Set.empty
+          )
+        )
+      )
+      .unsafeRunSync()
+
+    returnedPolicies.size shouldBe 1
+    returnedPolicies.head._2.isLeft shouldBe true
   }
 
   /** Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures that `events` were appended. If tryTwice` run `test` again to make

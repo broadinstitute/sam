@@ -1,6 +1,18 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import com.typesafe.config.{ConfigException, ConfigFactory, ConfigValueFactory}
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
+import org.broadinstitute.dsde.workbench.sam.model.{
+  AccessPolicyDescendantPermissions,
+  AccessPolicyName,
+  FullyQualifiedPolicyId,
+  FullyQualifiedResourceId,
+  ResourceId,
+  ResourceRoleName,
+  ResourceTypeName,
+  SamResourceTypes
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -35,5 +47,29 @@ class AppConfigSpec extends AnyFlatSpec with Matchers {
     intercept[ConfigException.Missing] {
       AppConfig.readConfig(combinedConfig.withoutPath("googleServices.appName"))
     }
+  }
+
+  it should "load resourceAccessPolicies" in {
+    val appConfig = AppConfig.load
+    appConfig.resourceAccessPolicies should contain allElementsOf Map(
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("workspace")), AccessPolicyName("rawls-policy")) ->
+        AccessPolicyMembershipRequest(
+          Set(WorkbenchEmail("rawls@test.firecloud.org")),
+          Set.empty,
+          Set.empty,
+          Some(
+            Set(
+              AccessPolicyDescendantPermissions(
+                ResourceTypeName("workspace"),
+                Set.empty,
+                Set(ResourceRoleName("owner"))
+              )
+            )
+          ),
+          None
+        ),
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("kubernetes-app")), AccessPolicyName("leo-policy")) ->
+        AccessPolicyMembershipRequest(Set(WorkbenchEmail("leo@test.firecloud.org")), Set.empty, Set(ResourceRoleName("support")), None, None)
+    )
   }
 }

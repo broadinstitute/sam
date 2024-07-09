@@ -11,9 +11,11 @@ import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig.googleServicesConfigReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DistributedLockConfig
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
 
 import java.time.Instant
 import scala.concurrent.duration.Duration
+import scala.jdk.CollectionConverters._
 
 /** Created by dvoet on 7/18/17.
   */
@@ -30,7 +32,8 @@ final case class AppConfig(
     adminConfig: AdminConfig,
     azureServicesConfig: Option[AzureServicesConfig],
     prometheusConfig: PrometheusConfig,
-    janitorConfig: JanitorConfig
+    janitorConfig: JanitorConfig,
+    resourceAccessPolicies: Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]
 )
 
 object AppConfig {
@@ -228,6 +231,45 @@ object AppConfig {
     )
   }
 
+  implicit val accessPolicyDescendantPermissionsReader: ValueReader[AccessPolicyDescendantPermissions] = ValueReader.relative { config =>
+    AccessPolicyDescendantPermissions(
+      ResourceTypeName(config.as[String]("resourceTypeName")),
+      config.as[Option[Set[String]]]("actions").getOrElse(Set.empty).map(ResourceAction.apply),
+      config.as[Option[Set[String]]]("roles").getOrElse(Set.empty).map(ResourceRoleName.apply)
+    )
+  }
+
+  implicit val policyIdentifiersReader: ValueReader[PolicyIdentifiers] = ValueReader.relative { config =>
+    PolicyIdentifiers(
+      AccessPolicyName(config.as[String]("accessPolicyName")),
+      ResourceTypeName(config.as[String]("resourceTypeName")),
+      ResourceId(config.as[String]("resourceId"))
+    )
+  }
+
+  implicit val accessPolicyMembershipRequestReader: ValueReader[AccessPolicyMembershipRequest] = ValueReader.relative { config =>
+    AccessPolicyMembershipRequest(
+      config.as[Set[String]]("memberEmails").map(WorkbenchEmail),
+      config.as[Option[Set[String]]]("actions").getOrElse(Set.empty).map(ResourceAction.apply),
+      config.as[Option[Set[String]]]("roles").getOrElse(Set.empty).map(ResourceRoleName.apply),
+      config.as[Option[Set[AccessPolicyDescendantPermissions]]]("descendantPermissions"),
+      config.as[Option[Set[PolicyIdentifiers]]]("memberPolicies")
+    )
+  }
+
+  implicit val resourceAccessPoliciesConfigReader: ValueReader[Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]] = ValueReader.relative { config =>
+    val policies = for {
+      resourceTypeName <- config.root().keySet().asScala
+      resourceId <- config.getConfig(resourceTypeName).root().keySet().asScala
+      policyName <- config.getConfig(s"$resourceTypeName.$resourceId").root().keySet().asScala
+    } yield {
+      val fullyQualifiedPolicyId =
+        FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
+      fullyQualifiedPolicyId -> config.as[AccessPolicyMembershipRequest](s"$resourceTypeName.$resourceId.$policyName")
+    }
+    policies.toMap
+  }
+
   /** Loads all the configs for the Sam App. All values defined in `src/main/resources/sam.conf` will take precedence over any other configs. In this way, we
     * can still use configs rendered by `firecloud-develop` that render to `config/sam.conf` if we want. To do so, you must render `config/sam.conf` and then do
     * not populate ENV variables for `src/main/resources/sam.conf`.
@@ -278,7 +320,8 @@ object AppConfig {
       adminConfig = config.as[AdminConfig]("admin"),
       azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
       prometheusConfig = config.as[PrometheusConfig]("prometheus"),
-      janitorConfig = config.as[JanitorConfig]("janitor")
+      janitorConfig = config.as[JanitorConfig]("janitor"),
+      resourceAccessPolicies = config.as[Option[Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]]]("resourceAccessPolicies").getOrElse(Map.empty)
     )
   }
 }
