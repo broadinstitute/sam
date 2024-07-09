@@ -51,7 +51,7 @@ class AppConfigSpec extends AnyFlatSpec with Matchers {
 
   it should "load resourceAccessPolicies" in {
     val appConfig = AppConfig.load
-    appConfig.resourceAccessPolicies should contain theSameElementsAs Map(
+    appConfig.resourceAccessPolicies should contain allElementsOf Map(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(SamResourceTypes.resourceTypeAdminName, ResourceId("workspace")), AccessPolicyName("rawls-policy")) ->
         AccessPolicyMembershipRequest(
           Set(WorkbenchEmail("rawls@test.firecloud.org")),
