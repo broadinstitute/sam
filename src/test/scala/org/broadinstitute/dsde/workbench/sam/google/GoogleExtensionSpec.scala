@@ -1094,6 +1094,8 @@ class GoogleExtensionSpec(_system: ActorSystem)
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN), Set.empty, samRequestContext))
 
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
+
+    verify(mockDirectoryDAO, times(2)).updateGroupUpdatedDateAndVersionWithSession(any[WorkbenchGroupIdentity], any[SamRequestContext])
   }
 
   it should "trigger updates to constrained policies when updating a group that is a part of a managed group" in {
