@@ -353,6 +353,7 @@ class GoogleExtensions(
         // SA does not exist in google, create it and add it to the proxy group
         case None =>
           for {
+            _ <- assertProjectIsActive(project)
             _ <- assertProjectInTerraOrg(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             _ <- withProxyEmail(user.id) { proxyEmail =>
@@ -415,6 +416,14 @@ class GoogleExtensions(
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
     }
   }
+
+  private def assertProjectIsActive(project: GoogleProject): IO[Unit] =
+    for {
+      projectIsActive <- IO.fromFuture(IO(googleProjectDAO.isProjectActive(project.value)))
+      _ <- IO.raiseUnless(projectIsActive)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} is inactive"))
+      )
+    } yield ()
 
   private def retrievePetAndSA(
       userId: WorkbenchUserId,
