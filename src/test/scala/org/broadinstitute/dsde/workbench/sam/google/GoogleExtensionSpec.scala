@@ -1080,6 +1080,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), Set.empty, samRequestContext))
@@ -1130,6 +1136,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock ancestor call to establish subgroup relationship to managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
@@ -1184,6 +1196,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
