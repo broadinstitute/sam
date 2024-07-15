@@ -286,6 +286,8 @@ class ResourceServiceSpec
     service.setPublic(policyToUpdate, false, samRequestContext).unsafeRunSync()
     service.isPublic(policyToUpdate, samRequestContext).unsafeRunSync() should equal(false)
 
+    service.loadPolicy(policyToUpdate, samRequestContext).unsafeRunSync().get.version shouldEqual 3
+
     // cleanup
     runAndWait(service.deleteResource(resource, samRequestContext))
   }
