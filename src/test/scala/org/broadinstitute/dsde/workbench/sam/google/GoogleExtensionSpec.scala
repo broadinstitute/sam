@@ -2047,6 +2047,50 @@ class GoogleExtensionSpec(_system: ActorSystem)
     report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
   }
 
+  it should "return a failed IO when the google project is inactive" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val dirDAO = newDirectoryDAO()
+
+    clearDatabase()
+
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleProjectDAO = new MockGoogleProjectDAO {
+      override def isProjectActive(projectName: String): Future[Boolean] =
+        Future.successful(false)
+    }
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      mockGoogleIamDAO,
+      null,
+      mockGoogleProjectDAO,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
+
+    val defaultUser = Generator.genWorkbenchUserBoth.sample.get
+
+    val googleProject = GoogleProject("testproject")
+    val report = intercept[WorkbenchExceptionWithErrorReport] {
+      googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    }
+
+    report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
+  }
+
   "fireAndForgetNotifications" should "not fail" in {
     val mockGoogleNotificationPubSubDAO = new MockGooglePubSubDAO
     val topicName = "neat_topic"
