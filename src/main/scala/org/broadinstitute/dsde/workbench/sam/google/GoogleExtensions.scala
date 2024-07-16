@@ -273,6 +273,9 @@ class GoogleExtensions(
         accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, relevantMembers, samRequestContext)
       )
 
+      // Update group versions for all the groups that are ancestors of the managed group so that they can be synced
+      _ <- constrainedResourceAccessPolicyIds.flatten.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(p, samRequestContext))
+
       // return messages for all the affected access policies and the original group we started with
     } yield constrainedResourceAccessPolicyIds.flatten.map(accessPolicyId => accessPolicyId.toJson.compactPrint)
 
