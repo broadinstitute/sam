@@ -717,6 +717,10 @@ class ResourceService(
       changeEvents = createAccessChangeEvents(policyId.resource, originalPolicies, updatedPolicies)
       _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq: _*)
 
+      _ <- directoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        FullyQualifiedPolicyId(policyId.resource, policyId.accessPolicyName),
+        samRequestContext
+      )
       _ <- cloudExtensions.onGroupUpdate(Seq(policyId), removedMembers ++ addedMembers, samRequestContext).attempt.flatMap {
         case Left(regrets) => IO(logger.error(s"error calling cloudExtensions.onGroupUpdate for $policyId", regrets))
         case Right(_) => IO.unit
@@ -885,10 +889,6 @@ class ResourceService(
           for {
             originalPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
             policyChanged <- accessPolicyDAO.setPolicyIsPublic(policyId, public, samRequestContext)
-            _ <- directoryDAO.updateGroupUpdatedDateAndVersionWithSession(
-              FullyQualifiedPolicyId(policyId.resource, policyId.accessPolicyName),
-              samRequestContext
-            )
             _ <- onPolicyUpdateIfChanged(policyId, originalPolicies, samRequestContext)(policyChanged)
           } yield ()
       }

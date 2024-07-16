@@ -54,7 +54,9 @@ class GoogleGroupSynchronizer(
       IO.pure(Map.empty)
     } else {
       loadSamGroupForSynchronization(groupId, samRequestContext).flatMap {
-        case Left(group) => IO.pure(Map(group.email -> Seq.empty))
+        case Left(group) =>
+          logger.info(s"Group ${group.id}:${group.email} does not need synchronization, skipping.")
+          IO.pure(Map(group.email -> Seq.empty))
         case Right(group) =>
           for {
             members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)

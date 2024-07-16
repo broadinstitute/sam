@@ -1080,6 +1080,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), Set.empty, samRequestContext))
@@ -1088,6 +1094,8 @@ class GoogleExtensionSpec(_system: ActorSystem)
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN), Set.empty, samRequestContext))
 
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
+
+    verify(mockDirectoryDAO, times(2)).updateGroupUpdatedDateAndVersionWithSession(any[WorkbenchGroupIdentity], any[SamRequestContext])
   }
 
   it should "trigger updates to constrained policies when updating a group that is a part of a managed group" in {
@@ -1130,6 +1138,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock ancestor call to establish subgroup relationship to managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
@@ -1184,6 +1198,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
