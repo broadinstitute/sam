@@ -356,8 +356,8 @@ class GoogleExtensions(
         // SA does not exist in google, create it and add it to the proxy group
         case None =>
           for {
-            _ <- assertProjectIsActive(project)
             _ <- assertProjectInTerraOrg(project)
+            _ <- assertProjectIsActive(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             _ <- withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
