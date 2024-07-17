@@ -357,6 +357,7 @@ class GoogleExtensions(
         case None =>
           for {
             _ <- assertProjectInTerraOrg(project)
+            _ <- assertProjectIsActive(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             _ <- withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
@@ -418,6 +419,14 @@ class GoogleExtensions(
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
     }
   }
+
+  private def assertProjectIsActive(project: GoogleProject): IO[Unit] =
+    for {
+      projectIsActive <- IO.fromFuture(IO(googleProjectDAO.isProjectActive(project.value)))
+      _ <- IO.raiseUnless(projectIsActive)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} is inactive"))
+      )
+    } yield ()
 
   private def retrievePetAndSA(
       userId: WorkbenchUserId,
