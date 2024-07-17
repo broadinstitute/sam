@@ -273,6 +273,9 @@ class GoogleExtensions(
         accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, relevantMembers, samRequestContext)
       )
 
+      // Update group versions for all the groups that are ancestors of the managed group so that they can be synced
+      _ <- constrainedResourceAccessPolicyIds.flatten.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(p, samRequestContext))
+
       // return messages for all the affected access policies and the original group we started with
     } yield constrainedResourceAccessPolicyIds.flatten.map(accessPolicyId => accessPolicyId.toJson.compactPrint)
 
@@ -354,6 +357,7 @@ class GoogleExtensions(
         case None =>
           for {
             _ <- assertProjectInTerraOrg(project)
+            _ <- assertProjectIsActive(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             _ <- withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
@@ -415,6 +419,14 @@ class GoogleExtensions(
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} must be in Terra Organization")))
     }
   }
+
+  private def assertProjectIsActive(project: GoogleProject): IO[Unit] =
+    for {
+      projectIsActive <- IO.fromFuture(IO(googleProjectDAO.isProjectActive(project.value)))
+      _ <- IO.raiseUnless(projectIsActive)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} is inactive"))
+      )
+    } yield ()
 
   private def retrievePetAndSA(
       userId: WorkbenchUserId,

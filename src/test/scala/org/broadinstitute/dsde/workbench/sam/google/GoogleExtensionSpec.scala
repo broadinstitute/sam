@@ -1080,6 +1080,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock responses for onManagedGroupUpdate
     when(mockAccessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(WorkbenchGroupName(managedGroupId), Set.empty, samRequestContext))
@@ -1088,6 +1094,8 @@ class GoogleExtensionSpec(_system: ActorSystem)
     runAndWait(googleExtensions.onGroupUpdate(Seq(managedGroupRPN), Set.empty, samRequestContext))
 
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
+
+    verify(mockDirectoryDAO, times(2)).updateGroupUpdatedDateAndVersionWithSession(any[WorkbenchGroupIdentity], any[SamRequestContext])
   }
 
   it should "trigger updates to constrained policies when updating a group that is a part of a managed group" in {
@@ -1130,6 +1138,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock ancestor call to establish subgroup relationship to managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
@@ -1184,6 +1198,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
     when(mockDirectoryDAO.getSynchronizedDate(any[FullyQualifiedPolicyId], any[SamRequestContext]))
       .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
     when(mockGoogleGroupSyncPubSubDAO.publishMessages(any[String], any[Seq[MessageRequest]])).thenReturn(Future.successful(()))
+    when(
+      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
+        any[WorkbenchGroupIdentity],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
 
     // mock ancestor call to establish nested group structure for owner policy and subgroup in managed group
     when(mockDirectoryDAO.listAncestorGroups(WorkbenchGroupName(subGroupId), samRequestContext))
@@ -2015,6 +2035,50 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val mockGoogleProjectDAO = new MockGoogleProjectDAO {
       override def getAncestry(projectName: String): Future[Seq[Ancestor]] =
         Future.failed(new HttpResponseException.Builder(403, "Made up error message", new HttpHeaders()).build())
+    }
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      mockGoogleIamDAO,
+      null,
+      mockGoogleProjectDAO,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
+
+    val defaultUser = Generator.genWorkbenchUserBoth.sample.get
+
+    val googleProject = GoogleProject("testproject")
+    val report = intercept[WorkbenchExceptionWithErrorReport] {
+      googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    }
+
+    report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
+  }
+
+  it should "return a failed IO when the google project is inactive" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val dirDAO = newDirectoryDAO()
+
+    clearDatabase()
+
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleProjectDAO = new MockGoogleProjectDAO {
+      override def isProjectActive(projectName: String): Future[Boolean] =
+        Future.successful(false)
     }
     val googleExtensions = new GoogleExtensions(
       TestSupport.distributedLock,
