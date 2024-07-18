@@ -1,15 +1,23 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchEmail, WorkbenchIdentityJsonSupport}
 import spray.json.DefaultJsonProtocol
 
 object SamGoogleModelJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
+  import WorkbenchIdentityJsonSupport._
 
   implicit val SyncReportItemFormat = jsonFormat4(SyncReportItem.apply)
+  implicit val SyncedPolicyFormat = jsonFormat2(SyncedPolicy.apply)
+  implicit val SyncReportFormat = jsonFormat1(SyncReport.apply)
+
 }
+
+case class SyncReport(syncedPolicies: Seq[SyncedPolicy])
+
+case class SyncedPolicy(policyEmail: WorkbenchEmail, changes: Seq[SyncReportItem])
 
 /** A SyncReportItem represents the results of synchronizing a single member of a google group. Synchronizing a google group will result in a collection of
   * these.

@@ -64,20 +64,20 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
     * @param report
     * @param consumer
     */
-  private def syncComplete(report: Map[WorkbenchEmail, Seq[SyncReportItem]], consumer: AckReplyConsumer): Unit = {
-    val errorReports = report.values.flatten.collect {
+  private def syncComplete(syncedPolicies: Map[WorkbenchEmail, Seq[SyncReportItem]], consumer: AckReplyConsumer): Unit = {
+    val errorReports = syncedPolicies.values.flatten.collect {
       case SyncReportItem(_, _, _, errorReports) if errorReports.nonEmpty => errorReports
     }.flatten
 
-    import DefaultJsonProtocol._
-    import WorkbenchIdentityJsonSupport._
     import org.broadinstitute.dsde.workbench.sam.google.SamGoogleModelJsonSupport._
 
+    val syncReport = SyncReport(syncedPolicies.map { case (email, changes) => SyncedPolicy(email, changes) }.toSeq)
+
     if (errorReports.isEmpty) {
-      logger.info(s"synchronized google group", StructuredArguments.raw("syncDetail", report.toJson.compactPrint))
+      logger.info(s"synchronized google group", StructuredArguments.raw("syncDetail", syncReport.toJson.compactPrint))
       consumer.ack()
     } else {
-      logger.error(s"synchronized google group with failures", StructuredArguments.raw("syncDetail", report.toJson.compactPrint))
+      logger.error(s"synchronized google group with failures", StructuredArguments.raw("syncDetail", syncReport.toJson.compactPrint))
       consumer.nack() // redeliver message to hopefully rectify the failures
     }
   }
