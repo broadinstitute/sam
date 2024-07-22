@@ -173,6 +173,9 @@ class UserService(
   def getUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     directoryDAO.loadUser(userId, samRequestContext)
 
+  def getUsersByIds(samUserIds: Seq[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
+    directoryDAO.batchLoadUsers(samUserIds.toSet, samRequestContext)
+
   def getUsersByQuery(
       userId: Option[WorkbenchUserId],
       googleSubjectId: Option[GoogleSubjectId],

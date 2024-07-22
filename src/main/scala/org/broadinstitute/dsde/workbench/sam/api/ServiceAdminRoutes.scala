@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import spray.json.DefaultJsonProtocol._
 
 trait ServiceAdminRoutes extends SecurityDirectives with SamRequestContextDirectives with SamUserDirectives with SamModelDirectives {
@@ -51,6 +52,13 @@ trait ServiceAdminRoutes extends SecurityDirectives with SamRequestContextDirect
                 samRequestContext
               )
               .map(users => (if (users.nonEmpty) OK else NotFound) -> users)
+          }
+        }
+      } ~
+      postWithTelemetry(samRequestContext) {
+        entity(as[Seq[WorkbenchUserId]]) { samUserIds =>
+          complete {
+            userService.getUsersByIds(samUserIds, samRequestContext)
           }
         }
       }
