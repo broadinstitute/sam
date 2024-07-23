@@ -14,7 +14,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol.immSetFormat
 
-class AdminServiceUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
+class ServiceAdminRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
   val defaultUserId: WorkbenchUserId = defaultUser.id
   val defaultUserEmail: WorkbenchEmail = defaultUser.email

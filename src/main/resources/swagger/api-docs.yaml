@@ -168,6 +168,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+    post:
+      tags:
+        - Admin
+      summary: Gets a list of users for a list of Sam User IDs
+      operationId: adminGetUsersByIDs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: string
+      responses:
+        200:
+          description: list of matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        403:
+          description: You do not have service admin privileges
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/user/{userId}/disable:
     put:
       tags:
