@@ -174,6 +174,10 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
           .toSet
       )
     )
+
+    mockUserService.getUsersByIds(any[Seq[WorkbenchUserId]], any[SamRequestContext]) answers ((userIds: Seq[WorkbenchUserId]) =>
+      IO(samUsers.filter(user => userIds.contains(user.id)).toSeq)
+    )
   }
 
   private def makeUserAppearEnabled(samUser: SamUser, mockUserService: UserService): Unit = {

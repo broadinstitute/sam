@@ -70,7 +70,7 @@ paths:
     get:
       tags:
         - Admin
-      summary: Retrieves a user record, by user id
+      summary: Retrieves a user record, by user id. Limited to 1000 user IDs.
       operationId: adminGetUser
       parameters:
         - name: userId
