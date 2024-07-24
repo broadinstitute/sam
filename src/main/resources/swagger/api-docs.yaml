@@ -189,9 +189,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/User'
+        400:
+          description: Request invalid. Request body must be a list of less than 1000 Sam User IDs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         403:
           description: You do not have service admin privileges
-          content: { }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         500:
           description: Internal Server Error
           content:
