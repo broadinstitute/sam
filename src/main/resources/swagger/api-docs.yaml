@@ -70,7 +70,7 @@ paths:
     get:
       tags:
         - Admin
-      summary: Retrieves a user record, by user id
+      summary: Retrieves a user record, by user id. Limited to 1000 user IDs.
       operationId: adminGetUser
       parameters:
         - name: userId
@@ -162,6 +162,45 @@ paths:
         404:
           description: No matching users found
           content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    post:
+      tags:
+        - Admin
+      summary: Gets a list of users for a list of Sam User IDs
+      operationId: adminGetUsersByIDs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: string
+      responses:
+        200:
+          description: list of matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        400:
+          description: Request invalid. Request body must be a list of less than 1000 Sam User IDs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        403:
+          description: You do not have service admin privileges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         500:
           description: Internal Server Error
           content:
