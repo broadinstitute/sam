@@ -95,13 +95,24 @@ object Dependencies {
   val excludeGoogleAutoValue = ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
   val excludeBouncyCastle = ExclusionRule("org.bouncycastle")
   val workbenchGoogle2: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludeGoogleAutoValue, excludeBouncyCastle)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (
+      excludeWorkbenchModel,
+      excludeWorkbenchUtil,
+      excludeGoogleAutoValue,
+      excludeBouncyCastle
+    )
   val workbenchNotifications: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (
+      excludeWorkbenchUtil,
+      excludeWorkbenchModel
+    )
   val workbenchGoogle2Tests: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (
+      excludeWorkbenchUtil,
+      excludeWorkbenchModel
+    )
   val googleStorageLocal: ModuleID =
     "com.google.cloud" % "google-cloud-nio" % "0.127.7" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
@@ -135,7 +146,14 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J, excludeAwsSdk)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (
+      excludeGoogleServiceUsage,
+      excludeGoogleCloudResourceManager,
+      excludeJerseyCore,
+      excludeJerseyMedia,
+      excludeSLF4J,
+      excludeAwsSdk
+    )
   val azureManagedApplications: ModuleID =
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
 
