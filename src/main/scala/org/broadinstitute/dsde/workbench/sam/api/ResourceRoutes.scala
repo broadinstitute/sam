@@ -168,6 +168,15 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                 pathEndOrSingleSlash {
                   getResourceAuthDomain(resource, samUser, samRequestContext) ~
                   patchResourceAuthDomain(resource, samUser, samRequestContext)
+                } ~
+                pathPrefix("satisfied") {
+                  pathEndOrSingleSlash {
+                    complete {
+                      resourceService.satisfiesAuthDomainConstrains(resource, samUser, samRequestContext).map { satisfied =>
+                        if (satisfied) StatusCodes.OK else StatusCodes.Forbidden
+                      }
+                    }
+                  }
                 }
               } ~
               pathPrefix("roles") {
