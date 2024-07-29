@@ -625,6 +625,16 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
     }
 
+    "batchLoadUsers" - {
+      "loads a list of users" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val users = Seq.range(0, 10).map(_ => Generator.genWorkbenchUserBoth.sample.get)
+        users.foreach(user => dao.createUser(user, samRequestContext).unsafeRunSync())
+        val loadedUsers = dao.batchLoadUsers(users.map(_.id).toSet, samRequestContext).unsafeRunSync()
+        loadedUsers should contain theSameElementsAs users
+      }
+    }
+
     "deleteUser" - {
       "delete users" in {
         assume(databaseEnabled, databaseEnabledClue)

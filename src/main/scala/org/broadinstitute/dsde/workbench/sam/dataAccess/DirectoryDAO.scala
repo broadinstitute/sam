@@ -63,6 +63,11 @@ trait DirectoryDAO {
 
   def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
 
+  def batchLoadUsers(
+      samUserIds: Set[WorkbenchUserId],
+      samRequestContext: SamRequestContext
+  ): IO[Seq[SamUser]]
+
   def loadUsersByQuery(
       userId: Option[WorkbenchUserId],
       googleSubjectId: Option[GoogleSubjectId],

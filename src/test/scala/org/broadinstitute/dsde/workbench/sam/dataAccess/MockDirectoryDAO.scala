@@ -115,6 +115,11 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     users.get(userId)
   }
 
+  override def batchLoadUsers(
+      samUserIds: Set[WorkbenchUserId],
+      samRequestContext: SamRequestContext
+  ): IO[Seq[SamUser]] = IO(samUserIds.flatMap(users.get).toSeq)
+
   override def loadUsersByQuery(
       userId: Option[WorkbenchUserId],
       googleSubjectId: Option[GoogleSubjectId],

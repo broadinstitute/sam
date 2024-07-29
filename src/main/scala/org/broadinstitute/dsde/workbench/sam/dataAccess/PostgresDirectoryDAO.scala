@@ -421,6 +421,25 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         .map(UserTable.unmarshalUserRecord)
     }
 
+  override def batchLoadUsers(
+      samUserIds: Set[WorkbenchUserId],
+      samRequestContext: SamRequestContext
+  ): IO[Seq[SamUser]] =
+    if (samUserIds.isEmpty) {
+      IO.pure(Seq.empty)
+    } else {
+      readOnlyTransaction("batchLoadUsers", samRequestContext) { implicit session =>
+        val userTable = UserTable.syntax
+        val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${samUserIds})"
+
+        loadUserQuery
+          .map(UserTable(userTable))
+          .list()
+          .apply()
+          .map(UserTable.unmarshalUserRecord)
+      }
+    }
+
   override def loadUsersByQuery(
       userId: Option[WorkbenchUserId],
       googleSubjectId: Option[GoogleSubjectId],

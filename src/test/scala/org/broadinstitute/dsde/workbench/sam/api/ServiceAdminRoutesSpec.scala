@@ -4,6 +4,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
@@ -12,9 +13,10 @@ import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import spray.json.DefaultJsonProtocol.immSetFormat
+import spray.json.DefaultJsonProtocol._
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 
-class AdminServiceUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
+class ServiceAdminRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
   val defaultUserId: WorkbenchUserId = defaultUser.id
   val defaultUserEmail: WorkbenchEmail = defaultUser.email
@@ -127,4 +129,32 @@ class AdminServiceUserRoutesSpec extends AnyFlatSpec with Matchers with Scalates
     }
   }
 
+  "POST /admin/v2/users" should "get the matching user records when provided a list of user IDs when called as a service admin" in {
+    // Arrange
+    val users = Seq.range(0, 10).map(_ => genWorkbenchUserBoth.sample.get)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminServiceUser() // enabled "admin" user who is making the http request
+      .withEnabledUsers(users)
+      .build
+
+    // Act and Assert
+    Post(s"/api/admin/v2/users", users.map(_.id)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Seq[SamUser]] should contain theSameElementsAs users
+    }
+  }
+
+  it should "reject a request for more than 1000 users" in {
+    // Arrange
+    val users = Seq.range(0, 1001).map(_ => genWorkbenchUserBoth.sample.get)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminServiceUser() // enabled "admin" user who is making the http request
+      .withEnabledUsers(users)
+      .build
+
+    // Act and Assert
+    Post(s"/api/admin/v2/users", users.map(_.id)) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
 }
