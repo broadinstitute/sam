@@ -308,6 +308,18 @@ class ResourceService(
         }
       )
 
+  def satisfiesAuthDomainConstrains(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Boolean] =
+    loadResourceAuthDomain(resource, samRequestContext).flatMap { authDomain =>
+      authDomain.toList.traverse { group =>
+        policyEvaluatorService.hasPermission(
+          FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(group.value)),
+          ManagedGroupService.useAction,
+          samUser.id,
+          samRequestContext
+        )
+      }
+    } map { listOfUsePermissions =>  listOfUsePermissions.isEmpty || listOfUsePermissions.forall(identity) }
+
   def addResourceAuthDomain(
       resource: FullyQualifiedResourceId,
       authDomains: Set[WorkbenchGroupName],

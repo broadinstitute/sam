@@ -2106,6 +2106,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2/{resourceTypeName}/{resourceId}/authDomain/satisfied:
+    get:
+      tags:
+        - Resources
+      summary: Check whether the calling user satisfies all Authoriaztion Domain Constraints
+      operationId: getAuthDomainV2
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: User satisfies all authorization domain constraints.
+            Empty if an Auth Domain has not been set
+        403:
+          description: User does not satisfy all authorization domain constraints.
+          content: { }
+        404:
+          description: Resource type or resource does not exist or you are not a member
+            of any policy on the resource
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/resources/v2/{resourceTypeName}/{resourceId}/allUsers:
     get:
       tags:
