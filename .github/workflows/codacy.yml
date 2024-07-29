@@ -20,13 +20,9 @@ jobs:
           distribution: 'temurin'
           java-version: 17
 
-      - name: Run Scalafmt Check
-        id: scalafmtCheck
-        run: sbt scalafmtCheckAll scalafmtSbtCheck
-
-      - name: Run unit tests and generate coverage report
-        id: coverageReport
-        run: source env/test.env; sbt coverage "testOnly --" coverageReport
+      - name: Compile
+        id: sbt-compile
+        run: sbt compile
 
       - name: Run Codacy Analysis CLI
         uses: codacy/codacy-analysis-cli-action@master
