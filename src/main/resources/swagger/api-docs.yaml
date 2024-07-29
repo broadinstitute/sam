@@ -2111,7 +2111,7 @@ paths:
       tags:
         - Resources
       summary: Check whether the calling user satisfies all Authoriaztion Domain Constraints
-      operationId: getAuthDomainV2
+      operationId: isAuthDomainV2Satisfied
       parameters:
         - name: resourceTypeName
           in: path
