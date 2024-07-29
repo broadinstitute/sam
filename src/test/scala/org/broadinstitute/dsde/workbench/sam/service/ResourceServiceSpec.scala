@@ -925,7 +925,6 @@ class ResourceServiceSpec
     val fry = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(fry, samRequestContext).unsafeRunSync()
 
-
     constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
     val managedGroupName1 = "firstGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName1), dummyUser, samRequestContext = samRequestContext))
@@ -938,16 +937,16 @@ class ResourceServiceSpec
     val authDomain = Set(WorkbenchGroupName(managedGroupName1), WorkbenchGroupName(managedGroupName2))
     val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
     val resource = runAndWait(
-        constrainableService.createResource(
-          constrainableResourceType,
-          ResourceId(UUID.randomUUID().toString),
-          Map(viewPolicyName -> constrainablePolicyMembership),
-          authDomain,
-          None,
-          bender.id,
-          samRequestContext
-        )
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        authDomain,
+        None,
+        bender.id,
+        samRequestContext
       )
+    )
 
     val benderAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, bender, samRequestContext).unsafeRunSync()
     val fryAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, fry, samRequestContext).unsafeRunSync()
@@ -978,7 +977,6 @@ class ResourceServiceSpec
 
     val fry = Generator.genWorkbenchUserBoth.sample.get
     dirDAO.createUser(fry, samRequestContext).unsafeRunSync()
-
 
     constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
     val managedGroupName1 = "firstGroup"

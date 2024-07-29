@@ -318,7 +318,7 @@ class ResourceService(
           samRequestContext
         )
       }
-    } map { listOfUsePermissions =>  listOfUsePermissions.isEmpty || listOfUsePermissions.forall(identity) }
+    } map { listOfUsePermissions => listOfUsePermissions.isEmpty || listOfUsePermissions.forall(identity) }
 
   def addResourceAuthDomain(
       resource: FullyQualifiedResourceId,
