@@ -881,7 +881,7 @@ class ResourceServiceSpec
     }
   }
 
-  it should "fail when user does not have access to at least 1 of the auth domain groups" in {
+  it should "fail when user does not have access all of the auth domain groups" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
@@ -913,6 +913,48 @@ class ResourceServiceSpec
     }
   }
 
+  it should "say auth domain is satisfied when a user is in all auth domain groups, and not satified when a user isn't" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+
+    val bender = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(bender, samRequestContext).unsafeRunSync()
+
+    val fry = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(fry, samRequestContext).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+    val managedGroupName1 = "firstGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName1), dummyUser, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName1), ManagedGroupService.adminPolicyName, bender.id, samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName1), ManagedGroupService.adminPolicyName, fry.id, samRequestContext))
+    val managedGroupName2 = "benderIsGreat"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName2), bender, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName2), ManagedGroupService.adminPolicyName, bender.id, samRequestContext))
+
+    val authDomain = Set(WorkbenchGroupName(managedGroupName1), WorkbenchGroupName(managedGroupName2))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        authDomain,
+        None,
+        bender.id,
+        samRequestContext
+      )
+    )
+
+    val benderAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, bender, samRequestContext).unsafeRunSync()
+    val fryAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, fry, samRequestContext).unsafeRunSync()
+
+    benderAccess shouldEqual true
+    fryAccess shouldEqual false
+  }
+
   "Loading an auth domain" should "fail when the resource does not exist" in {
     assume(databaseEnabled, databaseEnabledClue)
 
@@ -922,6 +964,82 @@ class ResourceServiceSpec
         .unsafeRunSync()
     }
     e.getMessage should include("not found")
+  }
+
+  "Checking auth domain satisfaction" should "say auth domain is satisfied when a user is in all auth domain groups, and not satisfied when a user isn't" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+
+    val bender = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(bender, samRequestContext).unsafeRunSync()
+
+    val fry = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(fry, samRequestContext).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+    val managedGroupName1 = "firstGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName1), dummyUser, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName1), ManagedGroupService.adminPolicyName, bender.id, samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName1), ManagedGroupService.adminPolicyName, fry.id, samRequestContext))
+    val managedGroupName2 = "benderIsGreat"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName2), bender, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName2), ManagedGroupService.adminPolicyName, bender.id, samRequestContext))
+
+    val authDomain = Set(WorkbenchGroupName(managedGroupName1), WorkbenchGroupName(managedGroupName2))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        authDomain,
+        None,
+        bender.id,
+        samRequestContext
+      )
+    )
+
+    val benderAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, bender, samRequestContext).unsafeRunSync()
+    val fryAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, fry, samRequestContext).unsafeRunSync()
+
+    benderAccess shouldEqual true
+    fryAccess shouldEqual false
+  }
+
+  it should "say the auth domain is satisfied if there are no auth domain constraints" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+
+    val bender = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(bender, samRequestContext).unsafeRunSync()
+
+    val fry = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(fry, samRequestContext).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        Set.empty,
+        None,
+        bender.id,
+        samRequestContext
+      )
+    )
+
+    val benderAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, bender, samRequestContext).unsafeRunSync()
+    val fryAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, fry, samRequestContext).unsafeRunSync()
+
+    benderAccess shouldEqual true
+    fryAccess shouldEqual true
   }
 
   "Creating a resource that has 0 constrainable action patterns" should "fail when an auth domain is provided" in {
