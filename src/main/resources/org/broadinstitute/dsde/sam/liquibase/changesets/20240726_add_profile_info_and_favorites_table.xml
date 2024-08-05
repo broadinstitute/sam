@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+    <changeSet logicalFilePath="dummy" author="kfeldman" id="add_sam_user_favorite_resources_table">
+        <createTable tableName="SAM_USER_FAVORITE_RESOURCES">
+            <column name="sam_user_id" type="VARCHAR">
+                <constraints primaryKey="true" foreignKeyName="FK_SUA_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="resource_id" type="BIGINT">
+                <constraints primaryKey="true" foreignKeyName="FK_SR_RESOURCE_ID" referencedTableName="SAM_RESOURCE" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet logicalFilePath="dummy" author="kfeldman" id="add_profile_info_to_user_attributes_table">
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="first_name" type="VARCHAR"
+            <constraints nullable="false"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="last_name" type="VARCHAR"
+            <constraints nullable="false"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="organization" type="VARCHAR"
+            <constraints nullable="false"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="contact_email" type="VARCHAR"
+            <constraints nullable="false"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="title" type="VARCHAR"
+            <constraints nullable="false"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="department" type="VARCHAR"
+            <constraints nullable="false"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="interest_in_terra" type="VARCHAR ARRAY"
+            <constraints nullable="false"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="program_location_city" type="VARCHAR"
+            <constraints nullable="true"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="program_location_state" type="VARCHAR"
+            <constraints nullable="true"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="program_location_country" type="VARCHAR"
+            <constraints nullable="true"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="research_area" type="VARCHAR ARRAY"
+            <constraints nullable="true"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="additional_attributes" type="JSONB"
+            <constraints nullable="true"/>
+        </column>
+    </addColumn>
+    <addColumn tableName="SAM_USER_ATTRIBUTE">
+        <column> name="created_at" type="timestamptz"
+            <constraints nullable="false"/>
+        </column>
+    </addColumn>
+    </changeSet>
+</databaseChangeLog>
