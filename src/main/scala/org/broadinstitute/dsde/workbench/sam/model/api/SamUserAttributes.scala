@@ -5,17 +5,50 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchUserIdFormat
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
-import spray.json.DefaultJsonProtocol.jsonFormat2
 import spray.json.DefaultJsonProtocol._
 import spray.json.RootJsonFormat
+import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
+
+import java.time.Instant
 
 object SamUserAttributes {
-  implicit val SamUserAttributesFormat: RootJsonFormat[SamUserAttributes] = jsonFormat2(SamUserAttributes.apply)
+  implicit val SamUserAttributesFormat: RootJsonFormat[SamUserAttributes] = jsonFormat16(SamUserAttributes.apply)
 
   def newUserAttributesFromRequest(userId: WorkbenchUserId, userAttributesRequest: SamUserAttributesRequest): IO[SamUserAttributes] = {
     val samUserAttributes = for {
       marketingConsent <- userAttributesRequest.marketingConsent
-    } yield SamUserAttributes(userId, marketingConsent)
+      firstName = userAttributesRequest.firstName
+      lastName = userAttributesRequest.lastName
+      organization = userAttributesRequest.organization
+      contactEmail = userAttributesRequest.contactEmail
+      title = userAttributesRequest.title
+      department = userAttributesRequest.department
+      interestInTerra = userAttributesRequest.interestInTerra
+      programLocationCity = userAttributesRequest.programLocationCity
+      programLocationState = userAttributesRequest.programLocationState
+      programLocationCountry = userAttributesRequest.programLocationCountry
+      researchArea = userAttributesRequest.researchArea
+      additionalAttributes = userAttributesRequest.additionalAttributes
+      createdAt = Option(userAttributesRequest.createdAt).getOrElse(Instant.now())
+      updatedAt = Instant.now()
+
+    } yield SamUserAttributes(
+      userId,
+      marketingConsent,
+      firstName,
+      lastName,
+      organization,
+      contactEmail,
+      title,
+      department,
+      interestInTerra,
+      programLocationCity,
+      programLocationState,
+      programLocationCountry,
+      researchArea,
+      additionalAttributes,
+      createdAt,
+      updatedAt)
     IO.fromOption(samUserAttributes)(
       new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Missing values required for new user attributes."))
     )
@@ -23,7 +56,38 @@ object SamUserAttributes {
   }
 
 }
-final case class SamUserAttributes(userId: WorkbenchUserId, marketingConsent: Boolean) {
+final case class SamUserAttributes(
+  userId: WorkbenchUserId,
+  marketingConsent: Boolean,
+  firstName: Option[String],
+  lastName: Option[String],
+  organization: Option[String],
+  contactEmail: Option[String],
+  title: Option[String],
+  department: Option[String],
+  interestInTerra: Option[Array[String]],
+  programLocationCity: Option[String],
+  programLocationState: Option[String],
+  programLocationCountry: Option[String],
+  researchArea: Option[Array[String]],
+  additionalAttributes: Option[String],
+  createdAt: Instant,
+  updatedAt: Instant) {
   def updateFromUserAttributesRequest(userAttributesRequest: SamUserAttributesRequest): IO[SamUserAttributes] =
-    IO(this.copy(marketingConsent = userAttributesRequest.marketingConsent.getOrElse(this.marketingConsent)))
+    IO(this.copy(marketingConsent = userAttributesRequest.marketingConsent.getOrElse(this.marketingConsent),
+      firstName = userAttributesRequest.firstName.orElse(this.firstName),
+      lastName = userAttributesRequest.lastName.orElse(this.lastName),
+      organization = userAttributesRequest.organization.orElse(this.organization),
+      contactEmail = userAttributesRequest.contactEmail.orElse(this.contactEmail),
+      title = userAttributesRequest.title.orElse(this.title),
+      department = userAttributesRequest.department.orElse(this.department),
+      interestInTerra = userAttributesRequest.interestInTerra.orElse(this.interestInTerra),
+      programLocationCity = userAttributesRequest.programLocationCity.orElse(this.programLocationCity),
+      programLocationState = userAttributesRequest.programLocationState.orElse(this.programLocationState),
+      programLocationCountry = userAttributesRequest.programLocationCountry.orElse(this.programLocationCountry),
+      researchArea = userAttributesRequest.researchArea.orElse(this.researchArea),
+      additionalAttributes = userAttributesRequest.additionalAttributes.orElse(this.additionalAttributes),
+      createdAt = this.createdAt,
+      updatedAt = Instant.now())
+    )
 }

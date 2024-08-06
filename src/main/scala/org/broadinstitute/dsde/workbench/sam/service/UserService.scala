@@ -97,11 +97,41 @@ class UserService(
   private def registerNewUserAttributes(
       userId: WorkbenchUserId,
       registrationRequest: Option[SamUserRegistrationRequest],
-      samRequestContext: SamRequestContext
+      samRequestContext: SamRequestContext,
+      firstName: Option[String] = None,
+      lastName: Option[String] = None,
+      organization: Option[String] = None,
+      contactEmail: Option[String] = None,
+      title: Option[String] = None,
+      department: Option[String] = None,
+      interestInTerra: Option[Array[String]] = None,
+      programLocationCity: Option[String] = None,
+      programLocationState: Option[String] = None,
+      programLocationCountry: Option[String] = None,
+      researchArea: Option[Array[String]] = None,
+      additionalAttributes: Option[String] = None,
+      createdAt: Instant = Instant.now(),
+      updatedAt: Instant = Instant.now()
   ): IO[Unit] = {
     val attributes = registrationRequest
       .map(_.userAttributes)
-      .getOrElse(SamUserAttributesRequest(marketingConsent = Some(false)))
+      .getOrElse(SamUserAttributesRequest(
+        marketingConsent = Some(false),
+        firstName = firstName,
+        lastName = lastName,
+        organization = organization,
+        contactEmail = contactEmail,
+        title = title,
+        department = department,
+        interestInTerra = interestInTerra,
+        programLocationCity = programLocationCity,
+        programLocationState = programLocationState,
+        programLocationCountry = programLocationCountry,
+        researchArea = researchArea,
+        additionalAttributes = additionalAttributes,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+      ))
     setUserAttributesFromRequest(userId, attributes, samRequestContext).map(_ => ())
   }
 
@@ -258,7 +288,7 @@ class UserService(
         case Some(_) =>
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${inviteeEmail} already exists")))
       }
-      _ <- setUserAttributes(SamUserAttributes(createdUser.id, marketingConsent = false), samRequestContext)
+      _ <- setUserAttributes(SamUserAttributes(createdUser.id, marketingConsent = false, None, None, None, None, None, None, None, None, None, None, None, None, Instant.now(), Instant.now()), samRequestContext)
     } yield UserStatusDetails(createdUser.id, createdUser.email)
 
   private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
