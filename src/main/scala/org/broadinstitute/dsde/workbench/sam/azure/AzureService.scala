@@ -282,12 +282,6 @@ class AzureService(
           validateServiceCatalogManagedResourceGroup(serviceCatalog, mrgCoords, samRequestContext, validateUser)
         }
         .getOrElse(IO.unit)
-
-      _ <- config.azureMarketPlace
-        .map { marketPlace =>
-          validateMarketPlaceManagedResourceGroup(marketPlace, mrgCoords, samRequestContext, validateUser)
-        }
-        .getOrElse(IO.unit)
     } yield ()
 
   /** Validates a managed resource group. Algorithm:
