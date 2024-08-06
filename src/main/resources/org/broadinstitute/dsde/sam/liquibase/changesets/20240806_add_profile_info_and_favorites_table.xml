@@ -81,4 +81,14 @@
         </column>
     </addColumn>
     </changeSet>
+    <changeSet logicalFilePath="dummy" author="kfeldman" id="move_updated_at_column_to_end_of_table">
+<!--        renaming updated_at so I can recreate it as a new column, then transfer existing data -->
+        <renameColumn tableName="SAM_USER_ATTRIBUTES" oldColumnName="updated_at" newColumnName="old_updated_at"/>
+        <addColumn tableName="SAM_USER_ATTRIBUTES">
+            <column name="updated_at" type="timestamptz" valueComputed="old_updated_at">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <dropColumn tableName="SAM_USER_ATTRIBUTES" columnName="old_updated_at"/>
+    </changeSet>
 </databaseChangeLog>
