@@ -34,7 +34,7 @@ class AzureService(
   /** This is specifically a val so that the stack trace does not leak information about why this error was thrown. Because it is a val, the stack trace is
     * constant. If it were a def, the stack trace would include the line number where the error was thrown.
     */
-  private val managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
+  private def managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
     ErrorReport(
       StatusCodes.Forbidden,
       "Specified managed resource group invalid. Possible reasons include resource group does not exist, it is not " +
