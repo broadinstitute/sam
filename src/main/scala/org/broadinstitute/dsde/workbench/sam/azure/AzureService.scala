@@ -34,11 +34,45 @@ class AzureService(
   /** This is specifically a val so that the stack trace does not leak information about why this error was thrown. Because it is a val, the stack trace is
     * constant. If it were a def, the stack trace would include the line number where the error was thrown.
     */
-  private def managedAppValidationFailure = new WorkbenchExceptionWithErrorReport(
+  private def managedAppValidationFailure1 = new WorkbenchExceptionWithErrorReport(
     ErrorReport(
       StatusCodes.Forbidden,
-      "Specified managed resource group invalid. Possible reasons include resource group does not exist, it is not " +
-        "associated to an application, the application's plan is not supported or the user is not listed as authorized."
+      "validateMarketPlaceManagedResourceGroup "
+    )
+  )
+
+  private def managedAppValidationFailure2 = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "validateServiceCatalogManagedResourceGroup"
+    )
+  )
+
+  private def managedAppValidationFailure3 = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "validateAuthorizedAppUser1"
+    )
+  )
+
+  private def managedAppValidationFailure4 = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "validateAuthorizedAppUser2"
+    )
+  )
+
+  private def managedAppValidationFailure5 = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "validatePlan "
+    )
+  )
+
+  private def managedAppValidationFailure6 = new WorkbenchExceptionWithErrorReport(
+    ErrorReport(
+      StatusCodes.Forbidden,
+      "lookupMrg "
     )
   )
 
@@ -272,7 +306,7 @@ class AzureService(
         mrg <- lookupMrg(mrgCoords, resourceManager)
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         appsInSubscription <- IO(appManager.applications().list().asScala.toSeq)
-        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
+        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure1)
         plan <- validatePlan(managedApp, marketPlace.managedAppPlans)
         _ <- if (validateUser) validateAuthorizedAppUser(managedApp, plan.authorizedUserKey, samRequestContext) else IO.unit
       } yield mrg
@@ -294,7 +328,7 @@ class AzureService(
         mrg <- lookupMrg(mrgCoords, resourceManager)
         appManager <- crlService.buildApplicationManager(mrgCoords.tenantId, mrgCoords.subscriptionId)
         appsInSubscription <- IO(appManager.applications().list().asScala)
-        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure)
+        managedApp <- IO.fromOption(appsInSubscription.find(_.managedResourceGroupId() == mrg.id()))(managedAppValidationFailure2)
         _ <-
           if (managedApp.kind() == serviceCatalog.managedAppTypeServiceCatalog && validateUser) {
             validateAuthorizedAppUser(
@@ -323,13 +357,13 @@ class AzureService(
     } yield authorizedUsersValue.toString
 
     for {
-      authorizedUsersString <- IO.fromOption(authorizedUsersValue)(managedAppValidationFailure)
+      authorizedUsersString <- IO.fromOption(authorizedUsersValue)(managedAppValidationFailure3)
       user <- IO.fromOption(samRequestContext.samUser)(
         // this exception is different from the others because it is a coding bug, the user should always be present here
         new WorkbenchException("user is missing in call to validateAuthorizedAppUser")
       )
       authorizedUsers = authorizedUsersString.split(",").map(_.trim.toLowerCase)
-      _ <- IO.raiseUnless(authorizedUsers.contains(user.email.value.toLowerCase))(managedAppValidationFailure)
+      _ <- IO.raiseUnless(authorizedUsers.contains(user.email.value.toLowerCase))(managedAppValidationFailure4)
     } yield ()
   }
 
@@ -339,12 +373,12 @@ class AzureService(
       matchingPlan <- allPlans.find(p => p.name == applicationPlan.name() && p.publisher == applicationPlan.publisher())
     } yield matchingPlan
 
-    IO.fromOption(maybePlan)(managedAppValidationFailure)
+    IO.fromOption(maybePlan)(managedAppValidationFailure5)
   }
 
   private def lookupMrg(mrgCoords: ManagedResourceGroupCoordinates, resourceManager: ResourceManager) =
     IO(resourceManager.resourceGroups().getByName(mrgCoords.managedResourceGroupName.value)).handleErrorWith { case t: Throwable =>
-      IO.raiseError(managedAppValidationFailure)
+      IO.raiseError(managedAppValidationFailure6)
     }
 
   /** Null-safe get billing profile tag from a ResourceGroup. */
