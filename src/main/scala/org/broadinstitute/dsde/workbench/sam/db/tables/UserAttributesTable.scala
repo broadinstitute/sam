@@ -15,13 +15,13 @@ final case class UserAttributesRecord(
     contactEmail: Option[String],
     title: Option[String],
     department: Option[String],
-    interestInTerra: Option[Array[String]],
+    interestInTerra: Option[List[String]],
     programLocationCity: Option[String],
     programLocationState: Option[String],
     programLocationCountry: Option[String],
-    researchArea: Option[Array[String]],
+    researchArea: Option[List[String]],
     additionalAttributes: Option[String],
-    createdAt: Instant,
+    createdAt: Option[Instant],
     updatedAt: Instant
 )
 
@@ -68,5 +68,5 @@ object UserAttributesTable extends SQLSyntaxSupportWithDefaultSamDB[UserAttribut
       userAttributesRecord.additionalAttributes,
       userAttributesRecord.createdAt,
       userAttributesRecord.updatedAt
-  )
+    )
 }

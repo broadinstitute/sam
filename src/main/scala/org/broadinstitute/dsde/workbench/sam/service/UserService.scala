@@ -104,34 +104,35 @@ class UserService(
       contactEmail: Option[String] = None,
       title: Option[String] = None,
       department: Option[String] = None,
-      interestInTerra: Option[Array[String]] = None,
+      interestInTerra: Option[List[String]] = None,
       programLocationCity: Option[String] = None,
       programLocationState: Option[String] = None,
       programLocationCountry: Option[String] = None,
-      researchArea: Option[Array[String]] = None,
+      researchArea: Option[List[String]] = None,
       additionalAttributes: Option[String] = None,
-      createdAt: Instant = Instant.now(),
+      createdAt: Option[Instant] = Some(Instant.now()),
       updatedAt: Instant = Instant.now()
   ): IO[Unit] = {
     val attributes = registrationRequest
       .map(_.userAttributes)
-      .getOrElse(SamUserAttributesRequest(
-        marketingConsent = Some(false),
-        firstName = firstName,
-        lastName = lastName,
-        organization = organization,
-        contactEmail = contactEmail,
-        title = title,
-        department = department,
-        interestInTerra = interestInTerra,
-        programLocationCity = programLocationCity,
-        programLocationState = programLocationState,
-        programLocationCountry = programLocationCountry,
-        researchArea = researchArea,
-        additionalAttributes = additionalAttributes,
-        createdAt = createdAt,
-        updatedAt = updatedAt
-      ))
+      .getOrElse(
+        SamUserAttributesRequest(
+          marketingConsent = Some(false),
+          firstName = firstName,
+          lastName = lastName,
+          organization = organization,
+          contactEmail = contactEmail,
+          title = title,
+          department = department,
+          interestInTerra = interestInTerra,
+          programLocationCity = programLocationCity,
+          programLocationState = programLocationState,
+          programLocationCountry = programLocationCountry,
+          researchArea = researchArea,
+          additionalAttributes = additionalAttributes,
+          createdAt = createdAt,
+          updatedAt = updatedAt)
+      )
     setUserAttributesFromRequest(userId, attributes, samRequestContext).map(_ => ())
   }
 
@@ -288,7 +289,27 @@ class UserService(
         case Some(_) =>
           IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"email ${inviteeEmail} already exists")))
       }
-      _ <- setUserAttributes(SamUserAttributes(createdUser.id, marketingConsent = false, None, None, None, None, None, None, None, None, None, None, None, None, Instant.now(), Instant.now()), samRequestContext)
+      _ <- setUserAttributes(
+        SamUserAttributes(
+          createdUser.id,
+          marketingConsent = false,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          Instant.now()
+        ),
+        samRequestContext
+      )
     } yield UserStatusDetails(createdUser.id, createdUser.email)
 
   private def createUserInternal(user: SamUser, samRequestContext: SamRequestContext): IO[SamUser] =
