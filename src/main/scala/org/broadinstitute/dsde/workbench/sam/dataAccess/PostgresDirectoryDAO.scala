@@ -1355,11 +1355,57 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userAttributesTable = UserAttributesTable.syntax
       val userAttributesColumns = UserAttributesTable.column
       samsql"""
-        insert into ${UserAttributesTable as userAttributesTable} (${userAttributesColumns.samUserId}, ${userAttributesColumns.marketingConsent}, ${userAttributesColumns.updatedAt})
-          values (${userAttributes.userId}, ${userAttributes.marketingConsent}, ${Instant.now()})
+        insert into ${UserAttributesTable as userAttributesTable} (
+        ${userAttributesColumns.samUserId},
+        ${userAttributesColumns.marketingConsent},
+        ${userAttributesColumns.firstName},
+        ${userAttributesColumns.lastName},
+        ${userAttributesColumns.organization},
+        ${userAttributesColumns.contactEmail},
+        ${userAttributesColumns.title},
+        ${userAttributesColumns.department},
+        ${userAttributesColumns.interestInTerra},
+        ${userAttributesColumns.programLocationCity},
+        ${userAttributesColumns.programLocationState},
+        ${userAttributesColumns.programLocationCountry},
+        ${userAttributesColumns.researchArea},
+        ${userAttributesColumns.additionalAttributes},
+        ${userAttributesColumns.createdAt},
+        ${userAttributesColumns.updatedAt}
+        ) values (
+        ${userAttributes.userId},
+        ${userAttributes.marketingConsent},
+        ${userAttributes.firstName},
+        ${userAttributes.lastName},
+        ${userAttributes.organization},
+        ${userAttributes.contactEmail},
+        ${userAttributes.title},
+        ${userAttributes.department},
+        ${userAttributes.interestInTerra},
+        ${userAttributes.programLocationCity},
+        ${userAttributes.programLocationState},
+        ${userAttributes.programLocationCountry},
+        ${userAttributes.researchArea},
+        ${userAttributes.additionalAttributes},
+        ${userAttributes.createdAt},
+        ${Instant.now()})
         on conflict(${userAttributesColumns.samUserId})
-          do update set ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
-            ${userAttributesColumns.updatedAt} = ${Instant.now()}
+          do update set
+          ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
+          ${userAttributesColumns.firstName} = ${userAttributes.firstName},
+        ${userAttributesColumns.lastName} = ${userAttributes.lastName},
+          ${userAttributesColumns.organization} = ${userAttributes.organization},
+          ${userAttributesColumns.contactEmail} = ${userAttributes.contactEmail},
+          ${userAttributesColumns.title} = ${userAttributes.title},
+          ${userAttributesColumns.department} = ${userAttributes.department},
+          ${userAttributesColumns.interestInTerra} = ${userAttributes.interestInTerra},
+          ${userAttributesColumns.programLocationCity} = ${userAttributes.programLocationCity},
+          ${userAttributesColumns.programLocationState} = ${userAttributes.programLocationState},
+          ${userAttributesColumns.programLocationCountry} = ${userAttributes.programLocationCountry},
+          ${userAttributesColumns.researchArea} = ${userAttributes.researchArea},
+          ${userAttributesColumns.additionalAttributes} = ${userAttributes.additionalAttributes},
+          ${userAttributesColumns.createdAt} = ${userAttributes.createdAt},
+          ${userAttributesColumns.updatedAt} = ${Instant.now()}
            """.update().apply() > 0
     }
 
