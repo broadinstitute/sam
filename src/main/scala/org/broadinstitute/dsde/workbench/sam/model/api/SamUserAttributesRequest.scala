@@ -13,22 +13,21 @@ object SamUserAttributesRequest {
 
 }
 case class SamUserAttributesRequest(
-    marketingConsent: Option[Boolean],
-    firstName: Option[String],
-    lastName: Option[String],
-    organization: Option[String],
-    contactEmail: Option[String],
-    title: Option[String],
-    department: Option[String],
-    interestInTerra: Option[Array[String]],
-    programLocationCity: Option[String],
-    programLocationState: Option[String],
-    programLocationCountry: Option[String],
-    researchArea: Option[Array[String]],
-    additionalAttributes: Option[String],
-    createdAt: Instant,
-    updatedAt: Instant
-) {
+   marketingConsent: Option[Boolean],
+   firstName: Option[String],
+   lastName: Option[String],
+   organization: Option[String],
+   contactEmail: Option[String],
+   title: Option[String],
+   department: Option[String],
+   interestInTerra: Option[List[String]],
+   programLocationCity: Option[String],
+   programLocationState: Option[String],
+   programLocationCountry: Option[String],
+   researchArea: Option[List[String]],
+   additionalAttributes: Option[String],
+   createdAt: Option[Instant],
+   updatedAt: Instant) {
   def validateForNewUser: Option[Seq[ErrorReport]] = Option(
     Seq(
       validateMarketingConsentExists

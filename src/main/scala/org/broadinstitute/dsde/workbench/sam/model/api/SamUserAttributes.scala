@@ -29,7 +29,7 @@ object SamUserAttributes {
       programLocationCountry = userAttributesRequest.programLocationCountry
       researchArea = userAttributesRequest.researchArea
       additionalAttributes = userAttributesRequest.additionalAttributes
-      createdAt = Option(userAttributesRequest.createdAt).getOrElse(Instant.now())
+      createdAt = Instant.now()
       updatedAt = Instant.now()
 
     } yield SamUserAttributes(
@@ -47,8 +47,9 @@ object SamUserAttributes {
       programLocationCountry,
       researchArea,
       additionalAttributes,
-      createdAt,
-      updatedAt)
+      Some(createdAt),
+      updatedAt
+    )
     IO.fromOption(samUserAttributes)(
       new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Missing values required for new user attributes."))
     )
@@ -57,37 +58,41 @@ object SamUserAttributes {
 
 }
 final case class SamUserAttributes(
-  userId: WorkbenchUserId,
-  marketingConsent: Boolean,
-  firstName: Option[String],
-  lastName: Option[String],
-  organization: Option[String],
-  contactEmail: Option[String],
-  title: Option[String],
-  department: Option[String],
-  interestInTerra: Option[Array[String]],
-  programLocationCity: Option[String],
-  programLocationState: Option[String],
-  programLocationCountry: Option[String],
-  researchArea: Option[Array[String]],
-  additionalAttributes: Option[String],
-  createdAt: Instant,
-  updatedAt: Instant) {
+    userId: WorkbenchUserId,
+    marketingConsent: Boolean,
+    firstName: Option[String],
+    lastName: Option[String],
+    organization: Option[String],
+    contactEmail: Option[String],
+    title: Option[String],
+    department: Option[String],
+    interestInTerra: Option[List[String]],
+    programLocationCity: Option[String],
+    programLocationState: Option[String],
+    programLocationCountry: Option[String],
+    researchArea: Option[List[String]],
+    additionalAttributes: Option[String],
+    createdAt: Option[Instant],
+    updatedAt: Instant
+) {
   def updateFromUserAttributesRequest(userAttributesRequest: SamUserAttributesRequest): IO[SamUserAttributes] =
-    IO(this.copy(marketingConsent = userAttributesRequest.marketingConsent.getOrElse(this.marketingConsent),
-      firstName = userAttributesRequest.firstName.orElse(this.firstName),
-      lastName = userAttributesRequest.lastName.orElse(this.lastName),
-      organization = userAttributesRequest.organization.orElse(this.organization),
-      contactEmail = userAttributesRequest.contactEmail.orElse(this.contactEmail),
-      title = userAttributesRequest.title.orElse(this.title),
-      department = userAttributesRequest.department.orElse(this.department),
-      interestInTerra = userAttributesRequest.interestInTerra.orElse(this.interestInTerra),
-      programLocationCity = userAttributesRequest.programLocationCity.orElse(this.programLocationCity),
-      programLocationState = userAttributesRequest.programLocationState.orElse(this.programLocationState),
-      programLocationCountry = userAttributesRequest.programLocationCountry.orElse(this.programLocationCountry),
-      researchArea = userAttributesRequest.researchArea.orElse(this.researchArea),
-      additionalAttributes = userAttributesRequest.additionalAttributes.orElse(this.additionalAttributes),
-      createdAt = this.createdAt,
-      updatedAt = Instant.now())
+    IO(
+      this.copy(
+        marketingConsent = userAttributesRequest.marketingConsent.getOrElse(this.marketingConsent),
+        firstName = userAttributesRequest.firstName.orElse(this.firstName),
+        lastName = userAttributesRequest.lastName.orElse(this.lastName),
+        organization = userAttributesRequest.organization.orElse(this.organization),
+        contactEmail = userAttributesRequest.contactEmail.orElse(this.contactEmail),
+        title = userAttributesRequest.title.orElse(this.title),
+        department = userAttributesRequest.department.orElse(this.department),
+        interestInTerra = userAttributesRequest.interestInTerra.orElse(this.interestInTerra),
+        programLocationCity = userAttributesRequest.programLocationCity.orElse(this.programLocationCity),
+        programLocationState = userAttributesRequest.programLocationState.orElse(this.programLocationState),
+        programLocationCountry = userAttributesRequest.programLocationCountry.orElse(this.programLocationCountry),
+        researchArea = userAttributesRequest.researchArea.orElse(this.researchArea),
+        additionalAttributes = userAttributesRequest.additionalAttributes.orElse(this.additionalAttributes),
+        createdAt = this.createdAt.orElse(userAttributesRequest.createdAt).orElse(Some(Instant.now())),
+        updatedAt = Instant.now()
+      )
     )
 }
