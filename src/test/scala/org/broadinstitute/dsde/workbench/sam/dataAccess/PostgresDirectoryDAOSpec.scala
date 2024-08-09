@@ -2065,9 +2065,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
 
-        val otherResourceTypeName: ResourceTypeName = ResourceTypeName("awesomeType2")
-        val otherResourceType: ResourceType = ResourceType(otherResourceTypeName, actionPatterns, roles, ownerRoleName)
-        val otherResource = Resource(otherResourceTypeName, ResourceId("otherResource"), Set.empty)
+        val otherResource = Resource(resourceTypeName, ResourceId("otherResource"), Set.empty)
         val result = dao.addUserFavoriteResource(user.id, otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
         result should be(false)
       }
@@ -2087,6 +2085,20 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val loadedFavoriteResources = dao.getUserFavoriteResources(user.id, samRequestContext).unsafeRunSync()
         loadedFavoriteResources should contain theSameElementsAs Set(otherResource.fullyQualifiedId)
+      }
+
+      "remove a favorite resource for a user when the resource doesn't exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val otherResource = Resource(resourceType.name, ResourceId("otherResource"), Set.empty)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        dao.removeUserFavoriteResource(user.id, otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+
+        val loadedFavoriteResources = dao.getUserFavoriteResources(user.id, samRequestContext).unsafeRunSync()
+        loadedFavoriteResources should contain theSameElementsAs Set.empty
       }
 
       "get the favorite resources of a specific resource type for a user" in {

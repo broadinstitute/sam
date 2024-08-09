@@ -13,7 +13,7 @@
       <column name="resource_id" type="BIGINT">
         <constraints nullable="false" primaryKey="true" foreignKeyName="FK_SUFR_RESOURCE" referencedTableName="SAM_RESOURCE" referencedColumnNames="id" deleteCascade="true"/>
       </column>
-      <column name="created_at" type="timestamptz"/>
+      <column name="created_at" type="timestamptz" defaultValueComputed="now()"/>
     </createTable>
 
   </changeSet>

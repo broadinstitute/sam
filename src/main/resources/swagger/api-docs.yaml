@@ -3289,25 +3289,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
   /api/users/v2/self/favoriteResources/{resourceTypeName}/{resourceId}:
-    parameters:
-      - name: resourceTypeName
-        in: path
-        description: Resource type of the resource to favorite
-        required: true
-        schema:
-          type: string
-      - name: resourceId
-        in: path
-        description: Resource ID of the resource to favorite
-        required: true
-        schema:
-          type: string
     put:
       tags:
         - Users
       summary: Add a resource to the calling user's favorites
       operationId: addFavoriteResource
-
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Resource type of the resource to favorite
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Resource ID of the resource to favorite
+          required: true
+          schema:
+            type: string
       responses:
         202:
           description: Favorite resource added
@@ -3323,7 +3322,19 @@ paths:
         - Users
       summary: Remove a resource from the calling user's favorites
       operationId: removeFavoriteResource
-
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Resource type of the resource to favorite
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Resource ID of the resource to favorite
+          required: true
+          schema:
+            type: string
       responses:
         202:
           description: Favorite resource removed

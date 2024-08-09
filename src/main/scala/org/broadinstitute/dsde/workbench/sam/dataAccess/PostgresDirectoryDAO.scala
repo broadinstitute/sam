@@ -1389,15 +1389,16 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val resourceTypeTable = ResourceTypeTable.syntax
       val userFavoriteResourcesTable = UserFavoriteResourcesTable.syntax
       val userFavoriteResourcesColumns = UserFavoriteResourcesTable.column
-      samsql"""
-        insert into ${UserFavoriteResourcesTable as userFavoriteResourcesTable} (${userFavoriteResourcesColumns.samUserId}, ${userFavoriteResourcesColumns.resourceId}, ${userFavoriteResourcesColumns.createdAt})
+      Try {
+        samsql"""
+        insert into ${UserFavoriteResourcesTable as userFavoriteResourcesTable} (${userFavoriteResourcesColumns.samUserId}, ${userFavoriteResourcesColumns.resourceId})
           values (
           $userId,
-          (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${fullyQualifiedResourceId.resourceId} and ${resourceTypeTable.name} = ${fullyQualifiedResourceId.resourceTypeName}),
-           ${Instant.now()}
+          (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${fullyQualifiedResourceId.resourceId} and ${resourceTypeTable.name} = ${fullyQualifiedResourceId.resourceTypeName})
            )
           on conflict do nothing
            """.update().apply() > 0
+      }.getOrElse(false)
     }
 
   override def removeUserFavoriteResource(
