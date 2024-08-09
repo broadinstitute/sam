@@ -54,6 +54,7 @@ import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
+import scala.util.Random
 
 /** Created by dvoet on 6/27/17.
   */
@@ -1474,7 +1475,7 @@ class ResourceServiceSpec
       .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
-  it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
+  it should "not do anything when policy is unchanged" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
@@ -1489,13 +1490,12 @@ class ResourceServiceSpec
     )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
-    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
+    val policyVersion = Random.between(10, 100) // random version to ensure it is neither the default nor fixed
+    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false, version = policyVersion)
 
-    // setup existing policy with no members
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(accessPolicy)))
 
-    // overwrite policy with no members
-    runAndWait(
+    val updatedPolicy = runAndWait(
       resourceService.overwritePolicy(
         defaultResourceType,
         policyId.accessPolicyName,
@@ -1505,7 +1505,9 @@ class ResourceServiceSpec
       )
     )
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
+    // no changes to policy, so no calls to overwritePolicy and version should not change
+    updatedPolicy.version shouldEqual policyVersion
+    verify(mockAccessPolicyDAO, Mockito.never).overwritePolicy(any[AccessPolicy], any[SamRequestContext])
   }
 
   "overwriteAdminPolicy" should "succeed with a valid request" in {
