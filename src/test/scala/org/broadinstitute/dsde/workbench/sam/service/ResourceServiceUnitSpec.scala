@@ -30,6 +30,16 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   private val nothingRoleName = ResourceRoleName("cantDoNuthin")
   private val authDomainGroup1 = WorkbenchGroupName("authDomain1")
   private val authDomainGroup2 = WorkbenchGroupName("authDomain2")
+  private val resourceType = ResourceType(
+    resourceTypeName,
+    Set(ResourceActionPattern(readAction.value, "read action", false), ResourceActionPattern(writeAction.value, "write action", false)),
+    Set(
+      ResourceRole(readerRoleName, Set(readAction), Set.empty, Map.empty),
+      ResourceRole(ownerRoleName, Set(readAction, writeAction), Set.empty, Map.empty),
+      ResourceRole(nothingRoleName, Set.empty, Set.empty, Map.empty)
+    ),
+    ownerRoleName
+  )
 
   val testResourceId = ResourceId(UUID.randomUUID().toString)
   val testResourceId2 = ResourceId(UUID.randomUUID().toString)
@@ -163,7 +173,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
   val mockCloudExtensions = spy[CloudExtensions](NoExtensions, true)
 
   val resourceService = new ResourceService(
-    Map.empty,
+    Map(resourceTypeName -> resourceType),
     mock[PolicyEvaluatorService],
     mockAccessPolicyDAO,
     mock[DirectoryDAO],
@@ -229,14 +239,12 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       .thenReturn(IO.pure(Set.empty))
     when(mockAccessPolicyDAO.listAccessPolicies(any[FullyQualifiedResourceId], any[SamRequestContext]))
       .thenReturn(IO.pure(LazyList.empty))
-    when(mockAccessPolicyDAO.deleteAllResourcePolicies(any[FullyQualifiedResourceId], any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(mockAccessPolicyDAO.deleteResource(any[FullyQualifiedResourceId], any[SamRequestContext]))
-      .thenReturn(IO.unit)
-    when(mockAccessPolicyDAO.removeAuthDomainFromResource(any[FullyQualifiedResourceId], any[SamRequestContext]))
+    when(mockAccessPolicyDAO.deleteResource(any[FullyQualifiedResourceId], any[Boolean], any[SamRequestContext]))
       .thenReturn(IO.unit)
     when(mockAccessPolicyDAO.deleteResourceParent(any[FullyQualifiedResourceId], any[SamRequestContext]))
       .thenReturn(IO.pure(true))
+    when(mockAccessPolicyDAO.checkPolicyGroupsInUse(any[FullyQualifiedResourceId], any[SamRequestContext]))
+      .thenReturn(IO.pure(List.empty))
 
     resourceService.deleteResource(FullyQualifiedResourceId(resourceTypeName, testResourceId), samRequestContext).unsafeRunSync()
     verify(mockCloudExtensions).onResourceDelete(testResourceId, samRequestContext)

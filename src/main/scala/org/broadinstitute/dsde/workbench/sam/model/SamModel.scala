@@ -3,7 +3,6 @@ package org.broadinstitute.dsde.workbench.sam.model
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, SamUser}
-import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
 import java.time.Instant
@@ -32,6 +31,7 @@ object SamResourceActions {
   val testAnyActionAccess = ResourceAction("test_any_action_access")
   val getParent = ResourceAction("get_parent")
   val setParent = ResourceAction("set_parent")
+  val createWithParent = ResourceAction("create_with_parent")
   val addChild = ResourceAction("add_child")
   val removeChild = ResourceAction("remove_child")
   val listChildren = ResourceAction("list_children")
@@ -41,6 +41,7 @@ object SamResourceActions {
   val adminRemoveMember = ResourceAction("admin_remove_member")
   val link = ResourceAction("link")
   val setManagedResourceGroup = ResourceAction("set_managed_resource_group")
+  val adminReadSummaryInformation = ResourceAction("admin_read_summary_information")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
@@ -84,7 +85,12 @@ object UserStatusDetails {
     userAcceptedVersion: Option[String]
 )
 
-@Lenses final case class TermsOfServiceDetails(latestAcceptedVersion: String, acceptedOn: Instant, permitsSystemUsage: Boolean, isCurrentVersion: Boolean)
+@Lenses final case class TermsOfServiceDetails(
+    latestAcceptedVersion: Option[String],
+    acceptedOn: Option[Instant],
+    permitsSystemUsage: Boolean,
+    isCurrentVersion: Boolean
+)
 @Lenses final case class TermsOfServiceHistory(history: List[TermsOfServiceHistoryRecord])
 @Lenses final case class TermsOfServiceHistoryRecord(action: String, version: String, timestamp: Instant)
 
@@ -100,7 +106,9 @@ object UserStatusDetails {
     descendantRoles: Map[ResourceTypeName, Set[ResourceRoleName]] = Map.empty
 )
 
-@Lenses final case class ResourceTypeName(value: String) extends ValueObject
+@Lenses final case class ResourceTypeName(value: String) extends ValueObject {
+  def isResourceTypeAdmin: Boolean = value == SamResourceTypes.resourceTypeAdminName.value
+}
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId) {
   override def toString: String = s"$resourceTypeName/$resourceId"
@@ -184,7 +192,9 @@ object RolesAndActions {
     policyName: AccessPolicyName,
     resourceTypeName: ResourceTypeName,
     resourceId: ResourceId
-)
+) {
+  def toFullyQualifiedPolicyId: FullyQualifiedPolicyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), policyName)
+}
 
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
@@ -207,7 +217,9 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
     descendantPermissions: Set[AccessPolicyDescendantPermissions],
-    public: Boolean
+    public: Boolean,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
 ) extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
@@ -223,10 +235,18 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     email: WorkbenchEmail,
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
-    public: Boolean
+    public: Boolean,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
 )
 
-@Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
+@Lenses final case class BasicWorkbenchGroup(
+    id: WorkbenchGroupName,
+    members: Set[WorkbenchSubject],
+    email: WorkbenchEmail,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
+) extends WorkbenchGroup
 object BasicWorkbenchGroup {
   def apply(workbenchGroup: WorkbenchGroup): BasicWorkbenchGroup =
     workbenchGroup.id match {
@@ -234,10 +254,6 @@ object BasicWorkbenchGroup {
       case _ => throw new WorkbenchException(s"WorkbenchGroup ${workbenchGroup} cannot be converted to a BasicWorkbenchGroup")
     }
 }
-
-@Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
-@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)
-@Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
 
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 

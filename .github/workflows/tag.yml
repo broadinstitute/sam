@@ -13,11 +13,6 @@ on:
         default: false
         required: false
         type: string
-      print-tag:
-        description: "Echo generated tag to console"
-        default: "true"
-        required: false
-        type: string
       release-branches:
         description: "Default branch (main, develop, etc)"
         default: 'main'
@@ -30,6 +25,9 @@ on:
       new-tag:
         description: "The value of the newly created tag"
         value: ${{ jobs.tag-job.outputs.new-tag }}
+      app-version:
+        description: "The app version"
+        value: ${{ jobs.tag-job.outputs.app-version }}
     secrets:
       BROADBOT_TOKEN:
         required: true
@@ -44,6 +42,7 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       new-tag: ${{ steps.tag.outputs.new_tag }}
+      app-version: ${{ steps.output-version.outputs.app-version }}
     steps:
       - name: Checkout current code
         uses: actions/checkout@v3
@@ -60,7 +59,14 @@ jobs:
           DRY_RUN: ${{ inputs.dry-run }}
           RELEASE_BRANCHES: ${{ inputs.release-branches }}
           WITH_V: true
-      - name: Echo generated tag to console
-        if: ${{ inputs.print-tag == 'true' }}
+      - name: Output app version
+        id: output-version
         run: |
-          echo "Newly created version tag: '${{ steps.tag.outputs.new_tag }}'"
+          # See https://broadworkbench.atlassian.net/browse/QA-2282 for context
+          if [[ -z "${{ steps.tag.outputs.new_tag }}" ]]; then
+            echo "App version tag for this commit has already been dispatched: '${{ steps.tag.outputs.tag }}'"
+            echo "app-version=${{ steps.tag.outputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "New app version tag: '${{ steps.tag.outputs.new_tag }}'"
+            echo "app-version=${{ steps.tag.outputs.new_tag }}" >> $GITHUB_OUTPUT
+          fi

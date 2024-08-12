@@ -17,8 +17,8 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, ge
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -283,6 +283,36 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[String] should not be empty
+    }
+  }
+
+  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with empty response when deduping sync requests" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val (user, samDep, routes) = createTestUser(resourceTypes)
+
+    Post(s"/api/resource/${resourceType.name}/foo") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+      assertResult("") {
+        responseAs[String]
+      }
+    }
+
+    import spray.json.DefaultJsonProtocol._
+    import SamGoogleModelJsonSupport._
+    Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]] should not be empty
+    }
+
+    // A duplicate call should return OK and the email with no sync report items
+    Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
+      response.keys should have size 1
+      val email = response.keys.head.value
+      email should startWith("policy-")
+      email should endWith("example.com")
+      response.values.flatten shouldBe empty
     }
   }
 

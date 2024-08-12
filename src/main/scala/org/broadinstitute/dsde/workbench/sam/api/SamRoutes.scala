@@ -109,9 +109,6 @@ abstract class SamRoutes(
 
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))
   }
-
-  def statusCodeCreated[T](response: T): (StatusCode, T) = (StatusCodes.Created, response)
-
 }
 
 object SamRoutes {

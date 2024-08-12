@@ -29,7 +29,8 @@ class UserService(
     val cloudExtensions: CloudExtensions,
     blockedEmailDomains: Seq[String],
     tosService: TosService,
-    azureConfig: Option[AzureServicesConfig] = None
+    azureConfig: Option[AzureServicesConfig] = None,
+    nonInvitableDomains: Seq[String] = Seq.empty
 )(implicit
     val executionContext: ExecutionContext
 ) extends LazyLogging {
@@ -172,6 +173,9 @@ class UserService(
   def getUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     directoryDAO.loadUser(userId, samRequestContext)
 
+  def getUsersByIds(samUserIds: Seq[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
+    directoryDAO.batchLoadUsers(samUserIds.toSet, samRequestContext)
+
   def getUsersByQuery(
       userId: Option[WorkbenchUserId],
       googleSubjectId: Option[GoogleSubjectId],
@@ -226,7 +230,7 @@ class UserService(
     for {
       _ <- updateInvitedUser(userToRegister, samRequestContext)
       groups <- directoryDAO.listUserDirectMemberships(userToRegister.id, samRequestContext)
-      _ <- cloudExtensions.onGroupUpdate(groups, samRequestContext)
+      _ <- cloudExtensions.onGroupUpdate(groups, Set(invitedUserId), samRequestContext)
     } yield userToRegister
   }
 
@@ -247,7 +251,7 @@ class UserService(
 
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
-      _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains)
+      _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains, nonInvitableDomains)
       existingSubject <- directoryDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext)
       createdUser <- existingSubject match {
         case None => createUserInternal(SamUser(genWorkbenchUserId(System.currentTimeMillis()), None, inviteeEmail, None, false), samRequestContext)
@@ -436,13 +440,25 @@ class UserService(
 
   // moved this method from the UserService companion object into this class
   // because Mockito would not let us spy/mock the static method
-  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String]): IO[Unit] =
+  def validateEmailAddress(email: WorkbenchEmail, blockedEmailDomains: Seq[String], nonInvitableDomain: Seq[String]): IO[Unit] =
     email.value match {
-      case emailString if blockedEmailDomains.exists(domain => emailString.endsWith("@" + domain) || emailString.endsWith("." + domain)) =>
+      case emailString if matchesBadDomain(emailString, blockedEmailDomains) =>
         IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"email domain not permitted [${email.value}]")))
+      case emailString if matchesBadDomain(emailString, nonInvitableDomain) =>
+        IO.raiseError(
+          new WorkbenchExceptionWithErrorReport(
+            ErrorReport(
+              StatusCodes.BadRequest,
+              s"Email domain cannot be invited [${email.value}]. If you are trying to invite a group, please make sure that group exists before adding it to a resource policy."
+            )
+          )
+        )
       case UserService.emailRegex() => IO.unit
       case _ => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"invalid email address [${email.value}]")))
     }
+
+  private def matchesBadDomain(emailString: String, badDomains: Seq[String]): Boolean =
+    badDomains.exists(domain => emailString.endsWith("@" + domain) || emailString.endsWith("." + domain))
 
   def getUserAllowances(samUser: SamUser, samRequestContext: SamRequestContext): IO[SamUserAllowances] =
     for {

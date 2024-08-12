@@ -67,6 +67,7 @@ class PetServiceAccounts(
         case None =>
           for {
             _ <- assertProjectInTerraOrg(project)
+            _ <- assertProjectIsActive(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             _ <- withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition

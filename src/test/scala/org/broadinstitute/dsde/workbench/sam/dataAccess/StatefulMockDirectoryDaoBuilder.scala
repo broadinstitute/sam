@@ -162,6 +162,9 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
           .toSet
       )
     )
+    mockedDirectoryDAO.batchLoadUsers(any[Set[WorkbenchUserId]], any[SamRequestContext]) answers ((samUserIds: Set[WorkbenchUserId], _: SamRequestContext) =>
+      IO(samUsers.filter(user => samUserIds.contains(user.id)).toSeq)
+    )
     this
   }
 

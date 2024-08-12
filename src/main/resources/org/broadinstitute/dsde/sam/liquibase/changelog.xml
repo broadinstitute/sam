@@ -28,5 +28,8 @@
     <include file="changesets/20230929_add_tos_audit_table.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20231011_add_tos_audit_table_created_at_pk.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20231019_sam_user_attributes_table.xml" relativeToChangelogFile="true"/>
-    <include file="changesets/20240118_action_service_accounts.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20240417_action_managed_identities.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20240416_add_sam_rac_tables.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20240701_add_group_version_and_last_synchronized_version.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20240812_action_service_accounts.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

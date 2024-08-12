@@ -11,14 +11,7 @@ info:
 servers:
   - url: /
 security:
-  - googleoauth:
-      - openid
-      - email
-      - profile
-  - oidc:
-      - openid
-      - email
-      - profile
+  - oidc: []
 paths:
   /api/admin/v1/user/{userId}:
     get:
@@ -77,7 +70,7 @@ paths:
     get:
       tags:
         - Admin
-      summary: Retrieves a user record, by user id
+      summary: Retrieves a user record, by user id. Limited to 1000 user IDs.
       operationId: adminGetUser
       parameters:
         - name: userId
@@ -169,6 +162,45 @@ paths:
         404:
           description: No matching users found
           content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    post:
+      tags:
+        - Admin
+      summary: Gets a list of users for a list of Sam User IDs
+      operationId: adminGetUsersByIDs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: string
+      responses:
+        200:
+          description: list of matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        400:
+          description: Request invalid. Request body must be a list of less than 1000 Sam User IDs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        403:
+          description: You do not have service admin privileges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
         500:
           description: Internal Server Error
           content:
@@ -324,7 +356,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/admin/v1/resources/{resourceTypeName}/{resourceId}/policies/{policyName}/memberEmails/{userEmail}:
+  /api/admin/v1/resources/{resourceTypeName}/{resourceId}/policies/{policyName}/memberEmails/{email}:
     put:
       tags:
         - Admin
@@ -349,7 +381,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: userEmail
+        - name: email
           in: path
           description: Email of user to be added
           required: true
@@ -404,7 +436,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: userEmail
+        - name: email
           in: path
           description: Email of user to be removed
           required: true
@@ -424,6 +456,39 @@ paths:
           description: Resource type does not exist, you are not a member of any policy
             on the resource, or user was not found
           content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v1/resourceTypes/{resourceTypeName}/action/{action}:
+    get:
+      tags:
+        - Admin
+      summary: Query if requesting user may perform the action on the resource type
+      operationId: resourceTypeAdminPermission
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource to query
+          required: true
+          schema:
+            type: string
+        - name: action
+          in: path
+          description: Action to perform
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: true if the user may perform the action, false if they may
+            not or the resource type does not exist
+          content:
+            application/json:
+              schema:
+                type: boolean
         500:
           description: Internal Server Error
           content:
@@ -537,6 +602,32 @@ paths:
         404:
           description: Policy does not exist or resource type does not exist
           content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v1/groups/{groupName}/supportSummary:
+    get:
+      tags:
+        - Admin
+      summary: Get information about a group useful for Terra support
+      operationId: getAdminGroupSummaryInfo
+      parameters:
+        - name: groupName
+          in: path
+          description: Name of group
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: group summary information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedGroupSupportSummary'
         500:
           description: Internal Server Error
           content:
@@ -943,7 +1034,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/google/v1/petServiceAccount/{project}/{userEmail}:
+  /api/google/v1/petServiceAccount/{project}/{email}:
     get:
       tags:
         - Google
@@ -957,7 +1048,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: userEmail
+        - name: email
           in: path
           description: User's email address
           required: true
@@ -990,14 +1081,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/google/v1/petServiceAccount/{userEmail}/key:
+  /api/google/v1/petServiceAccount/{email}/key:
     get:
       tags:
         - Google
       summary: gets a key for the user's arbitrary pet service account, get_pet_private_key action on cloud-extension/google required
       operationId: getUserArbitraryPetServiceAccountKey
       parameters:
-        - name: userEmail
+        - name: email
           in: path
           description: User's email address
           required: true
@@ -1547,7 +1638,7 @@ paths:
         content:
           'application/json':
             schema:
-              $ref: '#/components/schemas/GetOrCreatePetManagedIdentityRequest'
+              $ref: '#/components/schemas/GetOrCreateManagedIdentityRequest'
         required: true
       responses:
         200:
@@ -1577,7 +1668,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/azure/v1/petManagedIdentity/{userEmail}:
+  /api/azure/v1/petManagedIdentity/{email}:
     post:
       tags:
         - Azure
@@ -1585,7 +1676,7 @@ paths:
         action on cloud-extension/azure required
       operationId: getPetManagedIdentityForUser
       parameters:
-        - name: userEmail
+        - name: email
           in: path
           description: User's email address
           required: true
@@ -1596,7 +1687,7 @@ paths:
         content:
           'application/json':
             schema:
-              $ref: '#/components/schemas/GetOrCreatePetManagedIdentityRequest'
+              $ref: '#/components/schemas/GetOrCreateManagedIdentityRequest'
         required: true
       responses:
         200:
@@ -1627,6 +1718,125 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/azure/v1/actionManagedIdentity/{billingProfileId}/{resourceTypeName}/{resourceId}/{action}:
+    post:
+      tags:
+        - Azure
+      summary: creates an action managed identity that the calling user has access to
+      operationId: createActionManagedIdentity
+      parameters:
+        - name: billingProfileId
+          in: path
+          description: Billing Profile if the Managed Resource Group to create the Action Managed Identity in
+          required: true
+          schema:
+            type: string
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+        - name: action
+          in: path
+          description: Action to create the managed identity for
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Action managed identity already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionManagedIdentityResponse'
+        201:
+          description: Successfully created the action managed identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionManagedIdentityResponse'
+        400:
+          description: Invalid or incomplete request body
+          content: { }
+        403:
+          description: Caller does not have the action on the resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: Resource does not exist
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/azure/v1/actionManagedIdentity/{resourceTypeName}/{resourceId}/{action}:
+    get:
+      tags:
+        - Azure
+      summary: gets an action managed identity that the calling user has access to
+      operationId: getActionManagedIdentity
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+        - name: action
+          in: path
+          description: Action to get the managed identity for
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Successfully retrieved the action managed identity without creating it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionManagedIdentityResponse'
+        201:
+          description: Successfully created the action managed identity
+          content:
+            application/json:
+              schema:
+                type: string
+        400:
+          description: Invalid or incomplete request body
+          content: { }
+        403:
+          description: Caller does not have the action on the resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: Resource does not exist
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+
   /api/resources/v2:
     get:
       tags:
@@ -1957,6 +2167,42 @@ paths:
       responses:
         204:
           description: Successfully updated domains
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2/{resourceTypeName}/{resourceId}/authDomain/satisfied:
+    get:
+      tags:
+        - Resources
+      summary: Check whether the calling user satisfies all Authoriaztion Domain Constraints
+      operationId: isAuthDomainV2Satisfied
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: User satisfies all authorization domain constraints.
+            Empty if an Auth Domain has not been set
+        403:
+          description: User does not satisfy all authorization domain constraints.
+          content: { }
+        404:
+          description: Resource type or resource does not exist or you are not a member
+            of any policy on the resource
           content: { }
         500:
           description: Internal Server Error
@@ -2670,7 +2916,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}/userEmail/{userEmail}:
+  /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}/userEmail/{email}:
     get:
       tags:
         - Resources
@@ -2695,7 +2941,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: userEmail
+        - name: email
           in: path
           description: User Email address to check
           required: true
@@ -2905,14 +3151,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/users/v1/invite/{inviteeEmail}:
+  /api/users/v1/invite/{email}:
     post:
       tags:
         - Users
       summary: create current user in the system using login credentials
       operationId: inviteUser
       parameters:
-        - name: inviteeEmail
+        - name: email
           in: path
           description: email for the user you want to invite
           required: true
@@ -3042,7 +3288,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/users/v2/{samUserId}:
+  /api/users/v2/self/combinedState:
+    get:
+      tags:
+        - Users
+      summary: Gets a combined SamUser, attributes, allowances, terms of service, enterprise features state of the user, used to reduce api calls.
+      operationId: getSamUserCombinedState
+      responses:
+        200:
+          description: user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserCombinedState'
+        403:
+          description: user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/{sam_user_id}:
     get:
       tags:
         - Admin
@@ -3052,7 +3317,7 @@ paths:
         Admin permissions grant the caller the ability to get any id.
       operationId: getSamUserById
       parameters:
-        - name: samUserId
+        - name: sam_user_id
           in: path
           description: the id of the sam user to get
           required: true
@@ -3071,7 +3336,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/users/v2/{samUserId}/allowed:
+  /api/users/v2/{sam_user_id}/allowed:
     get:
       tags:
         - Admin
@@ -3081,7 +3346,7 @@ paths:
         Admin permissions grant the caller the ability to get any id.
       operationId: getSamUserAllowancesById
       parameters:
-        - name: samUserId
+        - name: sam_user_id
           in: path
           description: the id of the sam user to get
           required: true
@@ -3429,14 +3694,14 @@ paths:
       responses:
         204:
           description: OK
-  /api/termsOfService/v1/user/{samUserId}:
+  /api/termsOfService/v1/user/{sam_user_id}:
     get:
       tags:
         - TermsOfService
       summary: gets a user's terms of service status, can only get another user's status if the requester is an admin.
       operationId: userTermsOfServiceGet
       parameters:
-        - name: samUserId
+        - name: sam_user_id
           in: path
           description: the id of the sam user to get terms of service status for
           required: true
@@ -3481,14 +3746,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/termsOfService/v1/user/{samUserId}/history:
+  /api/termsOfService/v1/user/{sam_user_id}/history:
     get:
       tags:
         - TermsOfService
       summary: gets a user's terms of service acceptance/rejection action history, can only get another user's history if the requester is an admin.
       operationId: userTermsOfServiceGetUserHistory
       parameters:
-        - name: samUserId
+        - name: sam_user_id
           in: path
           description: the id of the sam user to get terms of service status for
           required: true
@@ -3840,6 +4105,29 @@ components:
           description: The email address associated with the group
       description: specification of a managed group with an access policy and the
         email associated with the managed group
+    ManagedGroupSupportSummary:
+      required:
+        - groupName
+        - email
+        - authDomainFor
+        - parentGroups
+      type: object
+      properties:
+        groupName:
+          type: string
+          description: The name of the group
+        email:
+          type: string
+          description: The email address associated with the group
+        authDomainFor:
+          type: array
+          items:
+            $ref: '#/components/schemas/FullyQualifiedResourceId'
+        parentGroups:
+          type: array
+          items:
+            type: string
+          description: The parent groups of the group
     PolicyIdentifiers:
       required:
         - policyName
@@ -4293,7 +4581,7 @@ components:
           type: string
           description: the name of the Azure managed resource group
           example: my-managed-resource-group
-    GetOrCreatePetManagedIdentityRequest:
+    GetOrCreateManagedIdentityRequest:
       required:
         - tenantId
         - subscriptionId
@@ -4312,7 +4600,31 @@ components:
           type: string
           description: the name of the Azure managed resource group
           example: my-managed-resource-group
-      description: specifies a request for a pet managed identity
+      description: specifies a request for a managed identity
+    ActionManagedIdentityId:
+      type: object
+      required:
+        - resourceId
+        - action
+        - billingProfileId
+      properties:
+        resourceId:
+          $ref: '#/components/schemas/FullyQualifiedResourceId'
+        action:
+          type: string
+        billingProfileId:
+          type: string
+    ActionManagedIdentityResponse:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/ActionManagedIdentityId'
+        objectId:
+          type: string
+        displayName:
+          type: string
+        managedResourceGroupCoordinates:
+          $ref: '#/components/schemas/ManagedResourceGroupCoordinates'
     User:
       type: object
       required:
@@ -4419,6 +4731,21 @@ components:
         marketingConsent:
           type: boolean
           description: does the user consent to receiving marketing communications
+    SamUserCombinedState:
+      type: object
+      properties:
+        samUser:
+          $ref: '#/components/schemas/SamUserResponse'
+        userAttributes:
+          $ref: '#/components/schemas/SamUserAttributes'
+        userAllowances:
+          $ref: '#/components/schemas/SamUserAllowances'
+        userTermsOfServiceDetails:
+          $ref: '#/components/schemas/UserTermsOfServiceDetails'
+        additionalDetails:
+          type: object
+          description: >
+            additional details about the user, such as enterprise features they have access to example: '{ "enterpriseFeatures": ["feature1", "feature2"] }'
     SamUserRegistrationRequest:
       type: object
       properties:
@@ -4578,22 +4905,11 @@ components:
           items:
             type: string
   securitySchemes:
-    googleoauth:
-      type: oauth2
-      flows:
-        implicit:
-          authorizationUrl: https://accounts.google.com/o/oauth2/auth
-          scopes:
-            openid: open id authorization
-            email: email authorization
-            profile: profile authorization
     oidc:
       type: oauth2
+      x-tokenName: id_token
       flows:
         authorizationCode:
-          authorizationUrl: /oauth2/authorize
-          tokenUrl: /oauth2/token
-          scopes:
-            openid: open id authorization
-            email: email authorization
-            profile: profile authorization
+          authorizationUrl: OAUTH_AUTHORIZATION_URL
+          scopes: {}
+          tokenUrl: OAUTH_TOKEN_URL

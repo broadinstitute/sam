@@ -14,7 +14,6 @@ import io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.context.propagation.{ContextPropagators, TextMapPropagator}
 import io.opentelemetry.exporter.prometheus.PrometheusHttpServer
-import io.opentelemetry.instrumentation.resources.{ContainerResource, HostResource}
 import io.opentelemetry.sdk.metrics.SdkMeterProvider
 import io.opentelemetry.sdk.{OpenTelemetrySdk, resources}
 import io.opentelemetry.sdk.trace.SdkTracerProvider
@@ -34,8 +33,8 @@ import org.broadinstitute.dsde.workbench.google.{
   HttpGoogleStorageDAO
 }
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
+import org.broadinstitute.dsde.workbench.oauth2.{ClientId, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -45,6 +44,7 @@ import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.util.Sentry.initSentry
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.typelevel.log4cats.StructuredLogger
@@ -80,6 +80,23 @@ object Boot extends IOApp with LazyLogging {
         }
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
+
+        // make sure all users referenced by resourceAccessPolicies exist
+        _ <- appConfig.resourceAccessPolicies.flatMap { case (_, policy) => policy.memberEmails }.toList.traverse { email =>
+          dependencies.samApplication.userService.inviteUser(email, SamRequestContext()).attempt
+        }
+
+        // create resourceAccessPolicies
+        policyTrials <- dependencies.samApplication.resourceService.upsertResourceAccessPolicies(appConfig.resourceAccessPolicies)
+        _ = policyTrials.map {
+          case (policyId, Left(t)) =>
+            logger.error(s"FATAL - failure creating configured policy [$policyId] on startup", t)
+          case (policyId, Right(_)) =>
+            logger.info(s"Upserted configured policy [$policyId] at startup")
+        }
+        _ <- IO.raiseWhen(policyTrials.values.exists(_.isLeft))(
+          new WorkbenchException("FATAL - failure creating configured policy on startup, see above errors")
+        )
 
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
 
@@ -141,8 +158,6 @@ object Boot extends IOApp with LazyLogging {
         OpenIDConnectConfiguration[IO](
           appConfig.oidcConfig.authorityEndpoint,
           ClientId(appConfig.oidcConfig.clientId),
-          oidcClientSecret = appConfig.oidcConfig.clientSecret.map(ClientSecret),
-          extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
           extraAuthParams = Some("prompt=login")
         )
       )
@@ -356,10 +371,7 @@ object Boot extends IOApp with LazyLogging {
       resources.Resource.getDefault.toBuilder
         .put(ResourceAttributes.SERVICE_NAME, "sam")
     maybeVersion.foreach(version => resourceBuilder.put(ResourceAttributes.SERVICE_VERSION, version))
-    val resource = HostResource
-      .get()
-      .merge(ContainerResource.get())
-      .merge(resourceBuilder.build)
+    val resource = resourceBuilder.build
 
     val maybeTracerProvider = appConfig.googleConfig.flatMap { googleConfig =>
       if (googleConfig.googleServicesConfig.traceExporter.enabled) {
@@ -412,6 +424,9 @@ object Boot extends IOApp with LazyLogging {
   )(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
+    val azureService = config.azureServicesConfig.map { azureConfig =>
+      new AzureService(azureConfig, new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
+    }
     val resourceService = new ResourceService(
       resourceTypeMap,
       policyEvaluatorService,
@@ -419,11 +434,19 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO,
       cloudExtensionsInitializer.cloudExtensions,
       config.emailDomain,
-      config.adminConfig.allowedEmailDomains
+      config.adminConfig.allowedEmailDomains,
+      azureService
     )
     val tosService = new TosService(cloudExtensionsInitializer.cloudExtensions, directoryDAO, config.termsOfServiceConfig)
     val userService =
-      new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService, config.azureServicesConfig)
+      new UserService(
+        directoryDAO,
+        cloudExtensionsInitializer.cloudExtensions,
+        config.blockedEmailDomains,
+        tosService,
+        config.azureServicesConfig,
+        Seq(config.emailDomain)
+      )
     val statusService =
       new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds, 1 minute)
     val managedGroupService =
@@ -437,9 +460,7 @@ object Boot extends IOApp with LazyLogging {
         config.emailDomain
       )
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
-    val azureService = config.azureServicesConfig.map { azureConfig =>
-      new AzureService(new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
-    }
+
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
         val routes = new SamRoutes(

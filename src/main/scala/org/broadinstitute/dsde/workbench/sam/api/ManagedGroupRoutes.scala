@@ -10,12 +10,12 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceId, _}
-import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.{ManagedGroupAccessInstructions, SamUser}
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.ManagedGroupPolicyName
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
+import org.broadinstitute.dsde.workbench.sam.model.api.ManagedGroupModelJsonSupport._
 
 import scala.concurrent.ExecutionContext
 
@@ -31,39 +31,39 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
       pathPrefix(Segment) { groupId =>
         val managedGroup = FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, ResourceId(groupId))
         pathEndOrSingleSlash {
-          get {
+          getWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleGetGroup(managedGroup.resourceId, samRequestContext)
-          } ~ post {
+          } ~ postWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleCreateGroup(managedGroup.resourceId, samUser, samRequestContext)
-          } ~ delete {
+          } ~ deleteWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleDeleteGroup(managedGroup, samUser, samRequestContext)
           }
         } ~ pathPrefix("requestAccess") {
-          post {
+          postWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleRequestAccess(managedGroup, samUser, samRequestContext)
           }
         } ~ path("accessInstructions") {
-          put {
+          putWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             entity(as[ManagedGroupAccessInstructions]) { accessInstructions =>
               handleSetAccessInstructions(managedGroup, accessInstructions, samUser, samRequestContext)
             }
-          } ~ get {
+          } ~ getWithTelemetry(samRequestContext, groupIdParam(managedGroup)) {
             handleGetAccessInstructions(managedGroup, samRequestContext)
           }
         } ~ pathPrefix(Segment) { policyName =>
           val accessPolicyName = ManagedGroupService.getPolicyName(policyName)
           pathEndOrSingleSlash {
-            get {
+            getWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName)) {
               handleListEmails(managedGroup, accessPolicyName, samUser, samRequestContext)
-            } ~ put {
+            } ~ putWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName)) {
               handleOverwriteEmails(managedGroup, accessPolicyName, samUser, samRequestContext)
             }
           } ~ pathPrefix(Segment) { email =>
             val workbenchEmail = WorkbenchEmail(email)
             pathEndOrSingleSlash {
-              put {
+              putWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName), emailParam(workbenchEmail)) {
                 handleAddEmailToPolicy(managedGroup, accessPolicyName, workbenchEmail, samUser, samRequestContext)
-              } ~ delete {
+              } ~ deleteWithTelemetry(samRequestContext, groupIdParam(managedGroup), policyNameParam(accessPolicyName), emailParam(workbenchEmail)) {
                 handleDeleteEmailFromPolicy(managedGroup, accessPolicyName, workbenchEmail, samUser, samRequestContext)
               }
             }
@@ -72,7 +72,7 @@ trait ManagedGroupRoutes extends SamUserDirectives with SecurityDirectives with 
       }
     } ~ (pathPrefix("groups" / "v1") | pathPrefix("groups")) {
       pathEndOrSingleSlash {
-        get {
+        getWithTelemetry(samRequestContext) {
           handleListGroups(samUser, samRequestContext)
         }
       }

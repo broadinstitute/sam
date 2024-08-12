@@ -76,7 +76,13 @@ class CreateUserSpec extends UserServiceTestTraits {
         val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
         val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
         val userService: UserService =
-          new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, Some(AzureServicesConfig("", "", "", Seq.empty, true)))
+          new UserService(
+            directoryDAO,
+            cloudExtensions,
+            Seq.empty,
+            defaultTosService,
+            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = true))
+          )
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(newAzureUser, samRequestContext))
@@ -284,7 +290,13 @@ class CreateUserSpec extends UserServiceTestTraits {
         val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
         val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
         val userServiceDisabledFeature: UserService =
-          new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, Some(AzureServicesConfig("", "", "", Seq.empty, false)))
+          new UserService(
+            directoryDAO,
+            cloudExtensions,
+            Seq.empty,
+            defaultTosService,
+            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = false))
+          )
 
         // Act and Assert
         assertThrows[WorkbenchExceptionWithErrorReport] {
@@ -382,6 +394,23 @@ class CreateUserSpec extends UserServiceTestTraits {
   }
 
   describe("An invited User") {
+
+    it("should not be able to be invited with a non-invitable domain") {
+      // Arrange
+      val nonInvitableDomain = "non-invitable-domain.com"
+      val invitedGoogleUser = genWorkbenchUserGoogle.sample.get.copy(email = WorkbenchEmail(s"user@$nonInvitableDomain"))
+      val directoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+      val cloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
+      val userService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService, None, Seq(nonInvitableDomain))
+
+      // Act
+      val exception = intercept[WorkbenchExceptionWithErrorReport] {
+        runAndWait(userService.inviteUser(invitedGoogleUser.email, samRequestContext))
+      }
+
+      // Assert
+      exception.errorReport.message should include("Email domain cannot be invited")
+    }
 
     it("should be able to be invited with no marketing consent") {
       // Arrange

@@ -6,10 +6,17 @@ import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.azure.{ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ActionManagedIdentity,
+  ActionManagedIdentityId,
+  BillingProfileId,
+  ManagedIdentityObjectId,
+  PetManagedIdentity,
+  PetManagedIdentityId
+}
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.model.api.{ActionServiceAccount, ActionServiceAccountId}
 import org.broadinstitute.dsde.workbench.sam.model.ResourceId
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -109,6 +116,11 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] = IO {
     users.get(userId)
   }
+
+  override def batchLoadUsers(
+      samUserIds: Set[WorkbenchUserId],
+      samRequestContext: SamRequestContext
+  ): IO[Seq[SamUser]] = IO(samUserIds.flatMap(users.get).toSeq)
 
   override def loadUsersByQuery(
       userId: Option[WorkbenchUserId],
@@ -252,10 +264,18 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     }.toSeq
   }
 
-  override def updateSynchronizedDate(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] = {
-    groupSynchronizedDates += groupId -> new Date()
+  override def updateSynchronizedDateAndVersion(group: WorkbenchGroup, samRequestContext: SamRequestContext): IO[Unit] = {
+    groupSynchronizedDates += group.id -> new Date()
+    groups.get(group.id).foreach {
+      case g: BasicWorkbenchGroup => groups.put(g.id, g.copy(lastSynchronizedVersion = Option(g.lastSynchronizedVersion.getOrElse(0) + 1)))
+      case p: AccessPolicy => groups.put(p.id, p.copy(lastSynchronizedVersion = Option(p.lastSynchronizedVersion.getOrElse(0) + 1)))
+      case _ => ()
+    }
     IO.unit
   }
+
+  override def updateGroupUpdatedDateAndVersionWithSession(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Unit] =
+    IO.unit
 
   override def loadSubjectEmail(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] = IO {
     subject match {
@@ -436,6 +456,38 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(None)
 
+  override def createActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] = ???
+
+  override def loadActionManagedIdentity(
+      actionManagedIdentityId: ActionManagedIdentityId,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] = ???
+
+  override def loadActionManagedIdentity(
+      resource: FullyQualifiedResourceId,
+      action: ResourceAction,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionManagedIdentity]] = ???
+
+  override def updateActionManagedIdentity(actionManagedIdentity: ActionManagedIdentity, samRequestContext: SamRequestContext): IO[ActionManagedIdentity] = ???
+
+  override def deleteActionManagedIdentity(actionManagedIdentityId: ActionManagedIdentityId, samRequestContext: SamRequestContext): IO[Unit] = ???
+
+  override def getAllActionManagedIdentitiesForResource(
+      resourceId: FullyQualifiedResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]] = IO.pure(Seq.empty)
+
+  override def deleteAllActionManagedIdentitiesForResource(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    ???
+
+  override def getAllActionManagedIdentitiesForBillingProfile(
+      billingProfileId: BillingProfileId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionManagedIdentity]] = IO.pure(Seq.empty)
+
+  override def deleteAllActionManagedIdentitiesForBillingProfile(billingProfileId: BillingProfileId, samRequestContext: SamRequestContext): IO[Unit] = ???
+
   override def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit] =
     loadUser(userId, samRequestContext).map {
       case None =>
@@ -465,4 +517,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       case Some(_) =>
         userAttributes.update(samUserAttributes.userId, samUserAttributes)
     }
+
+  override def listParentGroups(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] = IO.pure(Set.empty)
 }

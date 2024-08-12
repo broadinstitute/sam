@@ -11,9 +11,11 @@ import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig.googleServicesConfigReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DistributedLockConfig
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
 
 import java.time.Instant
 import scala.concurrent.duration.Duration
+import scala.jdk.CollectionConverters._
 
 /** Created by dvoet on 7/18/17.
   */
@@ -30,16 +32,15 @@ final case class AppConfig(
     adminConfig: AdminConfig,
     azureServicesConfig: Option[AzureServicesConfig],
     prometheusConfig: PrometheusConfig,
-    janitorConfig: JanitorConfig
+    janitorConfig: JanitorConfig,
+    resourceAccessPolicies: Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]
 )
 
 object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
     OidcConfig(
       config.getString("authorityEndpoint"),
-      config.getString("oidcClientId"),
-      config.as[Option[String]]("oidcClientSecret"),
-      config.as[Option[String]]("legacyGoogleClientId")
+      config.getString("oidcClientId")
     )
   }
 
@@ -169,6 +170,32 @@ object AppConfig {
     ManagedAppPlan(config.getString("name"), config.getString("publisher"), config.getString("authorizedUserKey"))
   }
 
+  implicit val azureMarketPlaceReader: ValueReader[Option[AzureMarketPlace]] = ValueReader.relative { config =>
+    // enabled by default
+    if (config.as[Option[Boolean]]("enabled").getOrElse(true)) {
+      Option(AzureMarketPlace(config.as[Seq[ManagedAppPlan]]("managedAppPlans")))
+    } else {
+      None
+    }
+  }
+
+  implicit val azureServiceCatalogReader: ValueReader[Option[AzureServiceCatalog]] = ValueReader.relative { config =>
+    // disabled by default
+    if (config.as[Option[Boolean]]("enabled").getOrElse(false)) {
+      Option(AzureServiceCatalog(config.getString("authorizedUserKey"), config.getString("managedAppTypeServiceCatalog")))
+    } else {
+      None
+    }
+  }
+
+  implicit val azureServicePrincipalConfigReader: ValueReader[Option[AzureServicePrincipalConfig]] = ValueReader.relative { config =>
+    for {
+      clientId <- config.getAs[String]("clientId")
+      clientSecret <- config.getAs[String]("clientSecret")
+      tenantId <- config.getAs[String]("tenantId")
+    } yield AzureServicePrincipalConfig(clientId, clientSecret, tenantId)
+  }
+
   implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
     config
       .getAs[Boolean]("azureEnabled")
@@ -176,10 +203,10 @@ object AppConfig {
         if (azureEnabled) {
           Option(
             AzureServicesConfig(
-              config.getString("managedAppClientId"),
-              config.getString("managedAppClientSecret"),
-              config.getString("managedAppTenantId"),
-              config.as[Seq[ManagedAppPlan]]("managedAppPlans"),
+              config.as[Option[String]]("managedAppWorkloadClientId"),
+              config.as[Option[AzureServicePrincipalConfig]]("managedAppServicePrincipal"),
+              config.as[Option[AzureMarketPlace]]("azureMarketPlace"),
+              config.as[Option[AzureServiceCatalog]]("azureServiceCatalog"),
               config.as[Option[Boolean]]("allowManagedIdentityUserCreation").getOrElse(false)
             )
           )
@@ -202,6 +229,45 @@ object AppConfig {
       GoogleProject(config.getString("trackResourceProjectId")),
       config.getString("trackResourceTopicId")
     )
+  }
+
+  implicit val accessPolicyDescendantPermissionsReader: ValueReader[AccessPolicyDescendantPermissions] = ValueReader.relative { config =>
+    AccessPolicyDescendantPermissions(
+      ResourceTypeName(config.as[String]("resourceTypeName")),
+      config.as[Option[Set[String]]]("actions").getOrElse(Set.empty).map(ResourceAction.apply),
+      config.as[Option[Set[String]]]("roles").getOrElse(Set.empty).map(ResourceRoleName.apply)
+    )
+  }
+
+  implicit val policyIdentifiersReader: ValueReader[PolicyIdentifiers] = ValueReader.relative { config =>
+    PolicyIdentifiers(
+      AccessPolicyName(config.as[String]("accessPolicyName")),
+      ResourceTypeName(config.as[String]("resourceTypeName")),
+      ResourceId(config.as[String]("resourceId"))
+    )
+  }
+
+  implicit val accessPolicyMembershipRequestReader: ValueReader[AccessPolicyMembershipRequest] = ValueReader.relative { config =>
+    AccessPolicyMembershipRequest(
+      config.as[Set[String]]("memberEmails").map(WorkbenchEmail),
+      config.as[Option[Set[String]]]("actions").getOrElse(Set.empty).map(ResourceAction.apply),
+      config.as[Option[Set[String]]]("roles").getOrElse(Set.empty).map(ResourceRoleName.apply),
+      config.as[Option[Set[AccessPolicyDescendantPermissions]]]("descendantPermissions"),
+      config.as[Option[Set[PolicyIdentifiers]]]("memberPolicies")
+    )
+  }
+
+  implicit val resourceAccessPoliciesConfigReader: ValueReader[Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]] = ValueReader.relative { config =>
+    val policies = for {
+      resourceTypeName <- config.root().keySet().asScala
+      resourceId <- config.getConfig(resourceTypeName).root().keySet().asScala
+      policyName <- config.getConfig(s"$resourceTypeName.$resourceId").root().keySet().asScala
+    } yield {
+      val fullyQualifiedPolicyId =
+        FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
+      fullyQualifiedPolicyId -> config.as[AccessPolicyMembershipRequest](s"$resourceTypeName.$resourceId.$policyName")
+    }
+    policies.toMap
   }
 
   /** Loads all the configs for the Sam App. All values defined in `src/main/resources/sam.conf` will take precedence over any other configs. In this way, we
@@ -254,7 +320,8 @@ object AppConfig {
       adminConfig = config.as[AdminConfig]("admin"),
       azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
       prometheusConfig = config.as[PrometheusConfig]("prometheus"),
-      janitorConfig = config.as[JanitorConfig]("janitor")
+      janitorConfig = config.as[JanitorConfig]("janitor"),
+      resourceAccessPolicies = config.as[Option[Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]]]("resourceAccessPolicies").getOrElse(Map.empty)
     )
   }
 }

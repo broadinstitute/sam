@@ -8,7 +8,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, truncateAll}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.matchers.BeSameUserMatcher.beSameUserAs
@@ -35,7 +35,7 @@ import scala.concurrent.duration._
 
 // TODO: continue breaking down old UserServiceSpec tests into nested suites
 // See: https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
-class UserServiceSpec(_system: ActorSystem) extends TestKit(_system) with Suite with BeforeAndAfterAll {
+class UserServiceSpec(_system: ActorSystem) extends TestKit(_system) with Suite with BeforeAndAfterAll with BeforeAndAfterEach {
   override def nestedSuites: IndexedSeq[Suite] =
     IndexedSeq(
       new CreateUserSpec,
@@ -53,6 +53,11 @@ class UserServiceSpec(_system: ActorSystem) extends TestKit(_system) with Suite 
   override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
     super.afterAll()
+  }
+
+  override def beforeEach(): Unit = {
+    truncateAll
+    super.beforeEach()
   }
 }
 
@@ -134,7 +139,7 @@ class OldUserServiceMockSpec(_system: ActorSystem)
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext])).thenReturn(IO.unit)
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
     when(mockTosService.getTermsOfServiceComplianceStatus(any[SamUser], any[SamRequestContext]))
@@ -319,7 +324,7 @@ class OldUserServiceSpec(_system: ActorSystem)
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO.pure(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext])).thenReturn(IO.unit)
 
     tos = new TosService(googleExtensions, dirDAO, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)
@@ -641,7 +646,7 @@ class OldUserServiceSpec(_system: ActorSystem)
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isRight)
+      assert(service.validateEmailAddress(email, Seq.empty, Seq.empty).attempt.unsafeRunSync().isRight)
     }
   }
 
@@ -662,7 +667,7 @@ class OldUserServiceSpec(_system: ActorSystem)
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
@@ -683,7 +688,7 @@ class OldUserServiceSpec(_system: ActorSystem)
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
@@ -697,12 +702,17 @@ class OldUserServiceSpec(_system: ActorSystem)
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
   it should "reject blocked email domain" in {
-    assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
-    assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq("bar.com"), Seq.empty).attempt.unsafeRunSync().isLeft)
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq("bar.com"), Seq.empty).attempt.unsafeRunSync().isLeft)
+  }
+
+  it should "reject an un-invitable email domain" in {
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq.empty, Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq.empty, Seq("bar.com")).attempt.unsafeRunSync().isLeft)
   }
 }

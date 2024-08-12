@@ -7,19 +7,48 @@ import com.azure.resourcemanager.managedapplications.models.Plan
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAzureManagedResourceGroupDAO, MockDirectoryDAO, PostgresDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.{UserStatus, UserStatusDetails}
-import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, TosService, UserService}
-import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator}
-import org.mockito.Mockito.when
-import org.scalatest.BeforeAndAfterAll
+import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.SamResourceActionPatterns
+import org.broadinstitute.dsde.workbench.sam.config.{AzureMarketPlace, AzureServicesConfig}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{
+  AccessPolicyDAO,
+  DirectoryDAO,
+  MockAzureManagedResourceGroupDAO,
+  MockDirectoryDAO,
+  PostgresAccessPolicyDAO,
+  PostgresAzureManagedResourceGroupDAO,
+  PostgresDirectoryDAO
+}
+import org.broadinstitute.dsde.workbench.sam.model.{
+  FullyQualifiedResourceId,
+  ResourceAction,
+  ResourceActionPattern,
+  ResourceId,
+  ResourceRole,
+  ResourceRoleName,
+  ResourceType,
+  ResourceTypeName,
+  UserStatus,
+  UserStatusDetails
+}
+import org.broadinstitute.dsde.workbench.sam.service.{NoExtensions, PolicyEvaluatorService, ResourceService, TosService, UserService}
+import org.broadinstitute.dsde.workbench.sam.{ConnectedTest, Generator, TestSupport}
+import org.mockito.scalatest.MockitoSugar
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
+import java.util.UUID
 import scala.jdk.CollectionConverters._
 
-class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFlatSpecLike with Matchers with ScalaFutures with BeforeAndAfterAll {
+class AzureServiceSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
+    with Matchers
+    with ScalaFutures
+    with BeforeAndAfterAll
+    with BeforeAndAfterEach
+    with MockitoSugar {
   implicit val ec = scala.concurrent.ExecutionContext.global
   implicit val ioRuntime = cats.effect.unsafe.IORuntime.global
 
@@ -33,6 +62,9 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     super.afterAll()
   }
 
+  override def beforeEach(): Unit =
+    TestSupport.truncateAll
+
   "AzureService" should "create a pet managed identity" taggedAs ConnectedTest in {
     val azureServicesConfig = appConfig.azureServicesConfig
     val janitorConfig = appConfig.janitorConfig
@@ -45,7 +77,8 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val tosService = new TosService(NoExtensions, directoryDAO, tosConfig)
     val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
     val azureTestConfig = config.getConfig("testStuff.azure")
-    val azureService = new AzureService(crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
+    setUpResources(directoryDAO)
+    val azureService = new AzureService(azureServicesConfig.get, crlService, directoryDAO, new MockAzureManagedResourceGroupDAO)
 
     // create user
     val defaultUser = genWorkbenchUserAzure.sample.get
@@ -107,13 +140,164 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     // this is a best effort -- it will be deleted anyway by Janitor
     msiManager.identities().deleteById(azureRes.id())
   }
+  def setUpResources(directoryDAO: DirectoryDAO): (ResourceService, ResourceType, ResourceAction) = {
+    lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+    val emailDomain = "example.com"
+    val ownerRoleName = ResourceRoleName("owner")
+    val viewAction = ResourceAction("view")
+
+    val defaultResourceTypeActions =
+      Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), viewAction, ResourceAction("non_owner_action"))
+    val defaultResourceTypeActionPatterns = Set(
+      SamResourceActionPatterns.alterPolicies,
+      SamResourceActionPatterns.delete,
+      SamResourceActionPatterns.readPolicies,
+      ResourceActionPattern("view", "", false),
+      ResourceActionPattern("non_owner_action", "", false)
+    )
+    val defaultResourceType = ResourceType(
+      ResourceTypeName(UUID.randomUUID().toString),
+      defaultResourceTypeActionPatterns,
+      Set(
+        ResourceRole(ownerRoleName, defaultResourceTypeActions - ResourceAction("non_owner_action")),
+        ResourceRole(ResourceRoleName("other"), Set(ResourceAction("view"), ResourceAction("non_owner_action")))
+      ),
+      ownerRoleName
+    )
+
+    val resourceTypes = Map(
+      defaultResourceType.name -> defaultResourceType
+    )
+    val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, directoryDAO)
+    val resourceService =
+      new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, directoryDAO, NoExtensions, emailDomain, Set("test.firecloud.org"))
+    (resourceService, defaultResourceType, viewAction)
+  }
+
+  it should "create and delete an action managed identity" taggedAs ConnectedTest in {
+    val azureServicesConfig = appConfig.azureServicesConfig
+    val janitorConfig = appConfig.janitorConfig
+
+    assume(azureServicesConfig.isDefined && janitorConfig.enabled, "-- skipping Azure test")
+
+    // create dependencies
+    val directoryDAO = new PostgresDirectoryDAO(dbRef, dbRef)
+    val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
+    val tosService = new TosService(NoExtensions, directoryDAO, tosConfig)
+    val userService = new UserService(directoryDAO, NoExtensions, Seq.empty, tosService)
+    val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
+    val azureTestConfig = config.getConfig("testStuff.azure")
+    val (resourceService, defaultResourceType, viewAction) = setUpResources(directoryDAO)
+    val azureService = new AzureService(azureServicesConfig.get, crlService, directoryDAO, azureManagedResourceGroupDAO)
+
+    // create user
+    val defaultUser = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("hermione.owner@test.firecloud.org"))).get
+    val userStatus = userService.createUser(defaultUser, samRequestContext).unsafeRunSync()
+    userStatus shouldBe UserStatus(
+      UserStatusDetails(defaultUser.id, defaultUser.email),
+      Map("tosAccepted" -> false, "adminEnabled" -> true, "ldap" -> true, "allUsersGroup" -> true, "google" -> true)
+    )
+
+    // user should exist in postgres
+    directoryDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
+
+    // Create the resource type and resource
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+    resourceService.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(resourceService.createResource(defaultResourceType, resourceName, defaultUser, samRequestContext))
+
+    // Create the "billing profile" resource. There's no actual need for it to be a "billing profile", we just need a resource to attach the managed resource group to.
+    val billingProfileId = BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
+    val billingProfileResource = runAndWait(resourceService.createResource(defaultResourceType, billingProfileId.asResourceId, defaultUser, samRequestContext))
+
+    // action managed identity should not exist in postgres
+    val tenantId = TenantId(azureTestConfig.getString("tenantId"))
+    val subscriptionId = SubscriptionId(azureTestConfig.getString("subscriptionId"))
+    val managedResourceGroupName = ManagedResourceGroupName(azureTestConfig.getString("managedResourceGroupName"))
+    val mrgCoordinates = ManagedResourceGroupCoordinates(tenantId, subscriptionId, managedResourceGroupName)
+    val managedResourceGroup = ManagedResourceGroup(mrgCoordinates, billingProfileId)
+    runAndWait(azureService.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = Some(defaultUser))))
+
+    val actionManagedIdentityId =
+      ActionManagedIdentityId(resource, viewAction, billingProfileId)
+    directoryDAO.loadActionManagedIdentity(actionManagedIdentityId, samRequestContext).unsafeRunSync() shouldBe None
+
+    // managed identity should not exist in Azure
+    val msiManager = crlService.buildMsiManager(tenantId, subscriptionId).unsafeRunSync()
+    msiManager.identities().listByResourceGroup(managedResourceGroupName.value).asScala.toList.exists { i =>
+      i.name() === azureService.toManagedIdentityNameFromAmiId(actionManagedIdentityId)
+    } shouldBe false
+
+    // create action managed identity
+    val (res, created) = azureService
+      .getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, samRequestContext.copy(samUser = Some(defaultUser)))
+      .unsafeRunSync()
+    created shouldBe true
+    res.id shouldBe actionManagedIdentityId
+    res.displayName shouldBe ManagedIdentityDisplayName(s"${resource.resourceId.value}-${viewAction.value}")
+
+    // action managed identity should now exist in postgres
+    directoryDAO.loadActionManagedIdentity(actionManagedIdentityId, samRequestContext).unsafeRunSync() shouldBe Some(res)
+
+    // managed identity should now exist in azure
+    val azureRes = msiManager.identities().getById(res.objectId.value)
+    azureRes should not be null
+    azureRes.tenantId() shouldBe tenantId.value
+    azureRes.resourceGroupName() shouldBe managedResourceGroupName.value
+    azureRes.id() shouldBe res.objectId.value
+    azureRes.name() shouldBe res.displayName.value
+
+    // call getOrCreate again
+    val (res2, created2) = azureService.getOrCreateActionManagedIdentity(resource, viewAction, billingProfileId, samRequestContext).unsafeRunSync()
+    created2 shouldBe false
+    res2 shouldBe res
+
+    // pet should still exist in postgres and azure
+    directoryDAO.loadActionManagedIdentity(actionManagedIdentityId, samRequestContext).unsafeRunSync() shouldBe Some(res2)
+    val azureRes2 = msiManager.identities().getById(res.objectId.value)
+    azureRes2 should not be null
+    azureRes2.tenantId() shouldBe tenantId.value
+    azureRes2.resourceGroupName() shouldBe managedResourceGroupName.value
+    azureRes2.id() shouldBe res2.objectId.value
+    azureRes2.name() shouldBe res2.displayName.value
+
+    // delete action managed identity
+    azureService.deleteActionManagedIdentity(actionManagedIdentityId, samRequestContext).unsafeRunSync()
+
+    // action managed identity should not exist in postgres
+    directoryDAO.loadActionManagedIdentity(actionManagedIdentityId, samRequestContext).unsafeRunSync() shouldBe None
+
+    // managed identity should not exist in Azure
+    msiManager.identities().listByResourceGroup(managedResourceGroupName.value).asScala.toList.exists { i =>
+      i.name() === azureService.toManagedIdentityNameFromAmiId(actionManagedIdentityId)
+    } shouldBe false
+
+    // delete managed identity from Azure
+    // this is a best effort -- it will be deleted anyway by Janitor
+    msiManager.identities().deleteById(azureRes.id())
+  }
 
   "createManagedResourceGroup" should "create a managed resource group" in {
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val mockCrlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
     val svc =
-      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+      new AzureService(
+        mockAzureServicesConfig,
+        mockCrlService,
+        new MockDirectoryDAO(),
+        mockMrgDAO
+      )
+
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
 
     svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
     mockMrgDAO.mrgs should contain(managedResourceGroup)
@@ -128,7 +312,7 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     // create dependencies
     val crlService = new CrlService(azureServicesConfig.get, janitorConfig)
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
-    val azureService = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+    val azureService = new AzureService(azureServicesConfig.get, crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     // build request
     val azureTestConfig = config.getConfig("testStuff.azure")
@@ -141,7 +325,7 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
       BillingProfileId("de38969d-f41b-4b80-99ba-db481e6db1cf")
     )
 
-    val user = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("rtitlefireclouddev@gmail.com")))
+    val user = Generator.genWorkbenchUserAzure.sample.map(_.copy(email = WorkbenchEmail("hermione.owner@test.firecloud.org")))
 
     azureService.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
     mockMrgDAO.mrgs should contain(managedResourceGroup)
@@ -151,8 +335,21 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
     val svc =
-      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+      new AzureService(
+        mockAzureServicesConfig,
+        MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
+        new MockDirectoryDAO(),
+        mockMrgDAO
+      )
+
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
 
     mockMrgDAO.insertManagedResourceGroup(managedResourceGroup.copy(billingProfileId = BillingProfileId("no the same")), samRequestContext).unsafeRunSync()
     val err = intercept[WorkbenchExceptionWithErrorReport] {
@@ -166,8 +363,22 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val mockCrlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
     val svc =
-      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+      new AzureService(
+        mockAzureServicesConfig,
+        mockCrlService,
+        new MockDirectoryDAO(),
+        mockMrgDAO
+      )
+
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
 
     mockMrgDAO
       .insertManagedResourceGroup(
@@ -187,7 +398,14 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
-    val svc = new AzureService(MockCrlService(user), new MockDirectoryDAO(), mockMrgDAO)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+    val svc = new AzureService(mockAzureServicesConfig, MockCrlService(user), new MockDirectoryDAO(), mockMrgDAO)
+
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
@@ -201,7 +419,9 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
+    val svc = new AzureService(mockAzureServicesConfig, crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -215,6 +435,12 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
       .head
     when(mockApplication.managedResourceGroupId()).thenReturn("something else")
 
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
+
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
     }
@@ -227,7 +453,9 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
+    val svc = new AzureService(mockAzureServicesConfig, crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -242,6 +470,12 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     when(mockApplication.plan())
       .thenReturn(null)
 
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
+
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
     }
@@ -254,7 +488,8 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+    val svc = new AzureService(mockAzureServicesConfig, crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -269,6 +504,12 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     when(mockApplication.plan())
       .thenReturn(new Plan().withName(MockCrlService.defaultManagedAppPlan.name).withPublisher("other publisher"))
 
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
+
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
     }
@@ -281,7 +522,8 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+    val svc = new AzureService(mockAzureServicesConfig, crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -296,6 +538,12 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     when(mockApplication.plan())
       .thenReturn(new Plan().withName("other name").withPublisher(MockCrlService.defaultManagedAppPlan.publisher))
 
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
+
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
     }
@@ -307,8 +555,21 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
     val svc =
-      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+      new AzureService(
+        mockAzureServicesConfig,
+        MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
+        new MockDirectoryDAO(),
+        mockMrgDAO
+      )
+
+    when(mockAzureServicesConfig.azureServiceCatalog)
+      .thenReturn(None)
+
+    when(mockAzureServicesConfig.azureMarketPlace)
+      .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc
@@ -324,7 +585,9 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val crlService = MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName)
-    val svc = new AzureService(crlService, new MockDirectoryDAO(), mockMrgDAO)
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
+    val svc = new AzureService(mockAzureServicesConfig, crlService, new MockDirectoryDAO(), mockMrgDAO)
 
     val mockApplication = crlService
       .buildApplicationManager(
@@ -349,6 +612,12 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
       when(mockApplication.parameters())
         .thenReturn(parameters)
 
+      when(mockAzureServicesConfig.azureServiceCatalog)
+        .thenReturn(None)
+
+      when(mockAzureServicesConfig.azureMarketPlace)
+        .thenReturn(Option(AzureMarketPlace(Seq(MockCrlService.defaultManagedAppPlan))))
+
       val err = intercept[WorkbenchExceptionWithErrorReport] {
         svc.createManagedResourceGroup(managedResourceGroup, samRequestContext.copy(samUser = user)).unsafeRunSync()
       }
@@ -361,8 +630,14 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val user = Generator.genWorkbenchUserAzure.sample
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
     val svc =
-      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+      new AzureService(
+        mockAzureServicesConfig,
+        MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
+        new MockDirectoryDAO(),
+        mockMrgDAO
+      )
 
     mockMrgDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext).unsafeRunSync()
     svc.deleteManagedResourceGroup(managedResourceGroup.billingProfileId, samRequestContext.copy(samUser = user)).unsafeRunSync()
@@ -373,8 +648,15 @@ class AzureServiceSpec(_system: ActorSystem) extends TestKit(_system) with AnyFl
     val user = Generator.genWorkbenchUserAzure.sample
     val mockMrgDAO = new MockAzureManagedResourceGroupDAO
     val managedResourceGroup = Generator.genManagedResourceGroup.sample.get
+    val mockAzureServicesConfig = mock[AzureServicesConfig]
+
     val svc =
-      new AzureService(MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName), new MockDirectoryDAO(), mockMrgDAO)
+      new AzureService(
+        mockAzureServicesConfig,
+        MockCrlService(user, managedResourceGroup.managedResourceGroupCoordinates.managedResourceGroupName),
+        new MockDirectoryDAO(),
+        mockMrgDAO
+      )
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       svc.deleteManagedResourceGroup(managedResourceGroup.billingProfileId, samRequestContext.copy(samUser = user)).unsafeRunSync()

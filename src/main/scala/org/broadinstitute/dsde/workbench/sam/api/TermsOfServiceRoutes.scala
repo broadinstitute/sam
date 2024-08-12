@@ -78,29 +78,31 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
             withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
               val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
               pathEndOrSingleSlash {
-                get {
-                  complete {
-                    tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
+                getWithTelemetry(samRequestContext) {
+                  rejectEmptyResponse {
+                    complete {
+                      tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
+                    }
                   }
                 }
               } ~
               pathPrefix("accept") { // api/termsOfService/v1/user/self/accept
                 pathEndOrSingleSlash {
-                  put {
+                  putWithTelemetry(samRequestContext) {
                     complete(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
                   }
                 }
               } ~
               pathPrefix("reject") { // api/termsOfService/v1/user/self/reject
                 pathEndOrSingleSlash {
-                  put {
+                  putWithTelemetry(samRequestContext) {
                     complete(tosService.rejectCurrentTermsOfService(samUser.id, samRequestContext).map(_ => StatusCodes.NoContent))
                   }
                 }
               } ~
               pathPrefix("history") { // api/termsOfService/v1/user/self/history
                 pathEndOrSingleSlash {
-                  get {
+                  getWithTelemetry(samRequestContext) {
                     parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
                       complete {
                         tosService.getTermsOfServiceHistoryForUser(samUser.id, samRequestContext, limit)
@@ -118,15 +120,17 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
               validate(samUserIdPattern.matches(userId), "User ID must be alpha numeric") {
                 val requestUserId = WorkbenchUserId(userId)
                 pathEndOrSingleSlash {
-                  get {
-                    complete {
-                      tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
+                  getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
+                    rejectEmptyResponse {
+                      complete {
+                        tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
+                      }
                     }
                   }
                 } ~
                 pathPrefix("history") { // api/termsOfService/v1/user/{userId}/history
                   pathEndOrSingleSlash {
-                    get {
+                    getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
                       parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
                         complete(tosService.getTermsOfServiceHistoryForUser(requestUserId, samRequestContext, limit))
                       }

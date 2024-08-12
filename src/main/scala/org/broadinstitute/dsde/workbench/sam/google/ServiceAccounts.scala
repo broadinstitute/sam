@@ -49,6 +49,14 @@ class ServiceAccounts(googleProjectDAO: GoogleProjectDAO, googleServicesConfig: 
     }
   }
 
+  private[google] def assertProjectIsActive(project: GoogleProject): IO[Unit] =
+    for {
+      projectIsActive <- IO.fromFuture(IO(googleProjectDAO.isProjectActive(project.value)))
+      _ <- IO.raiseUnless(projectIsActive)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} is inactive"))
+      )
+    } yield ()
+
   def getAccessTokenUsingJson(saKey: String, desiredScopes: Set[String]): Future[String] = Future {
     val keyStream = new ByteArrayInputStream(saKey.getBytes)
     val credential = ServiceAccountCredentials.fromStream(keyStream).createScoped(desiredScopes.asJava)

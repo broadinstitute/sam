@@ -41,8 +41,10 @@ object States {
   val UserExists = "user exists"
   val HasResourceDeletePermission = "user has delete permission"
   val HasResourceWritePermission = "user has write permission"
+  val HasResourceReadPermission = "user has read permission"
   val DoesNotHaveResourceDeletePermission = "user does not have delete permission"
   val DoesNotHaveResourceWritePermission = "user does not have write permission"
+  val DoesNotHaveResourceReadPermission = "user does not have read permission"
   val UserStatusInfoRequestWithAccessToken = "user status info request with access token"
   val UserStatusInfoRequestWithoutAccessToken = "user status info request without access token"
 }
@@ -162,10 +164,14 @@ class SamProviderSpec
       mockResourceActionPermission(SamResourceActions.delete, hasPermission = true).unsafeRunSync()
     case ProviderState(States.HasResourceWritePermission, _) =>
       mockResourceActionPermission(SamResourceActions.write, hasPermission = true).unsafeRunSync()
+    case ProviderState(States.HasResourceReadPermission, _) =>
+      mockResourceActionPermission(ResourceAction("read"), hasPermission = true).unsafeRunSync()
     case ProviderState(States.DoesNotHaveResourceDeletePermission, _) =>
       mockResourceActionPermission(SamResourceActions.delete, hasPermission = false).unsafeRunSync()
     case ProviderState(States.DoesNotHaveResourceWritePermission, _) =>
       mockResourceActionPermission(SamResourceActions.write, hasPermission = false).unsafeRunSync()
+    case ProviderState(States.DoesNotHaveResourceReadPermission, _) =>
+      mockResourceActionPermission(ResourceAction("read"), hasPermission = false).unsafeRunSync()
     case ProviderState(States.UserStatusInfoRequestWithAccessToken, _) =>
       logger.debug(s"you may stub provider behaviors here for the state: ${States.UserStatusInfoRequestWithAccessToken}")
     case ProviderState(States.UserStatusInfoRequestWithoutAccessToken, _) =>
@@ -186,7 +192,7 @@ class SamProviderSpec
       accessPolicyDAO,
       googleExt,
       FakeOpenIDConnectConfiguration,
-      azureService
+      Option(azureService)
     )
 
   override def beforeAll(): Unit = {

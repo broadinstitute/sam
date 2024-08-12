@@ -6,6 +6,7 @@ import akka.http.scaladsl.server.Directives.reject
 import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
 import cats.effect.unsafe.implicits.global
+import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -13,7 +14,15 @@ import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfigurat
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
-import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{
+  AppConfig,
+  AzureMarketPlace,
+  AzureServiceCatalog,
+  AzureServicePrincipalConfig,
+  AzureServicesConfig,
+  LiquibaseConfig,
+  TermsOfServiceConfig
+}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -108,8 +117,13 @@ class TestSamTosEnabledRoutes(
 
 object TestSamRoutes {
   val defaultUserInfo = Generator.genWorkbenchUserGoogle.sample.get
+  val config = ConfigFactory.load()
+  val appConfig = AppConfig.readConfig(config)
 
   object SamResourceActionPatterns {
+    val config = ConfigFactory.load()
+    val appConfig = AppConfig.readConfig(config)
+
     val readPolicies = ResourceActionPattern("read_policies", "", false)
     val alterPolicies = ResourceActionPattern("alter_policies", "", false)
     val delete = ResourceActionPattern("delete", "", false)
@@ -163,7 +177,9 @@ object TestSamRoutes {
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None,
-      acceptTermsOfService: Boolean = true
+      acceptTermsOfService: Boolean = true,
+      azureMarketPlace: Option[AzureMarketPlace] = None,
+      azureServiceCatalog: Option[AzureServiceCatalog] = None
   )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
@@ -203,7 +219,22 @@ object TestSamRoutes {
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
-    val azureService = new AzureService(crlService.getOrElse(MockCrlService(Option(user))), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    val mockAzureServicesConfig = AzureServicesConfig(
+      Option("mock-managedapp-workload-clientid"),
+      Option(AzureServicePrincipalConfig("mock-managedapp-clientid", "mock-managedapp-clientsecret", "mock-managedapp-tenantid")),
+      azureMarketPlace,
+      azureServiceCatalog,
+      allowManagedIdentityUserCreation = true
+    )
+
+    val azureService =
+      new AzureService(
+        mockAzureServicesConfig,
+        crlService.getOrElse(MockCrlService(Option(user))),
+        directoryDAO,
+        new MockAzureManagedResourceGroupDAO
+      )
+
     new TestSamRoutes(
       mockResourceService,
       policyEvaluatorService,
@@ -213,7 +244,7 @@ object TestSamRoutes {
       user,
       tosService = mockTosService,
       cloudExtensions = cloudXtns,
-      azureService = Some(azureService)
+      azureService = Option(azureService)
     )
   }
 }

@@ -10,7 +10,7 @@ class LivenessRoutes(directoryDAO: DirectoryDAO) extends SamRequestContextDirect
     withSamRequestContext { samRequestContext =>
       pathPrefix("liveness") {
         pathEndOrSingleSlash {
-          get {
+          getWithTelemetry(samRequestContext) {
             complete {
               directoryDAO.checkStatus(samRequestContext).map {
                 case true => OK

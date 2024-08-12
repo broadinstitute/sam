@@ -8,14 +8,18 @@ import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributesRequest, SamUserRegistrationRequest, SamUserResponse}
-import org.broadinstitute.dsde.workbench.sam.service.UserService
+import org.broadinstitute.dsde.workbench.sam.model.api._
+import org.broadinstitute.dsde.workbench.sam.model.{ResourceRoleName, ResourceTypeName, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import spray.json.enrichAny
 
 /** Created by tlangs on 10/12/2023.
   */
 trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
   val userService: UserService
+  val tosService: TosService
+  val resourceService: ResourceService
 
   /** Changes a 403 error to a 404 error. Used when `UserInfoDirectives` throws a 403 in the case where a user is not found. In most routes that is appropriate
     * but in the user routes it should be a 404.
@@ -68,20 +72,31 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
                   patchSamUserAttributes(samUser, samRequestContext)
                 }
               }
+            } ~
+            // api/user/v2/self/combinedState
+            pathPrefix("combinedState") {
+              withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
+                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+                pathEndOrSingleSlash {
+                  getSamUserCombinedState(samUser, samRequestContext)
+                }
+              }
             }
           } ~
           pathPrefix(Segment) { samUserId =>
             val workbenchUserId = WorkbenchUserId(samUserId)
             withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
               val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
-              // api/users/v2/{sam_user_id}
-              pathEndOrSingleSlash {
-                regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
-              } ~
-              // api/users/v2/{sam_user_id}/allowed
-              pathPrefix("allowed") {
+              addTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+                // api/users/v2/{sam_user_id}
                 pathEndOrSingleSlash {
-                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                  regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserResponse)(getAdminSamUserResponse)
+                } ~
+                // api/users/v2/{sam_user_id}/allowed
+                pathPrefix("allowed") {
+                  pathEndOrSingleSlash {
+                    regularUserOrAdmin(samUser, workbenchUserId, samRequestContext)(getSamUserAllowances)(getAdminSamUserAllowances)
+                  }
                 }
               }
             }
@@ -102,7 +117,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
 
   // Get Sam User
   private def getAdminSamUserResponse(samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         for {
           user <- userService.getUser(samUserId, samRequestContext)
@@ -115,7 +130,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     }
 
   private def getSamUserResponse(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         samUserResponse(samUser, samRequestContext).map(response => StatusCodes.OK -> response)
       }
@@ -127,14 +142,14 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
 
   // Get Sam User Allowed
   private def getSamUserAllowances(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         userService.getUserAllowances(samUser, samRequestContext).map(StatusCodes.OK -> _)
       }
     }
 
   private def getAdminSamUserAllowances(samUserId: WorkbenchUserId, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         for {
           user <- userService.getUser(samUserId, samRequestContext)
@@ -147,14 +162,14 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
     }
 
   private def getSamUserAttributes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    get {
+    getWithTelemetry(samRequestContext) {
       complete {
         userService.getUserAttributes(samUser.id, samRequestContext).map(response => (if (response.isDefined) OK else NotFound) -> response)
       }
     }
 
   private def patchSamUserAttributes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    patch {
+    patchWithTelemetry(samRequestContext) {
       entity(as[SamUserAttributesRequest]) { userAttributesRequest =>
         complete {
           userService.setUserAttributesFromRequest(samUser.id, userAttributesRequest, samRequestContext).map(OK -> _)
@@ -162,8 +177,35 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
       }
     }
 
+  private def getSamUserCombinedState(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    get {
+      complete {
+        for {
+          allowances <- userService.getUserAllowances(samUser, samRequestContext)
+          maybeAttributes <- userService.getUserAttributes(samUser.id, samRequestContext)
+          termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
+          enterpriseFeatures <- resourceService
+            .listResourcesFlat(
+              samUser.id,
+              Set(ResourceTypeName("enterprise-feature")),
+              Set.empty,
+              Set(ResourceRoleName("user")),
+              Set.empty,
+              includePublic = false,
+              samRequestContext
+            )
+        } yield SamUserCombinedStateResponse(
+          samUser,
+          allowances,
+          maybeAttributes,
+          termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
+          Map("enterpriseFeatures" -> enterpriseFeatures.toJson)
+        )
+      }
+    }
+
   private def postUserRegistration(newUser: SamUser, samRequestContext: SamRequestContext): Route =
-    post {
+    postWithTelemetry(samRequestContext) {
       entity(as[SamUserRegistrationRequest]) { userRegistrationRequest =>
         complete {
           for {
@@ -175,5 +217,4 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
         }
       }
     }
-
 }

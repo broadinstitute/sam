@@ -27,6 +27,7 @@ import scala.concurrent.duration._
 class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   val defaultGroupName: WorkbenchGroupName = WorkbenchGroupName("group")
   val defaultGoogleProject: GoogleProject = GoogleProject("testProject")
@@ -83,6 +84,27 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
   val defaultPetSigningAccount: PetServiceAccount = PetServiceAccount(
     PetServiceAccountId(defaultUser.id, defaultUserGoogleAccount),
     ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@petsigning.co"), ServiceAccountDisplayName("whoCares-signing"))
+  )
+
+  val defaultTenantId = TenantId("testTenant")
+  val defaultSubscriptionId = SubscriptionId(UUID.randomUUID().toString)
+  val defaultManagedResourceGroupName = ManagedResourceGroupName("mrg-test")
+  val defaultManagedResourceGroupCoordinates = ManagedResourceGroupCoordinates(defaultTenantId, defaultSubscriptionId, defaultManagedResourceGroupName)
+  val defaultBillingProfileId = BillingProfileId(UUID.randomUUID().toString)
+  val defaultBillingProfileResource = defaultResource.copy(resourceId = defaultBillingProfileId.asResourceId)
+  val defaultManagedResourceGroup = ManagedResourceGroup(defaultManagedResourceGroupCoordinates, defaultBillingProfileId)
+
+  val defaultActionManagedIdentities: Set[ActionManagedIdentity] = Set(readAction, writeAction).map(action =>
+    ActionManagedIdentity(
+      ActionManagedIdentityId(
+        FullyQualifiedResourceId(defaultResource.resourceTypeName, defaultResource.resourceId),
+        action,
+        defaultBillingProfileId
+      ),
+      ManagedIdentityObjectId(UUID.randomUUID().toString),
+      ManagedIdentityDisplayName(s"whoCares-$action"),
+      defaultManagedResourceGroupCoordinates
+    )
   )
 
   override protected def beforeEach(): Unit =
@@ -245,6 +267,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         loadedGroup.members should contain theSameElementsAs Set(subGroup.id)
+
+        loadedGroup.version shouldEqual 2
       }
 
       "add users to groups" in {
@@ -256,6 +280,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         loadedGroup.members should contain theSameElementsAs Set(defaultUser.id)
+
+        loadedGroup.version shouldEqual 2
       }
 
       "add policies to groups" in {
@@ -269,6 +295,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val loadedGroup = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         loadedGroup.members should contain theSameElementsAs Set(defaultPolicy.id)
+
+        loadedGroup.version shouldEqual 2
       }
 
       "add groups to policies" in {
@@ -283,6 +311,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(defaultGroup.id)
+
+        loadedPolicy.version shouldEqual 2
       }
 
       "add users to policies" in {
@@ -297,6 +327,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(defaultUser.id)
+
+        loadedPolicy.version shouldEqual 2
       }
 
       "add policies to other policies" in {
@@ -313,6 +345,8 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members should contain theSameElementsAs Set(memberPolicy.id)
+
+        loadedPolicy.version shouldEqual 2
       }
 
       "trying to add a group that does not exist will fail" in {
@@ -370,10 +404,13 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.addGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
         val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterAdd.members should contain theSameElementsAs Set(subGroup.id)
+        afterAdd.version shouldEqual 2
+
         dao.removeGroupMember(defaultGroup.id, subGroup.id, samRequestContext).unsafeRunSync() shouldBe true
 
         val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterRemove.members shouldBe empty
+        afterRemove.version shouldEqual 3
       }
 
       "remove users from groups" in {
@@ -384,10 +421,13 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.addGroupMember(defaultGroup.id, defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
         val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterAdd.members should contain theSameElementsAs Set(defaultUser.id)
+        afterAdd.version shouldEqual 2
+
         dao.removeGroupMember(defaultGroup.id, defaultUser.id, samRequestContext).unsafeRunSync() shouldBe true
 
         val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterRemove.members shouldBe empty
+        afterRemove.version shouldEqual 3
       }
 
       "remove policies from groups" in {
@@ -400,10 +440,13 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.addGroupMember(defaultGroup.id, defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe true
         val afterAdd = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterAdd.members should contain theSameElementsAs Set(defaultPolicy.id)
+        afterAdd.version shouldEqual 2
+
         dao.removeGroupMember(defaultGroup.id, defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe true
 
         val afterRemove = dao.loadGroup(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"failed to load group ${defaultGroup.id}"))
         afterRemove.members shouldBe empty
+        afterRemove.version shouldEqual 3
       }
 
       "remove groups from policies" in {
@@ -417,12 +460,16 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.addGroupMember(defaultPolicy.id, defaultGroup.id, samRequestContext).unsafeRunSync()
         val afterAdd = policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         afterAdd.members should contain theSameElementsAs Set(defaultGroup.id)
+        afterAdd.version shouldEqual 2
+
         policyDAO.listFlattenedPolicyMembers(defaultPolicy.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(defaultUser)
         dao.removeGroupMember(defaultPolicy.id, defaultGroup.id, samRequestContext).unsafeRunSync()
 
         val afterRemove =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         afterRemove.members shouldBe empty
+        afterRemove.version shouldEqual 3
+
         policyDAO.listFlattenedPolicyMembers(defaultPolicy.id, samRequestContext).unsafeRunSync() shouldBe empty
       }
 
@@ -439,6 +486,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members shouldBe empty
+        loadedPolicy.version shouldBe 3
       }
 
       "remove policies from other policies" in {
@@ -456,6 +504,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedPolicy =
           policyDAO.loadPolicy(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${defaultPolicy.id}"))
         loadedPolicy.members shouldBe empty
+        loadedPolicy.version shouldBe 3
       }
     }
 
@@ -592,6 +641,16 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         // Assert
         loadedUser.value should have(Symbol("azureB2CId")(None))
+      }
+    }
+
+    "batchLoadUsers" - {
+      "loads a list of users" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val users = Seq.range(0, 10).map(_ => Generator.genWorkbenchUserBoth.sample.get)
+        users.foreach(user => dao.createUser(user, samRequestContext).unsafeRunSync())
+        val loadedUsers = dao.batchLoadUsers(users.map(_.id).toSet, samRequestContext).unsafeRunSync()
+        loadedUsers should contain theSameElementsAs users
       }
     }
 
@@ -1317,7 +1376,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         assume(databaseEnabled, databaseEnabledClue)
         dao.createGroup(defaultGroup, samRequestContext = samRequestContext).unsafeRunSync()
 
-        dao.updateSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(defaultGroup, samRequestContext).unsafeRunSync()
 
         val loadedDate = dao.getSynchronizedDate(defaultGroup.id, samRequestContext).unsafeRunSync().getOrElse(fail("failed to load date"))
         loadedDate.getTime should equal(new Date().getTime +- 2.seconds.toMillis)
@@ -1329,7 +1388,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
 
-        dao.updateSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(defaultPolicy, samRequestContext).unsafeRunSync()
 
         val loadedDate = dao.getSynchronizedDate(defaultPolicy.id, samRequestContext).unsafeRunSync().getOrElse(fail("failed to load date"))
         loadedDate.getTime should equal(new Date().getTime +- 2.seconds.toMillis)
@@ -1362,30 +1421,31 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       "update the googleSubjectId for a user" in {
         assume(databaseEnabled, databaseEnabledClue)
         val newGoogleSubjectId = GoogleSubjectId("newGoogleSubjectId")
-        dao.createUser(defaultUser.copy(googleSubjectId = None), samRequestContext).unsafeRunSync()
+        val user = Generator.genWorkbenchUserAzure.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
-        dao.updateUser(defaultUser, AdminUpdateUserRequest(None, Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe None
+        dao.updateUser(user, AdminUpdateUserRequest(None, Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
       }
 
       "update the azureB2CId for a user" in {
         assume(databaseEnabled, databaseEnabledClue)
         val newB2CId = AzureB2CId(UUID.randomUUID().toString)
-        dao.createUser(defaultUser.copy(azureB2CId = None), samRequestContext).unsafeRunSync()
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
-        dao.updateUser(defaultUser, AdminUpdateUserRequest(Option(newB2CId), None), samRequestContext).unsafeRunSync()
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe None
+        dao.updateUser(user, AdminUpdateUserRequest(Option(newB2CId), None), samRequestContext).unsafeRunSync()
 
-        dao.loadUser(defaultUser.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(newB2CId)
+        dao.loadUser(user.id, samRequestContext).unsafeRunSync().flatMap(_.azureB2CId) shouldBe Option(newB2CId)
       }
 
       "sets the updatedAt datetime to the current datetime" in {
         assume(databaseEnabled, databaseEnabledClue)
         // Arrange
         val user = Generator.genWorkbenchUserGoogle.sample.get.copy(
-          googleSubjectId = None,
           updatedAt = Instant.parse("2020-02-02T20:20:20Z")
         )
         dao.createUser(user, samRequestContext).unsafeRunSync()
@@ -1397,6 +1457,20 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         // Assert
         val loadedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
         loadedUser.value.updatedAt should beAround(Instant.now())
+      }
+
+      "will update the googleSubjectId and azureB2CId for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val newGoogleSubjectId = GoogleSubjectId("234567890123456789012")
+        val newB2CId = AzureB2CId(UUID.randomUUID().toString)
+        val user = Generator.genWorkbenchUserBoth.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+
+        dao.updateUser(user, AdminUpdateUserRequest(Option(newB2CId), Option(newGoogleSubjectId)), samRequestContext).unsafeRunSync()
+
+        val updatedUser = dao.loadUser(user.id, samRequestContext).unsafeRunSync()
+        updatedUser.flatMap(_.googleSubjectId) shouldBe Option(newGoogleSubjectId)
+        updatedUser.flatMap(_.azureB2CId) shouldBe Option(newB2CId)
       }
     }
 
@@ -1890,6 +1964,78 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         retrievedAttributes should be(Some(upsertedAttributes))
       }
     }
+    "Action Managed Identities" - {
+      "can be individually created, read, updated, and deleted" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val readActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == readAction)
+        val loadedReadActionManagedIdentity = dao.loadActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        loadedReadActionManagedIdentity should be(readActionManagedIdentity)
+
+        val writeActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == writeAction)
+        val loadedWriteActionManagedIdentity = dao.loadActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        loadedWriteActionManagedIdentity should be(writeActionManagedIdentity)
+
+        val updatedActionManagedIdentity = writeActionManagedIdentity.get.copy(
+          objectId = ManagedIdentityObjectId(UUID.randomUUID().toString),
+          displayName = ManagedIdentityDisplayName("newDisplayName")
+        )
+
+        dao.updateActionManagedIdentity(updatedActionManagedIdentity, samRequestContext).unsafeRunSync()
+
+        val loadedUpdatedActionManagedIdentity = dao.loadActionManagedIdentity(updatedActionManagedIdentity.id, samRequestContext).unsafeRunSync()
+        loadedUpdatedActionManagedIdentity should be(Some(updatedActionManagedIdentity))
+
+        dao.deleteActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+        dao.deleteActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync()
+
+        dao.loadActionManagedIdentity(readActionManagedIdentity.get.id, samRequestContext).unsafeRunSync() should be(None)
+        dao.loadActionManagedIdentity(writeActionManagedIdentity.get.id, samRequestContext).unsafeRunSync() should be(None)
+      }
+
+      "can be loaded for a resource and action" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val readActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == readAction)
+        val loadedReadActionManagedIdentity = dao.loadActionManagedIdentity(defaultResource.fullyQualifiedId, readAction, samRequestContext).unsafeRunSync()
+        loadedReadActionManagedIdentity should be(readActionManagedIdentity)
+
+        val writeActionManagedIdentity = defaultActionManagedIdentities.find(_.id.action == writeAction)
+        val loadedWriteActionManagedIdentity = dao.loadActionManagedIdentity(defaultResource.fullyQualifiedId, writeAction, samRequestContext).unsafeRunSync()
+        loadedWriteActionManagedIdentity should be(writeActionManagedIdentity)
+      }
+
+      "can be read, and deleted en mass for a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultBillingProfileResource, samRequestContext).unsafeRunSync()
+        azureManagedResourceGroupDAO.insertManagedResourceGroup(defaultManagedResourceGroup, samRequestContext).unsafeRunSync()
+
+        defaultActionManagedIdentities.map(dao.createActionManagedIdentity(_, samRequestContext).unsafeRunSync())
+
+        val bothLoadedServiceAccounts =
+          dao.getAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync().toSet
+        bothLoadedServiceAccounts should be(defaultActionManagedIdentities)
+
+        dao.deleteAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+
+        dao.getAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should be(Seq.empty)
+      }
+    }
+
     "Action Service Accounts" - {
       "can be individually created, read, updated, and deleted" in {
         assume(databaseEnabled, databaseEnabledClue)
@@ -1977,6 +2123,32 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val userPetSigningAccount = dao.loadUserPetSigningAccount(defaultUser.id, samRequestContext).unsafeRunSync()
         userPetSigningAccount should be(Some(defaultPetSigningAccount))
+      }
+    }
+
+    "listParentGroups" - {
+      "list all of the parent groups of a group" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val subGroup = defaultGroup
+        val members: Set[WorkbenchSubject] = Set(subGroup.id)
+        val parentGroup1 = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup1"), members, WorkbenchEmail("baz@qux.com"))
+        val parentGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("parentGroup2"), members, WorkbenchEmail("bar@baz.com"))
+        val grandParentGroup = BasicWorkbenchGroup(WorkbenchGroupName("grandParentGroup"), Set(parentGroup1.id), WorkbenchEmail("qux@baz.com"))
+
+        dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createGroup(parentGroup1, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createGroup(parentGroup2, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.createGroup(grandParentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+        dao.listParentGroups(subGroup.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(parentGroup1.id, parentGroup2.id)
+        dao.listParentGroups(parentGroup1.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(grandParentGroup.id)
+        dao.listParentGroups(parentGroup2.id, samRequestContext).unsafeRunSync() shouldBe empty
+        dao.listParentGroups(grandParentGroup.id, samRequestContext).unsafeRunSync() shouldBe empty
+      }
+
+      "return empty when group does not exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.listParentGroups(WorkbenchGroupName("nonexistentGroup"), samRequestContext).unsafeRunSync() shouldBe empty
       }
     }
   }

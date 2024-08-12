@@ -250,9 +250,12 @@ trait PostgresGroupDAO {
     query.map(rs => rs.int(1)).single().apply().getOrElse(0) > 0
   }
 
-  def updateGroupUpdatedDate(groupId: WorkbenchGroupIdentity)(implicit session: DBSession): Int = {
+  def updateGroupUpdatedDateAndVersion(groupId: WorkbenchGroupIdentity)(implicit session: DBSession): Int = {
     val g = GroupTable.column
-    samsql"update ${GroupTable.table} set ${g.updatedDate} = ${Instant.now()} where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})".update().apply()
+    samsql"""update ${GroupTable.table}
+            set ${g.updatedDate} = ${Instant.now()},
+                ${g.version} = ${g.version} + 1
+            where ${g.id} = (${workbenchGroupIdentityToGroupPK(groupId)})""".update().apply()
   }
 
   def deleteGroup(groupName: WorkbenchGroupName)(implicit session: DBSession): Int = {
