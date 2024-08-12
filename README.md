@@ -19,7 +19,7 @@ The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a *
 ## Best Practices
 * Use roles to aggregate actions into a more meaningful, higher level concept. Changing roles is a configuration change and affects all resources with that role, easy. Changing policies requires an api call or direct database updates and affects only the resource the policy is attached to, hard in bulk.
 * Define actions to be as granular as possible. This allows for better composability of roles.
-* Check only 1 action per api call. Complex checks involving multiple actions or even roles is a code smell indicating poorly modeled access control. How a subject gets an action might be complicated (groups, hierarchy, etc.) but the action itself should be simple. Of course, there are exceptions to this rule, such as apis that deal with more than one resource, but they should be a minority.
+* Check only 1 action per api call. Complex checks involving multiple actions or even roles are code smells indicating poorly modeled access control. How a subject gets an action might be complicated (groups, hierarchy, etc.) but the action itself should be simple. Of course, there are exceptions to this rule, such as apis that deal with more than one resource, but they should be a minority.
 
 ## Design
 ### Guiding Principles
