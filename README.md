@@ -5,18 +5,23 @@
 The crux of IAM in Sam is a policy. A policy says **who** can **do what** to a **thing**. More technically the who is called a **subject** and can be a user or a group of users, the do what is called an **action** such as read or update, and the thing is called a **resource** such as a workspace or project. Resources have types which specify what actions are available for its resources, roles (which are collections of actions) and which role is the "owner" role. The "owner" role should have the appropriate actions to administer a resource. When a resource is created a policy with the owner role is automatically created and the creator is added.
 
 ## Terms
-* Subject - an authenticated user or group
+* Subject - an authenticated user, group or policy (policies contain a set of subjects and can be treated as a group)
 * Resource - something to which access is controlled
 * Action - may be performed on a resource - meant to be as granular as possible
-* Policy - represents the actions a subject may perform on a resource
+* Policy - represents the actions a set of subjects may perform on a resource
 * Role - a collection of actions - meant to aggregate actions into a more meaningful, higher level concept
 * Group - a group of subjects (this can include groups)
 * Resource type - defines a class of resources. Each resource has a type which defines
   * Available actions
   * Available roles and actions for each role
-  * Of the available roles which is the “owner” role - this is used when creating a resource to give the creator ownership access
+  * Of the available roles which is the “owner” role - this is used make sure resources are not orphaned 
 
-## Requirements
+## Best Practices
+* Use roles to aggregate actions into a more meaningful, higher level concept. Changing roles is a configuration change and affects all resources with that role, easy. Changing policies requires an api call or direct database updates and affects only the resource the policy is attached to, hard in bulk.
+* Define actions to be as granular as possible. This allows for better composability of roles.
+* Check only 1 action per api call. Complex checks involving multiple actions or even roles is a code smell indicating poorly modeled access control. How a subject gets an action might be complicated (groups, hierarchy, etc.) but the action itself should be simple. Of course, there are exceptions to this rule, such as apis that deal with more than one resource, but they should be a minority.
+
+## Design
 ### Guiding Principles
 There are no special/super users in this system. All api calls authenticate as subjects with access rights determined by policies in the same way. In other words, this system should use its own policy mechanisms internally for any authorization needs. (Note that this does leave the problem of bootstrapping, i.e. how is the first user created, which can be achieved by scripts outside the system with direct data store level access.)
 This system can be publicly facing. This does not mean that it will be in all cases but it should be designed with this in mind.
@@ -29,7 +34,7 @@ Evaluation is the act of determining what a user may access.
 1. Given a user and resource, list all the actions the user may perform on that resource
 1. Given a user and resource, list all the user’s roles on that resource
 
-Of these 1 and 2 are the most important from a performance standpoint. Expect 1 to be called for almost every api call in a system. Expect 2 to be called from UI list pages where users generally want a snappy response.
+Of these 1 and 2 are the most important from a performance standpoint. Expect 1 to be called for almost every api call in a system. Expect 2 to be called from UI list pages where users generally want a snappy response. 2 and 4 should never be used to make access decisions because role definitions may change, they are for informational purposes only.
 
 ### Resource and Policy Management
 A resource may be part of a hierarchy of resources. A parent may be set on a resource. To do so, users must have the set_parent action on the resource and the add_child action on the would be parent. Ancestor resources in the hierarchy control permissions on all descendants. 
@@ -41,16 +46,14 @@ A policy is specific to a resource and a resource may have multiple policies. Ea
 * A set of descendant permissions - roles and actions applicable to descendant resources
 All of the subjects may perform all of the actions/roles in the policy. A policy may also be marked as public effectively meaning all users are members. Each policy has a name that is unique within a resource. Access to actions through policies is additive (i.e. the actions available to a user on a resource is an accumulation of all policies the user is a member of for that resource).
 
-There must be functions to create, delete and manage policies for resources. There must be access control around deleting resources and managing policies. There must be some built-in actions to do so (delete, read-policies, alter-policies). 
+The “owner” role of a resource generally will include delete action and actions to control sharing but need not always (e.g. if a resource may never be deleted then an owner would not have delete permissions). The actions that make up the “owner” role are defined by the resource type.
 
-There must be functions to create and delete resources. When a resource is created the caller should be the “owner.” The “owner” role generally will include delete action and actions to control sharing but need not always (e.g. if a resource may never be deleted then an owner would not have delete permissions). The actions that make up the “owner” role are defined by the resource type.
-
-Resource types define the set of available actions for all resources of that type. It also defines a set of roles and their associated actions. Roles are useful because it can be cumbersome to deal with granular actions and as a point of extensibility (when new actions are added to resource types, they can be added to roles as well, effectively adding the action to all resources with that role). It is not yet necessary to provide apis to create and maintain resource types, this can be achieved through configuration.
+Resource types define the set of available actions for all resources of that type. It also defines a set of roles and their associated actions. Roles are useful because it can be cumbersome to deal with granular actions and as a point of extensibility (when new actions are added to resource types, they can be added to roles as well, effectively adding the action to all resources with that role). Creating and maintaining resource types is achieved through [configuration](src/main/resources/reference.conf).
 
 ### Public Policies
 There are some cases where it is desirable to grant actions or roles to all authenticated users. For example, granting read-only access to public workspaces. In this case a policy can be created that has the appropriate actions or roles and set to public. Resources with public policies show up when listing resources for a user. For this reason it is not always desirable to allow everyone to make public policies. Again, the example is public workspaces. Public workspaces show up for everyone and should be curated.
 
-To change a policy's public status the caller must be able to share the policy (either via `alter_policies` and `share_policy::{policy_name}` actions) _and_ must have the `set_public` action on the resource `resource_type_admin/{resource type name}`. `resource_type_admin` is an internally created resource type. `{resource type name}` is for the resource containing the policy. Note that every resource type in sam has a resource of the same name of type `resource_type_admin` which is automatically created. When these resources are created they do not have owners, permissions must be granted via direct postgres changes.
+To change a policy's public status the caller must be able to share the policy (either via `alter_policies` and `share_policy::{policy_name}` actions) _and_ must have the `set_public` action on the resource `resource_type_admin/{resource type name}`. `resource_type_admin` is an internally created resource type. `{resource type name}` is for the resource containing the policy. Note that every resource type in sam has a resource of the same name of type `resource_type_admin` which is automatically created. When these resources are created they do not have owners, permissions must be granted via admin api calls.
 
 ### User and Group Management
 User - Create, enable, disable, get status. Disabled users should be rejected from any api calls. Enabling a user should reinstate any prior access.
@@ -123,10 +126,6 @@ class SamClient(samBasePath: String) {
 * Proxy groups - each user with access to google resources should have a google group known as a proxy. The proxy is 1-to-1 with the user and the user is member of the proxy. The proxy group should be used in place of the user in Google IAM policies and Google groups. Users should not be added directly. This allows easy enable and disable functionality by adding/removing users to their proxy groups. It also allows creation of service accounts that can act as the user (see pet service accounts below).
 * Pet service accounts - Google Compute Engine requires a service account to run compute. Service account credentials are the default credentials on any GCE instance. This is the best way at this time to provide credentials to any processes running on a GCE instance. Pet service accounts correspond with 1 and only 1 user, are added to the user’s proxy group and can call system apis as the user. In this way a pet service account can act as the user in all respects that can be controlled by the system (resources outside control of the system need to be manually shared by the user with the proxy group).
 
-#### Proposed model for accessing external google resources
-![Data Access](data_access.png)
-
-Note that Sam does not actually launch workflows create VMs but appears to in this diagram in order to simplify interactions. The key concept is the user of service accounts.
 #### Google integration requires
 * a GSuite domain
 * a project with a service account for the sam application
