@@ -438,8 +438,6 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
     }
   }
 
-  //    when(samRoutes.requireAnyAction(ArgumentMatchers.eq(resource), ArgumentMatchers.eq(user.id), any[SamRequestContext]))
-  //      .thenReturn(Directives.mapInnerRoute { innerRoute => onSuccess(IO.unit) { innerRoute } })
   "GET /api/user/v2/self/favoriteResources" should "return the user's favorite resources" in {
     // Arrange
     val user = Generator.genWorkbenchUserGoogle.sample.get
