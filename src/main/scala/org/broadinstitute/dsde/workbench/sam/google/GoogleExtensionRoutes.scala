@@ -20,6 +20,7 @@ import org.broadinstitute.dsde.workbench.sam.api.{
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.ActionServiceAccount._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -47,7 +48,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
             getWithTelemetry(samRequestContext, "userEmail" -> email) {
               complete {
                 import spray.json._
-                googleExtensions.getArbitraryPetServiceAccountKey(email, samRequestContext) map {
+                googleExtensions.petServiceAccounts.getArbitraryPetServiceAccountKey(email, samRequestContext) map {
                   // parse json to ensure it is json and tells akka http the right content-type
                   case Some(key) => StatusCodes.OK -> key.parseJson
                   case None =>
@@ -62,7 +63,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               getWithTelemetry(samRequestContext, "userEmail" -> email, "googleProject" -> googleProject) {
                 complete {
                   import spray.json._
-                  googleExtensions.getPetServiceAccountKey(email, googleProject, samRequestContext) map {
+                  googleExtensions.petServiceAccounts.getPetServiceAccountKey(email, googleProject, samRequestContext) map {
                     // parse json to ensure it is json and tells akka http the right content-type
                     case Some(key) => StatusCodes.OK -> key.parseJson
                     case None =>
@@ -80,7 +81,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               getWithTelemetry(samRequestContext) {
                 complete {
                   import spray.json._
-                  googleExtensions
+                  googleExtensions.petServiceAccounts
                     .getArbitraryPetServiceAccountKey(samUser, samRequestContext)
                     .map(key => StatusCodes.OK -> key.parseJson)
                 }
@@ -92,7 +93,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 postWithTelemetry(samRequestContext) {
                   entity(as[Set[String]]) { scopes =>
                     complete {
-                      googleExtensions.getArbitraryPetServiceAccountToken(samUser, scopes, samRequestContext).map { token =>
+                      googleExtensions.petServiceAccounts.getArbitraryPetServiceAccountToken(samUser, scopes, samRequestContext).map { token =>
                         StatusCodes.OK -> JsString(token)
                       }
                     }
@@ -113,7 +114,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     complete {
                       import spray.json._
                       // parse json to ensure it is json and tells akka http the right content-type
-                      googleExtensions
+                      googleExtensions.petServiceAccounts
                         .getPetServiceAccountKey(samUser, GoogleProject(project), samRequestContext)
                         .map { key =>
                           StatusCodes.OK -> key.parseJson
@@ -125,7 +126,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     val serviceAccountKeyId = ServiceAccountKeyId(keyId)
                     deleteWithTelemetry(samRequestContext, "googleProject" -> projectResourceId, "keyId" -> serviceAccountKeyId) {
                       complete {
-                        googleExtensions
+                        googleExtensions.petServiceAccounts
                           .removePetServiceAccountKey(samUser.id, GoogleProject(project), serviceAccountKeyId, samRequestContext)
                           .map(_ => StatusCodes.NoContent)
                       }
@@ -142,7 +143,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     postWithTelemetry(samRequestContext, "googleProject" -> projectResourceId) {
                       entity(as[Set[String]]) { scopes =>
                         complete {
-                          googleExtensions
+                          googleExtensions.petServiceAccounts
                             .getPetServiceAccountToken(samUser, GoogleProject(project), scopes, samRequestContext)
                             .map { token =>
                               StatusCodes.OK -> JsString(token)
@@ -189,7 +190,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   ) {
                     getWithTelemetry(samRequestContext, "googleProject" -> projectResourceId) {
                       complete {
-                        googleExtensions.createUserPetServiceAccount(samUser, GoogleProject(project), samRequestContext).map { petSA =>
+                        googleExtensions.petServiceAccounts.createUserPetServiceAccount(samUser, GoogleProject(project), samRequestContext).map { petSA =>
                           StatusCodes.OK -> petSA.serviceAccount.email
                         }
                       }
@@ -261,5 +262,55 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
             }
           }
         }
-    }
+    } ~
+      pathPrefix("google" / "v2") {
+        pathPrefix("actionServiceAccount") {
+          path(Segment / Segment / Segment / Segment) { (project, resourceTypeName, resourceId, action) =>
+            val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+            val googleProject = GoogleProject(project)
+            val resourceAction = ResourceAction(action)
+
+            withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
+              if (!resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
+                throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+              }
+              pathEndOrSingleSlash {
+                post {
+                  complete {
+                    googleExtensions.actionServiceAccounts.createActionServiceAccount(resource, googleProject, resourceAction, samRequestContext).map {
+                      StatusCodes.OK -> _
+                    }
+                  }
+                }
+              } ~
+                pathPrefix("signedUrlForBlob") {
+                  pathEndOrSingleSlash {
+                    post {
+                      requireAction(resource, resourceAction, samUser.id, samRequestContext) {
+                        entity(as[RequesterPaysSignedUrlRequest]) { request =>
+                          complete {
+                            googleExtensions
+                              .getRequesterPaysSignedUrl(
+                                samUser,
+                                resource.resourceId,
+                                resourceAction,
+                                googleProject,
+                                request.gsPath,
+                                request.duration,
+                                request.requesterPaysProject.map(GoogleProject),
+                                samRequestContext
+                              )
+                              .map { signedUrl =>
+                                StatusCodes.OK -> JsString(signedUrl.toString)
+                              }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+            }
+          }
+        }
+      }
 }

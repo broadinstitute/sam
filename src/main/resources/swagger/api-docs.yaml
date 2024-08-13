@@ -1331,41 +1331,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
       x-codegen-request-body-name: scopes
-  /api/google/v1/user/petServiceAccount/{project}/signedUrlForBlob:
-    post:
-      tags:
-        - Google
-      summary: Gets a signed URL for the given blob, signed by the Pet Service account of the calling user.
-        The signed URL is active for 1 hour and scoped to the permissions of the signing Pet Service Account.
-        Sam will provide a signed URL for any object path, even if that object does not exist.
-      operationId: getSignedUrlForBlob
-      parameters:
-        - name: project
-          in: path
-          description: Google project of the pet
-          required: true
-          schema:
-            type: string
-      requestBody:
-        description: bucketName and blobName of the object to get a signed URL for
-        content:
-          'application/json':
-            schema:
-              $ref: '#/components/schemas/SignedUrlRequest'
-        required: true
-      responses:
-        200:
-          description: signed URL for the blob, signed by the Pet Service Account key
-          content:
-            application/json:
-              schema:
-                type: string
-        500:
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/user/proxyGroup/{email}:
     get:
       tags:
@@ -1471,6 +1436,109 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SyncReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/google/v2/actionServiceAccount/{project}/{resourceTypeName}/{resourceId}/{action}:
+    post:
+      tags:
+        - Google
+      summary: Gets/creates an Action Service Account in a Google Project for an action on a resource
+      operationId: getActionServiceAccount
+      parameters:
+        - name: project
+          in: path
+          description: Google project of the the resource
+          required: true
+          schema:
+            type: string
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+        - name: action
+          in: path
+          description: Name of action to create an Action Service Account for
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              type: object
+      responses:
+        200:
+          description: Successfully created Action Service Account
+          content:
+            text/plain:
+              schema:
+                type: string
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/google/v2/actionServiceAccount/{project}/{resourceTypeName}/{resourceId}/{action}/signedUrlForBlob:
+    post:
+      tags:
+        - Google
+      summary: Gets a signed URL for the given blob, signed by the Action Service Account for the given
+        action, delegated to by the user's Pet Signing Account
+        The signed URL is active for 1 hour and scoped to the permissions of the Action Service Account.
+        Sam will provide a signed URL for any object path, even if that object does not exist.
+      operationId: getActionServiceAccountSignedUrlForBlob
+      parameters:
+        - name: project
+          in: path
+          description: project of the GCP Resource
+          required: true
+          schema:
+            type: string
+        - name: resourceTypeName
+          in: path
+          description: Resource type name
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Resource ID
+          required: true
+          schema:
+            type: string
+        - name: action
+          in: path
+          description: Action on the Resource Type to use
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: gspath of the object to get a signed URL for
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/RequesterPaysSignedUrlRequest'
+        required: true
+      responses:
+        200:
+          description: signed URL for the blob, signed by the Pet Signing Account key via the Action Service Account
+          content:
+            application/json:
+              schema:
+                type: string
         500:
           description: Internal Server Error
           content:
@@ -3881,6 +3949,21 @@ components:
           description: Use the pet service account project as the user project in the request.
           default: true
     RequesterPaysSignedUrlRequest:
+      type: object
+      required:
+        - gsPath
+      properties:
+        gsPath:
+          type: string
+          description: GS Path to the blob
+        duration:
+          type: number
+          description: Optional validity duration of the link in minutes. Defaults to 1 hour.
+          default: 60
+        requesterPaysProject:
+          type: string
+          description: Optional Google Project to use for billing.
+    ActionServiceAccountSignedUrlRequest:
       type: object
       required:
         - gsPath

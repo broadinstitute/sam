@@ -17,6 +17,8 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.api.{ActionServiceAccount, ActionServiceAccountId}
+import org.broadinstitute.dsde.workbench.sam.model.ResourceId
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -305,6 +307,43 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     petServiceAccount
   }
 
+  override def createActionServiceAccount(actionServiceAccount: ActionServiceAccount, samRequestContext: SamRequestContext): IO[ActionServiceAccount] = ???
+
+  override def loadActionServiceAccount(
+      actionServiceAccountId: ActionServiceAccountId,
+      samRequestContext: SamRequestContext
+  ): IO[Option[ActionServiceAccount]] = ???
+
+  override def updateActionServiceAccount(actionServiceAccount: ActionServiceAccount, samRequestContext: SamRequestContext): IO[ActionServiceAccount] = ???
+  override def deleteActionServiceAccount(actionServiceAccountId: ActionServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = ???
+
+  override def getAllActionServiceAccountsForResource(
+      resourceId: ResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionServiceAccount]] = ???
+  override def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    ???
+
+  override def createPetSigningAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
+    if (petServiceAccountsByUser.keySet.contains(petServiceAccount.id)) {
+      IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, s"pet service account ${petServiceAccount.id} already exists")))
+    }
+    petServiceAccountsByUser += petServiceAccount.id -> petServiceAccount
+    petsWithEmails += petServiceAccount.serviceAccount.email -> petServiceAccount.id
+    usersWithGoogleSubjectIds += GoogleSubjectId(petServiceAccount.serviceAccount.subjectId.value) -> petServiceAccount.id
+    IO.pure(petServiceAccount)
+  }
+
+  override def loadPetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = IO {
+    petServiceAccountsByUser.get(petServiceAccountId)
+  }
+  def loadUserPetSigningAccount(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]] = ???
+
+  override def updatePetSigningAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] = IO {
+    petServiceAccountsByUser.update(petServiceAccount.id, petServiceAccount)
+    petServiceAccount
+  }
+  override def deletePetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit] = ???
   override def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]] =
     if (groups.contains(groupName))
       IO.pure(groupAccessInstructions.get(groupName))

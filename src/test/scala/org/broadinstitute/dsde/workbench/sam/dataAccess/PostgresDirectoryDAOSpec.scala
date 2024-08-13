@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{ActionServiceAccount, ActionServiceAccountId}
 import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFreeSpec, TestSupport}
 import org.scalatest.Inside.inside
 import org.scalatest.matchers.should.Matchers
@@ -29,10 +30,11 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
   val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   val defaultGroupName: WorkbenchGroupName = WorkbenchGroupName("group")
+  val defaultGoogleProject: GoogleProject = GoogleProject("testProject")
   val defaultGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(defaultGroupName, Set.empty, WorkbenchEmail("foo@bar.com"))
   val defaultUser: SamUser = Generator.genWorkbenchUserBoth.sample.get
   val defaultPetSA: PetServiceAccount = PetServiceAccount(
-    PetServiceAccountId(defaultUser.id, GoogleProject("testProject")),
+    PetServiceAccountId(defaultUser.id, defaultGoogleProject),
     ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@pet.co"), ServiceAccountDisplayName("whoCares"))
   )
   val defaultPetMI: PetManagedIdentity = PetManagedIdentity(
@@ -65,6 +67,23 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
     Set(writeAction, readAction),
     Set.empty,
     public = false
+  )
+
+  val defaultActionServiceAccounts: Set[ActionServiceAccount] = Set(readAction, writeAction).map(action =>
+    ActionServiceAccount(
+      ActionServiceAccountId(defaultResource.resourceId, action, defaultGoogleProject),
+      ServiceAccount(
+        ServiceAccountSubjectId(s"testGoogleSubjectId-$action"),
+        WorkbenchEmail(s"test-$action@asa.co"),
+        ServiceAccountDisplayName(s"whoCares-$action")
+      )
+    )
+  )
+
+  val defaultUserGoogleAccount: GoogleProject = GoogleProject("testUserProject")
+  val defaultPetSigningAccount: PetServiceAccount = PetServiceAccount(
+    PetServiceAccountId(defaultUser.id, defaultUserGoogleAccount),
+    ServiceAccount(ServiceAccountSubjectId("testGoogleSubjectId"), WorkbenchEmail("test@petsigning.co"), ServiceAccountDisplayName("whoCares-signing"))
   )
 
   val defaultTenantId = TenantId("testTenant")
@@ -1945,7 +1964,6 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         retrievedAttributes should be(Some(upsertedAttributes))
       }
     }
-
     "Action Managed Identities" - {
       "can be individually created, read, updated, and deleted" in {
         assume(databaseEnabled, databaseEnabledClue)
@@ -2015,6 +2033,96 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.deleteAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
 
         dao.getAllActionManagedIdentitiesForResource(defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should be(Seq.empty)
+      }
+    }
+
+    "Action Service Accounts" - {
+      "can be individually created, read, updated, and deleted" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        defaultActionServiceAccounts.map(dao.createActionServiceAccount(_, samRequestContext).unsafeRunSync())
+
+        val readActionServiceAccount = defaultActionServiceAccounts.find(_.id.action == readAction)
+        val loadedReadActionServiceAccount = dao.loadActionServiceAccount(readActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
+        loadedReadActionServiceAccount should be(readActionServiceAccount)
+
+        val writeActionServiceAccount = defaultActionServiceAccounts.find(_.id.action == writeAction)
+        val loadedWriteActionServiceAccount = dao.loadActionServiceAccount(writeActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
+        loadedWriteActionServiceAccount should be(writeActionServiceAccount)
+
+        val updatedActionServiceAccount = writeActionServiceAccount.get.copy(serviceAccount =
+          writeActionServiceAccount.get.serviceAccount.copy(displayName = ServiceAccountDisplayName("new name"), email = WorkbenchEmail("newEmail@asa.co"))
+        )
+        dao.updateActionServiceAccount(updatedActionServiceAccount, samRequestContext).unsafeRunSync()
+
+        val loadedUpdatedActionServiceAccount = dao.loadActionServiceAccount(updatedActionServiceAccount.id, samRequestContext).unsafeRunSync()
+        loadedUpdatedActionServiceAccount should be(Some(updatedActionServiceAccount))
+
+        dao.deleteActionServiceAccount(readActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
+        dao.deleteActionServiceAccount(writeActionServiceAccount.get.id, samRequestContext).unsafeRunSync()
+
+        dao.loadActionServiceAccount(readActionServiceAccount.get.id, samRequestContext).unsafeRunSync() should be(None)
+        dao.loadActionServiceAccount(writeActionServiceAccount.get.id, samRequestContext).unsafeRunSync() should be(None)
+      }
+
+      "can be read, and deleted en mass for a resource" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        defaultActionServiceAccounts.map(dao.createActionServiceAccount(_, samRequestContext).unsafeRunSync())
+
+        val bothLoadedServiceAccounts =
+          dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync().toSet
+        bothLoadedServiceAccounts should be(defaultActionServiceAccounts)
+
+        dao.deleteAllActionServiceAccountsForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync()
+
+        dao.getAllActionServiceAccountsForResource(defaultResource.resourceId, samRequestContext).unsafeRunSync() should be(Seq.empty)
+      }
+    }
+    "Pet Signing Accounts" - {
+      "can be individually created, read, and deleted" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+        val createdPetSigningAccount = dao.createPetSigningAccount(defaultPetSigningAccount, samRequestContext).unsafeRunSync()
+
+        val loadedPetSigningAccount = dao.loadPetSigningAccount(defaultPetSigningAccount.id, samRequestContext).unsafeRunSync()
+        loadedPetSigningAccount should not be None
+        loadedPetSigningAccount should be(Some(createdPetSigningAccount))
+
+        dao.deletePetSigningAccount(defaultPetSigningAccount.id, samRequestContext).unsafeRunSync()
+
+        dao.loadPetSigningAccount(defaultPetSigningAccount.id, samRequestContext).unsafeRunSync() should be(None)
+      }
+
+      "are distinct from Pet Service Accounts" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+        dao.createPetSigningAccount(defaultPetSigningAccount, samRequestContext).unsafeRunSync()
+
+        val loadedPetServiceAccounts = dao.getAllPetServiceAccountsForUser(defaultUser.id, samRequestContext).unsafeRunSync()
+
+        loadedPetServiceAccounts should be(Seq(defaultPetSA))
+      }
+
+      "can be loaded per-user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.createPetSigningAccount(defaultPetSigningAccount, samRequestContext).unsafeRunSync()
+
+        val userPetSigningAccount = dao.loadUserPetSigningAccount(defaultUser.id, samRequestContext).unsafeRunSync()
+        userPetSigningAccount should be(Some(defaultPetSigningAccount))
       }
     }
 

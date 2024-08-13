@@ -13,6 +13,8 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
 }
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.api.{ActionServiceAccount, ActionServiceAccountId}
+import org.broadinstitute.dsde.workbench.sam.model.ResourceId
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -116,6 +118,31 @@ trait DirectoryDAO {
 
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
 
+  def createActionServiceAccount(actionServiceAccount: ActionServiceAccount, samRequestContext: SamRequestContext): IO[ActionServiceAccount]
+
+  def loadActionServiceAccount(actionServiceAccountId: ActionServiceAccountId, samRequestContext: SamRequestContext): IO[Option[ActionServiceAccount]]
+
+  def updateActionServiceAccount(actionServiceAccount: ActionServiceAccount, samRequestContext: SamRequestContext): IO[ActionServiceAccount]
+
+  def deleteActionServiceAccount(actionServiceAccountId: ActionServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
+
+  def getAllActionServiceAccountsForResource(
+      resourceId: ResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[ActionServiceAccount]]
+
+  def deleteAllActionServiceAccountsForResource(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit]
+
+  def createPetSigningAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
+
+  def loadPetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
+
+  def updatePetSigningAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
+
+  def loadUserPetSigningAccount(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[PetServiceAccount]]
+
+  def deletePetSigningAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
+
   def getManagedGroupAccessInstructions(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Option[String]]
 
   def setManagedGroupAccessInstructions(groupName: WorkbenchGroupName, accessInstructions: String, samRequestContext: SamRequestContext): IO[Unit]
@@ -174,7 +201,6 @@ trait DirectoryDAO {
   def setUserRegisteredAt(userId: WorkbenchUserId, registeredAt: Instant, samRequestContext: SamRequestContext): IO[Unit]
 
   def getUserAttributes(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUserAttributes]]
-
   def setUserAttributes(samUserAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[Unit]
 
   def listParentGroups(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]]

@@ -413,7 +413,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val petServiceAccount = googleExtensions.petServiceAccounts.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
 
@@ -425,7 +425,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     mockGoogleDirectoryDAO.groups(defaultUserProxyEmail) shouldBe Set(defaultUser.email, petServiceAccount.serviceAccount.email)
 
     // create one again, it should work
-    val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val petSaResponse2 = googleExtensions.petServiceAccounts.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
     petSaResponse2 shouldBe petServiceAccount
 
     // delete the pet service account
@@ -503,7 +503,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     ) = initPetTest
     val googleProject = GoogleProject("testproject")
 
-    val (saName, saDisplayName) = googleExtensions.toPetSAFromUser(defaultUser)
+    val (saName, saDisplayName) = googleExtensions.petServiceAccounts.toPetSAFromUser(defaultUser)
     val serviceAccount = mockGoogleIamDAO.createServiceAccount(googleProject, saName, saDisplayName).futureValue
     // create a user
 
@@ -511,7 +511,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
     newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), TestSupport.enabledMapTosAccepted)
 
     // create a pet service account
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val petServiceAccount = googleExtensions.petServiceAccounts.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
     petServiceAccount.serviceAccount shouldBe serviceAccount
 
   }
@@ -536,13 +536,13 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val petServiceAccount = googleExtensions.petServiceAccounts.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     import org.broadinstitute.dsde.workbench.model.google.toAccountName
     mockGoogleIamDAO.removeServiceAccount(googleProject, toAccountName(petServiceAccount.serviceAccount.email)).futureValue
     mockGoogleIamDAO.findServiceAccount(googleProject, petServiceAccount.serviceAccount.email).futureValue shouldBe None
 
-    val petServiceAccount2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val petServiceAccount2 = googleExtensions.petServiceAccounts.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
     petServiceAccount.serviceAccount shouldNot equal(petServiceAccount2.serviceAccount)
     val res = dirDAO.loadPetServiceAccount(petServiceAccount.id, samRequestContext).unsafeRunSync()
     res shouldBe Some(petServiceAccount2)
@@ -1288,12 +1288,12 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val petServiceAccount = googleExtensions.petServiceAccounts.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     // get a key, which should create a brand new one
-    val firstKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val firstKey = googleExtensions.petServiceAccounts.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
     // get a key again, which should return the original cached key created above
-    val secondKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val secondKey = googleExtensions.petServiceAccounts.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
     assert(firstKey == secondKey)
   }
 
@@ -1313,23 +1313,23 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val petServiceAccount = googleExtensions.petServiceAccounts.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     // get a key, which should create a brand new one
-    val firstKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val firstKey = googleExtensions.petServiceAccounts.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     // remove the key we just created
     runAndWait(for {
       keys <- googleExtensions.googleIamDAO.listServiceAccountKeys(googleProject, petServiceAccount.serviceAccount.email)
       _ <- keys.toList
         .parTraverse { key =>
-          googleExtensions.removePetServiceAccountKey(createDefaultUser.id, googleProject, key.id, samRequestContext)
+          googleExtensions.petServiceAccounts.removePetServiceAccountKey(createDefaultUser.id, googleProject, key.id, samRequestContext)
         }
         .unsafeToFuture()
     } yield ())
 
     // get a key again, which should once again create a brand new one because we've deleted the cached one
-    val secondKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val secondKey = googleExtensions.petServiceAccounts.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     assert(firstKey != secondKey)
   }
@@ -1350,10 +1350,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     // create a pet service account
     val googleProject = GoogleProject("testproject")
-    val petServiceAccount = googleExtensions.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val petServiceAccount = googleExtensions.petServiceAccounts.createUserPetServiceAccount(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     // get a key, which should create a brand new one
-    val firstKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val firstKey = googleExtensions.petServiceAccounts.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     // remove the key we just created behind the scenes
     val removedKeyObjects = (for {
@@ -1375,7 +1375,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     // get a key again, which should once again create a brand new one because we've deleted the cached one
     // and all the keys removed should have been removed from google
-    val secondKey = googleExtensions.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
+    val secondKey = googleExtensions.petServiceAccounts.getPetServiceAccountKey(createDefaultUser, googleProject, samRequestContext).unsafeRunSync()
 
     // assert that keys have been removed from service account
     assert(removedKeyObjects.forall { removed =>
@@ -2017,7 +2017,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val googleProject = GoogleProject("testproject")
     val report = intercept[WorkbenchExceptionWithErrorReport] {
-      googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+      googleExtensions.petServiceAccounts.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
     }
 
     report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
@@ -2061,7 +2061,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val googleProject = GoogleProject("testproject")
     val report = intercept[WorkbenchExceptionWithErrorReport] {
-      googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+      googleExtensions.petServiceAccounts.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
     }
 
     report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)
@@ -2105,7 +2105,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     val googleProject = GoogleProject("testproject")
     val report = intercept[WorkbenchExceptionWithErrorReport] {
-      googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+      googleExtensions.petServiceAccounts.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
     }
 
     report.errorReport.statusCode shouldEqual Some(StatusCodes.BadRequest)

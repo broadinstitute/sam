@@ -376,8 +376,8 @@ class ResourceService(
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
+      _ <- cloudExtensions.onResourceDelete(resource.resourceId, samRequestContext)
       _ <- deleteActionManagedIdentitiesForResource(resource, samRequestContext)
-
       // leave a tomb stone if the resource type does not allow reuse
       leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
       _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)

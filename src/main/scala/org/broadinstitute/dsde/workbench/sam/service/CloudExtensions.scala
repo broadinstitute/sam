@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceId, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
@@ -21,6 +21,7 @@ import scala.concurrent.{ExecutionContext, Future}
 object CloudExtensions {
   val resourceTypeName = ResourceTypeName("cloud-extension")
   val allUsersGroupName = WorkbenchGroupName("All_Users")
+  val allPetSingingAccountsGroupName = WorkbenchGroupName("All_Signing_Accounts")
 }
 
 trait CloudExtensions {
@@ -53,6 +54,7 @@ trait CloudExtensions {
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean]
 
+  def onResourceDelete(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit]
   def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
 
   def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit
@@ -99,7 +101,7 @@ trait NoExtensions extends CloudExtensions {
   override def onUserDelete(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
-
+  def onResourceDelete(resourceId: ResourceId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
   override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     IO.pure(Option(userEmail))
 
