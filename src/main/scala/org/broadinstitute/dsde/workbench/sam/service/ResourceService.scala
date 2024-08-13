@@ -958,6 +958,22 @@ class ResourceService(
   def listResourceChildren(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
     accessPolicyDAO.listResourceChildren(resourceId, samRequestContext)
 
+  def addUserFavoriteResource(userId: WorkbenchUserId, resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] =
+    directoryDAO.addUserFavoriteResource(userId, resourceId, samRequestContext)
+
+  def removeUserFavoriteResource(userId: WorkbenchUserId, resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    directoryDAO.removeUserFavoriteResource(userId, resourceId, samRequestContext)
+
+  def getUserFavoriteResources(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
+    directoryDAO.getUserFavoriteResources(userId, samRequestContext)
+
+  def getUserFavoriteResourcesOfType(
+      userId: WorkbenchUserId,
+      resourceType: ResourceTypeName,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedResourceId]] =
+    directoryDAO.getUserFavoriteResourcesOfType(userId, resourceType, samRequestContext)
+
   private[service] def createAccessChangeEvents(
       resource: FullyQualifiedResourceId,
       beforePolicies: Iterable[AccessPolicy],

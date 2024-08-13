@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   PetManagedIdentityId
 }
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, ResourceTypeName, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -178,4 +178,16 @@ trait DirectoryDAO {
   def setUserAttributes(samUserAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[Unit]
 
   def listParentGroups(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]]
+
+  def addUserFavoriteResource(userId: WorkbenchUserId, resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean]
+
+  def removeUserFavoriteResource(userId: WorkbenchUserId, resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit]
+
+  def getUserFavoriteResources(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]]
+
+  def getUserFavoriteResourcesOfType(
+      userId: WorkbenchUserId,
+      resourceTypeName: ResourceTypeName,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedResourceId]]
 }
