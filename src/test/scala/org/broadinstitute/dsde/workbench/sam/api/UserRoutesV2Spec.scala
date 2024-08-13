@@ -263,6 +263,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
   "GET /api/users/v2/self/combinedState" should "get the user combined state of the calling user" in {
     // Arrange
     val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
+    val favoriteResources = Set(FullyQualifiedResourceId(ResourceTypeName("workspaceType"), ResourceId("workspaceName")))
     val enterpriseFeature = FilteredResourceFlat(
       resourceType = ResourceTypeName("enterprise-feature"),
       resourceId = ResourceId("enterprise-feature"),
@@ -278,7 +279,8 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       SamUserAllowances(enabled = true, termsOfService = true),
       Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
       TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
-      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
+      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
+      favoriteResources
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -301,6 +303,11 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         any[SamRequestContext]
       )
 
+    lenient()
+      .doReturn(IO.pure(favoriteResources))
+      .when(samRoutes.resourceService)
+      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
+
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -313,6 +320,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
       response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
+      response.favoriteResources should be(favoriteResources)
     }
   }
 
@@ -333,7 +341,8 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       SamUserAllowances(enabled = true, termsOfService = true),
       Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
       TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
-      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
+      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
+      Set.empty
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -355,6 +364,11 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         any[SamRequestContext]
       )
 
+    lenient()
+      .doReturn(IO.pure(Set.empty))
+      .when(samRoutes.resourceService)
+      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
+
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -367,18 +381,20 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
       response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
+
     }
   }
 
   it should "return falsy terms of service if the user has no tos history" in {
     // Arrange
-    val filteresResourcesFlat = FilteredResourcesFlat(Set.empty)
+    val filteredResourcesFlat = FilteredResourcesFlat(Set.empty)
     val userCombinedStateResponse = SamUserCombinedStateResponse(
       defaultUser,
       SamUserAllowances(enabled = false, termsOfService = false),
       Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
       TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false),
-      Map("enterpriseFeatures" -> filteresResourcesFlat.toJson)
+      Map("enterpriseFeatures" -> filteredResourcesFlat.toJson),
+      Set.empty
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -400,6 +416,11 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         any[SamRequestContext]
       )
 
+    lenient()
+      .doReturn(IO.pure(Set.empty))
+      .when(samRoutes.resourceService)
+      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
+
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -411,7 +432,9 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion shouldBe None
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
+      response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
+      response.favoriteResources should be(Set.empty)
+
     }
   }
 

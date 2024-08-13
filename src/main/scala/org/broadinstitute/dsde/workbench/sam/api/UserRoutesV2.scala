@@ -217,12 +217,14 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives wi
               includePublic = false,
               samRequestContext
             )
+          favoriteResources <- resourceService.getUserFavoriteResources(samUser.id, samRequestContext)
         } yield SamUserCombinedStateResponse(
           samUser,
           allowances,
           maybeAttributes,
           termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
-          Map("enterpriseFeatures" -> enterpriseFeatures.toJson)
+          Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
+          favoriteResources
         )
       }
     }
