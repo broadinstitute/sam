@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.MockTestSupport.genSamRoutes
 import org.broadinstitute.dsde.workbench.sam.api.StandardSamUserDirectives
 import org.broadinstitute.dsde.workbench.sam.azure.AzureService
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, StatefulMockAccessPolicyDaoBuilder}
-import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensions, PetServiceAccounts}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -95,6 +95,7 @@ class SamProviderSpec
 
   // The following services are mocked for now
   val googleExt: GoogleExtensions = mock[GoogleExtensions]
+  val mockPetServiceAccountExt = mock[PetServiceAccounts]
   val mockManagedGroupService: ManagedGroupService = mock[ManagedGroupService]
   val tosService: TosService = MockTosServiceBuilder().withAllAccepted().build
   val azureService: AzureService = mock[AzureService]
@@ -135,9 +136,16 @@ class SamProviderSpec
   private def mockGetArbitraryPetServiceAccountToken(): IO[Unit] = for {
     _ <- IO(
       when {
-        googleExt.petServiceAccounts.getArbitraryPetServiceAccountToken(any[SamUser], any[Set[String]], any[SamRequestContext])
+        mockPetServiceAccountExt.getArbitraryPetServiceAccountToken(any[SamUser], any[Set[String]], any[SamRequestContext])
       } thenReturn {
         Future.successful("aToken")
+      }
+    )
+    _ <- IO(
+      when {
+        googleExt.petServiceAccounts
+      } thenReturn {
+        mockPetServiceAccountExt
       }
     )
   } yield ()
