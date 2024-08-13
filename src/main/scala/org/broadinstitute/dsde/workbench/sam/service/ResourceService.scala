@@ -553,14 +553,13 @@ class ResourceService(
             _ <- onPolicyUpdate(policyIdentity, originalPolicies, samRequestContext)
           } yield result
         case Some(existingAccessPolicy) =>
-          val newAccessPolicy = AccessPolicy(
-            policyIdentity,
-            workbenchSubjects,
-            existingAccessPolicy.email,
-            policy.roles,
-            policy.actions,
-            policy.descendantPermissions,
-            existingAccessPolicy.public
+          // this function updates only the members, roles, actions, and descendantPermissions of the policy
+          // so the new policy is a copy of the existing policy with the updated fields
+          val newAccessPolicy = existingAccessPolicy.copy(
+            members = workbenchSubjects,
+            roles = policy.roles,
+            actions = policy.actions,
+            descendantPermissions = policy.descendantPermissions
           )
           if (newAccessPolicy == existingAccessPolicy) {
             // short cut if access policy is unchanged
