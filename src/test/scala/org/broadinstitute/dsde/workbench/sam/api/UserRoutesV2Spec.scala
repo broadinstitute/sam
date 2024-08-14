@@ -510,7 +510,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
     // Act and Assert
     Put(s"/api/users/v2/self/favoriteResources/$resourceType/$resourceId") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Accepted
+      status shouldEqual StatusCodes.NoContent
     }
   }
 
@@ -585,7 +585,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
     // Act and Assert
     Delete(s"/api/users/v2/self/favoriteResources/$resourceType/$resourceId") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Accepted
+      status shouldEqual StatusCodes.NoContent
     }
   }
 
@@ -609,7 +609,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
     // Act and Assert
     Delete(s"/api/users/v2/self/favoriteResources/$resourceType/$resourceId") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.Accepted
+      status shouldEqual StatusCodes.NoContent
     }
   }
 }

@@ -263,7 +263,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives wi
         requireAnyAction(resource, samUser.id, samRequestContext) {
           complete {
             resourceService.addUserFavoriteResource(samUser.id, resource, samRequestContext).map {
-              case true => StatusCodes.Accepted
+              case true => StatusCodes.NoContent
               case false => StatusCodes.NotFound
             }
           }
@@ -274,7 +274,7 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives wi
   private def removeFavoriteResource(samUser: SamUser, resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Route =
     deleteWithTelemetry(samRequestContext) {
       complete {
-        resourceService.removeUserFavoriteResource(samUser.id, resource, samRequestContext).map(_ => StatusCodes.Accepted)
+        resourceService.removeUserFavoriteResource(samUser.id, resource, samRequestContext).map(_ => StatusCodes.NoContent)
       }
     }
 }
