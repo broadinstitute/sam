@@ -3308,7 +3308,7 @@ paths:
           schema:
             type: string
       responses:
-        202:
+        204:
           description: Favorite resource added
           content: { }
         404:
@@ -3336,7 +3336,7 @@ paths:
           schema:
             type: string
       responses:
-        202:
+        204:
           description: Favorite resource removed
           content: { }
   /api/users/v2/{sam_user_id}:
