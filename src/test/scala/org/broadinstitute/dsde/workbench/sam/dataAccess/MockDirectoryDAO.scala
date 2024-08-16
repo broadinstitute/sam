@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
 }
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, ResourceTypeName, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -42,6 +42,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   private val groupAccessInstructions: mutable.Map[WorkbenchGroupName, String] = new TrieMap()
 
   private val petManagedIdentitiesByUser: mutable.Map[PetManagedIdentityId, PetManagedIdentity] = new TrieMap()
+
+  private val userFavoriteResources: mutable.Map[WorkbenchUserId, Set[FullyQualifiedResourceId]] = new TrieMap()
 
   override def createGroup(
       group: BasicWorkbenchGroup,
@@ -480,4 +482,33 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
     }
 
   override def listParentGroups(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] = IO.pure(Set.empty)
+
+  override def addUserFavoriteResource(userId: WorkbenchUserId, resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] = {
+    if (userFavoriteResources.keySet.contains(userId)) {
+      val updatedResources = userFavoriteResources(userId) + resourceId
+      userFavoriteResources += userId -> updatedResources
+    } else {
+      userFavoriteResources += userId -> Set(resourceId)
+    }
+    IO.pure(true)
+  }
+
+  override def removeUserFavoriteResource(userId: WorkbenchUserId, resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    if (userFavoriteResources.keySet.contains(userId)) {
+      val updatedResources = userFavoriteResources(userId) - resourceId
+      userFavoriteResources += userId -> updatedResources
+    }
+    IO.unit
+  }
+
+  override def getUserFavoriteResources(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] = IO {
+    userFavoriteResources.getOrElse(userId, Set.empty)
+  }
+
+  override def getUserFavoriteResourcesOfType(
+      userId: WorkbenchUserId,
+      resourceTypeName: ResourceTypeName,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedResourceId]] =
+    IO.pure(userFavoriteResources.getOrElse(userId, Set.empty).filter(_.resourceTypeName == resourceTypeName))
 }

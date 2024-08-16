@@ -3311,6 +3311,55 @@ class ResourceServiceSpec
     returnedPolicies.head._2.isLeft shouldBe true
   }
 
+  "UserFavoriteResource" should "add, remove, and list favorite resources for a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName = ResourceId("resource")
+    val resource2Name = ResourceId("resource2")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+    val resource2 = FullyQualifiedResourceId(otherResourceType.name, resource2Name)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    service.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+    service.createResource(otherResourceType, resource2Name, dummyUser, samRequestContext).unsafeRunSync()
+
+    service.addUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource)
+
+    service.addUserFavoriteResource(dummyUser.id, resource2, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource, resource2)
+
+    service.removeUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource2)
+
+    service.removeUserFavoriteResource(dummyUser.id, resource2, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() shouldBe empty
+  }
+
+  it should "not return favorite resources for another user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    def otherUser = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(otherUser, samRequestContext).unsafeRunSync()
+
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+
+    service.addUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(otherUser.id, samRequestContext).unsafeRunSync() shouldBe empty
+  }
+
   /** Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures that `events` were appended. If tryTwice` run `test` again to make
     * sure subsequent calls to no log more messages. Ends by tearing down the log appender.
     */

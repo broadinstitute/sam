@@ -3239,6 +3239,106 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/favoriteResources:
+    get:
+      tags:
+        - Users
+      summary: Gets a user's favorite resources.
+      operationId: getFavoriteResources
+      responses:
+        200:
+          description: list of the user's favorite resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FullyQualifiedResourceId'
+        403:
+          description: user not found or is not allowed to use Terra
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/favoriteResources/{resourceTypeName}:
+    get:
+      tags:
+        - Users
+      summary: Gets a user's favorite resources of a given resource type.
+      operationId: getFavoriteResourcesOfType
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Resource type to narrow favorite resources to
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: list of the user's favorite resources of a specific resource type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FullyQualifiedResourceId'
+        404:
+          description: resource type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/favoriteResources/{resourceTypeName}/{resourceId}:
+    put:
+      tags:
+        - Users
+      summary: Add a resource to the calling user's favorites
+      operationId: addFavoriteResource
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Resource type of the resource to favorite
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Resource ID of the resource to favorite
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Favorite resource added
+          content: { }
+        404:
+          description: resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    delete:
+      tags:
+        - Users
+      summary: Remove a resource from the calling user's favorites
+      operationId: removeFavoriteResource
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Resource type of the resource to favorite
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Resource ID of the resource to favorite
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Favorite resource removed
+          content: { }
   /api/users/v2/{sam_user_id}:
     get:
       tags:

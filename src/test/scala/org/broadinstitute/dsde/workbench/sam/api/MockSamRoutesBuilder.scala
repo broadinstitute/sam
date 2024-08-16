@@ -137,6 +137,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
     val mockUserService = userServiceBuilder.build
     val mockCloudExtensions = cloudExtensionsBuilder.build
     val mockTosService = mockTosServiceBuilder.build
+    val mockPolicyEvaluatorService = mock[PolicyEvaluatorService]
 
     new SamRoutes(
       mockResourceService,
@@ -144,7 +145,7 @@ class MockSamRoutesBuilder(allUsersGroup: WorkbenchGroup)(implicit system: Actor
       null,
       null,
       null,
-      null,
+      mockPolicyEvaluatorService,
       mockTosService,
       null,
       null,
