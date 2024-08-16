@@ -184,7 +184,8 @@ class ResourceService(
   }
 
   /** This method only persists the resource and then overwrites/creates the policies for that resource. Be very careful if calling this method directly because
-    * it will not validate the resource or its policies. If you want to create a Resource, use createResource() which will also perform critical validations
+    * it will not validate the resource or its policies. If you want to create a Resource, use createResource() which will also perform critical validations. If
+    * the parent has an auth domain, it will be added the auth domain of the child.
     *
     * @param resourceType
     * @param resourceId
@@ -202,7 +203,13 @@ class ResourceService(
       samRequestContext: SamRequestContext
   ) = {
     val accessPolicies = policies.map(constructAccessPolicy(resourceType, resourceId, _, public = false)) // can't set public at create time
-    accessPolicyDAO.createResource(Resource(resourceType.name, resourceId, authDomain, accessPolicies = accessPolicies, parent = parentOpt), samRequestContext)
+    for {
+      inheritedAuthDomains <- parentOpt.map(loadResourceAuthDomain(_, samRequestContext)).getOrElse(IO.pure(Set.empty))
+      resource <- accessPolicyDAO.createResource(
+        Resource(resourceType.name, resourceId, inheritedAuthDomains ++ authDomain, accessPolicies = accessPolicies, parent = parentOpt),
+        samRequestContext
+      )
+    } yield resource
   }
 
   private def constructAccessPolicy(resourceType: ResourceType, resourceId: ResourceId, validatableAccessPolicy: ValidatableAccessPolicy, public: Boolean) =
@@ -230,7 +237,8 @@ class ResourceService(
       ownerPolicyErrors <- IO.pure(validateOwnerPolicyExists(resourceType, policies, parentOpt))
       policyErrors <- policies.toList.traverse(policy => validatePolicy(resourceType, resourceId, policy)).map(_.flatten)
       authDomainErrors <- validateAuthDomain(resourceType, authDomain, userId, samRequestContext)
-    } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors).toSeq
+      childAuthDomainErrors <- validateChildAuthDomain(authDomain, parentOpt, samRequestContext)
+    } yield (resourceIdErrors ++ ownerPolicyErrors ++ policyErrors ++ authDomainErrors ++ childAuthDomainErrors).toSeq
 
   private val validUrlSafePattern = "[-a-zA-Z0-9._~%]+".r
 
@@ -278,6 +286,23 @@ class ResourceService(
       } else None
     }
 
+  /** If an auth domain is specified for a child resource, it must contain all of the groups of the parent auth domain. Containing additional groups is allowed.
+    */
+  private def validateChildAuthDomain(
+      childAuthDomain: Set[WorkbenchGroupName],
+      parentOpt: Option[FullyQualifiedResourceId],
+      samRequestContext: SamRequestContext
+  ): IO[Option[ErrorReport]] =
+    parentOpt
+      .traverse { parent =>
+        loadResourceAuthDomain(parent, samRequestContext).map { parentAuthDomain =>
+          if (childAuthDomain.nonEmpty && !parentAuthDomain.forall(childAuthDomain.contains)) {
+            Option(ErrorReport("Child resource auth domain must contain all of the groups of the parent auth domain"))
+          } else None
+        }
+      }
+      .map(_.flatten)
+
   private def validateAuthDomainPermissions(
       authDomain: Set[WorkbenchGroupName],
       userId: WorkbenchUserId,
@@ -320,26 +345,56 @@ class ResourceService(
       }
     } map { listOfUsePermissions => listOfUsePermissions.isEmpty || listOfUsePermissions.forall(identity) }
 
+  /**
+    * Adds groups to a resource's auth domain. If the resource is a parent, the auth domain of all children will be updated as well.
+    * @param resource the resource to add the auth domain groups to
+    * @param authDomains groups to add to the auth domain
+    * @param userId optional, if provided, the user must have access to the new auth domain groups
+    * @param samRequestContext
+    * @return the complete new auth domain of the resource
+    */
   def addResourceAuthDomain(
       resource: FullyQualifiedResourceId,
       authDomains: Set[WorkbenchGroupName],
-      userId: WorkbenchUserId,
+      userId: Option[WorkbenchUserId],
       samRequestContext: SamRequestContext
   ): IO[Set[WorkbenchGroupName]] =
     for {
       resourceType <- getResourceType(resource.resourceTypeName)
-      _ <- validateAuthDomain(resourceType.get, authDomains, userId, samRequestContext)
-      accessPolicies <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
-      _ <-
-        if (accessPolicies.exists(_.public)) {
-          IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "Cannot add an auth domain group to a public resource")))
-        } else IO.unit
-      policies <- listResourcePolicies(resource, samRequestContext)
-      _ <- accessPolicyDAO.addResourceAuthDomain(resource, authDomains, samRequestContext)
+      error <- userId.map(validateAuthDomain(resourceType.get, authDomains, _, samRequestContext)).getOrElse(IO.none)
+      _ <- IO.raiseWhen(error.isDefined)(new WorkbenchExceptionWithErrorReport(error.get.copy(statusCode = Option(StatusCodes.BadRequest))))
+      resourceAndDescendants <- listResourceAndDescendants(resource, samRequestContext)
+      _ <- resourceAndDescendants.traverse(validateNoPublicPolicies(_, samRequestContext))
+      _ <- resourceAndDescendants.traverse(accessPolicyDAO.addResourceAuthDomain(_, authDomains, samRequestContext))
+
+      // sync groups because new auth domain can change group membership
+      policies <- resourceAndDescendants.traverse(listResourcePolicies(_, samRequestContext)).map(_.flatten)
       _ <- policies.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(FullyQualifiedPolicyId(resource, p.policyName), samRequestContext))
       _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), Set.empty, samRequestContext)
       authDomains <- loadResourceAuthDomain(resource, samRequestContext)
     } yield authDomains
+
+  private def validateNoPublicPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    accessPolicyDAO.listAccessPolicies(resource, samRequestContext).map { policies =>
+      if (policies.exists(_.public)) {
+        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Cannot add an auth domain group to a public resource $resource"))
+      }
+    }
+
+  /** List the resource and all of its descendants. Recursively calls accessPolicyDAO.listResourceChildren.
+    *
+    * @param resource
+    * @return
+    *   the resource and all of its descendants
+    */
+  private def listResourceAndDescendants(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[FullyQualifiedResourceId]] =
+    accessPolicyDAO.listResourceChildren(resource, samRequestContext).flatMap { children =>
+      children.toList
+        .traverse { child =>
+          listResourceAndDescendants(child, samRequestContext)
+        }
+        .map(_.flatten.appended(resource))
+    }
 
   @VisibleForTesting
   def createPolicy(
@@ -916,32 +971,12 @@ class ResourceService(
   def getResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] =
     accessPolicyDAO.getResourceParent(resourceId, samRequestContext)
 
-  /** In this iteration of hierarchical resources, we do not allow child resources to be in an auth domain because it would introduce additional complications
-    * when keeping Sam policies with their Google Groups. For more details, see
-    * https://docs.google.com/document/d/10qGxsV9BeM6-N_Zk27_JIayE509B8LUQBGiGrqB0taY/edit#heading=h.dxz6xjtnz9la
-    */
   def setResourceParent(childResource: FullyQualifiedResourceId, parentResource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
-      authDomain <- accessPolicyDAO.loadResourceAuthDomain(childResource, samRequestContext)
-      _ <- authDomain match {
-        case LoadResourceAuthDomainResult.NotConstrained =>
-          for {
-            _ <- accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
-            _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentUpdated, childResource, Set(ResourceChange(parentResource))))
-          } yield ()
-        case LoadResourceAuthDomainResult.Constrained(_) =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.BadRequest, "Cannot set the parent for a constrained resource")
-            )
-          )
-        case LoadResourceAuthDomainResult.ResourceNotFound =>
-          IO.raiseError(
-            new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.NotFound, "Resource not found")
-            )
-          )
-      }
+      parentAuthDomain <- loadResourceAuthDomain(parentResource, samRequestContext)
+      _ <- IO.whenA(parentAuthDomain.nonEmpty)(addResourceAuthDomain(childResource, parentAuthDomain, None, samRequestContext).void)
+      _ <- accessPolicyDAO.setResourceParent(childResource, parentResource, samRequestContext)
+      _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceParentUpdated, childResource, Set(ResourceChange(parentResource))))
     } yield ()
 
   def deleteResourceParent(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] =

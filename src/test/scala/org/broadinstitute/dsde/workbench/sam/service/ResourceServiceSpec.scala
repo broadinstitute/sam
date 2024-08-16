@@ -52,7 +52,6 @@ import org.slf4j.LoggerFactory
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.util.Random
 
@@ -956,6 +955,125 @@ class ResourceServiceSpec
     fryAccess shouldEqual false
   }
 
+  it should "inherit parent auth domains" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+
+    val parentAuthDomain = Set(WorkbenchGroupName("parentGroup"))
+    managedGroupService.createManagedGroup(ResourceId("parentGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+
+    val parentResource = service
+      .createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map.newBuilder
+          .addOne(AccessPolicyName("policy") -> AccessPolicyMembershipRequest(Set(dummyUser.email), Set.empty, Set(constrainableReaderRoleName)))
+          .result(),
+        parentAuthDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      .unsafeRunSync()
+    val childResource =
+      service
+        .createResource(
+          constrainableResourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map.empty,
+          Set.empty,
+          Option(parentResource.fullyQualifiedId),
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
+
+    constrainableService.loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs parentAuthDomain
+  }
+
+  it should "pass if auth domains includes parent's" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+
+    val parentAuthDomain = Set(WorkbenchGroupName("parentGroup"))
+    managedGroupService.createManagedGroup(ResourceId("parentGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+    val childAuthDomain = parentAuthDomain + WorkbenchGroupName("childGroup")
+    managedGroupService.createManagedGroup(ResourceId("childGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+
+    val parentResource = service
+      .createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(AccessPolicyName("policy") -> constrainablePolicyMembership),
+        parentAuthDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      .unsafeRunSync()
+    val childResource =
+      service
+        .createResource(
+          constrainableResourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map.empty,
+          childAuthDomain,
+          Option(parentResource.fullyQualifiedId),
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
+
+    constrainableService.loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs childAuthDomain
+  }
+
+  it should "fail if auth domains conflict with parent" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+
+    val parentAuthDomain = Set(WorkbenchGroupName("parentGroup"))
+    managedGroupService.createManagedGroup(ResourceId("parentGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+    val childAuthDomain = Set(WorkbenchGroupName("childGroup"))
+    managedGroupService.createManagedGroup(ResourceId("childGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+
+    val parentResource = service
+      .createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map.newBuilder
+          .addOne(AccessPolicyName("policy") -> AccessPolicyMembershipRequest(Set(dummyUser.email), Set.empty, Set(constrainableReaderRoleName)))
+          .result(),
+        parentAuthDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      .unsafeRunSync()
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      service
+        .createResource(
+          constrainableResourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map.empty,
+          childAuthDomain,
+          Option(parentResource.fullyQualifiedId),
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
+    }
+    error.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+  }
+
   "Loading an auth domain" should "fail when the resource does not exist" in {
     assume(databaseEnabled, databaseEnabledClue)
 
@@ -1105,7 +1223,7 @@ class ResourceServiceSpec
     policy.version shouldEqual 1
 
     val resourceWithAuthDomain =
-      runAndWait(constrainableService.addResourceAuthDomain(resource.fullyQualifiedId, authDomain.toList.toSet, dummyUser.id, samRequestContext))
+      runAndWait(constrainableService.addResourceAuthDomain(resource.fullyQualifiedId, authDomain.toList.toSet, None, samRequestContext))
     resourceWithAuthDomain shouldEqual authDomain.toList.toSet
 
     val updatedPolicy =
@@ -2122,7 +2240,7 @@ class ResourceServiceSpec
     runAndWait(service.validatePolicy(defaultResourceType, ResourceId(""), policy)) shouldBe empty
   }
 
-  "validatePolicy" should "fail with an incorrect policy" in {
+  it should "fail with an incorrect policy" in {
     val emailToMaybeSubject = Map(dummyUser.email -> Option(dummyUser.id.asInstanceOf[WorkbenchSubject]))
     val policy =
       service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ResourceRoleName("bad_name")), Set(ResourceAction("bad_action")), Set())
@@ -2136,7 +2254,7 @@ class ResourceServiceSpec
     maybeErrorReport.value.message should include("invalid role")
   }
 
-  "validateRoles" should "succeed with role included in listed roles" in {
+  it should "succeed with role included in listed roles" in {
     service.validateRoles(defaultResourceType, Set(ownerRoleName)) shouldBe empty
   }
 
@@ -2145,6 +2263,10 @@ class ResourceServiceSpec
       service.validateActions(defaultResourceType, Set(ResourceAction("asdf")))
     maybeErrorReport shouldBe defined
     maybeErrorReport.value.message should include("invalid action")
+  }
+
+  it should "succeed with action included in listed actions" in {
+    service.validateActions(defaultResourceType, Set(ResourceAction("alter_policies"))) shouldBe empty
   }
 
   "validateResourceTypeAdminDescendantPermissions" should "succeed if resource type admin matches resource" in {
@@ -2179,10 +2301,6 @@ class ResourceServiceSpec
         s"Resource type admin policies can only have descendant permissions for their matching resource type, ${otherResourceType.name} is a different type"
       )
     )
-  }
-
-  "validateActions" should "succeed with action included in listed actions" in {
-    service.validateActions(defaultResourceType, Set(ResourceAction("alter_policies"))) shouldBe empty
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
@@ -2754,40 +2872,106 @@ class ResourceServiceSpec
       testPolicy.email
     )
 
-    implicit val patienceConfig = PatienceConfig(5.seconds)
     testResult.unsafeRunSync()
   }
 
-  "setResourceParent" should "throw if the child resource has an auth domain" in {
+  "setResourceParent" should "inherit parent's auth domain for all descendants" in {
     assume(databaseEnabled, databaseEnabledClue)
 
-    val childAccessPolicies = Map(
+    val accessPolicies = Map(
       AccessPolicyName("constrainable") -> constrainablePolicyMembership
     )
 
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
     val testResult = for {
       _ <- service.createResourceType(constrainableResourceType, samRequestContext)
       _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
 
       _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUser, samRequestContext = samRequestContext)
-      childResource <- service.createResource(
+      parentResource <- service.createResource(
         constrainableResourceType,
-        ResourceId("child"),
-        childAccessPolicies,
-        Set(WorkbenchGroupName("authDomain")),
+        ResourceId("parent"),
+        accessPolicies,
+        authDomain,
         None,
         dummyUser.id,
         samRequestContext
       )
-      parentResource <- service.createResource(constrainableResourceType, ResourceId("parent"), dummyUser, samRequestContext)
+      childResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("child"),
+        accessPolicies,
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      grandchild <- service.createResource(
+        constrainableResourceType,
+        ResourceId("grandchild"),
+        accessPolicies,
+        Set.empty,
+        Option(childResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      _ <- service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+      childAD <- constrainableService.loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext)
+      grandchildAD <- constrainableService.loadResourceAuthDomain(grandchild.fullyQualifiedId, samRequestContext)
+    } yield {
+      childAD shouldBe authDomain
+      grandchildAD shouldBe authDomain
+    }
+
+    testResult.unsafeRunSync()
+  }
+
+  it should "fail when parent has auth domain and descendant has public policy" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val accessPolicies = Map(
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUser, samRequestContext = samRequestContext)
+      parentResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("parent"),
+        accessPolicies,
+        authDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      childResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("child"),
+        accessPolicies,
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      grandchild <- service.createResource(
+        constrainableResourceType,
+        ResourceId("grandchild"),
+        accessPolicies,
+        Set.empty,
+        Option(childResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      _ <- service.setPublic(FullyQualifiedPolicyId(grandchild.fullyQualifiedId, accessPolicies.head._1), public = true, samRequestContext)
       _ <- service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
     } yield ()
 
-    val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      testResult.unsafeRunSync()
-    }
-
-    exception.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
+    val error = intercept[WorkbenchExceptionWithErrorReport](testResult.unsafeRunSync())
+    error.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
   "deletePolicy" should "delete the policy" in {
