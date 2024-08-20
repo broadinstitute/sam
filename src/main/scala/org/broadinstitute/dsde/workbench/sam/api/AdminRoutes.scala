@@ -11,6 +11,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
+import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
@@ -28,6 +29,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
 
   implicit val executionContext: ExecutionContext
   val resourceService: ResourceService
+  val directoryDAO: DirectoryDAO
   val managedGroupService: ManagedGroupService
   val liquibaseConfig: LiquibaseConfig
 
@@ -145,6 +147,14 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                 .map(user => (if (user.isDefined) OK else NotFound) -> user)
             }
           }
+        } ~
+        pathPrefix("repairCloudAccess") {
+            putWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+              complete {
+                repairCloudAccess(workbenchUserId, samRequestContext)
+                  .map(_ => NoContent)
+              }
+            }
         }
       }
     }
@@ -265,6 +275,17 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
         }
       }
     }
+  def repairCloudAccess(workbenchUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
+    for {
+      maybeUser <- userService
+      .getUser(workbenchUserId, samRequestContext = samRequestContext)
+      user = maybeUser.getOrElse(throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"User ${workbenchUserId.value} not found")))
+      _ <- cloudExtensions.onUserCreate(user, samRequestContext)
+      groups <- directoryDAO.listUserDirectMemberships(user.id, samRequestContext)
+      _ <- cloudExtensions.onGroupUpdate(groups, Set(user.id), samRequestContext)
+    } yield IO.pure(())
+  }
+
 
   def requireAdminResourceAction(action: ResourceAction, resourceType: ResourceType, user: SamUser, samRequestContext: SamRequestContext): Directive0 =
     requireAction(
