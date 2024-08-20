@@ -384,7 +384,9 @@ class ResourceService(
       }
     }
 
-  /** List the resource and all of its descendants. Recursively calls accessPolicyDAO.listResourceChildren.
+  /** List the resource and all of its descendants. Recursively calls accessPolicyDAO.listResourceChildren. An alternate implementation could be to use a
+    * recursive query in the database but this is a little more concise and easier to understand at the expense of more db queries. But there are not likely to
+    * be huge depths of hierarchical resources and this is a seldom called function.
     *
     * @param resource
     * @return
