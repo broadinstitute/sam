@@ -345,13 +345,16 @@ class ResourceService(
       }
     } map { listOfUsePermissions => listOfUsePermissions.isEmpty || listOfUsePermissions.forall(identity) }
 
-  /**
-    * Adds groups to a resource's auth domain. If the resource is a parent, the auth domain of all children will be updated as well.
-    * @param resource the resource to add the auth domain groups to
-    * @param authDomains groups to add to the auth domain
-    * @param userId optional, if provided, the user must have access to the new auth domain groups
+  /** Adds groups to a resource's auth domain. If the resource is a parent, the auth domain of all children will be updated as well.
+    * @param resource
+    *   the resource to add the auth domain groups to
+    * @param authDomains
+    *   groups to add to the auth domain
+    * @param userId
+    *   optional, if provided, the user must have access to the new auth domain groups
     * @param samRequestContext
-    * @return the complete new auth domain of the resource
+    * @return
+    *   the complete new auth domain of the resource
     */
   def addResourceAuthDomain(
       resource: FullyQualifiedResourceId,
@@ -368,9 +371,9 @@ class ResourceService(
       _ <- resourceAndDescendants.traverse(accessPolicyDAO.addResourceAuthDomain(_, authDomains, samRequestContext))
 
       // sync groups because new auth domain can change group membership
-      policies <- resourceAndDescendants.traverse(listResourcePolicies(_, samRequestContext)).map(_.flatten)
-      _ <- policies.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(FullyQualifiedPolicyId(resource, p.policyName), samRequestContext))
-      _ <- cloudExtensions.onGroupUpdate(policies.map(p => FullyQualifiedPolicyId(resource, p.policyName)), Set.empty, samRequestContext)
+      policies <- resourceAndDescendants.traverse(accessPolicyDAO.listAccessPolicies(_, samRequestContext)).map(_.flatten)
+      _ <- policies.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(p.id, samRequestContext))
+      _ <- cloudExtensions.onGroupUpdate(policies.map(_.id), Set.empty, samRequestContext)
       authDomains <- loadResourceAuthDomain(resource, samRequestContext)
     } yield authDomains
 

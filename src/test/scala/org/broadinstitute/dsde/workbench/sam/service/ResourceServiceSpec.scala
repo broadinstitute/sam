@@ -4,6 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
+import cats.implicits.toTraverseOps
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
@@ -991,7 +992,9 @@ class ResourceServiceSpec
         )
         .unsafeRunSync()
 
-    constrainableService.loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs parentAuthDomain
+    constrainableService
+      .loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext)
+      .unsafeRunSync() should contain theSameElementsAs parentAuthDomain
   }
 
   it should "pass if auth domains includes parent's" in {
@@ -1030,7 +1033,9 @@ class ResourceServiceSpec
         )
         .unsafeRunSync()
 
-    constrainableService.loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs childAuthDomain
+    constrainableService
+      .loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext)
+      .unsafeRunSync() should contain theSameElementsAs childAuthDomain
   }
 
   it should "fail if auth domains conflict with parent" in {
@@ -1230,6 +1235,145 @@ class ResourceServiceSpec
       policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${resourceAndPolicyName}"))
     updatedPolicy.version shouldEqual 2
 
+  }
+
+  it should "add auth domains to resource and descendants" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val accessPolicies = Map(
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
+    val authDomain2 = Set(WorkbenchGroupName("authDomain2"))
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUser, samRequestContext = samRequestContext)
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain2"), dummyUser, samRequestContext = samRequestContext)
+      parentResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("parent"),
+        accessPolicies,
+        authDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      childResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("child"),
+        accessPolicies,
+        Set.empty,
+        Option(parentResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      grandchild <- service.createResource(
+        constrainableResourceType,
+        ResourceId("grandchild"),
+        accessPolicies,
+        Set.empty,
+        Option(childResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      updated <- constrainableService.addResourceAuthDomain(parentResource.fullyQualifiedId, authDomain2, Option(dummyUser.id), samRequestContext)
+      allResourceIds = List(parentResource.fullyQualifiedId, childResource.fullyQualifiedId, grandchild.fullyQualifiedId)
+      allADs <- allResourceIds.traverse(constrainableService.loadResourceAuthDomain(_, samRequestContext))
+      allPolicies <- allResourceIds.traverse(policyDAO.listAccessPolicies(_, samRequestContext))
+    } yield {
+      updated shouldBe authDomain2 ++ authDomain
+      allADs.foreach(_ shouldBe updated)
+      allPolicies.flatten.foreach(_.version shouldBe 2)
+    }
+
+    testResult.unsafeRunSync()
+  }
+
+  it should "throw if any has public policies" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val accessPolicies = Map(
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUser, samRequestContext = samRequestContext)
+      parentResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("parent"),
+        accessPolicies,
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      childResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("child"),
+        accessPolicies,
+        Set.empty,
+        Option(parentResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      grandchild <- service.createResource(
+        constrainableResourceType,
+        ResourceId("grandchild"),
+        accessPolicies,
+        Set.empty,
+        Option(childResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      // pick a random resource to set public, this test should work for any of the 3
+      probeResourceId = Random.shuffle(List(parentResource.fullyQualifiedId, childResource.fullyQualifiedId, grandchild.fullyQualifiedId)).head
+      _ <- constrainableService.setPublic(FullyQualifiedPolicyId(probeResourceId, accessPolicies.head._1), true, samRequestContext)
+      _ <- constrainableService.addResourceAuthDomain(parentResource.fullyQualifiedId, authDomain, Option(dummyUser.id), samRequestContext)
+    } yield {}
+
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      testResult.unsafeRunSync()
+    }
+
+    error.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+  }
+
+  it should "throw if auth domain does not exist" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val accessPolicies = Map(
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      resource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("parent"),
+        accessPolicies,
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      _ <- constrainableService.addResourceAuthDomain(resource.fullyQualifiedId, authDomain, Option(dummyUser.id), samRequestContext)
+    } yield {}
+
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      testResult.unsafeRunSync()
+    }
+
+    error.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
   }
 
   "listUserResourceRoles" should "list the user's role when they have at least one role" in {
