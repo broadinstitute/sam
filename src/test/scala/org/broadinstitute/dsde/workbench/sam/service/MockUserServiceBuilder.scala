@@ -212,7 +212,21 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     mockUserService.setUserAttributes(argThat((attr: SamUserAttributes) => attr.userId.equals(userId)), any[SamRequestContext]) returns IO(userAttributes)
     mockUserService.setUserAttributesFromRequest(
       eqTo(userId),
-      SamUserAttributesRequest(Some(userAttributes.marketingConsent)),
+      SamUserAttributesRequest(
+        userId,
+        Some(userAttributes.marketingConsent),
+        userAttributes.firstName,
+        userAttributes.lastName,
+        userAttributes.organization,
+        userAttributes.contactEmail,
+        userAttributes.title,
+        userAttributes.department,
+        userAttributes.interestInTerra,
+        userAttributes.programLocationCity,
+        userAttributes.programLocationState,
+        userAttributes.programLocationCountry,
+        userAttributes.researchArea,
+        userAttributes.additionalAttributes),
       any[SamRequestContext]
     ) returns IO(userAttributes)
   }
