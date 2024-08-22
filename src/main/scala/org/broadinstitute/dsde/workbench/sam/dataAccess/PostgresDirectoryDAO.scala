@@ -6,19 +6,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.azure.{
-  ActionManagedIdentity,
-  ActionManagedIdentityId,
-  BillingProfileId,
-  ManagedIdentityDisplayName,
-  ManagedIdentityObjectId,
-  ManagedResourceGroupCoordinates,
-  ManagedResourceGroupName,
-  PetManagedIdentity,
-  PetManagedIdentityId,
-  SubscriptionId,
-  TenantId
-}
+import org.broadinstitute.dsde.workbench.sam.azure.{ActionManagedIdentity, ActionManagedIdentityId, BillingProfileId, ManagedIdentityDisplayName, ManagedIdentityObjectId, ManagedResourceGroupCoordinates, ManagedResourceGroupName, PetManagedIdentity, PetManagedIdentityId, SubscriptionId, TenantId}
 import org.broadinstitute.dsde.workbench.sam.db.SamParameterBinderFactory._
 import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
@@ -1381,31 +1369,31 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         ${userAttributes.contactEmail},
         ${userAttributes.title},
         ${userAttributes.department},
-        ${userAttributes.interestInTerra},
+        ARRAY[${userAttributes.interestInTerra.getOrElse(Array.empty[String])}],
         ${userAttributes.programLocationCity},
         ${userAttributes.programLocationState},
         ${userAttributes.programLocationCountry},
-        ${userAttributes.researchArea},
-        ${userAttributes.additionalAttributes},
-        ${userAttributes.createdAt},
-        ${Instant.now()})
+        ARRAY[${userAttributes.researchArea.getOrElse(Array.empty[String])}],
+        ${userAttributes.additionalAttributes.getOrElse("{}")}::jsonb,
+        ${Instant.now()},
+        ${Instant.now()}
+        )
         on conflict(${userAttributesColumns.samUserId})
           do update set
-          ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
-          ${userAttributesColumns.firstName} = ${userAttributes.firstName},
-        ${userAttributesColumns.lastName} = ${userAttributes.lastName},
-          ${userAttributesColumns.organization} = ${userAttributes.organization},
-          ${userAttributesColumns.contactEmail} = ${userAttributes.contactEmail},
-          ${userAttributesColumns.title} = ${userAttributes.title},
-          ${userAttributesColumns.department} = ${userAttributes.department},
-          ${userAttributesColumns.interestInTerra} = ${userAttributes.interestInTerra},
-          ${userAttributesColumns.programLocationCity} = ${userAttributes.programLocationCity},
-          ${userAttributesColumns.programLocationState} = ${userAttributes.programLocationState},
-          ${userAttributesColumns.programLocationCountry} = ${userAttributes.programLocationCountry},
-          ${userAttributesColumns.researchArea} = ${userAttributes.researchArea},
-          ${userAttributesColumns.additionalAttributes} = ${userAttributes.additionalAttributes},
-          ${userAttributesColumns.createdAt} = ${userAttributes.createdAt},
-          ${userAttributesColumns.updatedAt} = ${Instant.now()}
+         ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
+         ${userAttributesColumns.firstName} = ${userAttributes.firstName},
+         ${userAttributesColumns.lastName} = ${userAttributes.lastName},
+         ${userAttributesColumns.organization} = ${userAttributes.organization},
+         ${userAttributesColumns.contactEmail} = ${userAttributes.contactEmail},
+         ${userAttributesColumns.title} = ${userAttributes.title},
+         ${userAttributesColumns.department} = ${userAttributes.department},
+         ${userAttributesColumns.interestInTerra} = ARRAY[${userAttributes.interestInTerra.getOrElse(Array.empty[String])}],
+         ${userAttributesColumns.programLocationCity} = ${userAttributes.programLocationCity},
+         ${userAttributesColumns.programLocationState} = ${userAttributes.programLocationState},
+         ${userAttributesColumns.programLocationCountry} = ${userAttributes.programLocationCountry},
+         ${userAttributesColumns.researchArea} = ARRAY[${userAttributes.researchArea.getOrElse(Array.empty[String])}],
+         ${userAttributesColumns.additionalAttributes} = ${userAttributes.additionalAttributes.getOrElse("{}")}::jsonb,
+         ${userAttributesColumns.updatedAt} = ${Some(Instant.now())}
            """.update().apply() > 0
     }
 

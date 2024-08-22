@@ -22,7 +22,7 @@ final case class UserAttributesRecord(
     researchArea: Option[List[String]],
     additionalAttributes: Option[String],
     createdAt: Option[Instant],
-    updatedAt: Instant
+    updatedAt: Option[Instant]
 )
 
 object UserAttributesTable extends SQLSyntaxSupportWithDefaultSamDB[UserAttributesRecord] {

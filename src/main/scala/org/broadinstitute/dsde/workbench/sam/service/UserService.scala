@@ -109,14 +109,13 @@ class UserService(
       programLocationState: Option[String] = None,
       programLocationCountry: Option[String] = None,
       researchArea: Option[List[String]] = None,
-      additionalAttributes: Option[String] = None,
-      createdAt: Option[Instant] = Some(Instant.now()),
-      updatedAt: Instant = Instant.now()
+      additionalAttributes: Option[String] = None
   ): IO[Unit] = {
     val attributes = registrationRequest
       .map(_.userAttributes)
       .getOrElse(
         SamUserAttributesRequest(
+          userId = userId,
           marketingConsent = Some(false),
           firstName = firstName,
           lastName = lastName,
@@ -129,9 +128,7 @@ class UserService(
           programLocationState = programLocationState,
           programLocationCountry = programLocationCountry,
           researchArea = researchArea,
-          additionalAttributes = additionalAttributes,
-          createdAt = createdAt,
-          updatedAt = updatedAt)
+          additionalAttributes = additionalAttributes)
       )
     setUserAttributesFromRequest(userId, attributes, samRequestContext).map(_ => ())
   }
@@ -306,7 +303,7 @@ class UserService(
           None,
           None,
           None,
-          Instant.now()
+          None
         ),
         samRequestContext
       )
@@ -531,7 +528,7 @@ class UserService(
       userAttributesOpt <- getUserAttributes(userId, samRequestContext)
       updatedAttributes <- userAttributesOpt match {
         case Some(currentUserAttributes) =>
-          currentUserAttributes.updateFromUserAttributesRequest(userAttributesRequest)
+          currentUserAttributes.updateFromUserAttributesRequest(userId, userAttributesRequest)
         case None =>
           SamUserAttributes.newUserAttributesFromRequest(userId, userAttributesRequest)
       }

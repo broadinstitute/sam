@@ -29,8 +29,6 @@ object SamUserAttributes {
       programLocationCountry = userAttributesRequest.programLocationCountry
       researchArea = userAttributesRequest.researchArea
       additionalAttributes = userAttributesRequest.additionalAttributes
-      createdAt = Instant.now()
-      updatedAt = Instant.now()
 
     } yield SamUserAttributes(
       userId,
@@ -47,8 +45,8 @@ object SamUserAttributes {
       programLocationCountry,
       researchArea,
       additionalAttributes,
-      Some(createdAt),
-      updatedAt
+      Some(Instant.now()),
+      Some(Instant.now())
     )
     IO.fromOption(samUserAttributes)(
       new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Missing values required for new user attributes."))
@@ -73,11 +71,12 @@ final case class SamUserAttributes(
     researchArea: Option[List[String]],
     additionalAttributes: Option[String],
     createdAt: Option[Instant],
-    updatedAt: Instant
+    updatedAt: Option[Instant]
 ) {
-  def updateFromUserAttributesRequest(userAttributesRequest: SamUserAttributesRequest): IO[SamUserAttributes] =
+  def updateFromUserAttributesRequest(userId: WorkbenchUserId, userAttributesRequest: SamUserAttributesRequest): IO[SamUserAttributes] =
     IO(
       this.copy(
+        userId = userId,
         marketingConsent = userAttributesRequest.marketingConsent.getOrElse(this.marketingConsent),
         firstName = userAttributesRequest.firstName.orElse(this.firstName),
         lastName = userAttributesRequest.lastName.orElse(this.lastName),
@@ -91,8 +90,6 @@ final case class SamUserAttributes(
         programLocationCountry = userAttributesRequest.programLocationCountry.orElse(this.programLocationCountry),
         researchArea = userAttributesRequest.researchArea.orElse(this.researchArea),
         additionalAttributes = userAttributesRequest.additionalAttributes.orElse(this.additionalAttributes),
-        createdAt = this.createdAt.orElse(userAttributesRequest.createdAt).orElse(Some(Instant.now())),
-        updatedAt = Instant.now()
       )
     )
 }

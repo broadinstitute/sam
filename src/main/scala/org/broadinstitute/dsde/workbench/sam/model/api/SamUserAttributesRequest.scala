@@ -1,18 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam
 package model.api
 
-import org.broadinstitute.dsde.workbench.model.ErrorReport
-import spray.json.DefaultJsonProtocol.jsonFormat15
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchUserIdFormat
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserId}
 import spray.json.DefaultJsonProtocol._
 import spray.json.RootJsonFormat
-import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
-import java.time.Instant
 
 object SamUserAttributesRequest {
-  implicit val SamUserAttributesRequestFormat: RootJsonFormat[SamUserAttributesRequest] = jsonFormat15(SamUserAttributesRequest.apply)
+  implicit val SamUserAttributesRequestFormat: RootJsonFormat[SamUserAttributesRequest] = jsonFormat14(SamUserAttributesRequest.apply)
 
 }
 case class SamUserAttributesRequest(
+   userId: WorkbenchUserId,
    marketingConsent: Option[Boolean],
    firstName: Option[String],
    lastName: Option[String],
@@ -25,9 +24,7 @@ case class SamUserAttributesRequest(
    programLocationState: Option[String],
    programLocationCountry: Option[String],
    researchArea: Option[List[String]],
-   additionalAttributes: Option[String],
-   createdAt: Option[Instant],
-   updatedAt: Instant) {
+   additionalAttributes: Option[String]) {
   def validateForNewUser: Option[Seq[ErrorReport]] = Option(
     Seq(
       validateMarketingConsentExists
