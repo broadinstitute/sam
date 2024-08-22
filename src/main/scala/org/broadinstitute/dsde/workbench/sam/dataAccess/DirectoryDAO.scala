@@ -3,14 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
-import org.broadinstitute.dsde.workbench.sam.azure.{
-  ActionManagedIdentity,
-  ActionManagedIdentityId,
-  BillingProfileId,
-  ManagedIdentityObjectId,
-  PetManagedIdentity,
-  PetManagedIdentityId
-}
+import org.broadinstitute.dsde.workbench.sam.azure.{ActionManagedIdentity, ActionManagedIdentityId, BillingProfileId, ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
