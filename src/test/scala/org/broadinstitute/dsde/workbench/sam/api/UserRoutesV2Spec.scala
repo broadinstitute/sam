@@ -345,9 +345,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
   "GET /api/users/v2/self/combinedState" should "get the user combined state of the calling user" in {
     // Arrange
-    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
     val favoriteResources = Set(FullyQualifiedResourceId(ResourceTypeName("workspaceType"), ResourceId("workspaceName")))
-
     val userAttributes = SamUserAttributes(
       defaultUser.id,
       marketingConsent = true,
