@@ -1369,11 +1369,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         ${userAttributes.contactEmail},
         ${userAttributes.title},
         ${userAttributes.department},
-        ARRAY[${userAttributes.interestInTerra.getOrElse(Array.empty[String])}],
+        ARRAY[${userAttributes.interestInTerra.getOrElse(Array.empty[String])}]::text[],
         ${userAttributes.programLocationCity},
         ${userAttributes.programLocationState},
         ${userAttributes.programLocationCountry},
-        ARRAY[${userAttributes.researchArea.getOrElse(Array.empty[String])}],
+        ARRAY[${userAttributes.researchArea.getOrElse(Array.empty[String])}]::text[],
         ${userAttributes.additionalAttributes.getOrElse("{}")}::jsonb,
         ${Instant.now()},
         ${Instant.now()}
@@ -1387,11 +1387,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
          ${userAttributesColumns.contactEmail} = ${userAttributes.contactEmail},
          ${userAttributesColumns.title} = ${userAttributes.title},
          ${userAttributesColumns.department} = ${userAttributes.department},
-         ${userAttributesColumns.interestInTerra} = ARRAY[${userAttributes.interestInTerra.getOrElse(Array.empty[String])}],
+         ${userAttributesColumns.interestInTerra} = ARRAY[${userAttributes.interestInTerra.getOrElse(Array.empty[String])}]::text[],
          ${userAttributesColumns.programLocationCity} = ${userAttributes.programLocationCity},
          ${userAttributesColumns.programLocationState} = ${userAttributes.programLocationState},
          ${userAttributesColumns.programLocationCountry} = ${userAttributes.programLocationCountry},
-         ${userAttributesColumns.researchArea} = ARRAY[${userAttributes.researchArea.getOrElse(Array.empty[String])}],
+         ${userAttributesColumns.researchArea} = ARRAY[${userAttributes.researchArea.getOrElse(Array.empty[String])}]::text[],
          ${userAttributesColumns.additionalAttributes} = ${userAttributes.additionalAttributes.getOrElse("{}")}::jsonb,
          ${userAttributesColumns.updatedAt} = ${Some(Instant.now())}
            """.update().apply() > 0
