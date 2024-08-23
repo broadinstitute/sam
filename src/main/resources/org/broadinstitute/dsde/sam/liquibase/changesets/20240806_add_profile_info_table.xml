@@ -4,16 +4,6 @@
                    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
-    <changeSet logicalFilePath="dummy" author="kfeldman" id="add_sam_user_favorite_resources_table">
-        <createTable tableName="SAM_USER_FAVORITE_RESOURCES">
-            <column name="sam_user_id" type="VARCHAR">
-                <constraints primaryKey="true" foreignKeyName="FK_SUA_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
-            </column>
-            <column name="resource_id" type="BIGINT">
-                <constraints primaryKey="true" foreignKeyName="FK_SR_RESOURCE_ID" referencedTableName="SAM_RESOURCE" referencedColumnNames="id" deleteCascade="true"/>
-            </column>
-        </createTable>
-    </changeSet>
     <changeSet logicalFilePath="dummy" author="kfeldman" id="add_profile_info_to_user_attributes_table">
     <addColumn tableName="SAM_USER_ATTRIBUTES">
         <column name="first_name" type="VARCHAR">
