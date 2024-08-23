@@ -4,7 +4,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserBoth
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUserAttributes, SamUserAttributesRequest, SamUserRegistrationRequest}
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes, SamUserAttributesRequest, SamUserRegistrationRequest}
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, MockCloudExtensionsBuilder, MockTosServiceBuilder, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
@@ -22,48 +22,33 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
   val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
   val tosService: TosService = MockTosServiceBuilder().withAllAccepted().build
 
-  val firstName: Option[String] = Some("firstName")
-  val lastName: Option[String] = Some("lastName")
-  val organization: Option[String] = Some("organization")
-  val contactEmail: Option[String] = Some("contactEmail")
-  val title: Option[String] = Some("title")
-  val department: Option[String] = Some("department")
-  val interestInTerra: Option[List[String]] = Some(List("interestInTerra"))
-  val programLocationCity: Option[String] = Some("programLocationCity")
-  val programLocationState: Option[String] = Some("programLocationState")
-  val programLocationCountry: Option[String] = Some("programLocationCountry")
-  val researchArea: Option[List[String]] = Some(List("researchArea"))
-  val additionalAttributes: Option[String] = Some("""{"additionalAttributes": "foo"}""")
-  val createdAt: Option[Instant] = Some(Instant.parse("2022-01-01T00:00:00Z"))
-  val updatedAt: Option[Instant] = Some(Instant.parse("2023-01-01T00:00:00Z"))
+  val user: SamUser = genWorkbenchUserBoth.sample.get.copy(enabled = true)
+  val userAttributes: SamUserAttributes = new SamUserAttributes(
+    user.id,
+    marketingConsent = true,
+    firstName = Some("firstName"),
+    lastName = Some("lastName"),
+    organization = Some("organization"),
+    contactEmail = Some("contactEmail"),
+    title = Some("title"),
+    department = Some("department"),
+    interestInTerra = Some(List("interestInTerra")),
+    programLocationCity = Some("programLocationCity"),
+    programLocationState = Some("programLocationState"),
+    programLocationCountry = Some("programLocationCountry"),
+    researchArea = Some(List("researchArea")),
+    additionalAttributes = Some("""{"additionalAttributes": "foo"}"""),
+    createdAt = Some(Instant.parse("2022-01-01T00:00:00Z")),
+    updatedAt = Some(Instant.parse("2023-01-01T00:00:00Z"))
+  )
   val newUpdatedAt: Option[Instant] = Some(Instant.parse("2024-01-01T00:00:00Z"))
 
   describe("user attributes") {
-    val user = genWorkbenchUserBoth.sample.get.copy(enabled = true)
 
     it("should be retrieved for a user") {
       // Arrange
       val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
-        .withUserAttributes(
-          SamUserAttributes(
-            user.id,
-            marketingConsent = true,
-            firstName,
-            lastName,
-            organization,
-            contactEmail,
-            title,
-            department,
-            interestInTerra,
-            programLocationCity,
-            programLocationState,
-            programLocationCountry,
-            researchArea,
-            additionalAttributes,
-            createdAt,
-            updatedAt
-          )
-        )
+        .withUserAttributes(userAttributes)
         .build
       val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
@@ -72,26 +57,7 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
 
       // Assert
       response should be(
-        Some(
-          SamUserAttributes(
-            user.id,
-            marketingConsent = true,
-            firstName,
-            lastName,
-            organization,
-            contactEmail,
-            title,
-            department,
-            interestInTerra,
-            programLocationCity,
-            programLocationState,
-            programLocationCountry,
-            researchArea,
-            additionalAttributes,
-            createdAt,
-            updatedAt
-          )
-        )
+        Some(userAttributes)
       )
       verify(directoryDAO).getUserAttributes(eqTo(user.id), any[SamRequestContext])
     }
@@ -103,13 +69,13 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
       val userAttributesRequest = SamUserAttributesRequest(
         user.id,
         marketingConsent = Some(true),
-        firstName,
-        lastName,
-        organization,
-        contactEmail,
-        title,
-        department,
-        interestInTerra,
+        userAttributes.firstName,
+        userAttributes.lastName,
+        userAttributes.organization,
+        userAttributes.contactEmail,
+        userAttributes.title,
+        userAttributes.department,
+        userAttributes.interestInTerra,
         None,
         None,
         None,
@@ -120,16 +86,16 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
       val response = runAndWait(userService.setUserAttributesFromRequest(user.id, userAttributesRequest, samRequestContext))
 
       // Assert
-      val userAttributes = SamUserAttributes(
+      val newUserAttributes = SamUserAttributes(
         user.id,
         marketingConsent = true,
-        firstName,
-        lastName,
-        organization,
-        contactEmail,
-        title,
-        department,
-        interestInTerra,
+        userAttributesRequest.firstName,
+        userAttributesRequest.lastName,
+        userAttributesRequest.organization,
+        userAttributesRequest.contactEmail,
+        userAttributesRequest.title,
+        userAttributesRequest.department,
+        userAttributesRequest.interestInTerra,
         programLocationCity = None,
         programLocationState = None,
         programLocationCountry = None,
@@ -140,69 +106,51 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
       )
 
       response.userId should be(user.id)
-      response.marketingConsent should be(userAttributes.marketingConsent)
-      response.firstName should be(userAttributes.firstName)
-      response.lastName should be(userAttributes.lastName)
-      response.organization should be(userAttributes.organization)
-      response.contactEmail should be(userAttributes.contactEmail)
-      response.title should be(userAttributes.title)
-      response.department should be(userAttributes.department)
-      response.interestInTerra should be(userAttributes.interestInTerra)
-      response.programLocationCity should be(userAttributes.programLocationCity)
-      response.programLocationState should be(userAttributes.programLocationState)
-      response.programLocationCountry should be(userAttributes.programLocationCountry)
-      response.researchArea should be(userAttributes.researchArea)
-      response.additionalAttributes should be(userAttributes.additionalAttributes)
-      response.createdAt.get should beAround(userAttributes.createdAt.get)
-      response.updatedAt.get should beAround(userAttributes.updatedAt.get)
+      response.marketingConsent should be(newUserAttributes.marketingConsent)
+      response.firstName should be(newUserAttributes.firstName)
+      response.lastName should be(newUserAttributes.lastName)
+      response.organization should be(newUserAttributes.organization)
+      response.contactEmail should be(newUserAttributes.contactEmail)
+      response.title should be(newUserAttributes.title)
+      response.department should be(newUserAttributes.department)
+      response.interestInTerra should be(newUserAttributes.interestInTerra)
+      response.programLocationCity should be(newUserAttributes.programLocationCity)
+      response.programLocationState should be(newUserAttributes.programLocationState)
+      response.programLocationCountry should be(newUserAttributes.programLocationCountry)
+      response.researchArea should be(newUserAttributes.researchArea)
+      response.additionalAttributes should be(newUserAttributes.additionalAttributes)
+      response.createdAt.get should beAround(newUserAttributes.createdAt.get)
+      response.updatedAt.get should beAround(newUserAttributes.updatedAt.get)
 
       verify(directoryDAO).getUserAttributes(eqTo(user.id), any[SamRequestContext])
       verify(directoryDAO).setUserAttributes(eqTo(SamUserAttributes(
-        userAttributes.userId,
-        userAttributes.marketingConsent,
-        userAttributes.firstName,
-        userAttributes.lastName,
-        userAttributes.organization,
-        userAttributes.contactEmail,
-        userAttributes.title,
-        userAttributes.department,
-        userAttributes.interestInTerra,
-        userAttributes.programLocationCity,
-        userAttributes.programLocationState,
-        userAttributes.programLocationCountry,
-        userAttributes.researchArea,
-        userAttributes.additionalAttributes,
-        userAttributes.createdAt,
-        userAttributes.updatedAt)
+        newUserAttributes.userId,
+        newUserAttributes.marketingConsent,
+        newUserAttributes.firstName,
+        newUserAttributes.lastName,
+        newUserAttributes.organization,
+        newUserAttributes.contactEmail,
+        newUserAttributes.title,
+        newUserAttributes.department,
+        newUserAttributes.interestInTerra,
+        newUserAttributes.programLocationCity,
+        newUserAttributes.programLocationState,
+        newUserAttributes.programLocationCountry,
+        newUserAttributes.researchArea,
+        newUserAttributes.additionalAttributes,
+        newUserAttributes.createdAt,
+        newUserAttributes.updatedAt)
       ), any[SamRequestContext])
     }
 
     it("updates existing user attributes") {
       // Arrange
-      val userAttributes = SamUserAttributes(
-        user.id,
-        marketingConsent = true,
-        firstName,
-        lastName,
-        organization,
-        contactEmail,
-        title,
-        department,
-        interestInTerra,
-        programLocationCity,
-        programLocationState,
-        programLocationCountry,
-        researchArea,
-        additionalAttributes,
-        createdAt,
-        updatedAt
-      )
       val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
         .withUserAttributes(userAttributes)
         .build
       val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
-      val userAttributesRequest = SamUserAttributesRequest(
+      val updateUserAttributesRequest = SamUserAttributesRequest(
         user.id,
         marketingConsent = Some(false),
         firstName = Some("newFirstName"),
@@ -219,28 +167,29 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
         additionalAttributes = Some("""{"additionalAttributes": "bar"}""")
       )
       // Act
-      val response = runAndWait(userService.setUserAttributesFromRequest(user.id, userAttributesRequest, samRequestContext))
+      val response = runAndWait(userService.setUserAttributesFromRequest(user.id, updateUserAttributesRequest, samRequestContext))
 
       // Assert
-      val updatedUserAttributes = userAttributes.copy(
-        marketingConsent = false,
-        firstName = Some("newFirstName"),
-        lastName = Some("newLastName"),
-        organization = Some("newOrganization"),
-        contactEmail = Some("newContactEmail"),
-        title = Some("newTitle"),
-        department = Some("newDepartment"),
-        interestInTerra = Some(List("newInterestInTerra")),
-        programLocationCity = Some("newProgramLocationCity"),
-        programLocationState = Some("newProgramLocationState"),
-        programLocationCountry = Some("newProgramLocationCountry"),
-        researchArea = Some(List("newResearchArea")),
-        additionalAttributes = Some("""{"additionalAttributes": "bar"}""")
+      val updatedUserAttributes = new SamUserAttributes(
+        response.userId,
+        response.marketingConsent,
+        response.firstName,
+        response.lastName,
+        response.organization,
+        response.contactEmail,
+        response.title,
+        response.department,
+        response.interestInTerra,
+        response.programLocationCity,
+        response.programLocationState,
+        response.programLocationCountry,
+        response.researchArea,
+        response.additionalAttributes,
+        response.createdAt,
+        response.updatedAt
       )
 
       response should be(updatedUserAttributes)
-      response.createdAt should be(createdAt)
-      response.updatedAt should be(updatedAt)
       verify(directoryDAO).getUserAttributes(eqTo(user.id), any[SamRequestContext])
       verify(directoryDAO).setUserAttributes(eqTo(updatedUserAttributes), any[SamRequestContext])
     }
@@ -292,25 +241,7 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
 
     it("sets user attributes when a new user is registered with a request body") {
       // Arrange
-      val newUserAttributes = SamUserAttributes(
-        user.id,
-        marketingConsent = true,
-        firstName,
-        lastName,
-        organization,
-        contactEmail,
-        title,
-        department,
-        interestInTerra,
-        programLocationCity,
-        programLocationState,
-        programLocationCountry,
-        researchArea,
-        additionalAttributes,
-        createdAt,
-        updatedAt
-      )
-      val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).withUserAttributes(newUserAttributes).build
+      val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).withUserAttributes(userAttributes).build
       val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
       // Act
@@ -322,19 +253,19 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
               true,
               SamUserAttributesRequest(
                 user.id,
-                marketingConsent = Some(true),
-                firstName,
-                lastName,
-                organization,
-                contactEmail,
-                title,
-                department,
-                interestInTerra,
-                programLocationCity,
-                programLocationState,
-                programLocationCountry,
-                researchArea,
-                additionalAttributes)
+                Some(userAttributes.marketingConsent),
+                userAttributes.firstName,
+                userAttributes.lastName,
+                userAttributes.organization,
+                userAttributes.contactEmail,
+                userAttributes.title,
+                userAttributes.department,
+                userAttributes.interestInTerra,
+                userAttributes.programLocationCity,
+                userAttributes.programLocationState,
+                userAttributes.programLocationCountry,
+                userAttributes.researchArea,
+                userAttributes.additionalAttributes)
             )
           ),
           samRequestContext
@@ -342,7 +273,7 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
       )
 
       // Assert
-      verify(directoryDAO).setUserAttributes(eqTo(newUserAttributes), any[SamRequestContext])
+      verify(directoryDAO).setUserAttributes(eqTo(userAttributes), any[SamRequestContext])
     }
 
     it("sets user attributes when a new user is invited") {
