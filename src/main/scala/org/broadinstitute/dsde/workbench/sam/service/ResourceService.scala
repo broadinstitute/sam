@@ -553,14 +553,13 @@ class ResourceService(
             _ <- onPolicyUpdate(policyIdentity, originalPolicies, samRequestContext)
           } yield result
         case Some(existingAccessPolicy) =>
-          val newAccessPolicy = AccessPolicy(
-            policyIdentity,
-            workbenchSubjects,
-            existingAccessPolicy.email,
-            policy.roles,
-            policy.actions,
-            policy.descendantPermissions,
-            existingAccessPolicy.public
+          // this function updates only the members, roles, actions, and descendantPermissions of the policy
+          // so the new policy is a copy of the existing policy with the updated fields
+          val newAccessPolicy = existingAccessPolicy.copy(
+            members = workbenchSubjects,
+            roles = policy.roles,
+            actions = policy.actions,
+            descendantPermissions = policy.descendantPermissions
           )
           if (newAccessPolicy == existingAccessPolicy) {
             // short cut if access policy is unchanged
@@ -958,6 +957,22 @@ class ResourceService(
 
   def listResourceChildren(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
     accessPolicyDAO.listResourceChildren(resourceId, samRequestContext)
+
+  def addUserFavoriteResource(userId: WorkbenchUserId, resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Boolean] =
+    directoryDAO.addUserFavoriteResource(userId, resourceId, samRequestContext)
+
+  def removeUserFavoriteResource(userId: WorkbenchUserId, resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    directoryDAO.removeUserFavoriteResource(userId, resourceId, samRequestContext)
+
+  def getUserFavoriteResources(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
+    directoryDAO.getUserFavoriteResources(userId, samRequestContext)
+
+  def getUserFavoriteResourcesOfType(
+      userId: WorkbenchUserId,
+      resourceType: ResourceTypeName,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedResourceId]] =
+    directoryDAO.getUserFavoriteResourcesOfType(userId, resourceType, samRequestContext)
 
   private[service] def createAccessChangeEvents(
       resource: FullyQualifiedResourceId,

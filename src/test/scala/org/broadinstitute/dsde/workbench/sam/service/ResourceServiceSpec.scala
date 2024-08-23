@@ -54,6 +54,7 @@ import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
+import scala.util.Random
 
 /** Created by dvoet on 6/27/17.
   */
@@ -1474,7 +1475,7 @@ class ResourceServiceSpec
       .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
-  it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
+  it should "not do anything when policy is unchanged" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
@@ -1489,13 +1490,12 @@ class ResourceServiceSpec
     )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
-    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
+    val policyVersion = Random.between(10, 100) // random version to ensure it is neither the default nor fixed
+    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false, version = policyVersion)
 
-    // setup existing policy with no members
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(accessPolicy)))
 
-    // overwrite policy with no members
-    runAndWait(
+    val updatedPolicy = runAndWait(
       resourceService.overwritePolicy(
         defaultResourceType,
         policyId.accessPolicyName,
@@ -1505,7 +1505,9 @@ class ResourceServiceSpec
       )
     )
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
+    // no changes to policy, so no calls to overwritePolicy and version should not change
+    updatedPolicy.version shouldEqual policyVersion
+    verify(mockAccessPolicyDAO, Mockito.never).overwritePolicy(any[AccessPolicy], any[SamRequestContext])
   }
 
   "overwriteAdminPolicy" should "succeed with a valid request" in {
@@ -3307,6 +3309,55 @@ class ResourceServiceSpec
 
     returnedPolicies.size shouldBe 1
     returnedPolicies.head._2.isLeft shouldBe true
+  }
+
+  "UserFavoriteResource" should "add, remove, and list favorite resources for a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName = ResourceId("resource")
+    val resource2Name = ResourceId("resource2")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+    val resource2 = FullyQualifiedResourceId(otherResourceType.name, resource2Name)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    service.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+    service.createResource(otherResourceType, resource2Name, dummyUser, samRequestContext).unsafeRunSync()
+
+    service.addUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource)
+
+    service.addUserFavoriteResource(dummyUser.id, resource2, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource, resource2)
+
+    service.removeUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource2)
+
+    service.removeUserFavoriteResource(dummyUser.id, resource2, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() shouldBe empty
+  }
+
+  it should "not return favorite resources for another user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    def otherUser = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(otherUser, samRequestContext).unsafeRunSync()
+
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+
+    service.addUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(otherUser.id, samRequestContext).unsafeRunSync() shouldBe empty
   }
 
   /** Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures that `events` were appended. If tryTwice` run `test` again to make

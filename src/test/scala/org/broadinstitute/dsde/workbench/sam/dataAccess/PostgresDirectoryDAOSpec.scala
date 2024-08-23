@@ -2106,5 +2106,83 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.listParentGroups(WorkbenchGroupName("nonexistentGroup"), samRequestContext).unsafeRunSync() shouldBe empty
       }
     }
+
+    "UserFavoriteResources" - {
+      "add a favorite resource for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        val result = dao.addUserFavoriteResource(user.id, defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        result should be(true)
+
+        val loadedFavoriteResources = dao.getUserFavoriteResources(user.id, samRequestContext).unsafeRunSync()
+        loadedFavoriteResources should contain theSameElementsAs Set(defaultResource.fullyQualifiedId)
+      }
+
+      "return false if adding a favorite resource for a user that doesn't exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        val otherResource = Resource(resourceTypeName, ResourceId("otherResource"), Set.empty)
+        val result = dao.addUserFavoriteResource(user.id, otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        result should be(false)
+      }
+
+      "remove a favorite resource for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val otherResource = Resource(resourceType.name, ResourceId("otherResource"), Set.empty)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(otherResource, samRequestContext).unsafeRunSync()
+
+        dao.addUserFavoriteResource(user.id, defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        dao.addUserFavoriteResource(user.id, otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        dao.removeUserFavoriteResource(user.id, defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+
+        val loadedFavoriteResources = dao.getUserFavoriteResources(user.id, samRequestContext).unsafeRunSync()
+        loadedFavoriteResources should contain theSameElementsAs Set(otherResource.fullyQualifiedId)
+      }
+
+      "remove a favorite resource for a user when the resource doesn't exist" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        val otherResource = Resource(resourceType.name, ResourceId("otherResource"), Set.empty)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        dao.removeUserFavoriteResource(user.id, otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+
+        val loadedFavoriteResources = dao.getUserFavoriteResources(user.id, samRequestContext).unsafeRunSync()
+        loadedFavoriteResources should contain theSameElementsAs Set.empty
+      }
+
+      "get the favorite resources of a specific resource type for a user" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dao.createUser(user, samRequestContext).unsafeRunSync()
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        val otherResourceTypeName: ResourceTypeName = ResourceTypeName("awesomeType2")
+        val otherResourceType: ResourceType = ResourceType(otherResourceTypeName, actionPatterns, roles, ownerRoleName)
+        val otherResource = Resource(otherResourceTypeName, ResourceId("otherResource"), Set.empty)
+        policyDAO.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(otherResource, samRequestContext).unsafeRunSync()
+
+        dao.addUserFavoriteResource(user.id, defaultResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+        dao.addUserFavoriteResource(user.id, otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync()
+
+        val loadedFavoriteResources = dao.getUserFavoriteResourcesOfType(user.id, otherResourceTypeName, samRequestContext).unsafeRunSync()
+        loadedFavoriteResources should contain theSameElementsAs Set(otherResource.fullyQualifiedId)
+      }
+    }
   }
 }

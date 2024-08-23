@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, Wor
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForSamUserResponseMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.{
   FilteredResourceFlat,
   FilteredResourcesFlat,
@@ -28,8 +29,10 @@ import org.scalatest.matchers.should.Matchers
 import java.time.Instant
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.lenient
 import spray.json.enrichAny
+import spray.json.DefaultJsonProtocol._
 
 class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
@@ -342,6 +345,8 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
   "GET /api/users/v2/self/combinedState" should "get the user combined state of the calling user" in {
     // Arrange
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
+    val favoriteResources = Set(FullyQualifiedResourceId(ResourceTypeName("workspaceType"), ResourceId("workspaceName")))
 
     val userAttributes = SamUserAttributes(
       defaultUser.id,
@@ -395,7 +400,8 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         )
       ),
       TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
-      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
+      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
+      favoriteResources
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -418,6 +424,11 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         any[SamRequestContext]
       )
 
+    lenient()
+      .doReturn(IO.pure(favoriteResources))
+      .when(samRoutes.resourceService)
+      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
+
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -430,6 +441,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
       response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
+      response.favoriteResources should be(favoriteResources)
     }
   }
 
@@ -469,7 +481,8 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         )
       ),
       TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
-      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson)
+      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
+      Set.empty
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -491,6 +504,11 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         any[SamRequestContext]
       )
 
+    lenient()
+      .doReturn(IO.pure(Set.empty))
+      .when(samRoutes.resourceService)
+      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
+
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -503,12 +521,13 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
       response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
+
     }
   }
 
   it should "return falsy terms of service if the user has no tos history" in {
     // Arrange
-    val filteresResourcesFlat = FilteredResourcesFlat(Set.empty)
+    val filteredResourcesFlat = FilteredResourcesFlat(Set.empty)
     val userCombinedStateResponse = SamUserCombinedStateResponse(
       defaultUser,
       SamUserAllowances(enabled = false, termsOfService = false),
@@ -533,7 +552,8 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         )
       ),
       TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false),
-      Map("enterpriseFeatures" -> filteresResourcesFlat.toJson)
+      Map("enterpriseFeatures" -> filteredResourcesFlat.toJson),
+      Set.empty
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -555,6 +575,11 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
         any[SamRequestContext]
       )
 
+    lenient()
+      .doReturn(IO.pure(Set.empty))
+      .when(samRoutes.resourceService)
+      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
+
     // Act and Assert
     Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
@@ -566,7 +591,184 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion shouldBe None
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
+      response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
+      response.favoriteResources should be(Set.empty)
+
+    }
+  }
+
+  "GET /api/user/v2/self/favoriteResources" should "return the user's favorite resources" in {
+    // Arrange
+    val user = Generator.genWorkbenchUserGoogle.sample.get
+    val resourceType = ResourceTypeName("workspace")
+    val resourceId = ResourceId("workspace")
+    val resource = FullyQualifiedResourceId(resourceType, resourceId)
+    val favoriteResources = Set(resource)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(user)
+      .withAllowedUser(user)
+      .callAsNonAdminUser(Some(user))
+      .build
+
+    when(samRoutes.resourceService.getUserFavoriteResources(ArgumentMatchers.eq(user.id), any[SamRequestContext]))
+      .thenReturn(IO.pure(favoriteResources))
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/favoriteResources") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[FullyQualifiedResourceId]] shouldEqual favoriteResources
+    }
+  }
+
+  "GET /api/user/v2/self/favoriteResources/{resourceTypeName}" should "return the user's favorite resources of a given type" in {
+    // Arrange
+    val user = Generator.genWorkbenchUserGoogle.sample.get
+    val resourceType = ResourceTypeName("workspace")
+    val resourceId = ResourceId("workspace")
+    val resource = FullyQualifiedResourceId(resourceType, resourceId)
+    val favoriteResources = Set(resource)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(user)
+      .withAllowedUser(user)
+      .callAsNonAdminUser(Some(user))
+      .build
+
+    when(samRoutes.resourceService.getResourceType(ArgumentMatchers.eq(resourceType)))
+      .thenReturn(IO.pure(Some(ResourceType(resourceType, Set.empty, Set.empty, ResourceRoleName("owner")))))
+
+    when(samRoutes.resourceService.getUserFavoriteResourcesOfType(ArgumentMatchers.eq(user.id), ArgumentMatchers.eq(resourceType), any[SamRequestContext]))
+      .thenReturn(IO.pure(favoriteResources))
+
+    // Act and Assert
+    Get(s"/api/users/v2/self/favoriteResources/$resourceType") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[FullyQualifiedResourceId]] shouldEqual favoriteResources
+    }
+  }
+
+  "PUT /api/user/v2/self/favoriteResources/{resourceTypeName}/{resourceId}" should "add a resource to a users favorites" in {
+    // Arrange
+    val user = Generator.genWorkbenchUserGoogle.sample.get
+    val resourceType = ResourceTypeName("workspace")
+    val resourceId = ResourceId("workspace")
+    val resource = FullyQualifiedResourceId(resourceType, resourceId)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(user)
+      .withAllowedUser(user)
+      .callAsNonAdminUser(Some(user))
+      .build
+
+    when(samRoutes.resourceService.getResourceType(ArgumentMatchers.eq(resourceType)))
+      .thenReturn(IO.pure(Some(ResourceType(resourceType, Set.empty, Set.empty, ResourceRoleName("owner")))))
+
+    when(samRoutes.policyEvaluatorService.listUserResourceActions(ArgumentMatchers.eq(resource), ArgumentMatchers.eq(user.id), any[SamRequestContext]))
+      .thenReturn(IO.pure(Set(ResourceAction("read"))))
+
+    when(samRoutes.resourceService.addUserFavoriteResource(ArgumentMatchers.eq(user.id), ArgumentMatchers.eq(resource), any[SamRequestContext]))
+      .thenReturn(IO.pure(true))
+
+    // Act and Assert
+    Put(s"/api/users/v2/self/favoriteResources/$resourceType/$resourceId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "forbid adding a resource to a users favorites if they have no access to it, but return Not Found" in {
+    // Arrange
+    val user = Generator.genWorkbenchUserGoogle.sample.get
+    val resourceType = ResourceTypeName("workspace")
+    val resourceId = ResourceId("workspace")
+    val resource = FullyQualifiedResourceId(resourceType, resourceId)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(user)
+      .withAllowedUser(user)
+      .callAsNonAdminUser(Some(user))
+      .build
+
+    when(samRoutes.resourceService.getResourceType(ArgumentMatchers.eq(resourceType)))
+      .thenReturn(IO.pure(Some(ResourceType(resourceType, Set.empty, Set.empty, ResourceRoleName("owner")))))
+
+    when(samRoutes.policyEvaluatorService.listUserResourceActions(ArgumentMatchers.eq(resource), ArgumentMatchers.eq(user.id), any[SamRequestContext]))
+      .thenReturn(IO.pure(Set(ResourceAction("read"))))
+
+    when(samRoutes.resourceService.addUserFavoriteResource(ArgumentMatchers.eq(user.id), ArgumentMatchers.eq(resource), any[SamRequestContext]))
+      .thenReturn(IO.pure(false))
+
+    // Act and Assert
+    Put(s"/api/users/v2/self/favoriteResources/$resourceType/$resourceId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "return Not Found if adding a resource that doesn't exist" in {
+    // Arrange
+    val user = Generator.genWorkbenchUserGoogle.sample.get
+    val resourceType = ResourceTypeName("workspace")
+    val resourceId = ResourceId("workspace")
+    val resource = FullyQualifiedResourceId(resourceType, resourceId)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(user)
+      .withAllowedUser(user)
+      .callAsNonAdminUser(Some(user))
+      .build
+
+    when(samRoutes.resourceService.getResourceType(ArgumentMatchers.eq(resourceType)))
+      .thenReturn(IO.pure(Some(ResourceType(resourceType, Set.empty, Set.empty, ResourceRoleName("owner")))))
+
+    when(samRoutes.policyEvaluatorService.listUserResourceActions(ArgumentMatchers.eq(resource), ArgumentMatchers.eq(user.id), any[SamRequestContext]))
+      .thenReturn(IO.pure(Set.empty))
+
+    // Act and Assert
+    Put(s"/api/users/v2/self/favoriteResources/$resourceType/$resourceId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "DELETE /api/user/v2/self/favoriteResources/{resourceTypeName}/{resourceId}" should "remove a resource to a users favorites" in {
+    // Arrange
+    val user = Generator.genWorkbenchUserGoogle.sample.get
+    val resourceType = ResourceTypeName("workspace")
+    val resourceId = ResourceId("workspace")
+    val resource = FullyQualifiedResourceId(resourceType, resourceId)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(user)
+      .withAllowedUser(user)
+      .callAsNonAdminUser(Some(user))
+      .build
+
+    when(samRoutes.resourceService.getResourceType(ArgumentMatchers.eq(resourceType)))
+      .thenReturn(IO.pure(Some(ResourceType(resourceType, Set.empty, Set.empty, ResourceRoleName("owner")))))
+
+    when(samRoutes.resourceService.removeUserFavoriteResource(ArgumentMatchers.eq(user.id), ArgumentMatchers.eq(resource), any[SamRequestContext]))
+      .thenReturn(IO.pure(()))
+
+    // Act and Assert
+    Delete(s"/api/users/v2/self/favoriteResources/$resourceType/$resourceId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "allow removing a resource to a users favorites if they have no access to it" in {
+    // Arrange
+    val user = Generator.genWorkbenchUserGoogle.sample.get
+    val resourceType = ResourceTypeName("workspace")
+    val resourceId = ResourceId("workspace")
+    val resource = FullyQualifiedResourceId(resourceType, resourceId)
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(user)
+      .withAllowedUser(user)
+      .callAsNonAdminUser(Some(user))
+      .build
+
+    when(samRoutes.resourceService.getResourceType(ArgumentMatchers.eq(resourceType)))
+      .thenReturn(IO.pure(Some(ResourceType(resourceType, Set.empty, Set.empty, ResourceRoleName("owner")))))
+
+    when(samRoutes.resourceService.removeUserFavoriteResource(ArgumentMatchers.eq(user.id), ArgumentMatchers.eq(resource), any[SamRequestContext]))
+      .thenReturn(IO.pure(()))
+
+    // Act and Assert
+    Delete(s"/api/users/v2/self/favoriteResources/$resourceType/$resourceId") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
     }
   }
 }

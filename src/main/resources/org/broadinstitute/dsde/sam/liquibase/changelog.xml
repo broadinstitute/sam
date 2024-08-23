@@ -32,4 +32,5 @@
     <include file="changesets/20240416_add_sam_rac_tables.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20240701_add_group_version_and_last_synchronized_version.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20240806_add_profile_info_table.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20240809_sam_user_favorite_resources_table.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
