@@ -14,6 +14,7 @@ import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.mockito.Mockito.verify
 import org.scalatest.DoNotDiscover
 
+import java.time.Instant
 import scala.concurrent.ExecutionContextExecutor
 
 @DoNotDiscover
@@ -122,20 +123,58 @@ class CreateUserSpec extends UserServiceTestTraits {
       it("with a valid registration request body") {
         // Arrange
         val newUserWithBothCloudIds = genWorkbenchUserBoth.sample.get
-        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).build
+        val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
+          .withUserAttributes(SamUserAttributes(
+            newUserWithBothCloudIds.id,
+            false,
+            Some("firstName"),
+            Some("lastName"),
+            Some("organization"),
+            Some("contactEmail"),
+            Some("title"),
+            Some("department"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(Instant.parse("2022-01-01T00:00:00Z")),
+            Some(Instant.parse("2023-01-01T00:00:00Z")))
+        ).build
         val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
         val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
         val userRegistrationRequest = SamUserRegistrationRequest(
           acceptsTermsOfService = true,
-          SamUserAttributesRequest(marketingConsent = Some(false))
+          SamUserAttributesRequest(
+            newUserWithBothCloudIds.id,
+            marketingConsent = Some(false),
+            firstName = Some("firstName"),
+            lastName = Some("lastName"),
+            organization = Some("organization"),
+            contactEmail = Some("contactEmail"),
+            title = Some("title"),
+            department = Some("department"),
+            interestInTerra = None,
+            programLocationCity = None,
+            programLocationState = None,
+            programLocationCountry = None,
+            researchArea = None,
+            additionalAttributes = None
+        )
         )
 
         // Act
         val newUsersStatus = runAndWait(userService.createUser(newUserWithBothCloudIds, Some(userRegistrationRequest), samRequestContext))
+        val actualAttributes = runAndWait(userService.getUserAttributes(newUsersStatus.userInfo.userSubjectId, samRequestContext))
 
         // Assert
-        verify(directoryDAO).setUserAttributes(SamUserAttributes(newUsersStatus.userInfo.userSubjectId, marketingConsent = false), samRequestContext)
+        verify(directoryDAO).setUserAttributes(
+          actualAttributes.get,
+          samRequestContext
+        )
+
         verify(defaultTosService).acceptCurrentTermsOfService(newUsersStatus.userInfo.userSubjectId, samRequestContext)
       }
     }
@@ -257,7 +296,21 @@ class CreateUserSpec extends UserServiceTestTraits {
 
         val invalidRegistrationRequest = SamUserRegistrationRequest(
           acceptsTermsOfService = true,
-          SamUserAttributesRequest(marketingConsent = None)
+          SamUserAttributesRequest(
+            userWithoutIds.id,
+            marketingConsent = None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None)
         )
 
         // Act and Assert
@@ -275,7 +328,22 @@ class CreateUserSpec extends UserServiceTestTraits {
 
         val invalidRegistrationRequest = SamUserRegistrationRequest(
           acceptsTermsOfService = false,
-          SamUserAttributesRequest(marketingConsent = None)
+          SamUserAttributesRequest(
+            userWithoutIds.id,
+            marketingConsent = None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None
+          )
         )
 
         // Act and Assert
@@ -423,7 +491,27 @@ class CreateUserSpec extends UserServiceTestTraits {
       val invitedUserStatus = runAndWait(userService.inviteUser(invitedGoogleUser.email, samRequestContext))
 
       // Assert
-      verify(directoryDAO).setUserAttributes(SamUserAttributes(invitedUserStatus.userSubjectId, marketingConsent = false), samRequestContext)
+      verify(directoryDAO).setUserAttributes(
+        SamUserAttributes(
+          invitedUserStatus.userSubjectId,
+          marketingConsent = false,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None
+        ),
+        samRequestContext
+      )
     }
 
     describe("should be able to register") {
