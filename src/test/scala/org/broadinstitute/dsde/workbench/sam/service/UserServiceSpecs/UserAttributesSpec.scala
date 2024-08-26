@@ -160,8 +160,8 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
         title = Some("newTitle"),
         department = Some("newDepartment"),
         interestInTerra = Some(List("newInterestInTerra")),
-        programLocationCity = Some("newProgramLocationCity"),
-        programLocationState = Some("newProgramLocationState"),
+        programLocationCity = None,
+        programLocationState = None,
         programLocationCountry = Some("newProgramLocationCountry"),
         researchArea = Some(List("newResearchArea")),
         additionalAttributes = Some("""{"additionalAttributes": "bar"}""")
@@ -305,9 +305,5 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
       )
       verify(directoryDAO).setUserAttributes(eqTo(userAttributes), any[SamRequestContext])
     }
-    it("sets userAttributes.createdAt and userAttributes.updatedAt when a new user is created"){}
-    it("updates userAttributes.updatedAt when a new user is created"){}
-
-
   }
 }
