@@ -226,7 +226,8 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
         userAttributes.programLocationState,
         userAttributes.programLocationCountry,
         userAttributes.researchArea,
-        userAttributes.additionalAttributes),
+        userAttributes.additionalAttributes
+      ),
       any[SamRequestContext]
     ) returns IO(userAttributes)
   }
