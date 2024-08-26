@@ -1034,7 +1034,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/google/v1/petServiceAccount/{project}/{email}:
+  /api/google/v1/petServiceAccount/{project}/{email}/key:
     get:
       tags:
         - Google
@@ -1081,6 +1081,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v1/petServiceAccount/{project}/{email}/token:
+    get:
+      tags:
+        - Google
+      summary: gets a token for the user's pet service account, get_pet_private_key
+        action on cloud-extension/google required
+      operationId: getUserPetServiceAccountToken
+      parameters:
+        - name: project
+          in: path
+          description: Google project of the pet
+          required: true
+          schema:
+            type: string
+        - name: email
+          in: path
+          description: User's email address
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Scopes for the token
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/ArrayOfScopes'
+        required: true
+      responses:
+        200:
+          description: an access token for the users pet service account
+          content:
+            application/json:
+              schema:
+                type: string
+        403:
+          description: caller has some access to cloud-extension/google but not to
+            the get_pet_private_key action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: user does not exist or caller does not have any access to cloud-extension/google
+            resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+      x-codegen-request-body-name: scopes
   /api/google/v1/petServiceAccount/{email}/key:
     get:
       tags:
@@ -1121,6 +1176,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v1/petServiceAccount/{email}/token:
+    get:
+      tags:
+        - Google
+      summary: gets a token for the user's arbitrary pet service account, get_pet_private_key action on cloud-extension/google required
+      operationId: getUserArbitraryPetServiceAccountToken
+      parameters:
+        - name: email
+          in: path
+          description: User's email address
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Scopes for the token
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/ArrayOfScopes'
+        required: true
+      responses:
+        200:
+          description: an access token for the users pet service account
+          content:
+            application/json:
+              schema:
+                type: string
+        403:
+          description: caller has some access to cloud-extension/google but not to
+            the get_pet_private_key action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: user does not exist or caller does not have any access to cloud-extension/google
+            resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        x-codegen-request-body-name: scopes
   /api/google/v1/user/signedUrlForBlob:
     post:
       tags:
@@ -1774,8 +1877,8 @@ paths:
       tags:
         - Resources
       summary: List resources the calling user has been granted policies/roles/actions on.
-        This endpoint MUST NOT be used to determine if a user has an action on a resource. 
-        This endpoint is ONLY for determining the state of the user's permissions. 
+        This endpoint MUST NOT be used to determine if a user has an action on a resource.
+        This endpoint is ONLY for determining the state of the user's permissions.
         It does not take into account enabled status, or Terms of Service Compliance, nor does it take into account Auth Domains.
         To check if a user is allowed to execute an action on a resource, use /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}
         By default, public resources are not included. Including public resources incurs a 3x cost of DB performance.
@@ -4490,7 +4593,7 @@ components:
           type: boolean
           description: true if there is a rolling acceptance window active. This
             means that users who have not accepted the latest terms of service
-            version (and who have accepted the previous version) will be allowed to use the system 
+            version (and who have accepted the previous version) will be allowed to use the system
             for a period of time after the terms of service have been updated.
     UserTermsOfServiceDetails:
       required:
