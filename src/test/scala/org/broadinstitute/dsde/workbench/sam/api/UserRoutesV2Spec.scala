@@ -42,7 +42,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
   val userAttributesRequest = SamUserAttributesRequest(
     userId = defaultUser.id,
-    marketingConsent = Some(false),
+    marketingConsent = Some(true),
     firstName = Some("firstName"),
     lastName = Some("lastName"),
     organization = Some("organization"),
@@ -272,6 +272,23 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
   "PATCH /api/users/v2/self/attributes" should "update the user attributes of the calling user" in {
     // Arrange
+    val updatedUserAttributesRequest = SamUserAttributesRequest(
+      defaultUser.id,
+      marketingConsent = Some(false),
+      firstName = Some("newFirstName"),
+      lastName = Some("newLastName"),
+      organization = Some("newOrganization"),
+      contactEmail = Some("newContactEmail"),
+      title = Some("newTitle"),
+      department = Some("newDepartment"),
+      interestInTerra = Some(List("NewInterestInTerra")),
+      programLocationCity = Some("NewProgramLocationCity"),
+      programLocationState = Some("NewProgramLocationState"),
+      programLocationCountry = Some("NewProgramLocationCountry"),
+      researchArea = Some(List("NewResearchArea")),
+      additionalAttributes = Some("""{"additionalAttributes": "bar"}""")
+    )
+
     val updatedUserAttributes = SamUserAttributes(
       defaultUser.id,
       marketingConsent = false,
@@ -288,7 +305,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       researchArea = Some(List("NewResearchArea")),
       additionalAttributes = Some("""{"additionalAttributes": "bar"}"""),
       createdAt = None,
-      updatedAt = None
+      updatedAt = Some(Instant.now()),
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
@@ -299,7 +316,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       .build
 
     // Act and Assert
-    Patch(s"/api/users/v2/self/attributes", userAttributesRequest) ~> samRoutes.route ~> check {
+    Patch(s"/api/users/v2/self/attributes", updatedUserAttributesRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[SamUserAttributes] should be(updatedUserAttributes)
     }
