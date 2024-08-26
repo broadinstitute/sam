@@ -89,7 +89,7 @@ final case class SamUserAttributes(
         programLocationState = userAttributesRequest.programLocationState.orElse(this.programLocationState),
         programLocationCountry = userAttributesRequest.programLocationCountry.orElse(this.programLocationCountry),
         researchArea = userAttributesRequest.researchArea.orElse(this.researchArea),
-        additionalAttributes = userAttributesRequest.additionalAttributes.orElse(this.additionalAttributes),
+        additionalAttributes = userAttributesRequest.additionalAttributes.orElse(this.additionalAttributes)
       )
     )
 }

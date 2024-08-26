@@ -128,7 +128,8 @@ class UserService(
           programLocationState = programLocationState,
           programLocationCountry = programLocationCountry,
           researchArea = researchArea,
-          additionalAttributes = additionalAttributes)
+          additionalAttributes = additionalAttributes
+        )
       )
     setUserAttributesFromRequest(userId, attributes, samRequestContext).map(_ => ())
   }
