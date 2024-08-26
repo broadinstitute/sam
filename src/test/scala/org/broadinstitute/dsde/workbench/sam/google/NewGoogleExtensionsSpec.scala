@@ -166,7 +166,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
       val arbitraryPetServiceAccount = genPetServiceAccount.sample.get
       val arbitraryPetServiceAccountKey = RealKeyMockGoogleIamDAO.generateNewRealKey(arbitraryPetServiceAccount.serviceAccount.email)._2
 
-      doReturn(Future.successful(arbitraryPetServiceAccountKey))
+      doReturn(IO.pure(arbitraryPetServiceAccountKey))
         .when(googleExtensions)
         .getArbitraryPetServiceAccountKey(eqTo(newGoogleUser), any[SamRequestContext])
 
