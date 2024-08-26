@@ -4,11 +4,13 @@ import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import cats.effect.IO
 import com.google.auth.oauth2.ServiceAccountCredentials
+import fs2.Stream
 import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.sam.Generator.{
   genFirecloudEmail,
   genGcsBlobName,
@@ -22,20 +24,18 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, Direct
 import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.mockito.ArgumentMatchersSugar._
 import org.mockito.IdiomaticMockito
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, doReturn}
-import fs2.Stream
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.scalatest.{Inside, OptionValues}
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.matchers.should.Matchers
-import org.mockito.ArgumentMatchersSugar._
 import org.mockito.MockitoSugar.verify
+import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.freespec.AnyFreeSpecLike
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.{Inside, OptionValues}
 
 import java.net.URL
 import java.util.concurrent.TimeUnit
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.ExecutionContextExecutor
 
 class NewGoogleExtensionsSpec(_system: ActorSystem)
     extends TestKit(_system)
