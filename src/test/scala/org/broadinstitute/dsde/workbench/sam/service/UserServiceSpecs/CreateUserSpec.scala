@@ -124,24 +124,27 @@ class CreateUserSpec extends UserServiceTestTraits {
         // Arrange
         val newUserWithBothCloudIds = genWorkbenchUserBoth.sample.get
         val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup)
-          .withUserAttributes(SamUserAttributes(
-            newUserWithBothCloudIds.id,
-            false,
-            Some("firstName"),
-            Some("lastName"),
-            Some("organization"),
-            Some("contactEmail"),
-            Some("title"),
-            Some("department"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(Instant.parse("2022-01-01T00:00:00Z")),
-            Some(Instant.parse("2023-01-01T00:00:00Z")))
-        ).build
+          .withUserAttributes(
+            SamUserAttributes(
+              newUserWithBothCloudIds.id,
+              false,
+              Some("firstName"),
+              Some("lastName"),
+              Some("organization"),
+              Some("contactEmail"),
+              Some("title"),
+              Some("department"),
+              None,
+              None,
+              None,
+              None,
+              None,
+              None,
+              Some(Instant.parse("2022-01-01T00:00:00Z")),
+              Some(Instant.parse("2023-01-01T00:00:00Z"))
+            )
+          )
+          .build
         val cloudExtensions: CloudExtensions = MockCloudExtensionsBuilder(allUsersGroup).build
         val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, defaultTosService)
 
@@ -162,7 +165,7 @@ class CreateUserSpec extends UserServiceTestTraits {
             programLocationCountry = None,
             researchArea = None,
             additionalAttributes = None
-        )
+          )
         )
 
         // Act
@@ -296,21 +299,7 @@ class CreateUserSpec extends UserServiceTestTraits {
 
         val invalidRegistrationRequest = SamUserRegistrationRequest(
           acceptsTermsOfService = true,
-          SamUserAttributesRequest(
-            userWithoutIds.id,
-            marketingConsent = None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None)
+          SamUserAttributesRequest(userWithoutIds.id, marketingConsent = None, None, None, None, None, None, None, None, None, None, None, None, None)
         )
 
         // Act and Assert

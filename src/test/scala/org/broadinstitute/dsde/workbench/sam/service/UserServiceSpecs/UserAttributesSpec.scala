@@ -123,24 +123,29 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
       response.updatedAt.get should beAround(newUserAttributes.updatedAt.get)
 
       verify(directoryDAO).getUserAttributes(eqTo(user.id), any[SamRequestContext])
-      verify(directoryDAO).setUserAttributes(eqTo(SamUserAttributes(
-        newUserAttributes.userId,
-        newUserAttributes.marketingConsent,
-        newUserAttributes.firstName,
-        newUserAttributes.lastName,
-        newUserAttributes.organization,
-        newUserAttributes.contactEmail,
-        newUserAttributes.title,
-        newUserAttributes.department,
-        newUserAttributes.interestInTerra,
-        newUserAttributes.programLocationCity,
-        newUserAttributes.programLocationState,
-        newUserAttributes.programLocationCountry,
-        newUserAttributes.researchArea,
-        newUserAttributes.additionalAttributes,
-        newUserAttributes.createdAt,
-        newUserAttributes.updatedAt)
-      ), any[SamRequestContext])
+      verify(directoryDAO).setUserAttributes(
+        eqTo(
+          SamUserAttributes(
+            newUserAttributes.userId,
+            newUserAttributes.marketingConsent,
+            newUserAttributes.firstName,
+            newUserAttributes.lastName,
+            newUserAttributes.organization,
+            newUserAttributes.contactEmail,
+            newUserAttributes.title,
+            newUserAttributes.department,
+            newUserAttributes.interestInTerra,
+            newUserAttributes.programLocationCity,
+            newUserAttributes.programLocationState,
+            newUserAttributes.programLocationCountry,
+            newUserAttributes.researchArea,
+            newUserAttributes.additionalAttributes,
+            newUserAttributes.createdAt,
+            newUserAttributes.updatedAt
+          )
+        ),
+        any[SamRequestContext]
+      )
     }
 
     it("updates existing user attributes") {
@@ -212,7 +217,8 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
         None,
         None,
         Some(Instant.parse("2022-01-01T00:00:00Z")),
-        Some(Instant.parse("2023-01-01T00:00:00Z")))
+        Some(Instant.parse("2023-01-01T00:00:00Z"))
+      )
       val directoryDAO: DirectoryDAO = MockDirectoryDaoBuilder(allUsersGroup).withUserAttributes(newUserAttributes).build
       val userService: UserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
 
@@ -220,23 +226,29 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
       runAndWait(userService.createUser(user, samRequestContext))
 
       // Assert
-      verify(directoryDAO).setUserAttributes(eqTo(SamUserAttributes(
-        newUserAttributes.userId,
-        newUserAttributes.marketingConsent,
-        newUserAttributes.firstName,
-        newUserAttributes.lastName,
-        newUserAttributes.organization,
-        newUserAttributes.contactEmail,
-        newUserAttributes.title,
-        newUserAttributes.department,
-        newUserAttributes.interestInTerra,
-        newUserAttributes.programLocationCity,
-        newUserAttributes.programLocationState,
-        newUserAttributes.programLocationCountry,
-        newUserAttributes.researchArea,
-        newUserAttributes.additionalAttributes,
-        newUserAttributes.createdAt,
-        newUserAttributes.updatedAt)), any[SamRequestContext])
+      verify(directoryDAO).setUserAttributes(
+        eqTo(
+          SamUserAttributes(
+            newUserAttributes.userId,
+            newUserAttributes.marketingConsent,
+            newUserAttributes.firstName,
+            newUserAttributes.lastName,
+            newUserAttributes.organization,
+            newUserAttributes.contactEmail,
+            newUserAttributes.title,
+            newUserAttributes.department,
+            newUserAttributes.interestInTerra,
+            newUserAttributes.programLocationCity,
+            newUserAttributes.programLocationState,
+            newUserAttributes.programLocationCountry,
+            newUserAttributes.researchArea,
+            newUserAttributes.additionalAttributes,
+            newUserAttributes.createdAt,
+            newUserAttributes.updatedAt
+          )
+        ),
+        any[SamRequestContext]
+      )
     }
 
     it("sets user attributes when a new user is registered with a request body") {
@@ -265,7 +277,8 @@ class UserAttributesSpec extends UserServiceTestTraits with TimeMatchers {
                 userAttributes.programLocationState,
                 userAttributes.programLocationCountry,
                 userAttributes.researchArea,
-                userAttributes.additionalAttributes)
+                userAttributes.additionalAttributes
+              )
             )
           ),
           samRequestContext
