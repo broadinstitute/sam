@@ -305,7 +305,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       researchArea = Some(List("NewResearchArea")),
       additionalAttributes = Some("""{"additionalAttributes": "bar"}"""),
       createdAt = None,
-      updatedAt = Some(Instant.now()),
+      updatedAt = Some(Instant.now())
     )
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
