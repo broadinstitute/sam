@@ -1082,7 +1082,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/petServiceAccount/{project}/{email}/token:
-    get:
+    post:
       tags:
         - Google
       summary: gets a token for the user's pet service account, get_pet_private_key
@@ -1177,10 +1177,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
   /api/google/v1/petServiceAccount/{email}/token:
-    get:
+    post:
       tags:
         - Google
-      summary: gets a token for the user's arbitrary pet service account, get_pet_private_key action on cloud-extension/google required
+      summary: gets a token for the user's arbitrary pet service account, get_pet_private_key
+        action on cloud-extension/google required
       operationId: getUserArbitraryPetServiceAccountToken
       parameters:
         - name: email
