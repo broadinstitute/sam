@@ -455,6 +455,11 @@ class GoogleExtensions(
       key <- googleKeyCache.getKey(pet)
     } yield key
 
+  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
+    getPetServiceAccountKey(user, project, samRequestContext).flatMap { key =>
+      IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
+    }
+
   def getPetServiceAccountToken(
       userEmail: WorkbenchEmail,
       project: GoogleProject,
@@ -469,11 +474,6 @@ class GoogleExtensions(
         case _ => IO.pure(None)
       }
     } yield token
-
-  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
-    getPetServiceAccountKey(user, project, samRequestContext).flatMap { key =>
-      IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
-    }
 
   def getArbitraryPetServiceAccountKey(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[String]] =
     for {
@@ -503,7 +503,7 @@ class GoogleExtensions(
       IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     }
 
-  private def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
+  private[google] def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
     val projectName =
       s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
     for {
