@@ -467,6 +467,7 @@ class GoogleExtensions(
       samRequestContext: SamRequestContext
   ): IO[Option[String]] =
     for {
+      _ <- IO.raiseError(new WorkbenchException("test message"))
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       token <- subject match {
         case Some(userId: WorkbenchUserId) =>
