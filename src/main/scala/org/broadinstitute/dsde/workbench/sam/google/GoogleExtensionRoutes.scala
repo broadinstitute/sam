@@ -74,7 +74,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
             pathPrefix(Segment / Segment) { (project, userEmail) =>
               val email = WorkbenchEmail(userEmail)
               val googleProject = GoogleProject(project)
-              (pathEndOrSingleSlash | path("key")) {
+              pathEndOrSingleSlash {
                 getWithTelemetry(samRequestContext, "userEmail" -> email, "googleProject" -> googleProject) {
                   complete {
                     import spray.json._

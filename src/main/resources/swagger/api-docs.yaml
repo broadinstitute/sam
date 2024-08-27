@@ -1034,7 +1034,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
-  /api/google/v1/petServiceAccount/{project}/{email}/key:
+  /api/google/v1/petServiceAccount/{project}/{email}:
     get:
       tags:
         - Google
