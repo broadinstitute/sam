@@ -33,7 +33,7 @@ import org.broadinstitute.dsde.workbench.google.{
   HttpGoogleStorageDAO
 }
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
@@ -44,6 +44,7 @@ import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.util.Sentry.initSentry
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.typelevel.log4cats.StructuredLogger
@@ -79,6 +80,23 @@ object Boot extends IOApp with LazyLogging {
         }
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
+
+        // make sure all users referenced by resourceAccessPolicies exist
+        _ <- appConfig.resourceAccessPolicies.flatMap { case (_, policy) => policy.memberEmails }.toList.traverse { email =>
+          dependencies.samApplication.userService.inviteUser(email, SamRequestContext()).attempt
+        }
+
+        // create resourceAccessPolicies
+        policyTrials <- dependencies.samApplication.resourceService.upsertResourceAccessPolicies(appConfig.resourceAccessPolicies)
+        _ = policyTrials.map {
+          case (policyId, Left(t)) =>
+            logger.error(s"FATAL - failure creating configured policy [$policyId] on startup", t)
+          case (policyId, Right(_)) =>
+            logger.info(s"Upserted configured policy [$policyId] at startup")
+        }
+        _ <- IO.raiseWhen(policyTrials.values.exists(_.isLeft))(
+          new WorkbenchException("FATAL - failure creating configured policy on startup, see above errors")
+        )
 
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
 

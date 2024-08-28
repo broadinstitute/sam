@@ -168,6 +168,15 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                 pathEndOrSingleSlash {
                   getResourceAuthDomain(resource, samUser, samRequestContext) ~
                   patchResourceAuthDomain(resource, samUser, samRequestContext)
+                } ~
+                pathPrefix("satisfied") {
+                  pathEndOrSingleSlash {
+                    complete {
+                      resourceService.satisfiesAuthDomainConstrains(resource, samUser, samRequestContext).map { satisfied =>
+                        if (satisfied) StatusCodes.OK else StatusCodes.Forbidden
+                      }
+                    }
+                  }
                 }
               } ~
               pathPrefix("roles") {
@@ -399,7 +408,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
     patchWithTelemetry(samRequestContext, resourceParams(resource): _*) {
       requireAction(resource, SamResourceActions.updateAuthDomain, samUser.id, samRequestContext) {
         entity(as[Set[WorkbenchGroupName]]) { authDomains =>
-          complete(resourceService.addResourceAuthDomain(resource, authDomains, samUser.id, samRequestContext).map { response =>
+          complete(resourceService.addResourceAuthDomain(resource, authDomains, Option(samUser.id), samRequestContext).map { response =>
             StatusCodes.OK -> response
           })
         }

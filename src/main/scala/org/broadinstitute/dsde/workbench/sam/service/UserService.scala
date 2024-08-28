@@ -173,6 +173,9 @@ class UserService(
   def getUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     directoryDAO.loadUser(userId, samRequestContext)
 
+  def getUsersByIds(samUserIds: Seq[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
+    directoryDAO.batchLoadUsers(samUserIds.toSet, samRequestContext)
+
   def getUsersByQuery(
       userId: Option[WorkbenchUserId],
       googleSubjectId: Option[GoogleSubjectId],
@@ -486,6 +489,19 @@ class UserService(
 
   def setUserAttributes(userAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[SamUserAttributes] =
     directoryDAO.setUserAttributes(userAttributes, samRequestContext).map(_ => userAttributes)
+
+  def repairCloudAccess(workbenchUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
+    val maybeUser = getUser(workbenchUserId, samRequestContext)
+    maybeUser.flatMap {
+      case Some(user) =>
+        for {
+          _ <- cloudExtensions.onUserCreate(user, samRequestContext)
+          groups <- directoryDAO.listUserDirectMemberships(user.id, samRequestContext)
+          _ <- cloudExtensions.onGroupUpdate(groups, Set(user.id), samRequestContext)
+        } yield IO.pure(())
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"User $workbenchUserId not found")))
+    }
+  }
 }
 
 object UserService {

@@ -1,6 +1,8 @@
-package org.broadinstitute.dsde.workbench.sam.api
+package org.broadinstitute.dsde.workbench.sam
+package api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.StatusCodes.{NotFound, OK}
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
@@ -8,6 +10,8 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import spray.json.DefaultJsonProtocol._
 
 trait ServiceAdminRoutes extends SecurityDirectives with SamRequestContextDirectives with SamUserDirectives with SamModelDirectives {
@@ -53,7 +57,19 @@ trait ServiceAdminRoutes extends SecurityDirectives with SamRequestContextDirect
               .map(users => (if (users.nonEmpty) OK else NotFound) -> users)
           }
         }
+      } ~
+      postWithTelemetry(samRequestContext) {
+        entity(as[Seq[WorkbenchUserId]]) {
+          case Seq() => complete(OK -> Seq.empty[SamUser])
+          case userIds: Seq[WorkbenchUserId] if userIds.length > 1000 =>
+            throw new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.BadRequest, "Batch request too large. Batch request too large, must be less than 1000")
+            )
+          case userIds: Seq[WorkbenchUserId] =>
+            complete {
+              userService.getUsersByIds(userIds, samRequestContext)
+            }
+        }
       }
-
     }
 }

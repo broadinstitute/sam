@@ -273,6 +273,9 @@ class GoogleExtensions(
         accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, relevantMembers, samRequestContext)
       )
 
+      // Update group versions for all the groups that are ancestors of the managed group so that they can be synced
+      _ <- constrainedResourceAccessPolicyIds.flatten.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(p, samRequestContext))
+
       // return messages for all the affected access policies and the original group we started with
     } yield constrainedResourceAccessPolicyIds.flatten.map(accessPolicyId => accessPolicyId.toJson.compactPrint)
 
@@ -354,6 +357,7 @@ class GoogleExtensions(
         case None =>
           for {
             _ <- assertProjectInTerraOrg(project)
+            _ <- assertProjectIsActive(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             _ <- withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
@@ -416,6 +420,14 @@ class GoogleExtensions(
     }
   }
 
+  private def assertProjectIsActive(project: GoogleProject): IO[Unit] =
+    for {
+      projectIsActive <- IO.fromFuture(IO(googleProjectDAO.isProjectActive(project.value)))
+      _ <- IO.raiseUnless(projectIsActive)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} is inactive"))
+      )
+    } yield ()
+
   private def retrievePetAndSA(
       userId: WorkbenchUserId,
       petServiceAccountName: ServiceAccountName,
@@ -443,30 +455,55 @@ class GoogleExtensions(
       key <- googleKeyCache.getKey(pet)
     } yield key
 
-  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
-    getPetServiceAccountKey(user, project, samRequestContext).unsafeToFuture().flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
+  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
+    getPetServiceAccountKey(user, project, samRequestContext).flatMap { key =>
+      IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     }
+
+  def getPetServiceAccountToken(
+      userEmail: WorkbenchEmail,
+      project: GoogleProject,
+      scopes: Set[String],
+      samRequestContext: SamRequestContext
+  ): IO[Option[String]] =
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
+      token <- subject match {
+        case Some(userId: WorkbenchUserId) =>
+          getPetServiceAccountToken(SamUser(userId, None, userEmail, None, false), project, scopes, samRequestContext).map(Option(_))
+        case _ => IO.pure(None)
+      }
+    } yield token
 
   def getArbitraryPetServiceAccountKey(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[String]] =
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) =>
-          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), samRequestContext))).map(Option(_))
+          getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), samRequestContext).map(Option(_))
         case _ => IO.none
       }
     } yield key
 
-  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): Future[String] =
-    getDefaultServiceAccountForShellProject(user, samRequestContext)
+  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): IO[String] =
+    IO.fromFuture(IO(getDefaultServiceAccountForShellProject(user, samRequestContext)))
 
-  def getArbitraryPetServiceAccountToken(user: SamUser, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
+  def getArbitraryPetServiceAccountToken(userEmail: WorkbenchEmail, scopes: Set[String], samRequestContext: SamRequestContext): IO[Option[String]] =
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
+      token <- subject match {
+        case Some(userId: WorkbenchUserId) =>
+          getArbitraryPetServiceAccountToken(SamUser(userId, None, userEmail, None, false), scopes, samRequestContext).map(Option(_))
+        case _ => IO.none
+      }
+    } yield token
+
+  def getArbitraryPetServiceAccountToken(user: SamUser, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
     getArbitraryPetServiceAccountKey(user, samRequestContext).flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
+      IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     }
 
-  private def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
+  private[google] def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
     val projectName =
       s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
     for {
@@ -678,7 +715,7 @@ class GoogleExtensions(
     val bucket = GcsBucketName(blobId.getBucket)
     val objectName = GcsBlobName(blobId.getName)
     for {
-      petKey <- IO.fromFuture(IO(getArbitraryPetServiceAccountKey(samUser, samRequestContext)))
+      petKey <- getArbitraryPetServiceAccountKey(samUser, samRequestContext)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
       url <- getSignedUrl(samUser, bucket, objectName, duration, urlParamsMap, serviceAccountCredentials)
     } yield url
