@@ -92,6 +92,8 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
       SamUserAllowances(enabled = false, termsOfService = false)
     )
     mockUserService.getUserAttributes(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
+
+    mockUserService.repairCloudAccess(any[WorkbenchUserId], any[SamRequestContext]) returns IO(())
   }
 
   private def makeUser(samUser: SamUser, mockUserService: UserService): Unit = {

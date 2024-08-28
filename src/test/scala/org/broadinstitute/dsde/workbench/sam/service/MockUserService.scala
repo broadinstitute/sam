@@ -123,9 +123,6 @@ class MockUserService(
   def setGoogleSubjectId(userId: WorkbenchUserId, googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Unit] =
     directoryDAO.setGoogleSubjectId(userId, googleSubjectId, samRequestContext)
 
-  def listUserDirectMemberships(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[LazyList[WorkbenchGroupIdentity]] =
-    directoryDAO.listUserDirectMemberships(userId, samRequestContext)
-
   def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] =
     directoryDAO.listFlattenedGroupMembers(groupName, samRequestContext)
 
