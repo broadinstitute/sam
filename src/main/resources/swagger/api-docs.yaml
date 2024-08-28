@@ -99,7 +99,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
   /api/admin/v2/user/{userId}/repairCloudAccess:
-    get:
+    put:
       tags:
         - Admin
       summary: Ensures that a user's proxy group exists and that it is added to any google groups that it should be in.
