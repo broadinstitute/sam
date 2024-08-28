@@ -98,6 +98,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v2/user/{userId}/repairCloudAccess:
+    get:
+      tags:
+        - Admin
+      summary: Ensures that a user's proxy group exists and that it is added to any google groups that it should be in.
+      operationId: adminRepairUserCloudAccess
+      parameters:
+        - name: userId
+          in: path
+          description: User ID of the user to have their cloud access repaired
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: User access was repaired successfully (as long as the group sync messages succeed)
+        403:
+          description: You do not have admin privileges
+          content: { }
+        404:
+          description: User not found
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/user/email/{email}:
     get:
       tags:
