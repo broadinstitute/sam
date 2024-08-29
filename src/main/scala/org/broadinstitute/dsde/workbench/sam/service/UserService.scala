@@ -496,6 +496,7 @@ class UserService(
       case Some(user) =>
         for {
           _ <- cloudExtensions.onUserCreate(user, samRequestContext)
+          _ <- cloudExtensions.onUserEnable(user, samRequestContext)
           groups <- directoryDAO.listUserDirectMemberships(user.id, samRequestContext)
           _ <- cloudExtensions.onGroupUpdate(groups, Set(user.id), samRequestContext)
         } yield IO.pure(())

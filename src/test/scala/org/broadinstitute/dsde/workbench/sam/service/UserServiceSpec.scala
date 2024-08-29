@@ -747,8 +747,8 @@ class OldUserServiceSpec(_system: ActorSystem)
     // Run test
     service.repairCloudAccess(invitedUserId, samRequestContext).unsafeRunSync()
 
-    verify(googleExtensions).onUserCreate(SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true), samRequestContext)
-
+    verify(googleExtensions).onUserCreate(updatedUserInPostgres.get, samRequestContext)
+    verify(googleExtensions).onUserEnable(updatedUserInPostgres.get, samRequestContext)
     verify(googleExtensions).onGroupUpdate(Seq(allUsersGroup.id), Set(invitedUserId), samRequestContext)
   }
 }
