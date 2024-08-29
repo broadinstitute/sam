@@ -495,9 +495,11 @@ class UserService(
     maybeUser.flatMap {
       case Some(user) =>
         for {
-          _ <- cloudExtensions.onUserCreate(user, samRequestContext)
-          _ <- cloudExtensions.onUserEnable(user, samRequestContext)
+          // if the user is already created and enabled, then recover and just add them to the groups they should be in
+          _ <- cloudExtensions.onUserCreate(user, samRequestContext).recover { case _ => () }
+          _ <- cloudExtensions.onUserEnable(user, samRequestContext).recover { case _ => () }
           groups <- directoryDAO.listUserDirectMemberships(user.id, samRequestContext)
+          _ = groups.map(g => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(g, samRequestContext))
           _ <- cloudExtensions.onGroupUpdate(groups, Set(user.id), samRequestContext)
         } yield IO.pure(())
       case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"User $workbenchUserId not found")))

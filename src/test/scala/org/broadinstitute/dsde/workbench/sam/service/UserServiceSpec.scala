@@ -739,6 +739,11 @@ class OldUserServiceSpec(_system: ActorSystem)
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
     updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true)
 
+    // add user to group
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("testGroup"), Set.empty, WorkbenchEmail("fake@group.com"))
+    runAndWait(dirDAO.createGroup(group, None, samRequestContext))
+    runAndWait(dirDAO.addGroupMember(group.id, invitedUserId, samRequestContext))
+
     val proxyGroup =
       WorkbenchGroupName(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${invitedUserId.value}@${googleServicesConfig.appsDomain}")
     // delete proxy group
@@ -749,6 +754,10 @@ class OldUserServiceSpec(_system: ActorSystem)
 
     verify(googleExtensions).onUserCreate(updatedUserInPostgres.get, samRequestContext)
     verify(googleExtensions).onUserEnable(updatedUserInPostgres.get, samRequestContext)
-    verify(googleExtensions).onGroupUpdate(Seq(allUsersGroup.id), Set(invitedUserId), samRequestContext)
+    verify(googleExtensions).onGroupUpdate(Seq(allUsersGroup.id, group.id), Set(invitedUserId), samRequestContext)
+
+    // get group from db
+    val groupWithUpdatedVersion = runAndWait(dirDAO.loadGroup(group.id, samRequestContext))
+    groupWithUpdatedVersion.get.version shouldBe group.version + 1
   }
 }
