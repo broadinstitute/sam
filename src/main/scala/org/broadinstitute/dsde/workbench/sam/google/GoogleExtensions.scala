@@ -466,14 +466,15 @@ class GoogleExtensions(
       scopes: Set[String],
       samRequestContext: SamRequestContext
   ): IO[Option[String]] =
-    for {
-      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
-      token <- subject match {
-        case Some(userId: WorkbenchUserId) =>
-          getPetServiceAccountToken(SamUser(userId, None, userEmail, None, false), project, scopes, samRequestContext).map(Option(_))
-        case _ => IO.pure(None)
-      }
-    } yield token
+    IO.raiseError(new WorkbenchException("test message"))
+//    for {
+//      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
+//      token <- subject match {
+//        case Some(userId: WorkbenchUserId) =>
+//          getPetServiceAccountToken(SamUser(userId, None, userEmail, None, false), project, scopes, samRequestContext).map(Option(_))
+//        case _ => IO.pure(None)
+//      }
+//    } yield token
 
   def getArbitraryPetServiceAccountKey(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[String]] =
     for {
