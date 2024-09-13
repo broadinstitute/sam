@@ -145,6 +145,17 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                 .map(user => (if (user.isDefined) OK else NotFound) -> user)
             }
           }
+        } ~
+        pathPrefix("repairCloudAccess") {
+          pathEndOrSingleSlash {
+            putWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+              complete {
+                userService
+                  .repairCloudAccess(workbenchUserId, samRequestContext)
+                  .map(_ => NoContent)
+              }
+            }
+          }
         }
       }
     }

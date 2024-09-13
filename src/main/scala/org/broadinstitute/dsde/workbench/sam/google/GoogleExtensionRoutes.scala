@@ -42,27 +42,13 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
           samUser.id,
           samRequestContext
         ) {
-          path(Segment / "key") { userEmail =>
+          pathPrefix(Segment) { userEmail =>
             val email = WorkbenchEmail(userEmail)
-            getWithTelemetry(samRequestContext, "userEmail" -> email) {
-              complete {
-                import spray.json._
-                googleExtensions.getArbitraryPetServiceAccountKey(email, samRequestContext) map {
-                  // parse json to ensure it is json and tells akka http the right content-type
-                  case Some(key) => StatusCodes.OK -> key.parseJson
-                  case None =>
-                    throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
-                }
-              }
-            }
-          } ~
-            path(Segment / Segment) { (project, userEmail) =>
-              val email = WorkbenchEmail(userEmail)
-              val googleProject = GoogleProject(project)
-              getWithTelemetry(samRequestContext, "userEmail" -> email, "googleProject" -> googleProject) {
+            path("key") {
+              getWithTelemetry(samRequestContext, "userEmail" -> email) {
                 complete {
                   import spray.json._
-                  googleExtensions.getPetServiceAccountKey(email, googleProject, samRequestContext) map {
+                  googleExtensions.getArbitraryPetServiceAccountKey(email, samRequestContext) map {
                     // parse json to ensure it is json and tells akka http the right content-type
                     case Some(key) => StatusCodes.OK -> key.parseJson
                     case None =>
@@ -70,6 +56,50 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   }
                 }
               }
+            } ~
+              path("token") {
+                postWithTelemetry(samRequestContext, "userEmail" -> email) {
+                  entity(as[Set[String]]) { scopes =>
+                    complete {
+                      googleExtensions.getArbitraryPetServiceAccountToken(email, scopes, samRequestContext).map {
+                        case Some(token) => StatusCodes.OK -> JsString(token)
+                        case None =>
+                          throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
+                      }
+                    }
+                  }
+                }
+              }
+          } ~
+            pathPrefix(Segment / Segment) { (project, userEmail) =>
+              val email = WorkbenchEmail(userEmail)
+              val googleProject = GoogleProject(project)
+              pathEndOrSingleSlash {
+                getWithTelemetry(samRequestContext, "userEmail" -> email, "googleProject" -> googleProject) {
+                  complete {
+                    import spray.json._
+                    googleExtensions.getPetServiceAccountKey(email, googleProject, samRequestContext) map {
+                      // parse json to ensure it is json and tells akka http the right content-type
+                      case Some(key) => StatusCodes.OK -> key.parseJson
+                      case None =>
+                        throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
+                    }
+                  }
+                }
+              } ~
+                path("token") {
+                  postWithTelemetry(samRequestContext, "userEmail" -> email) {
+                    entity(as[Set[String]]) { scopes =>
+                      complete {
+                        googleExtensions.getPetServiceAccountToken(email, googleProject, scopes, samRequestContext).map {
+                          case Some(token) => StatusCodes.OK -> JsString(token)
+                          case None =>
+                            throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
+                        }
+                      }
+                    }
+                  }
+                }
             }
         }
       } ~
