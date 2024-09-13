@@ -161,40 +161,53 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
     }
 
   def adminResourcesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("resources" / Segment / Segment / "policies") { case (resourceTypeName, resourceId) =>
+    pathPrefix("resources" / Segment / Segment) { case (resourceTypeName, resourceId) =>
       withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
         val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
         pathEndOrSingleSlash {
-          getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
-            requireAdminResourceAction(adminReadPolicies, resourceType, user, samRequestContext) {
+          asWorkbenchAdmin(user) {
+            delete {
               complete {
                 resourceService
-                  .listResourcePolicies(resource, samRequestContext)
-                  .map(response => OK -> response.toSet)
+                  .deleteResource(resource, samRequestContext)
+                  .map(_ => NoContent)
               }
             }
           }
         } ~
-        pathPrefix(Segment / "memberEmails" / Segment) { case (policyName, userEmail) =>
-          val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
-          val workbenchEmail = WorkbenchEmail(userEmail)
+        pathPrefix("policies") {
           pathEndOrSingleSlash {
-            withSubject(workbenchEmail, samRequestContext) { subject =>
-              putWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
-                requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
-                  complete {
-                    resourceService
-                      .addSubjectToPolicy(policyId, subject, samRequestContext)
-                      .as(NoContent)
-                  }
+            getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
+              requireAdminResourceAction(adminReadPolicies, resourceType, user, samRequestContext) {
+                complete {
+                  resourceService
+                    .listResourcePolicies(resource, samRequestContext)
+                    .map(response => OK -> response.toSet)
                 }
-              } ~
-              deleteWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
-                requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
-                  complete {
-                    resourceService
-                      .removeSubjectFromPolicy(policyId, subject, samRequestContext)
-                      .as(NoContent)
+              }
+            }
+          } ~
+          pathPrefix(Segment / "memberEmails" / Segment) { case (policyName, userEmail) =>
+            val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+            val workbenchEmail = WorkbenchEmail(userEmail)
+            pathEndOrSingleSlash {
+              withSubject(workbenchEmail, samRequestContext) { subject =>
+                putWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
+                  requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
+                    complete {
+                      resourceService
+                        .addSubjectToPolicy(policyId, subject, samRequestContext)
+                        .as(NoContent)
+                    }
+                  }
+                } ~
+                deleteWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
+                  requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
+                    complete {
+                      resourceService
+                        .removeSubjectFromPolicy(policyId, subject, samRequestContext)
+                        .as(NoContent)
+                    }
                   }
                 }
               }

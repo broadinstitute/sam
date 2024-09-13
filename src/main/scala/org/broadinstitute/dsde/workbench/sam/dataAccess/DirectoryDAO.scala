@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentity,
   ActionManagedIdentityId,
@@ -12,7 +12,15 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   PetManagedIdentityId
 }
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, ResourceTypeName, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{
+  BasicWorkbenchGroup,
+  FullyQualifiedResourceId,
+  PetServiceAgents,
+  ResourceAction,
+  ResourceTypeName,
+  SamUserTos,
+  ServiceAgent
+}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -190,4 +198,29 @@ trait DirectoryDAO {
       resourceTypeName: ResourceTypeName,
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedResourceId]]
+
+  def getPetServiceAgents(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      samRequestContext: SamRequestContext
+  ): IO[Option[PetServiceAgents]]
+
+  def addPetServiceAgent(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      destinationProjectNumber: Long,
+      serviceAgent: String,
+      samRequestContext: SamRequestContext
+  ): IO[Set[ServiceAgent]]
+
+  def removePetServiceAgent(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      destinationProjectNumber: Long,
+      serviceAgent: String,
+      samRequestContext: SamRequestContext
+  ): IO[Set[ServiceAgent]]
 }

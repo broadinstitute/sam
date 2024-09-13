@@ -34,14 +34,14 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response.value should endWith(s"@myproject.iam.gserviceaccount.com")
+      response.value should endWith(s"${user.id.value}.iam.gserviceaccount.com")
     }
 
     // same result a second time
     Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response.value should endWith(s"@myproject.iam.gserviceaccount.com")
+      response.value should endWith(s"${user.id.value}.iam.gserviceaccount.com")
     }
   }
 
@@ -62,7 +62,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     val petEmail = Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response.value should endWith(s"@myproject.iam.gserviceaccount.com")
+      response.value should endWith(s"${user.id.value}.iam.gserviceaccount.com")
       response.value
     }
 
@@ -168,15 +168,17 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypes = Map(resourceType.name -> resourceType)
-    val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
+    val (googleIamDAO, expectedJson: String, mockWithUser) = createMockGoogleIamDaoForSAKeyTests
 
     val (user, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO))
+
+    mockWithUser(user)
 
     // create a pet service account
     Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response.value should endWith(s"@myproject.iam.gserviceaccount.com")
+      response.value should endWith(s"${user.id.value}.iam.gserviceaccount.com")
     }
 
     // create a pet service account key
@@ -191,15 +193,17 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypes = Map(resourceType.name -> resourceType)
-    val (googleIamDAO, expectedJson: String) = createMockGoogleIamDaoForSAKeyTests
+    val (googleIamDAO, expectedJson: String, mockWithUser) = createMockGoogleIamDaoForSAKeyTests
 
     val (user, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO))
+
+    mockWithUser(user)
 
     // create a pet service account
     Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       val response = responseAs[WorkbenchEmail]
-      response.value should endWith(s"@myproject.iam.gserviceaccount.com")
+      response.value should endWith(s"${user.id.value}.iam.gserviceaccount.com")
     }
 
     // create a pet service account key

@@ -183,4 +183,9 @@ object SamTypeBinders {
     def apply(rs: ResultSet, index: Int): LastQuotaErrorPK = LastQuotaErrorPK(rs.getLong(index))
   }
 
+  implicit def setTypeBinder[A]: TypeBinder[Set[A]] = new TypeBinder[Set[A]] {
+    def apply(rs: ResultSet, label: String): Set[A] = rs.getArray(label).getArray.asInstanceOf[Array[A]].toSet
+    def apply(rs: ResultSet, index: Int): Set[A] = rs.getArray(index).getArray.asInstanceOf[Array[A]].toSet
+  }
+
 }
