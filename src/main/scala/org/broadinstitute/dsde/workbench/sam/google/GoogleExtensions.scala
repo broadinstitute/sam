@@ -562,6 +562,10 @@ class GoogleExtensions(
         .map(psa => IO.pure(Option(psa.destinationProjectNumber)))
         .getOrElse(IO.fromFuture(IO(googleProjectDAO.getProjectNumber(destinationProject.value))))
         .map(_.getOrElse(throw new WorkbenchException(s"Could not find project number for project ${destinationProject.value}")))
+      ancestry <- IO.fromFuture(IO(googleProjectDAO.getAncestry(destinationProject.value)))
+      organization = ancestry.find(_.getResourceId.getType.equals("organization")).map(_.getResourceId)
+      _ <- IO.raiseWhen(organization.isEmpty)(new WorkbenchException(s"Project $destinationProject is not in an organization"))
+      _ <- IO.raiseUnless(organization.exists(_.getId.equals(googleServicesConfig.terraGoogleOrgNumber)))(new WorkbenchException(s"Project $destinationProject is not in organization ${googleServicesConfig.terraGoogleOrgNumber}"))
       _ <- serviceAgentsToAdd.toList.traverse { serviceAgentName =>
         val serviceAgent = ServiceAgent(serviceAgentName, destinationProjectNumber)
         for {
