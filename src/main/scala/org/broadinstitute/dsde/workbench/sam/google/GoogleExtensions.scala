@@ -30,7 +30,6 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, CloudExtensionsInitializer, ManagedGroupService, SamApplication}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
