@@ -30,6 +30,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, CloudExtensionsInitializer, ManagedGroupService, SamApplication}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
 import spray.json._
@@ -606,6 +607,7 @@ class GoogleExtensions(
       petServiceAgents <- directoryDAO.getPetServiceAgents(user.id, petServiceAccount.id.project, destinationProject, samRequestContext)
       existingServiceAgents = petServiceAgents.map(_.serviceAgents.map(_.name)).getOrElse(Set.empty)
       serviceAgentsToAdd = googleServicesConfig.serviceAgents -- existingServiceAgents
+      _ = logger.info(s"Adding $serviceAgentsToAdd to $petServiceAccount")
       _ <- assertProjectInTerraOrg(destinationProject)
       _ <- assertProjectIsActive(destinationProject)
       destinationProjectNumber <- petServiceAgents
@@ -642,6 +644,7 @@ class GoogleExtensions(
         } yield ()
       }
       serviceAgentsToRemove = existingServiceAgents -- googleServicesConfig.serviceAgents
+      _ = logger.info(s"Removing $serviceAgentsToRemove from $petServiceAccount")
       _ <- serviceAgentsToRemove.toList.traverse { serviceAgentName =>
 //                val serviceAgent = ServiceAgent(serviceAgentName, destinationProjectNumber)
         for {

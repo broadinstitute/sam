@@ -498,13 +498,6 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
 
   def setupSignedUrlTest(): (SamUser, SamRoutes, String) = {
     val googleIamDAO = new RealKeyMockGoogleIamDAO
-//    val googleProjectDAO = new MockGoogleProjectDAO() {
-//      override def pollOperation(operationId: String): Future[Operation] = {
-//        val operation = new com.google.api.services.cloudresourcemanager.model.Operation
-//        operation.setDone(true)
-//        Future.successful(operation)
-//      }
-//    }
     val samUser = Generator.genWorkbenchUserGoogle.sample.get
     val (user, samDeps, routes) = createTestUser(
       configResourceTypes,
