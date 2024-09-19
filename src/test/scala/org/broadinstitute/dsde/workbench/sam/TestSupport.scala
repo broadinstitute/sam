@@ -13,6 +13,7 @@ import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.sam.api._
@@ -285,6 +286,12 @@ object TestSupport extends TestSupport {
 
   val enabledMapNoTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> false, "adminEnabled" -> true)
   val enabledMapTosAccepted = Map("ldap" -> true, "allUsersGroup" -> true, "google" -> true, "tosAccepted" -> true, "adminEnabled" -> true)
+
+  def singletonServiceAccountForUser(user: SamUser) =
+    s"pet-${user.id.value}@${singletonServiceAccountProject(user).value}.iam.gserviceaccount.com"
+
+  def singletonServiceAccountProject(user: SamUser): GoogleProject =
+    GoogleProject(s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}")
 }
 
 final case class SamDependencies(

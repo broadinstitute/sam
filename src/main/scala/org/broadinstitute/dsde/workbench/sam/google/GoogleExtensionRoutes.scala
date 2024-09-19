@@ -227,7 +227,10 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   } ~
                     deleteWithTelemetry(samRequestContext, "googleProject" -> projectResourceId) {
                       complete {
-                        googleExtensions.deleteUserPetServiceAccount(samUser.id, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
+                        for {
+                          _ <- googleExtensions.removeProjectServiceAgents(samUser.id, GoogleProject(project), samRequestContext)
+                          _ <- googleExtensions.deleteUserPetServiceAccount(samUser.id, GoogleProject(project), samRequestContext)
+                        } yield StatusCodes.NoContent
                       }
                     }
                 }

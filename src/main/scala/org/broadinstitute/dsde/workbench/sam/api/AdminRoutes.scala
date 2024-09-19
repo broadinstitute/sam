@@ -122,9 +122,10 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
               val googleProject = GoogleProject(project)
               deleteWithTelemetry(samRequestContext, userIdParam(workbenchUserId), googleProjectParam(googleProject)) {
                 complete {
-                  cloudExtensions
-                    .deleteUserPetServiceAccount(workbenchUserId, googleProject, samRequestContext)
-                    .map(_ => NoContent)
+                  for {
+                    _ <- cloudExtensions.removeProjectServiceAgents(workbenchUserId, GoogleProject(project), samRequestContext)
+                    _ <- cloudExtensions.deleteUserPetServiceAccount(workbenchUserId, GoogleProject(project), samRequestContext)
+                  } yield StatusCodes.NoContent
                 }
               }
             }

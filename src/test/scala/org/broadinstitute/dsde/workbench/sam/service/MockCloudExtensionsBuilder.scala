@@ -27,6 +27,7 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
   mockedCloudExtensions.allSubSystems returns Set.empty
   mockedCloudExtensions.checkStatus returns Map.empty
   mockedCloudExtensions.deleteUserPetServiceAccount(any[WorkbenchUserId], any[GoogleProject], any[SamRequestContext]) returns IO(true)
+  mockedCloudExtensions.removeProjectServiceAgents(any[WorkbenchUserId], any[GoogleProject], any[SamRequestContext]) returns IO(true)
 
   def withEnabledUser(samUser: SamUser): MockCloudExtensionsBuilder = withEnabledUsers(Set(samUser))
   def withEnabledUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {

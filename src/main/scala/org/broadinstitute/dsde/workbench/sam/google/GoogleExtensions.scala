@@ -343,7 +343,16 @@ class GoogleExtensions(
       }
     } yield deletedSomething
 
-  def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
+  def removeProjectServiceAgents(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] =
+    for {
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, projectForSingletonServiceAccount(userId)), samRequestContext)
+      removedSomething <- maybePet match {
+        case Some(pet) => removeProjectServiceAgentsFromPet(userId, pet, project, samRequestContext).map(_ => true)
+        case None => IO.pure(false)
+      }
+    } yield removedSomething
+
+  private[google] def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
     // The normal situation is that the pet either exists in both the database and google or neither.
     // Sometimes, especially in tests, the pet may be removed from the database, but not google or the other way around.
@@ -450,15 +459,9 @@ class GoogleExtensions(
 
   def getPetServiceAccountKey(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[String] =
     for {
-      pet <- createUserPetServiceAccount(user, project, samRequestContext)
+      pet <- getSingletonPetServiceAccountForUser(user, Some(project), samRequestContext)
       key <- googleKeyCache.getKey(pet)
     } yield key
-
-  def getPetServiceAccountAndKey(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[(PetServiceAccount, String)] =
-    for {
-      pet <- createUserPetServiceAccount(user, project, samRequestContext)
-      key <- googleKeyCache.getKey(pet)
-    } yield (pet, key)
 
   def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
     getPetServiceAccountKey(user, project, samRequestContext).flatMap { key =>
@@ -522,18 +525,23 @@ class GoogleExtensions(
       opt <- getSingletonPetServiceAccountAndKeyForUser(userEmail, destinationProject, samRequestContext)
     } yield opt.map(_._2)
 
+  private[google] def projectForSingletonServiceAccount(samUser: SamUser): GoogleProject =
+    projectForSingletonServiceAccount(samUser.id)
+
+  private[google] def projectForSingletonServiceAccount(userId: WorkbenchUserId): GoogleProject =
+    GoogleProject(s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${userId.value}")
+
   private[google] def getSingletonPetServiceAccountForUser(
       user: SamUser,
       destinationProject: Option[GoogleProject],
       samRequestContext: SamRequestContext
   ): IO[PetServiceAccount] = {
-    val projectName =
-      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
+    val project = projectForSingletonServiceAccount(user)
     for {
       creationOperationId <- IO.fromFuture {
         IO {
           googleProjectDAO
-            .createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
+            .createProject(project.value, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
             .map(opId => Option(opId)) recover {
             case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
           }
@@ -543,10 +551,50 @@ class GoogleExtensions(
         case Some(opId) => IO.fromFuture(IO(pollShellProjectCreation(opId))) // poll until it's created
         case None => IO.unit
       }
-      sa <- createUserPetServiceAccount(user, GoogleProject(projectName), samRequestContext)
+      sa <- createUserPetServiceAccount(user, project, samRequestContext)
       _ <- destinationProject.map(p => syncServiceAgents(user, sa, p, samRequestContext)).getOrElse(IO.unit)
     } yield sa
   }
+
+  private def removeProjectServiceAgentsFromPet(
+      userId: WorkbenchUserId,
+      petServiceAccount: PetServiceAccount,
+      destinationProject: GoogleProject,
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    for {
+      petServiceAgents <- directoryDAO.getPetServiceAgents(userId, petServiceAccount.id.project, destinationProject, samRequestContext)
+      existingServiceAgents = petServiceAgents.map(_.serviceAgents.map(_.name)).getOrElse(Set.empty)
+      _ <- assertProjectInTerraOrg(destinationProject)
+      _ <- assertProjectIsActive(destinationProject)
+      destinationProjectNumber <- petServiceAgents
+        .map(psa => IO.pure(Option(psa.destinationProjectNumber)))
+        .getOrElse(IO.fromFuture(IO(googleProjectDAO.getProjectNumber(destinationProject.value))))
+        .map(
+          _.getOrElse(
+            throw new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.BadRequest, s"Could not find project number for project ${destinationProject.value}")
+            )
+          )
+        )
+      _ <- existingServiceAgents.toList.traverse { serviceAgentName =>
+        //                val serviceAgent = ServiceAgent(serviceAgentName, destinationProjectNumber)
+        for {
+          // removeIamPolicyBindingOnServiceAccount is not implemented in googleIamDAO yet
+          // TODO do it
+          //                _ <- googleIamDAO.removeIamPolicyBindingOnServiceAccount(petServiceAccount.id.project, petServiceAccount.serviceAccount.email, serviceAgent.email, Set("roles/iam.serviceAccountTokenCreator"))
+          _ <- directoryDAO.removePetServiceAgent(
+            userId,
+            petServiceAccount.id.project,
+            destinationProject,
+            destinationProjectNumber,
+            serviceAgentName,
+            samRequestContext
+          )
+        } yield ()
+      }
+
+    } yield ()
 
   private def syncServiceAgents(
       user: SamUser,
@@ -558,6 +606,8 @@ class GoogleExtensions(
       petServiceAgents <- directoryDAO.getPetServiceAgents(user.id, petServiceAccount.id.project, destinationProject, samRequestContext)
       existingServiceAgents = petServiceAgents.map(_.serviceAgents.map(_.name)).getOrElse(Set.empty)
       serviceAgentsToAdd = googleServicesConfig.serviceAgents -- existingServiceAgents
+      _ <- assertProjectInTerraOrg(destinationProject)
+      _ <- assertProjectIsActive(destinationProject)
       destinationProjectNumber <- petServiceAgents
         .map(psa => IO.pure(Option(psa.destinationProjectNumber)))
         .getOrElse(IO.fromFuture(IO(googleProjectDAO.getProjectNumber(destinationProject.value))))
@@ -568,14 +618,6 @@ class GoogleExtensions(
             )
           )
         )
-      ancestry <- IO.fromFuture(IO(googleProjectDAO.getAncestry(destinationProject.value)))
-      organization = ancestry.find(_.getResourceId.getType.equals("organization")).map(_.getResourceId)
-      _ <- IO.raiseWhen(organization.isEmpty)(
-        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project $destinationProject is not in an organization"))
-      )
-      _ <- IO.raiseUnless(organization.exists(_.getId.equals(googleServicesConfig.terraGoogleOrgNumber)))(
-        new WorkbenchException(s"Project $destinationProject is not in organization ${googleServicesConfig.terraGoogleOrgNumber}")
-      )
       _ <- serviceAgentsToAdd.toList.traverse { serviceAgentName =>
         val serviceAgent = ServiceAgent(serviceAgentName, destinationProjectNumber)
         for {
@@ -634,7 +676,7 @@ class GoogleExtensions(
       token <- IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     } yield token
 
-  private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
+  private[google] def pollShellProjectCreation(operationId: String): Future[Boolean] = {
     def whenCreating(throwable: Throwable): Boolean =
       throwable match {
         case t: WorkbenchException => throw t
@@ -846,8 +888,7 @@ class GoogleExtensions(
   ): IO[URL] = {
     val urlParamsMap: Map[String, String] = if (requesterPays) Map(userProjectQueryParam -> project.value) else Map.empty
     for {
-      petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
-      petKey <- googleKeyCache.getKey(petServiceAccount)
+      petKey <- getSingletonPetServiceAccountKeyForUser(samUser, Some(project), samRequestContext)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
       url <- getSignedUrl(samUser, bucket, name, duration, urlParamsMap, serviceAccountCredentials)
     } yield url

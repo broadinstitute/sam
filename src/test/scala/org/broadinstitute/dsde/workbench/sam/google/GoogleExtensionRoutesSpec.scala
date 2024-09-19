@@ -464,9 +464,6 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     googleIamDAO
   }
 
-  def singletonServiceAccountForUser(user: SamUser) =
-    s"pet-${user.id.value}@fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}.iam.gserviceaccount.com"
-
   def createMockGoogleIamDaoForSAKeyTests: (GoogleIamDAO, String, SamUser => Unit) = {
     val googleIamDAO = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
     val expectedJson = """{"json":"yes I am"}"""
@@ -492,6 +489,9 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     lenient().when(googleIamDAO.listUserManagedServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail])).thenReturn(Future.successful(Seq.empty))
     lenient()
       .when(googleIamDAO.addServiceAccountUserRoleForUser(any[GoogleProject], any[WorkbenchEmail], any[WorkbenchEmail]))
+      .thenReturn(Future.successful(()))
+    lenient
+      .when(googleIamDAO.addIamPolicyBindingOnServiceAccount(any[GoogleProject], any[WorkbenchEmail], any[WorkbenchEmail], any[Set[String]]))
       .thenReturn(Future.successful(()))
     (googleIamDAO, expectedJson, mockWithUser)
   }
