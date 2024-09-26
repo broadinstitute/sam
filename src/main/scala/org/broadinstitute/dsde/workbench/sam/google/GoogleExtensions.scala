@@ -603,66 +603,72 @@ class GoogleExtensions(
       destinationProject: GoogleProject,
       samRequestContext: SamRequestContext
   ): IO[Unit] =
-    for {
-      petServiceAgents <- directoryDAO.getPetServiceAgents(user.id, petServiceAccount.id.project, destinationProject, samRequestContext)
-      existingServiceAgents = petServiceAgents.map(_.serviceAgents.map(_.name)).getOrElse(Set.empty)
-      serviceAgentsToAdd = googleServicesConfig.serviceAgents -- existingServiceAgents
-      _ = logger.info(s"Adding $serviceAgentsToAdd to $petServiceAccount")
-      _ <- assertProjectInTerraOrg(destinationProject)
-      _ <- assertProjectIsActive(destinationProject)
-      destinationProjectNumber <- petServiceAgents
-        .map(psa => IO.pure(Option(psa.destinationProjectNumber)))
-        .getOrElse(IO.fromFuture(IO(googleProjectDAO.getProjectNumber(destinationProject.value))))
-        .map(
-          _.getOrElse(
-            throw new WorkbenchExceptionWithErrorReport(
-              ErrorReport(StatusCodes.BadRequest, s"Could not find project number for project ${destinationProject.value}")
-            )
-          )
-        )
-      _ <- serviceAgentsToAdd.toList.traverse { serviceAgentName =>
-        val serviceAgent = ServiceAgent(serviceAgentName, destinationProjectNumber)
-        for {
-          _ <- IO.fromFuture(
-            IO(
-              googleIamDAO.addIamPolicyBindingOnServiceAccount(
-                petServiceAccount.id.project,
-                petServiceAccount.serviceAccount.email,
-                serviceAgent.email,
-                Set("roles/iam.serviceAccountTokenCreator")
+    if (destinationProject.equals(petServiceAccount.id.project)) {
+      logger.info("Not adding service agents from singleton pet SA project to singleton pet SA")
+      IO.unit
+    } else {
+      for {
+        petServiceAgents <- directoryDAO.getPetServiceAgents(user.id, petServiceAccount.id.project, destinationProject, samRequestContext)
+        _ = logger.info(s"$petServiceAgents")
+        existingServiceAgents = petServiceAgents.map(_.serviceAgents.map(_.name)).getOrElse(Set.empty)
+        serviceAgentsToAdd = googleServicesConfig.serviceAgents -- existingServiceAgents
+        _ = logger.info(s"Adding $serviceAgentsToAdd to $petServiceAccount")
+        _ <- assertProjectInTerraOrg(destinationProject)
+        _ <- assertProjectIsActive(destinationProject)
+        destinationProjectNumber <- petServiceAgents
+          .map(psa => IO.pure(Option(psa.destinationProjectNumber)))
+          .getOrElse(IO.fromFuture(IO(googleProjectDAO.getProjectNumber(destinationProject.value))))
+          .map(
+            _.getOrElse(
+              throw new WorkbenchExceptionWithErrorReport(
+                ErrorReport(StatusCodes.BadRequest, s"Could not find project number for project ${destinationProject.value}")
               )
             )
           )
-          _ <- directoryDAO.addPetServiceAgent(
-            user.id,
-            petServiceAccount.id.project,
-            destinationProject,
-            destinationProjectNumber,
-            serviceAgentName,
-            samRequestContext
-          )
-        } yield ()
-      }
-      serviceAgentsToRemove = existingServiceAgents -- googleServicesConfig.serviceAgents
-      _ = logger.info(s"Removing $serviceAgentsToRemove from $petServiceAccount")
-      _ <- serviceAgentsToRemove.toList.traverse { serviceAgentName =>
-//                val serviceAgent = ServiceAgent(serviceAgentName, destinationProjectNumber)
-        for {
-          // removeIamPolicyBindingOnServiceAccount is not implemented in googleIamDAO yet
-          // TODO do it
-//                _ <- googleIamDAO.removeIamPolicyBindingOnServiceAccount(petServiceAccount.id.project, petServiceAccount.serviceAccount.email, serviceAgent.email, Set("roles/iam.serviceAccountTokenCreator"))
-          _ <- directoryDAO.removePetServiceAgent(
-            user.id,
-            petServiceAccount.id.project,
-            destinationProject,
-            destinationProjectNumber,
-            serviceAgentName,
-            samRequestContext
-          )
-        } yield ()
-      }
+        _ <- serviceAgentsToAdd.toList.traverse { serviceAgentName =>
+          val serviceAgent = ServiceAgent(serviceAgentName, destinationProjectNumber)
+          for {
+            _ <- IO.fromFuture(
+              IO(
+                googleIamDAO.addIamPolicyBindingOnServiceAccount(
+                  petServiceAccount.id.project,
+                  petServiceAccount.serviceAccount.email,
+                  serviceAgent.email,
+                  Set("roles/iam.serviceAccountTokenCreator")
+                )
+              )
+            )
+            _ <- directoryDAO.addPetServiceAgent(
+              user.id,
+              petServiceAccount.id.project,
+              destinationProject,
+              destinationProjectNumber,
+              serviceAgentName,
+              samRequestContext
+            )
+          } yield ()
+        }
+        serviceAgentsToRemove = existingServiceAgents -- googleServicesConfig.serviceAgents
+        _ = logger.info(s"Removing $serviceAgentsToRemove from $petServiceAccount")
+        _ <- serviceAgentsToRemove.toList.traverse { serviceAgentName =>
+          //                val serviceAgent = ServiceAgent(serviceAgentName, destinationProjectNumber)
+          for {
+            // removeIamPolicyBindingOnServiceAccount is not implemented in googleIamDAO yet
+            // TODO do it
+            //                _ <- googleIamDAO.removeIamPolicyBindingOnServiceAccount(petServiceAccount.id.project, petServiceAccount.serviceAccount.email, serviceAgent.email, Set("roles/iam.serviceAccountTokenCreator"))
+            _ <- directoryDAO.removePetServiceAgent(
+              user.id,
+              petServiceAccount.id.project,
+              destinationProject,
+              destinationProjectNumber,
+              serviceAgentName,
+              samRequestContext
+            )
+          } yield ()
+        }
 
-    } yield ()
+      } yield ()
+    }
 
   def getSingletonPetServiceAccountToken(userEmail: WorkbenchEmail, scopes: Set[String], samRequestContext: SamRequestContext): IO[Option[String]] =
     for {
