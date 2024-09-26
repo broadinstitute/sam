@@ -168,11 +168,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypes = Map(resourceType.name -> resourceType)
-    val (googleIamDAO, expectedJson: String, mockWithUser) = createMockGoogleIamDaoForSAKeyTests
 
-    val (user, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO))
-
-    mockWithUser(user)
+    val (user, _, routes) = createTestUser(resourceTypes)
 
     // create a pet service account
     Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {
@@ -193,11 +190,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypes = Map(resourceType.name -> resourceType)
-    val (googleIamDAO, expectedJson: String, mockWithUser) = createMockGoogleIamDaoForSAKeyTests
 
-    val (user, _, routes) = createTestUser(resourceTypes, Some(googleIamDAO))
-
-    mockWithUser(user)
+    val (user, _, routes) = createTestUser(resourceTypes)
 
     // create a pet service account
     Get("/api/google/v1/user/petServiceAccount/myproject") ~> routes.route ~> check {

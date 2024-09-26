@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.Notifications.NotificationFormat
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.GoogleProject
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccount}
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{
   databaseEnabled,
   databaseEnabledClue,
@@ -27,7 +27,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{
   truncateAll
 }
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
-import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
+import org.broadinstitute.dsde.workbench.sam.mock.{MockSamGoogleProjectDAO, RealKeyMockGoogleIamDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
@@ -935,6 +935,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       // don't do any of the real boot stuff, it is all googley
       override def onBoot()(implicit system: ActorSystem): IO[Unit] = IO.unit
     }
+    val mockGoogleProjectDAO = new MockSamGoogleProjectDAO
 
     val ge = new GoogleExtensions(
       TestSupport.distributedLock,
@@ -946,7 +947,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockGoogleDisableUsersPubSubDAO,
       mockGoogleIamDAO,
       mockGoogleStorageDAO,
-      null,
+      mockGoogleProjectDAO,
       googleKeyCache,
       notificationDAO,
       FakeGoogleKmsInterpreter,
@@ -1052,7 +1053,15 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val proxyEmail = WorkbenchEmail(s"PROXY_${user.id}@${googleServicesConfig.appsDomain}")
 
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    when(mockDirectoryDAO.loadPetServiceAccount(any[PetServiceAccountId], any[SamRequestContext])).thenReturn(IO.none)
+    when(mockDirectoryDAO.createPetServiceAccount(any[PetServiceAccount], any[SamRequestContext])).thenAnswer(
+      (pet: PetServiceAccount, ctx: SamRequestContext) => IO.pure(pet)
+    )
+    when(mockDirectoryDAO.enableIdentity(any[WorkbenchSubject], any[SamRequestContext])).thenReturn(IO.unit)
     val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
+    when(mockGoogleDirectoryDAO.addServiceAccountToGroup(any[WorkbenchEmail], any[ServiceAccount])).thenReturn(Future.successful(()))
+    val mockGoogleProjectDAO = new MockSamGoogleProjectDAO
+    val mockGoogleIamDAO = new MockGoogleIamDAO
     val googleExtensions = new GoogleExtensions(
       TestSupport.distributedLock,
       mockDirectoryDAO,
@@ -1061,9 +1070,9 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
+      mockGoogleIamDAO,
       null,
-      null,
-      null,
+      mockGoogleProjectDAO,
       null,
       null,
       null,

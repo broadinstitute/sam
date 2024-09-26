@@ -289,6 +289,7 @@ class GoogleExtensions(
       }
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)))
+      _ <- getSingletonPetServiceAccountForUser(user, None, samRequestContext)
 
     } yield ()
   }

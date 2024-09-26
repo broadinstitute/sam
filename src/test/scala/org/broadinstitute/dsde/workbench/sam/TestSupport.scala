@@ -24,6 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
+import org.broadinstitute.dsde.workbench.sam.mock.MockSamGoogleProjectDAO
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -100,7 +101,7 @@ object TestSupport extends TestSupport {
     val googleDisableUsersPubSubDAO = new MockGooglePubSubDAO()
     val googleKeyCachePubSubDAO = new MockGooglePubSubDAO()
     val googleStorageDAO = new MockGoogleStorageDAO()
-    val googleProjectDAO = googProjectDAO.getOrElse(new MockGoogleProjectDAO())
+    val googleProjectDAO = googProjectDAO.getOrElse(new MockSamGoogleProjectDAO())
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
     val cloudKeyCache = new GoogleKeyCache(
       distributedLock,
