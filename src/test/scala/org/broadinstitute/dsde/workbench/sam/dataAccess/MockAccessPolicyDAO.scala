@@ -359,7 +359,6 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
-      actions: Set[ResourceAction],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]] = IO {
@@ -368,38 +367,32 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
         this.policies.collect {
           case (fqPolicyId @ FullyQualifiedPolicyId(FullyQualifiedResourceId(`resourceTypeName`, _), _), accessPolicy: AccessPolicy)
               if accessPolicy.members.contains(samUserId) || accessPolicy.public =>
-            val rolesAndActions = RolesAndActions.fromPolicy(accessPolicy)
-            rolesAndActions.roles.flatMap { role =>
-              if (actions.isEmpty) {
-                Set(
-                  FilterResourcesResult(
-                    fqPolicyId.resource.resourceId,
-                    fqPolicyId.resource.resourceTypeName,
-                    Some(fqPolicyId.accessPolicyName),
-                    Some(role),
-                    None,
-                    accessPolicy.public,
-                    None,
-                    false,
-                    false
-                  )
-                )
-              } else {
-                rolesAndActions.actions.map { action =>
-                  FilterResourcesResult(
-                    fqPolicyId.resource.resourceId,
-                    fqPolicyId.resource.resourceTypeName,
-                    Some(fqPolicyId.accessPolicyName),
-                    Some(role),
-                    Some(action),
-                    accessPolicy.public,
-                    None,
-                    false,
-                    false
-                  )
-                }
-              }
+            val roleResults = accessPolicy.roles.map { role =>
+              FilterResourcesResult(
+                fqPolicyId.resource.resourceId,
+                fqPolicyId.resource.resourceTypeName,
+                fqPolicyId.accessPolicyName,
+                Left(role),
+                accessPolicy.public,
+                None,
+                false,
+                false
+              )
             }
+
+            val actionResults = accessPolicy.actions.map { action =>
+              FilterResourcesResult(
+                fqPolicyId.resource.resourceId,
+                fqPolicyId.resource.resourceTypeName,
+                fqPolicyId.accessPolicyName,
+                Right(action),
+                accessPolicy.public,
+                None,
+                false,
+                false
+              )
+            }
+            roleResults ++ actionResults
         }
       }
       .flatten

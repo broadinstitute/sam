@@ -116,7 +116,10 @@ class ResourceService(
                 samRequestContext
               )
             }
-        } yield upsertedPolicy
+        } yield {
+          logger.info(s"Upserted policy $fullyQualifiedPolicyId")
+          upsertedPolicy
+        }
         upsertIO.attempt.map(fullyQualifiedPolicyId -> _)
       }
       .map(_.toMap)
@@ -1038,19 +1041,26 @@ class ResourceService(
       authDomainGroups: Map[WorkbenchGroupName, Boolean] = Map.empty
   )
 
-  private def groupFlat(dbResult: Seq[FilterResourcesResult]): FilteredResourcesFlat = {
+  private def groupFlat(dbResult: Seq[FilterResourcesResult], filterActions: Set[ResourceAction]): FilteredResourcesFlat = {
     val groupedFilteredResource = dbResult
       .groupBy(_.resourceId)
       .map { tuple =>
         val (k, v) = tuple
-        val grouped = v.foldLeft(GroupedDbRows())((acc: GroupedDbRows, r: FilterResourcesResult) =>
+        val grouped = v.foldLeft(GroupedDbRows()) { (acc: GroupedDbRows, r: FilterResourcesResult) =>
+          val role = r.roleOrAction.left.toOption
+          val roleActions = role.flatMap(roleName => getRoleActions(r.resourceTypeName, roleName, filterActions)).getOrElse(Set.empty)
+          // if filterActions is not emtpy, we only want to include roles that still have actions
+          val filteredRole = if (filterActions.isEmpty) role else role.filter(_ => roleActions.nonEmpty)
+          val policyActions = r.roleOrAction.toOption.toSet
+          // if filterActions is not emtpy, we only want to include actions that are in the filterActions set
+          val filteredPolicyActions = if (filterActions.isEmpty) policyActions else policyActions.intersect(filterActions)
           acc.copy(
-            policies = acc.policies ++ r.policy.map(p => FilteredResourceFlatPolicy(p, r.isPublic, r.inherited)),
-            roles = acc.roles ++ r.role,
-            actions = acc.actions ++ r.action,
+            policies = acc.policies + FilteredResourceFlatPolicy(r.policy, r.isPublic, r.inherited),
+            roles = acc.roles ++ filteredRole,
+            actions = acc.actions ++ filteredPolicyActions ++ roleActions,
             authDomainGroups = acc.authDomainGroups ++ r.authDomain.map(_ -> r.inAuthDomain)
           )
-        )
+        }
 
         FilteredResourceFlat(
           resourceId = k,
@@ -1066,25 +1076,36 @@ class ResourceService(
     FilteredResourcesFlat(resources = groupedFilteredResource)
   }
 
-  private def groupHierarchical(dbResult: Seq[FilterResourcesResult]): FilteredResourcesHierarchical = {
+  private def getRoleActions(resourceTypeName: ResourceTypeName, roleName: ResourceRoleName, filterActions: Set[ResourceAction]) =
+    // if filterActions is not emtpy, we only want to include actions that are in the filterActions set
+    resourceTypes(resourceTypeName).roles
+      .find(_.roleName == roleName)
+      .map(actions => if (filterActions.isEmpty) actions.actions else actions.actions.intersect(filterActions))
+
+  private def groupHierarchical(dbResult: Seq[FilterResourcesResult], filterActions: Set[ResourceAction]): FilteredResourcesHierarchical = {
     val groupedFilteredResources = dbResult
       .groupBy(_.resourceId)
       .map { tuple =>
         val (resourceId, resourceRows) = tuple
         val policies = resourceRows
-          .groupBy(_.policy.get)
+          .groupBy(_.policy)
           .map { policyTuple =>
             val (policyName, policyRows) = policyTuple
-            val actionsWithoutRoles = policyRows.filter(_.role.isEmpty).flatMap(_.action).toSet
-            val actionsWithRoles = policyRows.filter(_.role.nonEmpty)
-            val roles = actionsWithRoles
-              .groupBy(_.role.get)
-              .map { roleTuple =>
-                val (roleName, roleRows) = roleTuple
-                FilteredResourceHierarchicalRole(roleName, roleRows.flatMap(_.action).toSet)
+            // if filterActions is not emtpy, we only want to include actions that are in the filterActions set
+            val policyActions = policyRows.flatMap(_.roleOrAction.toOption).toSet
+            val filteredPolicyActions = if (filterActions.isEmpty) policyActions else policyActions.intersect(filterActions)
+            val roles = policyRows
+              .flatMap(_.roleOrAction.left.toOption)
+              .map { roleName =>
+                FilteredResourceHierarchicalRole(
+                  roleName,
+                  getRoleActions(policyRows.head.resourceTypeName, roleName, filterActions).getOrElse(Set.empty)
+                )
               }
               .toSet
-            FilteredResourceHierarchicalPolicy(policyName, roles, actionsWithoutRoles, policyRows.head.isPublic, policyRows.head.inherited)
+            // if filterActions is not emtpy, we only want to include roles that still have actions
+            val filteredRoles = if (filterActions.isEmpty) roles else roles.filter(_.actions.nonEmpty)
+            FilteredResourceHierarchicalPolicy(policyName, filteredRoles, filteredPolicyActions, policyRows.head.isPublic, policyRows.head.inherited)
           }
           .toSet
         val authDomainGroupMemberships = resourceRows.flatMap(r => r.authDomain.map(_ -> r.inAuthDomain)).toMap
@@ -1135,7 +1156,20 @@ class ResourceService(
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesFlat] =
-    accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupFlat)
+    // note that filtering by actions is implemented by application logic, not by the database query
+    // adding actions to the query would make return many more rows than necessary because roles can have many actions
+    // and those actions are static and already in memory
+    accessPolicyDAO
+      .filterResources(samUserId, resourceTypeNames, policies, roles, includePublic, samRequestContext)
+      .map(groupFlat(_, actions))
+      .map(results =>
+        // If we are filtering by actions, remove any resources that don't have the actions
+        if (actions.nonEmpty) {
+          results.copy(resources = results.resources.map(resource => resource.copy(actions = actions.intersect(resource.actions))).filter(_.actions.nonEmpty))
+        } else {
+          results
+        }
+      )
 
   def listResourcesHierarchical(
       samUserId: WorkbenchUserId,
@@ -1146,7 +1180,18 @@ class ResourceService(
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesHierarchical] =
+    // note that filtering by actions is implemented by application logic, not by the database query
+    // adding actions to the query would make return many more rows than necessary because roles can have many actions
+    // and those actions are static and already in memory
     accessPolicyDAO
-      .filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
-      .map(groupHierarchical)
+      .filterResources(samUserId, resourceTypeNames, policies, roles, includePublic, samRequestContext)
+      .map(groupHierarchical(_, actions))
+      .map(results =>
+        // If we are filtering by actions, remove any resources that don't have the actions either directly or through a role
+        if (actions.nonEmpty) {
+          results.copy(resources = results.resources.filter(resource => resource.policies.exists(policy => policy.actions.nonEmpty || policy.roles.nonEmpty)))
+        } else {
+          results
+        }
+      )
 }
