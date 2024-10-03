@@ -445,16 +445,17 @@ class ResourceService(
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
     } yield ()
 
-  private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
-      if (problematicGroups.nonEmpty)
-        IO.raiseError(
-          new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
-            ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")
-          )
-        )
-      else IO.unit
-    }
+  private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Int] =
+    accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext)
+//      .flatMap { problematicGroups =>
+//      if (problematicGroups.nonEmpty)
+//        IO.raiseError(
+//          new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
+//            ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")
+//          )
+//        )
+//      else IO.unit
+//    }
 
   private def deleteActionManagedIdentitiesForResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     azureService
