@@ -986,6 +986,7 @@ class PostgresAccessPolicyDAO(
       where ${gm.groupId} = ${p.groupId}
       and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
     """
+      logger.info(s"deleteQuery: ${deleteQuery}")
       deleteQuery.update().apply()
     }
   }

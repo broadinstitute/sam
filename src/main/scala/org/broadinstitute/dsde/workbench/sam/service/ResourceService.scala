@@ -429,7 +429,9 @@ class ResourceService(
   //      preventing a new Resource with the same ID from being created
   // Resources with children cannot be deleted and will throw a 400.
   @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
-  def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+  def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    logger.info(s"Deleting resource ${resource.resourceId} of type ${resource.resourceTypeName}")
+
     for {
       _ <- checkNoChildren(resource, samRequestContext)
       _ <- checkNoPoliciesInUse(resource, samRequestContext)
@@ -444,6 +446,7 @@ class ResourceService(
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
     } yield ()
+  }
 
   private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Int] =
     accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext)
