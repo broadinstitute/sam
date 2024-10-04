@@ -975,21 +975,24 @@ class PostgresAccessPolicyDAO(
     }
   }
 
-  override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Int] = {
-    val gm = GroupMemberTable.syntax("gm")
-    val p = PolicyTable.syntax("p")
+  override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Int] =
+    if (resourceId.resourceTypeName == SamResourceTypes.workspaceName) {
+      val gm = GroupMemberTable.syntax("gm")
+      val p = PolicyTable.syntax("p")
 
-    serializableWriteTransaction("checkPolicyGroupsInUse", samRequestContext) { implicit session =>
-      val deleteQuery = samsql"""
+      serializableWriteTransaction("checkPolicyGroupsInUse", samRequestContext) { implicit session =>
+        val deleteQuery = samsql"""
       delete from ${GroupMemberTable as gm}
       using ${PolicyTable as p}
       where ${gm.groupId} = ${p.groupId}
       and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
     """
-      logger.info(s"deleteQuery: ${deleteQuery}")
-      deleteQuery.update().apply()
+        logger.info(s"deleteQuery: ${deleteQuery}")
+        deleteQuery.update().apply()
+      }
+    } else {
+      IO.pure(0)
     }
-  }
 
 //  override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] = {
 //    val g = GroupTable.syntax("g")
