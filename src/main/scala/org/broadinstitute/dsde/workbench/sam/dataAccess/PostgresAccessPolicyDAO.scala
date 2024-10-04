@@ -986,7 +986,7 @@ class PostgresAccessPolicyDAO(
         val deleteQuery = samsql"""
       delete from ${GroupMemberTable as gm}
       using ${PolicyTable as p}
-      where ${gm.groupId} = ${p.groupId}
+      where ${gm.memberGroupId} = ${p.groupId}
       and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
     """
         logger.info(s"deleteQuery: ${deleteQuery.statement}")

@@ -497,6 +497,7 @@ class ResourceService(
     for {
       policiesToDelete <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
       _ <- policiesToDelete.traverse { policy =>
+        logger.info(s"deleting policy ${policy}")
         cloudExtensions.onGroupDelete(policy.email)
       }
     } yield policiesToDelete
