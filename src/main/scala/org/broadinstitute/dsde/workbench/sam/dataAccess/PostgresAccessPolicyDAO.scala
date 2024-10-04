@@ -981,12 +981,24 @@ class PostgresAccessPolicyDAO(
       logger.info("deleting from group_member tables")
       val gm = GroupMemberTable.syntax("gm")
       val p = PolicyTable.syntax("p")
+      val gmf = GroupMemberFlatTable.syntax("gmf")
 
       serializableWriteTransaction("checkPolicyGroupsInUse", samRequestContext) { implicit session =>
         val deleteQuery = samsql"""
       delete from ${GroupMemberTable as gm}
       using ${PolicyTable as p}
       where ${gm.memberGroupId} = ${p.groupId}
+      and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+    """
+        logger.info(s"deleteQuery: ${deleteQuery.statement}")
+        deleteQuery.update().apply()
+      }
+
+      serializableWriteTransaction("checkPolicyGroupsInUse", samRequestContext) { implicit session =>
+        val deleteQuery = samsql"""
+      delete from ${GroupMemberFlatTable as gmf}
+      using ${PolicyTable as p}
+      where ${gmf.memberGroupId} = ${p.groupId}
       and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
     """
         logger.info(s"deleteQuery: ${deleteQuery.statement}")
