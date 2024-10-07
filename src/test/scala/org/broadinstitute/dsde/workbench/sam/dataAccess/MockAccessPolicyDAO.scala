@@ -126,6 +126,9 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
   override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] =
     IO.pure(List.empty)
 
+  override def removePolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+    IO.pure()
+
   override def listAccessPolicies(
       resourceTypeName: ResourceTypeName,
       user: WorkbenchUserId,

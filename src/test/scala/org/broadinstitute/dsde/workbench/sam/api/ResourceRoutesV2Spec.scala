@@ -907,7 +907,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     )
 
     // Delete the resource
-    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}?cascadePolicies=false") ~> samRoutes.route ~> check {
       withClue(responseAs[String]) {
         status shouldEqual StatusCodes.NoContent
       }
@@ -928,7 +928,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     )
 
     // Throw 400 exception when delete is called
-    when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext]))
+    when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), mockitoEq(Some(false)), any[SamRequestContext]))
       .thenThrow(
         new WorkbenchExceptionWithErrorReport(
           ErrorReport(StatusCodes.BadRequest, "Cannot delete a resource with children. Delete the children first then try again.")
@@ -2002,7 +2002,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
     }
 
     if (actionsOnChild.contains(SamResourceActions.delete)) {
-      lenient().when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), any[SamRequestContext])).thenReturn(IO.unit)
+      lenient().when(samRoutes.resourceService.deleteResource(mockitoEq(childResource), mockitoEq(Some(false)), any[SamRequestContext])).thenReturn(IO.unit)
     }
   }
 
