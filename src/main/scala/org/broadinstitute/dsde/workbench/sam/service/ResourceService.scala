@@ -429,12 +429,12 @@ class ResourceService(
   //      preventing a new Resource with the same ID from being created
   // Resources with children cannot be deleted and will throw a 400.
   @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
-  def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+  def deleteResource(resource: FullyQualifiedResourceId, cascadePolicies: Option[Boolean], samRequestContext: SamRequestContext): IO[Unit] = {
     logger.info(s"Deleting resource ${resource.resourceId} of type ${resource.resourceTypeName}")
 
     for {
       _ <- checkNoChildren(resource, samRequestContext)
-      _ <- checkNoPoliciesInUse(resource, samRequestContext)
+      _ <- checkNoPoliciesInUse(resource, cascadePolicies, samRequestContext)
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
@@ -448,17 +448,22 @@ class ResourceService(
     } yield ()
   }
 
-  private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Int] =
-    accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext)
-//      .flatMap { problematicGroups =>
-//      if (problematicGroups.nonEmpty)
-//        IO.raiseError(
-//          new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
-//            ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")
-//          )
-//        )
-//      else IO.unit
-//    }
+  private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, cascadePolicies: Option[Boolean], samRequestContext: SamRequestContext): IO[Unit] =
+    cascadePolicies match {
+      case Some(true) =>
+        accessPolicyDAO.removePolicyGroupsInUse(resource, samRequestContext)
+        IO.unit
+      case _ =>
+        accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
+          if (problematicGroups.nonEmpty)
+            IO.raiseError(
+              new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
+                ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")
+              )
+            )
+          else IO.unit
+        }
+    }
 
   private def deleteActionManagedIdentitiesForResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     azureService

@@ -324,11 +324,13 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
 
   def deleteResource(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     deleteWithTelemetry(samRequestContext, resourceParams(resource): _*) {
-      // Note that this does not require remove_child on the parent if it exists. remove_child is meant to prevent
-      // users from removing a child only to add it to a different parent and thus circumvent any permissions
-      // a parent may be enforcing. Deleting a child does not allow this situation.
-      requireAction(resource, SamResourceActions.delete, samUser.id, samRequestContext) {
-        complete(resourceService.deleteResource(resource, samRequestContext).map(_ => StatusCodes.NoContent))
+      parameter("cascadePolicies".as[Boolean].?) { cascadePolicies =>
+        // Note that this does not require remove_child on the parent if it exists. remove_child is meant to prevent
+        // users from removing a child only to add it to a different parent and thus circumvent any permissions
+        // a parent may be enforcing. Deleting a child does not allow this situation.
+        requireAction(resource, SamResourceActions.delete, samUser.id, samRequestContext) {
+          complete(resourceService.deleteResource(resource, cascadePolicies, samRequestContext).map(_ => StatusCodes.NoContent))
+        }
       }
     }
 

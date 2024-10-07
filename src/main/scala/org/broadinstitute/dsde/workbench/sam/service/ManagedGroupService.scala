@@ -141,7 +141,7 @@ class ManagedGroupService(
       managedGroupResourceId = FullyQualifiedResourceId(managedGroupType.name, groupId)
       _ <- resourceService.cloudDeletePolicies(managedGroupResourceId, samRequestContext)
       _ <- directoryDAO.deleteGroup(WorkbenchGroupName(groupId.value), samRequestContext)
-      _ <- resourceService.deleteResource(managedGroupResourceId, samRequestContext)
+      _ <- resourceService.deleteResource(managedGroupResourceId, Some(false), samRequestContext)
     } yield ()
 
   def listGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Iterable[ManagedGroupMembershipEntry]] =
