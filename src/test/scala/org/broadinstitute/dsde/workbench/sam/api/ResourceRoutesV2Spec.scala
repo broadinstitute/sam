@@ -936,7 +936,7 @@ class ResourceRoutesV2Spec extends RetryableAnyFlatSpec with Matchers with TestS
       )
 
     // Delete the resource
-    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}") ~> samRoutes.route ~> check {
+    Delete(s"/api/resources/v2/${defaultResourceType.name}/${childResource.resourceId.value}?cascadePolicies=false") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.BadRequest
     }
   }
