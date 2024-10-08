@@ -1893,46 +1893,14 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         // Arrange
         val expectedUser = defaultUser.copy(registeredAt = Some(Instant.now()))
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
-        val userAttributes = SamUserAttributes(
-          createdUser.id,
-          marketingConsent = true,
-          firstName = Some("firstName"),
-          lastName = Some("lastName"),
-          organization = Some("organization"),
-          contactEmail = Some("contactEmail"),
-          title = Some("title"),
-          department = Some("department"),
-          interestInTerra = Some(List("interestInTerra")),
-          programLocationCity = Some("programLocationCity"),
-          programLocationState = Some("programLocationState"),
-          programLocationCountry = Some("programLocationCountry"),
-          researchArea = Some(List("researchArea")),
-          additionalAttributes = Some("""{"additionalAttributes": "foo"}"""),
-          None,
-          None
-        )
+        val userAttributes = SamUserAttributes(createdUser.id, marketingConsent = true)
         dao.setUserAttributes(userAttributes, samRequestContext).unsafeRunSync()
 
         // Act
         val retrievedAttributes = dao.getUserAttributes(createdUser.id, samRequestContext).unsafeRunSync()
 
         // Assert
-        retrievedAttributes.get.marketingConsent should be(true)
-        retrievedAttributes.get.firstName should be(Some("firstName"))
-        retrievedAttributes.get.lastName should be(Some("lastName"))
-        retrievedAttributes.get.organization should be(Some("organization"))
-        retrievedAttributes.get.contactEmail should be(Some("contactEmail"))
-        retrievedAttributes.get.title should be(Some("title"))
-        retrievedAttributes.get.department should be(Some("department"))
-        retrievedAttributes.get.interestInTerra should be(Some(List("interestInTerra")))
-        retrievedAttributes.get.programLocationCity should be(Some("programLocationCity"))
-        retrievedAttributes.get.programLocationState should be(Some("programLocationState"))
-        retrievedAttributes.get.programLocationCountry should be(Some("programLocationCountry"))
-        retrievedAttributes.get.researchArea should be(Some(List("researchArea")))
-        retrievedAttributes.get.additionalAttributes should be(Some("""{"additionalAttributes": "foo"}"""))
-        retrievedAttributes.get.createdAt.get should beAround(Instant.now())
-        retrievedAttributes.get.updatedAt.get should beAround(Instant.now())
-
+        retrievedAttributes should be(Some(userAttributes))
       }
 
       "returns None if no user attributes exist" in {
@@ -1965,47 +1933,16 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         // Arrange
         val expectedUser = defaultUser.copy(registeredAt = Some(Instant.now()))
         val createdUser = dao.createUser(expectedUser, samRequestContext).unsafeRunSync()
-        val userAttributes = SamUserAttributes(
-          createdUser.id,
-          marketingConsent = true,
-          firstName = Some("firstName"),
-          lastName = Some("lastName"),
-          organization = Some("organization"),
-          contactEmail = Some("contactEmail"),
-          title = Some("title"),
-          department = Some("department"),
-          interestInTerra = Some(List("interestInTerra")),
-          programLocationCity = Some("programLocationCity"),
-          programLocationState = Some("programLocationState"),
-          programLocationCountry = Some("programLocationCountry"),
-          researchArea = Some(List("researchArea")),
-          additionalAttributes = Some("""{"additionalAttributes": "foo"}"""),
-          None,
-          None
-        )
+        val userAttributes = SamUserAttributes(createdUser.id, marketingConsent = true)
         dao.setUserAttributes(userAttributes, samRequestContext).unsafeRunSync()
 
         // Act
-        val upsertedAttributes = userAttributes.copy(marketingConsent = false, firstName = Some("newFirstName"))
+        val upsertedAttributes = userAttributes.copy(marketingConsent = false)
         dao.setUserAttributes(upsertedAttributes, samRequestContext).unsafeRunSync()
         val retrievedAttributes = dao.getUserAttributes(expectedUser.id, samRequestContext).unsafeRunSync()
 
         // Assert
-        retrievedAttributes.get.marketingConsent should be(false)
-        retrievedAttributes.get.firstName should be(Some("newFirstName"))
-        retrievedAttributes.get.lastName should be(Some("lastName"))
-        retrievedAttributes.get.organization should be(Some("organization"))
-        retrievedAttributes.get.contactEmail should be(Some("contactEmail"))
-        retrievedAttributes.get.title should be(Some("title"))
-        retrievedAttributes.get.department should be(Some("department"))
-        retrievedAttributes.get.interestInTerra should be(Some(List("interestInTerra")))
-        retrievedAttributes.get.programLocationCity should be(Some("programLocationCity"))
-        retrievedAttributes.get.programLocationState should be(Some("programLocationState"))
-        retrievedAttributes.get.programLocationCountry should be(Some("programLocationCountry"))
-        retrievedAttributes.get.researchArea should be(Some(List("researchArea")))
-        retrievedAttributes.get.additionalAttributes should be(Some("""{"additionalAttributes": "foo"}"""))
-        retrievedAttributes.get.createdAt.get should beAround(Instant.now())
-        retrievedAttributes.get.updatedAt.get should beAround(Instant.now())
+        retrievedAttributes should be(Some(upsertedAttributes))
       }
     }
 

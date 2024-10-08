@@ -40,43 +40,10 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
   val thirdUser: SamUser = Generator.genWorkbenchUserGoogle.sample.get
   val adminGroupEmail: WorkbenchEmail = Generator.genFirecloudEmail.sample.get
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
-  val userAttributesRequest = SamUserAttributesRequest(
-    userId = defaultUser.id,
-    marketingConsent = Some(true),
-    firstName = Some("firstName"),
-    lastName = Some("lastName"),
-    organization = Some("organization"),
-    contactEmail = Some("contactEmail"),
-    title = Some("title"),
-    department = Some("department"),
-    interestInTerra = Some(List("interestInTerra")),
-    programLocationCity = Some("programLocationCity"),
-    programLocationState = Some("programLocationState"),
-    programLocationCountry = Some("programLocationCountry"),
-    researchArea = Some(List("researchArea")),
-    additionalAttributes = Some("""{"additionalAttributes": "foo"}""")
-  )
-  val userAttributes = SamUserAttributes(
-    defaultUser.id,
-    marketingConsent = true,
-    firstName = Some("firstName"),
-    lastName = Some("lastName"),
-    organization = Some("organization"),
-    contactEmail = Some("contactEmail"),
-    title = Some("title"),
-    department = Some("department"),
-    interestInTerra = Some(List("interestInTerra")),
-    programLocationCity = Some("programLocationCity"),
-    programLocationState = Some("programLocationState"),
-    programLocationCountry = Some("programLocationCountry"),
-    researchArea = Some(List("researchArea")),
-    additionalAttributes = Some("""{"additionalAttributes": "foo"}"""),
-    createdAt = Some(Instant.now()),
-    updatedAt = Some(Instant.now())
-  )
 
   "POST /api/users/v2/self/register" should "register a user when the required attributes are provided" in {
     // Arrange
+    val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser)
       .withAllowedUser(defaultUser)
@@ -226,6 +193,8 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
   "GET /api/users/v2/self/attributes" should "get the user attributes of the calling user" in {
     // Arrange
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
+
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
       .withAllowedUser(defaultUser) // "allowed" user we will check the status of
@@ -242,6 +211,8 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
   "GET /api/users/v2/self/attributes" should "get the user attributes of the calling disallowed user" in {
     // Arrange
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
+
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withDisabledUser(defaultUser)
       .withDisallowedUser(defaultUser)
@@ -272,58 +243,26 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
 
   "PATCH /api/users/v2/self/attributes" should "update the user attributes of the calling user" in {
     // Arrange
-    val updatedUserAttributesRequest = SamUserAttributesRequest(
-      defaultUser.id,
-      marketingConsent = Some(false),
-      firstName = Some("newFirstName"),
-      lastName = Some("newLastName"),
-      organization = Some("newOrganization"),
-      contactEmail = Some("newContactEmail"),
-      title = Some("newTitle"),
-      department = Some("newDepartment"),
-      interestInTerra = Some(List("NewInterestInTerra")),
-      programLocationCity = Some("NewProgramLocationCity"),
-      programLocationState = Some("NewProgramLocationState"),
-      programLocationCountry = Some("NewProgramLocationCountry"),
-      researchArea = Some(List("NewResearchArea")),
-      additionalAttributes = Some("""{"additionalAttributes": "bar"}""")
-    )
-
-    val updatedUserAttributes = SamUserAttributes(
-      defaultUser.id,
-      marketingConsent = false,
-      firstName = Some("newFirstName"),
-      lastName = Some("newLastName"),
-      organization = Some("newOrganization"),
-      contactEmail = Some("newContactEmail"),
-      title = Some("newTitle"),
-      department = Some("newDepartment"),
-      interestInTerra = Some(List("NewInterestInTerra")),
-      programLocationCity = Some("NewProgramLocationCity"),
-      programLocationState = Some("NewProgramLocationState"),
-      programLocationCountry = Some("NewProgramLocationCountry"),
-      researchArea = Some(List("NewResearchArea")),
-      additionalAttributes = Some("""{"additionalAttributes": "bar"}"""),
-      createdAt = None,
-      updatedAt = Some(Instant.now())
-    )
+    val userAttributesRequest = SamUserAttributesRequest(marketingConsent = Some(false))
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = false)
 
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
       .withAllowedUser(defaultUser) // "allowed" user we will check the status of
-      .withUserAttributes(defaultUser, updatedUserAttributes)
+      .withUserAttributes(defaultUser, userAttributes)
       .callAsNonAdminUser()
       .build
 
     // Act and Assert
-    Patch(s"/api/users/v2/self/attributes", updatedUserAttributesRequest) ~> samRoutes.route ~> check {
+    Patch(s"/api/users/v2/self/attributes", userAttributesRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
-      responseAs[SamUserAttributes] should be(updatedUserAttributes)
+      responseAs[SamUserAttributes] should be(userAttributes)
     }
   }
 
   "GET /api/users/v2/self/combinedState" should "get the user combined state of the calling user" in {
     // Arrange
+    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
     val favoriteResources = Set(FullyQualifiedResourceId(ResourceTypeName("workspaceType"), ResourceId("workspaceName")))
     val enterpriseFeature = FilteredResourceFlat(
       resourceType = ResourceTypeName("enterprise-feature"),
@@ -334,13 +273,11 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       authDomainGroups = Set.empty,
       missingAuthDomainGroups = Set.empty
     )
-    val filteredResourcesFlat = FilteredResourcesFlat(Set(enterpriseFeature))
+    val filteresResourcesFlat = FilteredResourcesFlat(Set(enterpriseFeature))
     val userCombinedStateResponse = SamUserCombinedStateResponse(
       defaultUser,
       SamUserAllowances(enabled = true, termsOfService = true),
-      Option(
-        userAttributes
-      ),
+      Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
       TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
       Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
       favoriteResources
@@ -382,7 +319,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
+      response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
       response.favoriteResources should be(favoriteResources)
     }
   }
@@ -398,30 +335,11 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       authDomainGroups = Set.empty,
       missingAuthDomainGroups = Set.empty
     )
-    val filteredResourcesFlat = FilteredResourcesFlat(Set(enterpriseFeature))
+    val filteresResourcesFlat = FilteredResourcesFlat(Set(enterpriseFeature))
     val userCombinedStateResponse = SamUserCombinedStateResponse(
       defaultUser,
       SamUserAllowances(enabled = true, termsOfService = true),
-      Option(
-        SamUserAttributes(
-          defaultUser.id,
-          marketingConsent = true,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None
-        )
-      ),
+      Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
       TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
       Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
       Set.empty
@@ -462,7 +380,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
       response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
       response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
       response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
+      response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
 
     }
   }
@@ -473,26 +391,7 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
     val userCombinedStateResponse = SamUserCombinedStateResponse(
       defaultUser,
       SamUserAllowances(enabled = false, termsOfService = false),
-      Option(
-        SamUserAttributes(
-          defaultUser.id,
-          marketingConsent = true,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None
-        )
-      ),
+      Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
       TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false),
       Map("enterpriseFeatures" -> filteredResourcesFlat.toJson),
       Set.empty

@@ -1355,57 +1355,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val userAttributesTable = UserAttributesTable.syntax
       val userAttributesColumns = UserAttributesTable.column
       samsql"""
-        insert into ${UserAttributesTable as userAttributesTable} (
-        ${userAttributesColumns.samUserId},
-        ${userAttributesColumns.marketingConsent},
-        ${userAttributesColumns.firstName},
-        ${userAttributesColumns.lastName},
-        ${userAttributesColumns.organization},
-        ${userAttributesColumns.contactEmail},
-        ${userAttributesColumns.title},
-        ${userAttributesColumns.department},
-        ${userAttributesColumns.interestInTerra},
-        ${userAttributesColumns.programLocationCity},
-        ${userAttributesColumns.programLocationState},
-        ${userAttributesColumns.programLocationCountry},
-        ${userAttributesColumns.researchArea},
-        ${userAttributesColumns.additionalAttributes},
-        ${userAttributesColumns.createdAt},
-        ${userAttributesColumns.updatedAt}
-        ) values (
-        ${userAttributes.userId},
-        ${userAttributes.marketingConsent},
-        ${userAttributes.firstName},
-        ${userAttributes.lastName},
-        ${userAttributes.organization},
-        ${userAttributes.contactEmail},
-        ${userAttributes.title},
-        ${userAttributes.department},
-        ARRAY[${userAttributes.interestInTerra.getOrElse(Array.empty[String])}]::text[],
-        ${userAttributes.programLocationCity},
-        ${userAttributes.programLocationState},
-        ${userAttributes.programLocationCountry},
-        ARRAY[${userAttributes.researchArea.getOrElse(Array.empty[String])}]::text[],
-        ${userAttributes.additionalAttributes.getOrElse("{}")}::jsonb,
-        ${Instant.now()},
-        ${Instant.now()}
-        )
+        insert into ${UserAttributesTable as userAttributesTable} (${userAttributesColumns.samUserId}, ${userAttributesColumns.marketingConsent}, ${userAttributesColumns.updatedAt})
+          values (${userAttributes.userId}, ${userAttributes.marketingConsent}, ${Instant.now()})
         on conflict(${userAttributesColumns.samUserId})
-          do update set
-         ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
-         ${userAttributesColumns.firstName} = ${userAttributes.firstName},
-         ${userAttributesColumns.lastName} = ${userAttributes.lastName},
-         ${userAttributesColumns.organization} = ${userAttributes.organization},
-         ${userAttributesColumns.contactEmail} = ${userAttributes.contactEmail},
-         ${userAttributesColumns.title} = ${userAttributes.title},
-         ${userAttributesColumns.department} = ${userAttributes.department},
-         ${userAttributesColumns.interestInTerra} = ARRAY[${userAttributes.interestInTerra.getOrElse(Array.empty[String])}]::text[],
-         ${userAttributesColumns.programLocationCity} = ${userAttributes.programLocationCity},
-         ${userAttributesColumns.programLocationState} = ${userAttributes.programLocationState},
-         ${userAttributesColumns.programLocationCountry} = ${userAttributes.programLocationCountry},
-         ${userAttributesColumns.researchArea} = ARRAY[${userAttributes.researchArea.getOrElse(Array.empty[String])}]::text[],
-         ${userAttributesColumns.additionalAttributes} = ${userAttributes.additionalAttributes.getOrElse("{}")}::jsonb,
-         ${userAttributesColumns.updatedAt} = ${Some(Instant.now())}
+          do update set ${userAttributesColumns.marketingConsent} = ${userAttributes.marketingConsent},
+            ${userAttributesColumns.updatedAt} = ${Instant.now()}
            """.update().apply() > 0
     }
 
