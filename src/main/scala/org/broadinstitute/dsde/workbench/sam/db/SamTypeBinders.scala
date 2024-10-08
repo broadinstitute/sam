@@ -16,13 +16,6 @@ import org.broadinstitute.dsde.workbench.sam.model._
 import scalikejdbc.TypeBinder
 
 object SamTypeBinders {
-  implicit val optionListStringTypeBinder: TypeBinder[Option[List[String]]] = new TypeBinder[Option[List[String]]] {
-    def apply(rs: ResultSet, label: String): Option[List[String]] =
-      Option(rs.getArray(label)).map(_.getArray.asInstanceOf[Array[String]].toList)
-    def apply(rs: ResultSet, index: Int): Option[List[String]] =
-      Option(rs.getArray(index)).map(_.getArray.asInstanceOf[Array[String]].toList)
-  }
-
   implicit val accessInstructionsPKTypeBinder: TypeBinder[AccessInstructionsPK] = new TypeBinder[AccessInstructionsPK] {
     def apply(rs: ResultSet, label: String): AccessInstructionsPK = AccessInstructionsPK(rs.getLong(label))
     def apply(rs: ResultSet, index: Int): AccessInstructionsPK = AccessInstructionsPK(rs.getLong(index))

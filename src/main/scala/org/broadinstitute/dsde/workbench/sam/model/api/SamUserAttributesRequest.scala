@@ -1,30 +1,17 @@
 package org.broadinstitute.dsde.workbench.sam
 package model.api
 
-import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchUserIdFormat
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.ErrorReport
+import spray.json.DefaultJsonProtocol.jsonFormat1
 import spray.json.DefaultJsonProtocol._
 import spray.json.RootJsonFormat
 
 object SamUserAttributesRequest {
-  implicit val SamUserAttributesRequestFormat: RootJsonFormat[SamUserAttributesRequest] = jsonFormat14(SamUserAttributesRequest.apply)
+  implicit val SamUserAttributesRequestFormat: RootJsonFormat[SamUserAttributesRequest] = jsonFormat1(SamUserAttributesRequest.apply)
 
 }
 case class SamUserAttributesRequest(
-    userId: WorkbenchUserId,
-    marketingConsent: Option[Boolean],
-    firstName: Option[String],
-    lastName: Option[String],
-    organization: Option[String],
-    contactEmail: Option[String],
-    title: Option[String],
-    department: Option[String],
-    interestInTerra: Option[List[String]],
-    programLocationCity: Option[String],
-    programLocationState: Option[String],
-    programLocationCountry: Option[String],
-    researchArea: Option[List[String]],
-    additionalAttributes: Option[String]
+    marketingConsent: Option[Boolean]
 ) {
   def validateForNewUser: Option[Seq[ErrorReport]] = Option(
     Seq(
