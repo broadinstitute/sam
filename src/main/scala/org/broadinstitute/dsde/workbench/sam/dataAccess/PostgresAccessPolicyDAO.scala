@@ -977,7 +977,7 @@ class PostgresAccessPolicyDAO(
 
   override def removePolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
 
-    logger.info("deleting from group_member tables")
+    logger.warm("deleting from group_member tables")
     val gm = GroupMemberTable.syntax("gm")
     val p = PolicyTable.syntax("p")
     val gmf = GroupMemberFlatTable.syntax("gmf")
@@ -989,7 +989,7 @@ class PostgresAccessPolicyDAO(
       where ${gm.memberGroupId} = ${p.groupId}
       and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
     """
-      logger.info(s"deleteQuery: ${deleteQuery.statement}")
+      logger.warn(s"deleteQuery: ${deleteQuery.statement}")
       deleteQuery.update().apply()
     }
 

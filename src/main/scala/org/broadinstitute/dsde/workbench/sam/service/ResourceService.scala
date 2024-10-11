@@ -448,7 +448,8 @@ class ResourceService(
     } yield ()
   }
 
-  private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, cascadePolicies: Option[Boolean], samRequestContext: SamRequestContext): IO[Unit] =
+  private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, cascadePolicies: Option[Boolean], samRequestContext: SamRequestContext): IO[Unit] = {
+    logger.warn(s"deleting resource, cascadePolicies: ${cascadePolicies}")
     cascadePolicies match {
       case Some(true) =>
         accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
@@ -468,6 +469,7 @@ class ResourceService(
           else IO.unit
         }
     }
+  }
 
   private def deleteActionManagedIdentitiesForResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     azureService
