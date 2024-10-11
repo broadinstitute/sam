@@ -452,13 +452,15 @@ class ResourceService(
     logger.warn(s"deleting resource, cascadePolicies: ${cascadePolicies}")
     cascadePolicies match {
       case Some(true) =>
+        logger.warn("cascading delete")
         accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
-          if (problematicGroups.nonEmpty) logger.warn(s"Problematic groups to delete: ${problematicGroups}")
+          logger.warn(s"Problematic groups to delete: ${problematicGroups}")
 
           accessPolicyDAO.removePolicyGroupsInUse(resource, samRequestContext)
         }
         IO.unit
       case _ =>
+        logger.warn("not cascading delete")
         accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
           if (problematicGroups.nonEmpty)
             IO.raiseError(
