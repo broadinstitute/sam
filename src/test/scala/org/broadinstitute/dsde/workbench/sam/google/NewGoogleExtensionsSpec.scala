@@ -9,8 +9,9 @@ import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsde.workbench.model.google.GoogleResourceTypes.GoogleParentResourceType
+import org.broadinstitute.dsde.workbench.model.{PetServiceAccountId, TraceId}
+import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject, ServiceAccountName}
 import org.broadinstitute.dsde.workbench.sam.Generator.{
   genFirecloudEmail,
   genGcsBlobName,
@@ -30,7 +31,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeNa
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchersSugar._
 import org.mockito.IdiomaticMockito
-import org.mockito.Mockito.{RETURNS_SMART_NULLS, clearInvocations, doReturn, verifyNoInteractions}
+import org.mockito.Mockito.{RETURNS_SMART_NULLS, clearInvocations, doReturn, times, verifyNoInteractions}
 import org.mockito.MockitoSugar.verify
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.freespec.AnyFreeSpecLike
@@ -38,6 +39,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{Inside, OptionValues}
 
 import java.net.URL
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
@@ -67,6 +69,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
 
     val mockGoogleKeyCache = mock[GoogleKeyCache](RETURNS_SMART_NULLS)
     val mockGoogleStorageService = mock[GoogleStorageService[IO]](RETURNS_SMART_NULLS)
+    val mockGoogleProjectDAO = mock[GoogleProjectDAO](RETURNS_SMART_NULLS)
 
     lazy val petServiceAccountConfig = TestSupport.petServiceAccountConfig
     lazy val googleServicesConfig = TestSupport.googleServicesConfig
@@ -82,7 +85,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         mock[GooglePubSubDAO](RETURNS_SMART_NULLS),
         mock[GoogleIamDAO](RETURNS_SMART_NULLS),
         mock[GoogleStorageDAO](RETURNS_SMART_NULLS),
-        mock[GoogleProjectDAO](RETURNS_SMART_NULLS),
+        mockGoogleProjectDAO,
         mockGoogleKeyCache,
         mock[NotificationDAO](RETURNS_SMART_NULLS),
         mock[GoogleKmsService[IO]](RETURNS_SMART_NULLS),
@@ -91,12 +94,17 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         petServiceAccountConfig,
         Map.empty[ResourceTypeName, ResourceType],
         genFirecloudEmail.sample.get
-      )
+      ),
+      lenient = true
     )
 
     doReturn(IO.pure(petServiceAccount))
       .when(googleExtensions)
-      .createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
+      .createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(TestSupport.singletonServiceAccountProject(newGoogleUser)), any[SamRequestContext])
+
+    doReturn(IO.pure(petServiceAccount))
+      .when(googleExtensions)
+      .getSingletonPetServiceAccountForUser(eqTo(newGoogleUser), any[Option[GoogleProject]], any[SamRequestContext])
 
     doReturn(IO.pure(petServiceAccountKey))
       .when(mockGoogleKeyCache)
@@ -114,6 +122,15 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         any[TimeUnit],
         any[Map[String, String]]
       )
+
+    doReturn(Future.successful(true))
+      .when(googleExtensions)
+      .pollShellProjectCreation(any[String])
+
+    doReturn(Future.successful(UUID.randomUUID().toString))
+      .when(mockGoogleProjectDAO)
+      .createProject(any[String], any[String], any[GoogleParentResourceType])
+
     "getSignedUrl" - {
       "generates a signed URL for a GCS Object" in {
         val signedUrl =
@@ -121,7 +138,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
 
         signedUrl should be(expectedUrl)
 
-        verify(googleExtensions).createUserPetServiceAccount(eqTo(newGoogleUser), eqTo(googleProject), any[SamRequestContext])
+        verify(googleExtensions).getSingletonPetServiceAccountKeyForUser(eqTo(newGoogleUser), eqTo(Some(googleProject)), any[SamRequestContext])
 
         verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
 
@@ -172,7 +189,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
 
       doReturn(IO.pure(arbitraryPetServiceAccountKey))
         .when(googleExtensions)
-        .getArbitraryPetServiceAccountKey(eqTo(newGoogleUser), any[SamRequestContext])
+        .getSingletonPetServiceAccountKeyForUser(eqTo(newGoogleUser), eqTo(None), any[SamRequestContext])
 
       "includes the requester pays user project if provided" in {
         runAndWait(
@@ -222,6 +239,8 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
 
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockGoogleKeyCache = mock[GoogleKeyCache](RETURNS_SMART_NULLS)
+    val mockGoogleIamDAO = mock[GoogleIamDAO](RETURNS_SMART_NULLS)
+    val mockGoogleProjectDAO = mock[GoogleProjectDAO](RETURNS_SMART_NULLS)
 
     val googleExtensions: GoogleExtensions = spy(
       new GoogleExtensions(
@@ -232,9 +251,9 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         mock[GooglePubSubDAO](RETURNS_SMART_NULLS),
         mock[GooglePubSubDAO](RETURNS_SMART_NULLS),
         mock[GooglePubSubDAO](RETURNS_SMART_NULLS),
-        mock[GoogleIamDAO](RETURNS_SMART_NULLS),
+        mockGoogleIamDAO,
         mock[GoogleStorageDAO](RETURNS_SMART_NULLS),
-        mock[GoogleProjectDAO](RETURNS_SMART_NULLS),
+        mockGoogleProjectDAO,
         mockGoogleKeyCache,
         mock[NotificationDAO](RETURNS_SMART_NULLS),
         mock[GoogleKmsService[IO]](RETURNS_SMART_NULLS),
@@ -243,28 +262,49 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         TestSupport.petServiceAccountConfig,
         Map.empty[ResourceTypeName, ResourceType],
         genFirecloudEmail.sample.get
-      )
+      ),
+      lenient = true
     )
 
     doReturn(IO.some(subject))
       .when(mockDirectoryDAO)
       .loadSubjectFromEmail(eqTo(email), any[SamRequestContext])
 
+    doReturn(IO.some(petServiceAccount))
+      .when(mockDirectoryDAO)
+      .loadPetServiceAccount(any[PetServiceAccountId], any[SamRequestContext])
+
+    doReturn(Future.successful(Some(petServiceAccount.serviceAccount)))
+      .when(mockGoogleIamDAO)
+      .findServiceAccount(any[GoogleProject], any[ServiceAccountName])
+
     doReturn(IO.pure(petServiceAccount))
       .when(googleExtensions)
       .createUserPetServiceAccount(eqTo(user), eqTo(googleProject), any[SamRequestContext])
+
+    doReturn(IO.pure(petServiceAccount))
+      .when(googleExtensions)
+      .getSingletonPetServiceAccountForUser(eqTo(user), any[Option[GoogleProject]], any[SamRequestContext])
 
     doReturn(Future.successful(expectedToken))
       .when(googleExtensions)
       .getAccessTokenUsingJson(eqTo(expectedKey), eqTo(scopes))
 
-    doReturn(Future.successful(expectedKey))
+    doReturn(IO.pure(petServiceAccount))
       .when(googleExtensions)
-      .getDefaultServiceAccountForShellProject(eqTo(user), any[SamRequestContext])
+      .getSingletonPetServiceAccountForUser(eqTo(user), eqTo(None), any[SamRequestContext])
 
     doReturn(IO.pure(expectedKey))
       .when(mockGoogleKeyCache)
       .getKey(eqTo(petServiceAccount))
+
+    doReturn(Future.successful(true))
+      .when(googleExtensions)
+      .pollShellProjectCreation(any[String])
+
+    doReturn(Future.successful(UUID.randomUUID().toString))
+      .when(mockGoogleProjectDAO)
+      .createProject(any[String], any[String], any[GoogleParentResourceType])
 
     "getPetServiceAccountKey" - {
       "gets a key for an email" in {
@@ -275,7 +315,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         key should be(Some(expectedKey))
 
         verify(mockDirectoryDAO).loadSubjectFromEmail(eqTo(email), any[SamRequestContext])
-        verify(googleExtensions).createUserPetServiceAccount(eqTo(user), eqTo(googleProject), any[SamRequestContext])
+        verify(googleExtensions).getSingletonPetServiceAccountForUser(eqTo(user), eqTo(Some(googleProject)), any[SamRequestContext])
         verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
       }
 
@@ -287,7 +327,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         key should be(expectedKey)
 
         verifyNoInteractions(mockDirectoryDAO)
-        verify(googleExtensions).createUserPetServiceAccount(eqTo(user), eqTo(googleProject), any[SamRequestContext])
+        verify(googleExtensions).getSingletonPetServiceAccountForUser(eqTo(user), eqTo(Some(googleProject)), any[SamRequestContext])
         verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
       }
 
@@ -300,7 +340,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
           token should be(Some(expectedToken))
 
           verify(mockDirectoryDAO).loadSubjectFromEmail(eqTo(email), any[SamRequestContext])
-          verify(googleExtensions).createUserPetServiceAccount(eqTo(user), eqTo(googleProject), any[SamRequestContext])
+          verify(googleExtensions).getSingletonPetServiceAccountForUser(eqTo(user), eqTo(Some(googleProject)), any[SamRequestContext])
           verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
           verify(googleExtensions).getAccessTokenUsingJson(eqTo(expectedKey), eqTo(scopes))
 
@@ -313,7 +353,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
           token should be(expectedToken)
 
           verifyNoInteractions(mockDirectoryDAO)
-          verify(googleExtensions).createUserPetServiceAccount(eqTo(user), eqTo(googleProject), any[SamRequestContext])
+          verify(googleExtensions).getSingletonPetServiceAccountForUser(eqTo(user), eqTo(Some(googleProject)), any[SamRequestContext])
           verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
           verify(googleExtensions).getAccessTokenUsingJson(eqTo(expectedKey), eqTo(scopes))
         }
@@ -323,25 +363,25 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         "gets a key for an email" in {
           clearInvocations(mockDirectoryDAO, googleExtensions, mockGoogleKeyCache)
 
-          val key = runAndWait(googleExtensions.getArbitraryPetServiceAccountKey(email, samRequestContext))
+          val key = runAndWait(googleExtensions.getSingletonPetServiceAccountKeyForUser(email, None, samRequestContext))
 
           key should be(Some(expectedKey))
 
           verify(mockDirectoryDAO).loadSubjectFromEmail(eqTo(email), any[SamRequestContext])
-          verifyNoInteractions(mockGoogleKeyCache)
-          verify(googleExtensions).getDefaultServiceAccountForShellProject(eqTo(user), any[SamRequestContext])
+          verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
+          verify(googleExtensions).getSingletonPetServiceAccountAndKeyForUser(eqTo(user), eqTo(None), any[SamRequestContext])
         }
 
         "gets a key for a SamUser" in {
           clearInvocations(mockDirectoryDAO, googleExtensions, mockGoogleKeyCache)
 
-          val key = runAndWait(googleExtensions.getArbitraryPetServiceAccountKey(user, samRequestContext))
+          val key = runAndWait(googleExtensions.getSingletonPetServiceAccountKeyForUser(user, None, samRequestContext))
 
           key should be(expectedKey)
 
-          verifyNoInteractions(mockDirectoryDAO)
-          verifyNoInteractions(mockGoogleKeyCache)
-          verify(googleExtensions).getDefaultServiceAccountForShellProject(eqTo(user), any[SamRequestContext])
+          verify(mockDirectoryDAO, times(0)).loadSubjectFromEmail(eqTo(email), any[SamRequestContext])
+          verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
+          verify(googleExtensions).getSingletonPetServiceAccountKeyForUser(eqTo(user), eqTo(None), any[SamRequestContext])
         }
       }
 
@@ -349,26 +389,26 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         "gets a token for an email" in {
           clearInvocations(mockDirectoryDAO, googleExtensions, mockGoogleKeyCache)
 
-          val token = runAndWait(googleExtensions.getArbitraryPetServiceAccountToken(email, scopes, samRequestContext))
+          val token = runAndWait(googleExtensions.getSingletonPetServiceAccountToken(email, scopes, samRequestContext))
 
           token should be(Some(expectedToken))
 
           verify(mockDirectoryDAO).loadSubjectFromEmail(eqTo(email), any[SamRequestContext])
-          verifyNoInteractions(mockGoogleKeyCache)
-          verify(googleExtensions).getDefaultServiceAccountForShellProject(eqTo(user), any[SamRequestContext])
+          verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
+          verify(googleExtensions).getSingletonPetServiceAccountAndKeyForUser(eqTo(user), eqTo(None), any[SamRequestContext])
           verify(googleExtensions).getAccessTokenUsingJson(eqTo(expectedKey), eqTo(scopes))
         }
 
         "gets a token for a SamUser" in {
           clearInvocations(mockDirectoryDAO, googleExtensions, mockGoogleKeyCache)
 
-          val token = runAndWait(googleExtensions.getArbitraryPetServiceAccountToken(user, scopes, samRequestContext))
+          val token = runAndWait(googleExtensions.getSingletonPetServiceAccountToken(user, scopes, samRequestContext))
 
           token should be(expectedToken)
 
-          verifyNoInteractions(mockDirectoryDAO)
-          verifyNoInteractions(mockGoogleKeyCache)
-          verify(googleExtensions).getDefaultServiceAccountForShellProject(eqTo(user), any[SamRequestContext])
+          verify(mockDirectoryDAO, times(0)).loadSubjectFromEmail(eqTo(email), any[SamRequestContext])
+          verify(mockGoogleKeyCache).getKey(eqTo(petServiceAccount))
+          verify(googleExtensions).getSingletonPetServiceAccountAndKeyForUser(eqTo(user), eqTo(None), any[SamRequestContext])
           verify(googleExtensions).getAccessTokenUsingJson(eqTo(expectedKey), eqTo(scopes))
         }
       }

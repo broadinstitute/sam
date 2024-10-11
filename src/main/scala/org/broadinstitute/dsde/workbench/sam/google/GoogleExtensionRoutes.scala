@@ -48,9 +48,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               getWithTelemetry(samRequestContext, "userEmail" -> email) {
                 complete {
                   import spray.json._
-                  googleExtensions.getArbitraryPetServiceAccountKey(email, samRequestContext) map {
+                  googleExtensions.getSingletonPetServiceAccountAndKeyForUser(email, None, samRequestContext) map {
                     // parse json to ensure it is json and tells akka http the right content-type
-                    case Some(key) => StatusCodes.OK -> key.parseJson
+                    case Some((_, key)) => StatusCodes.OK -> key.parseJson
                     case None =>
                       throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
                   }
@@ -61,7 +61,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 postWithTelemetry(samRequestContext, "userEmail" -> email) {
                   entity(as[Set[String]]) { scopes =>
                     complete {
-                      googleExtensions.getArbitraryPetServiceAccountToken(email, scopes, samRequestContext).map {
+                      googleExtensions.getSingletonPetServiceAccountToken(email, scopes, samRequestContext).map {
                         case Some(token) => StatusCodes.OK -> JsString(token)
                         case None =>
                           throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
@@ -78,9 +78,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 getWithTelemetry(samRequestContext, "userEmail" -> email, "googleProject" -> googleProject) {
                   complete {
                     import spray.json._
-                    googleExtensions.getPetServiceAccountKey(email, googleProject, samRequestContext) map {
+                    googleExtensions.getSingletonPetServiceAccountAndKeyForUser(email, Some(googleProject), samRequestContext) map {
                       // parse json to ensure it is json and tells akka http the right content-type
-                      case Some(key) => StatusCodes.OK -> key.parseJson
+                      case Some((_, key)) => StatusCodes.OK -> key.parseJson
                       case None =>
                         throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
                     }
@@ -91,7 +91,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   postWithTelemetry(samRequestContext, "userEmail" -> email) {
                     entity(as[Set[String]]) { scopes =>
                       complete {
-                        googleExtensions.getPetServiceAccountToken(email, googleProject, scopes, samRequestContext).map {
+                        googleExtensions.getSingletonPetServiceAccountToken(email, scopes, samRequestContext).map {
                           case Some(token) => StatusCodes.OK -> JsString(token)
                           case None =>
                             throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "pet service account not found"))
@@ -111,8 +111,8 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 complete {
                   import spray.json._
                   googleExtensions
-                    .getArbitraryPetServiceAccountKey(samUser, samRequestContext)
-                    .map(key => StatusCodes.OK -> key.parseJson)
+                    .getSingletonPetServiceAccountAndKeyForUser(samUser, None, samRequestContext)
+                    .map(tup => StatusCodes.OK -> tup._2.parseJson)
                 }
               }
             }
@@ -122,7 +122,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 postWithTelemetry(samRequestContext) {
                   entity(as[Set[String]]) { scopes =>
                     complete {
-                      googleExtensions.getArbitraryPetServiceAccountToken(samUser, scopes, samRequestContext).map { token =>
+                      googleExtensions.getSingletonPetServiceAccountToken(samUser, scopes, samRequestContext).map { token =>
                         StatusCodes.OK -> JsString(token)
                       }
                     }
@@ -144,9 +144,9 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                       import spray.json._
                       // parse json to ensure it is json and tells akka http the right content-type
                       googleExtensions
-                        .getPetServiceAccountKey(samUser, GoogleProject(project), samRequestContext)
-                        .map { key =>
-                          StatusCodes.OK -> key.parseJson
+                        .getSingletonPetServiceAccountAndKeyForUser(samUser, Some(GoogleProject(project)), samRequestContext)
+                        .map { tup =>
+                          StatusCodes.OK -> tup._2.parseJson
                         }
                     }
                   }
@@ -219,15 +219,18 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   ) {
                     getWithTelemetry(samRequestContext, "googleProject" -> projectResourceId) {
                       complete {
-                        googleExtensions.createUserPetServiceAccount(samUser, GoogleProject(project), samRequestContext).map { petSA =>
-                          StatusCodes.OK -> petSA.serviceAccount.email
+                        googleExtensions.getSingletonPetServiceAccountAndKeyForUser(samUser, Some(GoogleProject(project)), samRequestContext).map { petSA =>
+                          StatusCodes.OK -> petSA._1.serviceAccount.email
                         }
                       }
                     }
                   } ~
                     deleteWithTelemetry(samRequestContext, "googleProject" -> projectResourceId) {
                       complete {
-                        googleExtensions.deleteUserPetServiceAccount(samUser.id, GoogleProject(project), samRequestContext).map(_ => StatusCodes.NoContent)
+                        for {
+                          _ <- googleExtensions.removeProjectServiceAgents(samUser.id, GoogleProject(project), samRequestContext)
+                          _ <- googleExtensions.deleteUserPetServiceAccount(samUser.id, GoogleProject(project), samRequestContext)
+                        } yield StatusCodes.NoContent
                       }
                     }
                 }

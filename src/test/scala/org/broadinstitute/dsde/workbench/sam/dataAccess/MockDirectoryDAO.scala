@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentity,
@@ -16,7 +16,16 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
 }
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, ResourceTypeName, SamUserTos}
+import org.broadinstitute.dsde.workbench.sam.model.{
+  AccessPolicy,
+  BasicWorkbenchGroup,
+  FullyQualifiedResourceId,
+  PetServiceAgents,
+  ResourceAction,
+  ResourceTypeName,
+  SamUserTos,
+  ServiceAgent
+}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
@@ -44,6 +53,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   private val petManagedIdentitiesByUser: mutable.Map[PetManagedIdentityId, PetManagedIdentity] = new TrieMap()
 
   private val userFavoriteResources: mutable.Map[WorkbenchUserId, Set[FullyQualifiedResourceId]] = new TrieMap()
+
+  private val petServiceAgents: mutable.Map[(WorkbenchUserId, GoogleProject, GoogleProject), PetServiceAgents] = new TrieMap()
 
   override def createGroup(
       group: BasicWorkbenchGroup,
@@ -511,4 +522,47 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedResourceId]] =
     IO.pure(userFavoriteResources.getOrElse(userId, Set.empty).filter(_.resourceTypeName == resourceTypeName))
+
+  override def getPetServiceAgents(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      samRequestContext: SamRequestContext
+  ): IO[Option[PetServiceAgents]] =
+    IO.pure(petServiceAgents.get((userId, petServiceAccountProject, destinationProject)))
+
+  override def addPetServiceAgent(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      destinationProjectNumber: Long,
+      serviceAgent: String,
+      samRequestContext: SamRequestContext
+  ): IO[Set[ServiceAgent]] = {
+    val agents = petServiceAgents.getOrElse(
+      (userId, petServiceAccountProject, destinationProject),
+      PetServiceAgents(userId, petServiceAccountProject, destinationProject, destinationProjectNumber, Set.empty)
+    )
+    val updated = agents.copy(serviceAgents = agents.serviceAgents + ServiceAgent(serviceAgent, destinationProjectNumber))
+    petServiceAgents.put((userId, petServiceAccountProject, destinationProject), updated)
+    IO.pure(updated.serviceAgents)
+  }
+
+  override def removePetServiceAgent(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      destinationProjectNumber: Long,
+      serviceAgent: String,
+      samRequestContext: SamRequestContext
+  ): IO[Set[ServiceAgent]] = {
+    val agents = petServiceAgents.getOrElse(
+      (userId, petServiceAccountProject, destinationProject),
+      PetServiceAgents(userId, petServiceAccountProject, destinationProject, destinationProjectNumber, Set.empty)
+    )
+    val updated = agents.copy(serviceAgents = agents.serviceAgents - ServiceAgent(serviceAgent, destinationProjectNumber))
+    petServiceAgents.put((userId, petServiceAccountProject, destinationProject), updated)
+    IO.pure(updated.serviceAgents)
+  }
+
 }

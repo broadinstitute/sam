@@ -33,7 +33,8 @@ final case class GoogleServicesConfig(
     adminSdkServiceAccountPaths: Option[NonEmptyList[String]],
     googleKms: GoogleKmsConfig,
     terraGoogleOrgNumber: String,
-    traceExporter: TraceExporterConfig
+    traceExporter: TraceExporterConfig,
+    serviceAgents: Set[String]
 )
 
 object GoogleServicesConfig {
@@ -98,7 +99,8 @@ object GoogleServicesConfig {
       config.as[Option[NonEmptyList[String]]]("adminSdkServiceAccountPaths"),
       config.as[GoogleKmsConfig]("kms"),
       config.getString("terraGoogleOrgNumber"),
-      config.as[TraceExporterConfig]("traceExporter")
+      config.as[TraceExporterConfig]("traceExporter"),
+      config.as[Option[String]]("serviceAgents").map(_.split(",").toSet).getOrElse(Set.empty)
     )
   }
 }

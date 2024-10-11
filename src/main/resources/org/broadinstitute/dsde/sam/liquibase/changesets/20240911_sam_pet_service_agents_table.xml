@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+  <changeSet logicalFilePath="dummy" author="tlangs" id="add_sam_pet_service_agents_table">
+    <createTable tableName="SAM_PET_SERVICE_AGENTS">
+      <column name="sam_user_id" type="VARCHAR">
+        <constraints primaryKey="true"/>
+      </column>
+      <column name="pet_service_account_project" type="VARCHAR">
+        <constraints primaryKey="true"/>
+      </column>
+      <column name="destination_project" type="VARCHAR">
+        <constraints primaryKey="true"/>
+      </column>
+      <column name="destination_project_number" type="VARCHAR">
+        <constraints primaryKey="false" nullable="false"/>
+      </column>
+      <column name="service_agents" type="VARCHAR []">
+        <constraints primaryKey="false" nullable="false"/>
+      </column>
+      <column name="updated_at" type="timestamptz"/>
+    </createTable>
+
+    <addForeignKeyConstraint baseTableName="SAM_PET_SERVICE_AGENTS" baseColumnNames="SAM_USER_ID, PET_SERVICE_ACCOUNT_PROJECT" constraintName="FK_PSA_SERVICE_AGENT"
+                             referencedTableName="SAM_PET_SERVICE_ACCOUNT"
+                             referencedColumnNames="USER_ID, PROJECT" deleteCascade="true" onDelete="CASCADE"/>
+
+  </changeSet>
+</databaseChangeLog>

@@ -22,6 +22,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.{Date, UUID}
 import scala.concurrent.duration._
+import scala.util.Random
 
 class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
@@ -2120,6 +2121,90 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         val loadedFavoriteResources = dao.getUserFavoriteResourcesOfType(user.id, otherResourceTypeName, samRequestContext).unsafeRunSync()
         loadedFavoriteResources should contain theSameElementsAs Set(otherResource.fullyQualifiedId)
       }
+    }
+  }
+
+  "Service Agents " - {
+    "adds a service agent to a singleton pet service account if a record doesn't exist" in {
+      assume(databaseEnabled, databaseEnabledClue)
+      val destinationProject = GoogleProject(UUID.randomUUID().toString)
+      val destinationProjectNumber = Random.between(0L, Long.MaxValue)
+      val serviceAgents = Set("compute-system")
+      dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+      dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+      val petServiceAgents = dao
+        .addPetServiceAgent(defaultUser.id, defaultPetSA.id.project, destinationProject, destinationProjectNumber, serviceAgents.head, samRequestContext)
+        .unsafeRunSync()
+
+      petServiceAgents shouldEqual serviceAgents.map(ServiceAgent(_, destinationProjectNumber))
+    }
+
+    "updates an existing PetServiceAgents record" in {
+      assume(databaseEnabled, databaseEnabledClue)
+      val destinationProject = GoogleProject(UUID.randomUUID().toString)
+      val destinationProjectNumber = Random.between(0L, Long.MaxValue)
+      val serviceAgents = Set("compute-system")
+      dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+      dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+      dao
+        .addPetServiceAgent(defaultUser.id, defaultPetSA.id.project, destinationProject, destinationProjectNumber, serviceAgents.head, samRequestContext)
+        .unsafeRunSync()
+      val newServiceAgent = "storage-system"
+      val petServiceAgents = dao
+        .addPetServiceAgent(defaultUser.id, defaultPetSA.id.project, destinationProject, destinationProjectNumber, newServiceAgent, samRequestContext)
+        .unsafeRunSync()
+
+      petServiceAgents shouldEqual (serviceAgents + newServiceAgent).map(ServiceAgent(_, destinationProjectNumber))
+    }
+
+    "removes a service agent from an existing PetServiceAgents record" in {
+      assume(databaseEnabled, databaseEnabledClue)
+      val destinationProject = GoogleProject(UUID.randomUUID().toString)
+      val destinationProjectNumber = Random.between(0L, Long.MaxValue)
+
+      val serviceAgents = Set("compute-system", "storage-system")
+      dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+      dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+
+      serviceAgents.foreach(serviceAgent =>
+        dao
+          .addPetServiceAgent(defaultUser.id, defaultPetSA.id.project, destinationProject, destinationProjectNumber, serviceAgent, samRequestContext)
+          .unsafeRunSync()
+      )
+      val petServiceAgents = dao.getPetServiceAgents(defaultUser.id, defaultPetSA.id.project, destinationProject, samRequestContext).unsafeRunSync()
+      petServiceAgents.map(_.serviceAgents) shouldEqual Some(serviceAgents.map(ServiceAgent(_, destinationProjectNumber)))
+
+      val removedServiceAgent = "storage-system"
+      dao
+        .removePetServiceAgent(defaultUser.id, defaultPetSA.id.project, destinationProject, destinationProjectNumber, removedServiceAgent, samRequestContext)
+        .unsafeRunSync()
+      val updatedPetServiceAgents = dao.getPetServiceAgents(defaultUser.id, defaultPetSA.id.project, destinationProject, samRequestContext).unsafeRunSync()
+      updatedPetServiceAgents.map(_.serviceAgents) shouldEqual Some(Set(ServiceAgent("compute-system", destinationProjectNumber)))
+    }
+
+    "gets a PetServiceAgents record" in {
+      assume(databaseEnabled, databaseEnabledClue)
+      val destinationProject = GoogleProject(UUID.randomUUID().toString)
+      val destinationProjectNumber = Random.between(0L, Long.MaxValue)
+      val serviceAgents = Set("compute-system", "storage-system")
+      dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+      dao.createPetServiceAccount(defaultPetSA, samRequestContext).unsafeRunSync()
+      serviceAgents.foreach(serviceAgent =>
+        dao
+          .addPetServiceAgent(defaultUser.id, defaultPetSA.id.project, destinationProject, destinationProjectNumber, serviceAgent, samRequestContext)
+          .unsafeRunSync()
+      )
+      val petServiceAgents = dao.getPetServiceAgents(defaultUser.id, defaultPetSA.id.project, destinationProject, samRequestContext).unsafeRunSync()
+
+      petServiceAgents shouldEqual Some(
+        PetServiceAgents(
+          defaultUser.id,
+          defaultPetSA.id.project,
+          destinationProject,
+          destinationProjectNumber,
+          serviceAgents.map(ServiceAgent(_, destinationProjectNumber))
+        )
+      )
     }
   }
 }
