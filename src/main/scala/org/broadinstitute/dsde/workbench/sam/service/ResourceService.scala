@@ -451,6 +451,9 @@ class ResourceService(
   private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, cascadePolicies: Option[Boolean], samRequestContext: SamRequestContext): IO[Unit] =
     cascadePolicies match {
       case Some(true) =>
+        accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
+          if (problematicGroups.nonEmpty) logger.warn(s"Problematic groups to delete: ${problematicGroups}")
+        }
         accessPolicyDAO.removePolicyGroupsInUse(resource, samRequestContext)
         IO.unit
       case _ =>
