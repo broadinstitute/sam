@@ -1006,6 +1006,7 @@ class PostgresAccessPolicyDAO(
   }
 
   override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] = {
+    logger.warn("checking policy groups in use")
     val g = GroupTable.syntax("g")
     val pg = GroupTable.syntax("pg") // problematic group
     val gm = GroupMemberTable.syntax("gm")
