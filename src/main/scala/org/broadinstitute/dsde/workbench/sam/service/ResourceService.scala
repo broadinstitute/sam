@@ -453,8 +453,9 @@ class ResourceService(
       case Some(true) =>
         accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
           if (problematicGroups.nonEmpty) logger.warn(s"Problematic groups to delete: ${problematicGroups}")
+
+          accessPolicyDAO.removePolicyGroupsInUse(resource, samRequestContext)
         }
-        accessPolicyDAO.removePolicyGroupsInUse(resource, samRequestContext)
         IO.unit
       case _ =>
         accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
