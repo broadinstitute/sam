@@ -1007,14 +1007,18 @@ class PostgresAccessPolicyDAO(
   }
 
   override def removePolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    removeFromGroupTable(resourceId, samRequestContext)
+    removeFromGroupTableFlat(resourceId, samRequestContext)
+  }
 
+  private def removeFromGroupTable(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     logger.warn("deleting from group_member tables")
     val gm = GroupMemberTable.syntax("gm")
     val p = PolicyTable.syntax("p")
-    val gmf = GroupMemberFlatTable.syntax("gmf")
 
-    serializableWriteTransaction("removePolicyGroupsInUse", samRequestContext) { implicit session =>
-      val deleteQuery = samsql"""delete from ${GroupMemberTable as gm} where ${gm.memberGroupId} in
+    serializableWriteTransaction("removeFromGroupTable", samRequestContext) { implicit session =>
+      val deleteQuery =
+        samsql"""delete from ${GroupMemberTable as gm} where ${gm.memberGroupId} in
                          (select distinct ${gm.result.memberGroupId}
                           from ${GroupMemberTable as gm}
                           join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
@@ -1023,8 +1027,14 @@ class PostgresAccessPolicyDAO(
       logger.warn(s"deleteQuery: ${deleteQuery.statement}")
       deleteQuery.update().apply()
     }
+  }
 
-    serializableWriteTransaction("removePolicyGroupsInUse", samRequestContext) { implicit session =>
+  private def removeFromGroupTableFlat(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+    logger.warn("deleting from group_member_flat tables")
+    val p = PolicyTable.syntax("p")
+    val gmf = GroupMemberFlatTable.syntax("gmf")
+
+    serializableWriteTransaction("removeFromGroupTableFlat", samRequestContext) { implicit session =>
       val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf} where ${gmf.memberGroupId} in
                          (select distinct ${gmf.result.memberGroupId}
                           from ${GroupMemberFlatTable as gmf}
