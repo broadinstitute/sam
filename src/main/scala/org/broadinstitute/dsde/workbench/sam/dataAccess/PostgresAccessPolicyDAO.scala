@@ -1025,7 +1025,7 @@ class PostgresAccessPolicyDAO(
     }
 
     serializableWriteTransaction("removePolicyGroupsInUse", samRequestContext) { implicit session =>
-      val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gm} where ${gm.memberGroupId} in
+      val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf} where ${gmf.memberGroupId} in
                          (select distinct ${gm.result.memberGroupId}
                           from ${GroupMemberTable as gm}
                           join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
