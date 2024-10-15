@@ -1024,7 +1024,7 @@ class PostgresAccessPolicyDAO(
                           join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
                           where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
                      group by ${g.id}, ${g.name}"""
-      problematicGroupsQuery
+      val result = problematicGroupsQuery
         .map(rs =>
           Map(
             "groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
@@ -1034,6 +1034,8 @@ class PostgresAccessPolicyDAO(
         )
         .list()
         .apply()
+      logger.warn(s"Result: ${result}")
+      result
     }
   }
 
