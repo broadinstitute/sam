@@ -37,7 +37,7 @@ object Settings {
     "-language:existentials", // Existential types (besides wildcard types) can be written and inferred
     "-unchecked", // Enable additional warnings where generated code depends on assumptions.
     "-Xcheckinit", // Wrap field accessors to throw an exception on uninitialized access.
-    "-Wconf:cat=deprecation:ws,any:e", // Fail the compilation if there are any warnings, except for deprecation warnings.
+    "-Wconf:any:e,cat=deprecation:ws", // Fail the compilation if there are any warnings, except for deprecation warnings.
     "-Xlint:adapted-args", // Warn if an argument list is modified to match the receiver.
     "-Xlint:constant", // Evaluation of a constant arithmetic expression results in an error.
     "-Xlint:delayedinit-select", // Selecting member of DelayedInit.
