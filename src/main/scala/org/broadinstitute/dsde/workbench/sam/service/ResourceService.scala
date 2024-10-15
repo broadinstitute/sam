@@ -455,8 +455,8 @@ class ResourceService(
         logger.warn("cascading delete")
         accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
           logger.warn(s"Problematic groups to delete: ${problematicGroups}")
-
-          accessPolicyDAO.removePolicyGroupsInUse(resource, samRequestContext)
+          IO.unit
+//          accessPolicyDAO.removePolicyGroupsInUse(resource, samRequestContext)
         }
         IO.unit
       case _ =>
