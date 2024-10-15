@@ -1007,14 +1007,10 @@ class PostgresAccessPolicyDAO(
   }
 
   override def removePolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
-    removeFromGroupTable(resourceId, samRequestContext)
-    removeFromGroupTableFlat(resourceId, samRequestContext)
-  }
-
-  private def removeFromGroupTable(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
     logger.warn("deleting from group_member tables")
     val gm = GroupMemberTable.syntax("gm")
     val p = PolicyTable.syntax("p")
+    val gmf = GroupMemberFlatTable.syntax("gmf")
 
     serializableWriteTransaction("removeFromGroupTable", samRequestContext) { implicit session =>
       val deleteQuery =
@@ -1026,15 +1022,7 @@ class PostgresAccessPolicyDAO(
                      """
       logger.warn(s"deleteQuery: ${deleteQuery.statement}")
       deleteQuery.update().apply()
-    }
-  }
 
-  private def removeFromGroupTableFlat(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
-    logger.warn("deleting from group_member_flat tables")
-    val p = PolicyTable.syntax("p")
-    val gmf = GroupMemberFlatTable.syntax("gmf")
-
-    serializableWriteTransaction("removeFromGroupTableFlat", samRequestContext) { implicit session =>
       val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf} where ${gmf.memberGroupId} in
                          (select distinct ${gmf.result.memberGroupId}
                           from ${GroupMemberFlatTable as gmf}
@@ -1045,6 +1033,7 @@ class PostgresAccessPolicyDAO(
       deleteFlatQuery.update().apply()
     }
   }
+
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
     listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName), samRequestContext).map(_.headOption)
 
