@@ -1006,6 +1006,35 @@ class PostgresAccessPolicyDAO(
     }
   }
 
+  override def removePolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+
+    logger.warn("deleting from group_member tables")
+    val gm = GroupMemberTable.syntax("gm")
+    val p = PolicyTable.syntax("p")
+    val gmf = GroupMemberFlatTable.syntax("gmf")
+
+    serializableWriteTransaction("removePolicyGroupsInUse", samRequestContext) { implicit session =>
+      val deleteQuery = samsql"""
+      delete from ${GroupMemberTable as gm}
+      using ${PolicyTable as p}
+      where ${gm.memberGroupId} = ${p.groupId}
+      and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+    """
+      logger.warn(s"deleteQuery: ${deleteQuery.statement}")
+      deleteQuery.update().apply()
+    }
+
+    serializableWriteTransaction("removePolicyGroupsInUse", samRequestContext) { implicit session =>
+      val deleteQuery = samsql"""
+      delete from ${GroupMemberFlatTable as gmf}
+      using ${PolicyTable as p}
+      where ${gmf.memberGroupId} = ${p.groupId}
+      and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+    """
+      logger.info(s"deleteQuery: ${deleteQuery.statement}")
+      deleteQuery.update().apply()
+    }
+  }
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
     listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName), samRequestContext).map(_.headOption)
 
