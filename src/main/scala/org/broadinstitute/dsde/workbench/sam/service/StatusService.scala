@@ -23,7 +23,7 @@ class StatusService(
     pollInterval: FiniteDuration = 1 minute
 )(implicit system: ActorSystem, executionContext: ExecutionContext)
     extends LazyLogging {
-  implicit val askTimeout = Timeout(5 seconds)
+  implicit val askTimeout: Timeout = Timeout(5 seconds)
 
   private val healthMonitor = system.actorOf(HealthMonitor.props(cloudExtensions.allSubSystems)(checkStatus _))
   system.scheduler.scheduleAtFixedRate(initialDelay, pollInterval, healthMonitor, HealthMonitor.CheckAll)
