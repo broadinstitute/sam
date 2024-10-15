@@ -2128,7 +2128,7 @@ paths:
       tags:
         - Resources
       summary: Delete a resource
-      operationId: deleteResourceV2
+      operationId: deleteResourceCascadeV2
       parameters:
         - name: resourceTypeName
           in: path
