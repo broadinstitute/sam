@@ -975,7 +975,38 @@ class PostgresAccessPolicyDAO(
     }
   }
 
+  override def removePolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+
+    logger.warn("deleting from group_member tables")
+    val gm = GroupMemberTable.syntax("gm")
+    val p = PolicyTable.syntax("p")
+    val gmf = GroupMemberFlatTable.syntax("gmf")
+
+    serializableWriteTransaction("removePolicyGroupsInUse", samRequestContext) { implicit session =>
+      val deleteQuery = samsql"""
+      delete from ${GroupMemberTable as gm}
+      using ${PolicyTable as p}
+      where ${gm.memberGroupId} = ${p.groupId}
+      and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+    """
+      logger.warn(s"deleteQuery: ${deleteQuery.statement}")
+      deleteQuery.update().apply()
+    }
+
+    serializableWriteTransaction("removePolicyGroupsInUse", samRequestContext) { implicit session =>
+      val deleteQuery = samsql"""
+      delete from ${GroupMemberFlatTable as gmf}
+      using ${PolicyTable as p}
+      where ${gmf.memberGroupId} = ${p.groupId}
+      and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+    """
+      logger.info(s"deleteQuery: ${deleteQuery.statement}")
+      deleteQuery.update().apply()
+    }
+  }
+
   override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] = {
+    logger.warn("checking policy groups in use")
     val g = GroupTable.syntax("g")
     val pg = GroupTable.syntax("pg") // problematic group
     val gm = GroupMemberTable.syntax("gm")
@@ -993,7 +1024,7 @@ class PostgresAccessPolicyDAO(
                           join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
                           where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
                      group by ${g.id}, ${g.name}"""
-      problematicGroupsQuery
+      val result = problematicGroupsQuery
         .map(rs =>
           Map(
             "groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
@@ -1003,6 +1034,8 @@ class PostgresAccessPolicyDAO(
         )
         .list()
         .apply()
+      logger.warn(s"Result: ${result}")
+      result
     }
   }
 

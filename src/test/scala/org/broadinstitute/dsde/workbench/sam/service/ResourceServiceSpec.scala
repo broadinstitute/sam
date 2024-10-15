@@ -260,7 +260,7 @@ class ResourceServiceSpec
     }
 
     // cleanup
-    runAndWait(service.deleteResource(resource, samRequestContext))
+    runAndWait(service.deleteResource(resource, Some(false), samRequestContext))
 
     assertResult(LazyList.empty) {
       policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync()
@@ -290,7 +290,7 @@ class ResourceServiceSpec
     service.loadPolicy(policyToUpdate, samRequestContext).unsafeRunSync().get.version shouldEqual 3
 
     // cleanup
-    runAndWait(service.deleteResource(resource, samRequestContext))
+    runAndWait(service.deleteResource(resource, Some(false), samRequestContext))
   }
 
   it should "fail to set public policies on auth domained resources" in {
@@ -2173,7 +2173,7 @@ class ResourceServiceSpec
 
     assert(policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().nonEmpty)
 
-    runAndWait(service.deleteResource(resource, samRequestContext))
+    runAndWait(service.deleteResource(resource, Some(false), samRequestContext))
 
     assert(policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().isEmpty)
   }
@@ -2187,7 +2187,7 @@ class ResourceServiceSpec
 
     service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
     runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext))
-    runAndWait(service.deleteResource(resource, samRequestContext))
+    runAndWait(service.deleteResource(resource, Some(false), samRequestContext))
 
     val err = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(service.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext))
@@ -2210,7 +2210,7 @@ class ResourceServiceSpec
     runAndWait(localService.createResource(reusableResourceType, resource.resourceId, dummyUser, samRequestContext))
     policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync() should not be empty
 
-    runAndWait(localService.deleteResource(resource, samRequestContext))
+    runAndWait(localService.deleteResource(resource, Some(false), samRequestContext))
     policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync() shouldBe empty
 
     runAndWait(localService.createResource(reusableResourceType, resource.resourceId, dummyUser, samRequestContext))
@@ -2250,7 +2250,7 @@ class ResourceServiceSpec
         )
         .unsafeRunSync()
 
-      runAndWait(constrainableService.deleteResource(resourceToDelete.fullyQualifiedId, samRequestContext))
+      runAndWait(constrainableService.deleteResource(resourceToDelete.fullyQualifiedId, Some(false), samRequestContext))
       runAndWait(managedGroupService.deleteManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext))
       managedGroupService.loadManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext).unsafeRunSync() shouldBe None
 
@@ -2315,7 +2315,7 @@ class ResourceServiceSpec
     assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().nonEmpty)
 
     when(mockAzureService.deleteActionManagedIdentity(any[ActionManagedIdentityId], any[SamRequestContext])).thenReturn(IO.unit)
-    runAndWait(serviceWithAzure.deleteResource(resource, samRequestContext))
+    runAndWait(serviceWithAzure.deleteResource(resource, Some(false), samRequestContext))
 
     assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().isEmpty)
     ownerRoleActions.foreach { action =>
@@ -2347,7 +2347,7 @@ class ResourceServiceSpec
 
     assert(policyDAO.listResourceChildren(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
 
-    runAndWait(service.deleteResource(childResource, samRequestContext))
+    runAndWait(service.deleteResource(childResource, Some(false), samRequestContext))
 
     assert(policyDAO.listResourceChildren(parentResource, samRequestContext).unsafeRunSync().isEmpty)
     assert(policyDAO.listAccessPolicies(childResource, samRequestContext).unsafeRunSync().isEmpty)
@@ -2369,7 +2369,7 @@ class ResourceServiceSpec
 
     // try to delete the parent resource and then validate the error
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      runAndWait(service.deleteResource(parentResource, samRequestContext))
+      runAndWait(service.deleteResource(parentResource, Some(false), samRequestContext))
     }
 
     exception.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
@@ -3417,7 +3417,7 @@ class ResourceServiceSpec
     val resource = Resource(defaultResourceType.name, genResourceId.sample.get, Set.empty)
     policyDAO.createResource(resource, samRequestContext).unsafeRunSync()
 
-    runAuditLogTest(service.deleteResource(resource.fullyQualifiedId, samRequestContext), List(ResourceDeleted), tryTwice = false)
+    runAuditLogTest(service.deleteResource(resource.fullyQualifiedId, Some(false), samRequestContext), List(ResourceDeleted), tryTwice = false)
   }
 
   it should "be called on createResource" in {

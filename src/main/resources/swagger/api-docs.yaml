@@ -2109,6 +2109,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: cascadePolicies
+          in: query
+          description: Cascade delete of policies associated with the resource
+          required: false
+          schema:
+            type: boolean
       responses:
         204:
           description: Successfully deleted resource
