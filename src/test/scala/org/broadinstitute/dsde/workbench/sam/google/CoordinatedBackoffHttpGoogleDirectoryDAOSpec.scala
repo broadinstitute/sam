@@ -14,7 +14,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
 class CoordinatedBackoffHttpGoogleDirectoryDAOSpec extends AnyFreeSpec with Matchers with MockitoSugar {
-  implicit val system = ActorSystem("CoordinatedBackoffHttpGoogleDirectoryDAOSpec")
+  implicit val system: ActorSystem = ActorSystem("CoordinatedBackoffHttpGoogleDirectoryDAOSpec")
 
   "CoordinatedBackoffHttpGoogleDirectoryDAO" - {
     "retryExponentially" - {

@@ -36,7 +36,7 @@ import scala.concurrent.duration._
 /** Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
   */
 class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with ScalaFutures {
-  implicit val timeout = RouteTestTimeout(
+  implicit val timeout: RouteTestTimeout = RouteTestTimeout(
     5 seconds
   ) // after using com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper, tests seems to run a bit longer
   val workspaceResourceId = "workspace"
