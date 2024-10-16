@@ -319,8 +319,8 @@ jobs:
                           -e JANITOR_CLIENT_CREDENTIAL_FILE_PATH="" \
                           -e JANITOR_TRACK_RESOURCE_PROJECT_ID="" \
                           -e JANITOR_TRACK_RESOURCE_TOPIC_ID="" \
-                          sbtscala/scala-sbt:openjdk-17.0.2_1.7.2_2.13.10 \
-                          sbt "set scalafmtOnCompile := false" "project pact4s" "testOnly *SamProviderSpec"
+                          sbtscala/scala-sbt:eclipse-temurin-jammy-17.0.10_7_1.10.2_2.13.15 \
+                          bash -c "git config --global --add safe.directory /working/sam && sbt \"set scalafmtOnCompile := false\" \"project pact4s\" \"testOnly *SamProviderSpec\""
 
   can-i-deploy: # The can-i-deploy job will run as a result of a Sam PR. It reports the pact verification statuses on all deployed environments.
     runs-on: ubuntu-latest

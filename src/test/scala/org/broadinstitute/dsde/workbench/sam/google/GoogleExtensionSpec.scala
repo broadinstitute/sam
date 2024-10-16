@@ -69,7 +69,7 @@ class GoogleExtensionSpec(_system: ActorSystem)
   lazy val superAdminsGroup = TestSupport.adminConfig.superAdminsGroup
 
   val configResourceTypes = TestSupport.configResourceTypes
-  override implicit val patienceConfig = PatienceConfig(5 seconds)
+  override implicit val patienceConfig: PatienceConfig = PatienceConfig(5 seconds)
   "Google group sync" should "add/remove the right emails and handle errors" in {
     // tests that emails only in sam get added to google
     // emails only in google are removed

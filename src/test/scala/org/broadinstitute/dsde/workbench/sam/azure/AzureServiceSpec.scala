@@ -3,6 +3,7 @@ package org.broadinstitute.dsde.workbench.sam.azure
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
+import cats.effect.unsafe.IORuntime
 import com.azure.resourcemanager.managedapplications.models.Plan
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.Generator.genWorkbenchUserAzure
@@ -39,6 +40,7 @@ import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
 import java.util.UUID
+import scala.concurrent.ExecutionContextExecutor
 import scala.jdk.CollectionConverters._
 
 class AzureServiceSpec(_system: ActorSystem)
@@ -49,8 +51,8 @@ class AzureServiceSpec(_system: ActorSystem)
     with BeforeAndAfterAll
     with BeforeAndAfterEach
     with MockitoSugar {
-  implicit val ec = scala.concurrent.ExecutionContext.global
-  implicit val ioRuntime = cats.effect.unsafe.IORuntime.global
+  implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
+  implicit val ioRuntime: IORuntime = cats.effect.unsafe.IORuntime.global
 
   def this() = this(ActorSystem("AzureServiceSpec"))
 
