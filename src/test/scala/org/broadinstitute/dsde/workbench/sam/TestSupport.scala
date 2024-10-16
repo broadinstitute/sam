@@ -47,7 +47,7 @@ trait TestSupport {
   def runAndWait[T](f: Awaitable[T]): T = Await.result(f, Duration.Inf)
   def runAndWait[T](f: IO[T]): T = f.unsafeRunSync()
 
-  implicit val futureTimeout = Timeout(Span(10, Seconds))
+  implicit val futureTimeout: Timeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
 
   val samRequestContext = SamRequestContext()

@@ -51,10 +51,10 @@ object SamAuditModelJsonSupport {
     }
   }
 
-  implicit val AuditInfoFormat = jsonFormat2(AuditInfo)
+  implicit val AuditInfoFormat: RootJsonFormat[AuditInfo] = jsonFormat2(AuditInfo)
 
-  implicit val ResourceChangeFormat = jsonFormat1(ResourceChange)
-  implicit val ResourceEventTypeFormat = new RootJsonFormat[ResourceEventType] {
+  implicit val ResourceChangeFormat: RootJsonFormat[ResourceChange] = jsonFormat1(ResourceChange)
+  implicit val ResourceEventTypeFormat: RootJsonFormat[ResourceEventType] = new RootJsonFormat[ResourceEventType] {
     def read(obj: JsValue): ResourceEventType = obj match {
       case JsString("ResourceCreated") => ResourceCreated
       case JsString("ResourceParentUpdated") => ResourceParentUpdated
@@ -66,9 +66,9 @@ object SamAuditModelJsonSupport {
     def write(obj: ResourceEventType): JsValue = JsString(obj.toString)
   }
 
-  implicit val ResourceEventFormat = jsonFormat3(ResourceEvent)
+  implicit val ResourceEventFormat: RootJsonFormat[ResourceEvent] = jsonFormat3(ResourceEvent)
 
-  implicit val WorkbenchSubjectFormat = new RootJsonFormat[WorkbenchSubject] {
+  implicit val WorkbenchSubjectFormat: RootJsonFormat[WorkbenchSubject] = new RootJsonFormat[WorkbenchSubject] {
     val MEMBER_TYPE_FIELD = "memberType"
     val USER_TYPE = "user"
     val GROUP_TYPE = "group"
@@ -105,8 +105,8 @@ object SamAuditModelJsonSupport {
       }
   }
 
-  implicit val AccessChangeFormat = jsonFormat5(AccessChange)
-  implicit val AccessChangeEventTypeFormat = new RootJsonFormat[AccessChangeEventType] {
+  implicit val AccessChangeFormat: RootJsonFormat[AccessChange] = jsonFormat5(AccessChange)
+  implicit val AccessChangeEventTypeFormat: RootJsonFormat[AccessChangeEventType] = new RootJsonFormat[AccessChangeEventType] {
     def read(obj: JsValue): AccessChangeEventType = obj match {
       case JsString("AccessAdded") => AccessAdded
       case JsString("AccessRemoved") => AccessRemoved
@@ -116,5 +116,5 @@ object SamAuditModelJsonSupport {
     def write(obj: AccessChangeEventType): JsValue = JsString(obj.toString)
   }
 
-  implicit val PolicyEventFormat = jsonFormat3(AccessChangeEvent)
+  implicit val PolicyEventFormat: RootJsonFormat[AccessChangeEvent] = jsonFormat3(AccessChangeEvent)
 }

@@ -2,16 +2,16 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, ErrorReportSource, WorkbenchEmail, WorkbenchIdentityJsonSupport}
-import spray.json.DefaultJsonProtocol
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 object SamGoogleModelJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
   import WorkbenchIdentityJsonSupport._
 
-  implicit val SyncReportItemFormat = jsonFormat4(SyncReportItem.apply)
-  implicit val SyncedPolicyFormat = jsonFormat2(SyncedPolicy.apply)
-  implicit val SyncReportFormat = jsonFormat1(SyncReport.apply)
+  implicit val SyncReportItemFormat: RootJsonFormat[SyncReportItem] = jsonFormat4(SyncReportItem.apply)
+  implicit val SyncedPolicyFormat: RootJsonFormat[SyncedPolicy] = jsonFormat2(SyncedPolicy.apply)
+  implicit val SyncReportFormat: RootJsonFormat[SyncReport] = jsonFormat1(SyncReport.apply)
 
 }
 

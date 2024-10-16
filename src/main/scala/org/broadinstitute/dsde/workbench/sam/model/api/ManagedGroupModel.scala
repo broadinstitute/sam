@@ -4,7 +4,7 @@ import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model.{ValueObject, ValueObjectFormat, WorkbenchEmail, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, ResourceRoleName}
 import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
-import spray.json.DefaultJsonProtocol
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 @Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
 @Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)
@@ -21,9 +21,9 @@ object ManagedGroupModelJsonSupport {
   import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
   import SamJsonSupport.{FullyQualifiedResourceIdFormat, ResourceIdFormat, ResourceRoleNameFormat}
 
-  implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
+  implicit val ManagedGroupMembershipEntryFormat: RootJsonFormat[ManagedGroupMembershipEntry] = jsonFormat3(ManagedGroupMembershipEntry.apply)
 
-  implicit val ManagedGroupAccessInstructionsFormat = ValueObjectFormat(ManagedGroupAccessInstructions.apply)
+  implicit val ManagedGroupAccessInstructionsFormat: ValueObjectFormat[ManagedGroupAccessInstructions] = ValueObjectFormat(ManagedGroupAccessInstructions.apply)
 
-  implicit val ManagedGroupSupportSummaryFormat = jsonFormat4(ManagedGroupSupportSummary.apply)
+  implicit val ManagedGroupSupportSummaryFormat: RootJsonFormat[ManagedGroupSupportSummary] = jsonFormat4(ManagedGroupSupportSummary.apply)
 }
