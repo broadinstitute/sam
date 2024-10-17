@@ -574,11 +574,10 @@ class PostgresAccessPolicyDAO(
       val gmf = GroupMemberFlatTable.syntax("gmf")
 
       val deleteQuery =
-        samsql"""delete from ${GroupMemberTable as gm} where ${gm.memberGroupId} in
-                         (select distinct ${gm.result.memberGroupId}
-                          from ${GroupMemberTable as gm}
-                          join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
-                          where ${p.resourceId} = (${loadResourcePKSubQuery(resource)}))
+        samsql"""delete from ${GroupMemberTable as gm}
+                 using ${PolicyTable as p}
+                 where ${gm.memberGroupId} = ${p.groupId}
+                 and ${p.resourceId} = (${loadResourcePKSubQuery(resource)}
                      """
       logger.warn(s"deleteQuery: ${deleteQuery.statement}")
       deleteQuery.update().apply()
@@ -1026,34 +1025,6 @@ class PostgresAccessPolicyDAO(
         )
         .list()
         .apply()
-    }
-  }
-
-  override def removePolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
-    logger.warn("deleting from group_member tables")
-    val gm = GroupMemberTable.syntax("gm")
-    val p = PolicyTable.syntax("p")
-    val gmf = GroupMemberFlatTable.syntax("gmf")
-
-    serializableWriteTransaction("removeFromGroupTable", samRequestContext) { implicit session =>
-      val deleteQuery =
-        samsql"""delete from ${GroupMemberTable as gm} where ${gm.memberGroupId} in
-                         (select distinct ${gm.result.memberGroupId}
-                          from ${GroupMemberTable as gm}
-                          join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
-                          where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
-                     """
-      logger.warn(s"deleteQuery: ${deleteQuery.statement}")
-      deleteQuery.update().apply()
-
-      val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf} where ${gmf.memberGroupId} in
-                         (select distinct ${gmf.result.memberGroupId}
-                          from ${GroupMemberFlatTable as gmf}
-                          join ${PolicyTable as p} on ${gmf.memberGroupId} = ${p.groupId}
-                          where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
-                     """
-      logger.info(s"deleteFlatQuery: ${deleteFlatQuery.statement}")
-      deleteFlatQuery.update().apply()
     }
   }
 

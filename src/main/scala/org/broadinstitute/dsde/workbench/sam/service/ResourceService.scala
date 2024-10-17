@@ -432,7 +432,6 @@ class ResourceService(
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- checkNoChildren(resource, samRequestContext)
-//      _ <- checkNoPoliciesInUse(resource, samRequestContext)
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
@@ -442,23 +441,6 @@ class ResourceService(
       leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
       _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)
       _ <- cloudSyncPolicies(resource, samRequestContext)
-
-      _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
-    } yield ()
-
-  @throws(classOf[WorkbenchExceptionWithErrorReport]) // Necessary to make Mockito happy
-  def deleteResourceCascade(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    for {
-      _ <- checkNoChildren(resource, samRequestContext)
-      _ <- accessPolicyDAO.removePolicyGroupsInUse(resource, samRequestContext)
-
-      // remove from cloud first so a failure there does not leave sam in a bad state
-      _ <- cloudDeletePolicies(resource, samRequestContext)
-      _ <- deleteActionManagedIdentitiesForResource(resource, samRequestContext)
-
-      // leave a tomb stone if the resource type does not allow reuse
-      leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
-      _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
     } yield ()
@@ -517,16 +499,11 @@ class ResourceService(
 
   def cloudSyncPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] =
     for {
-//      updatedPolicies <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
-//      removedMembers = originalPolicies.flatMap(_.members).toSet -- updatedPolicies.flatMap(_.members).toSet
-//      addedMembers = updatedPolicies.flatMap(_.members).toSet -- originalPolicies.flatMap(_.members).toSet
-//      addedMembers = updatedPolicies.flatMap(_.members).toSet
-
-      policiesToUpdate <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
-      _ <- policiesToUpdate.traverse { policy =>
+      policiesToSync <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
+      _ <- policiesToSync.traverse { policy =>
         cloudExtensions.onGroupUpdate(Seq(policy.id), Set.empty, samRequestContext)
       }
-    } yield policiesToUpdate
+    } yield policiesToSync
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] =
     accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext)
