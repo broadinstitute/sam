@@ -432,7 +432,8 @@ class ResourceService(
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- checkNoChildren(resource, samRequestContext)
-      _ <- checkNoPoliciesInUse(resource, samRequestContext)
+//      _ <- checkNoPoliciesInUse(resource, samRequestContext)
+      _ <- cloudSyncPolicies(resource, samRequestContext)
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
@@ -513,6 +514,19 @@ class ResourceService(
         cloudExtensions.onGroupDelete(policy.email)
       }
     } yield policiesToDelete
+
+  def cloudSyncPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] =
+    for {
+//      updatedPolicies <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
+//      removedMembers = originalPolicies.flatMap(_.members).toSet -- updatedPolicies.flatMap(_.members).toSet
+//      addedMembers = updatedPolicies.flatMap(_.members).toSet -- originalPolicies.flatMap(_.members).toSet
+//      addedMembers = updatedPolicies.flatMap(_.members).toSet
+
+      policiesToUpdate <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
+      _ <- policiesToUpdate.traverse { policy =>
+        cloudExtensions.onGroupUpdate(Seq(policy.id), Set.empty, samRequestContext)
+      }
+    } yield policiesToUpdate
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] =
     accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext)

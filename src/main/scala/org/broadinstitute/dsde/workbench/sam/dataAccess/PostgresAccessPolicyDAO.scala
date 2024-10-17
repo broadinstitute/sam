@@ -573,6 +573,29 @@ class PostgresAccessPolicyDAO(
       deleteEffectivePolicies(resource, resourceTypePKsByName)
       removeAuthDomainFromResource(resource, samRequestContext)
 
+      val gm = GroupMemberTable.syntax("gm")
+      val p = PolicyTable.syntax("p")
+      val gmf = GroupMemberFlatTable.syntax("gmf")
+
+      val deleteQuery =
+        samsql"""delete from ${GroupMemberTable as gm} where ${gm.memberGroupId} in
+                         (select distinct ${gm.result.memberGroupId}
+                          from ${GroupMemberTable as gm}
+                          join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
+                          where ${p.resourceId} = (${loadResourcePKSubQuery(resource)}))
+                     """
+      logger.warn(s"deleteQuery: ${deleteQuery.statement}")
+      deleteQuery.update().apply()
+
+      val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf} where ${gmf.memberGroupId} in
+                         (select distinct ${gmf.result.memberGroupId}
+                          from ${GroupMemberFlatTable as gmf}
+                          join ${PolicyTable as p} on ${gmf.memberGroupId} = ${p.groupId}
+                          where ${p.resourceId} = (${loadResourcePKSubQuery(resource)}))
+                     """
+      logger.info(s"deleteFlatQuery: ${deleteFlatQuery.statement}")
+      deleteFlatQuery.update().apply()
+
       val r = ResourceTable.syntax("r")
       if (leaveTombStone) {
         // if leaving a tombstone, we need to orphan the resource
