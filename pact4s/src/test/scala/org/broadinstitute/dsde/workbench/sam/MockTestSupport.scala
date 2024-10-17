@@ -158,7 +158,7 @@ object MockTestSupport extends MockTestSupport {
       policyDAO,
       googleExt,
       FakeOpenIDConnectConfiguration,
-      azureService:Option[AzureService]
+      azureService: Option[AzureService]
     )
   }
 
