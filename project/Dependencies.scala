@@ -5,13 +5,13 @@ object Dependencies {
   val akkaHttpV = "10.2.9"
   val jacksonV = "2.17.0"
   val scalaLoggingV = "3.9.2"
-  val scalaTestV = "3.2.12"
-  val scalaCheckV = "1.14.3"
+  val scalaTestV = "3.2.19"
+  val scalaCheckV = "1.18.1"
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.7.2"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "9405803" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchLibV = "80e4b8d" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
   val workbenchUtil2V = s"0.9-$workbenchLibV"
   val workbenchModelV = s"0.20-$workbenchLibV"
@@ -77,8 +77,8 @@ object Dependencies {
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion
 
   val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
-  val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-15" % s"${scalaTestV}.0-RC2" % Test
-  val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "1.17.12" % Test
+  val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-18" % s"${scalaTestV}.0" % Test
+  val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "1.17.37" % Test
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -103,7 +103,7 @@ object Dependencies {
   val workbenchGoogle2Tests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.127.7" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.25" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
