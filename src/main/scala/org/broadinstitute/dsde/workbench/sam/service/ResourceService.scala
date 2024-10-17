@@ -433,7 +433,6 @@ class ResourceService(
     for {
       _ <- checkNoChildren(resource, samRequestContext)
 //      _ <- checkNoPoliciesInUse(resource, samRequestContext)
-      _ <- cloudSyncPolicies(resource, samRequestContext)
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
@@ -442,6 +441,7 @@ class ResourceService(
       // leave a tomb stone if the resource type does not allow reuse
       leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
       _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)
+      _ <- cloudSyncPolicies(resource, samRequestContext)
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
     } yield ()
