@@ -577,7 +577,7 @@ class PostgresAccessPolicyDAO(
         samsql"""delete from ${GroupMemberTable as gm}
                  using ${PolicyTable as p}
                  where ${gm.memberGroupId} = ${p.groupId}
-                 and ${p.resourceId} = (${loadResourcePKSubQuery(resource)}
+                 and ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
                      """
       logger.warn(s"deleteQuery: ${deleteQuery.statement}")
       deleteQuery.update().apply()
