@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.unsafe.implicits.global
 import cats.effect.{Clock, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
@@ -46,6 +45,10 @@ import scala.jdk.CollectionConverters._
 object GoogleExtensions {
   val resourceId = ResourceId("google")
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
+
+  def getShellGoogleProjectName(user: SamUser, googleServicesConfig: GoogleServicesConfig) =
+    // max 30 characters. subject ID is 21
+    GoogleProject(s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}")
 }
 
 class GoogleExtensions(
@@ -485,9 +488,6 @@ class GoogleExtensions(
       }
     } yield key
 
-  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): IO[String] =
-    IO.fromFuture(IO(getDefaultServiceAccountForShellProject(user, samRequestContext)))
-
   def getArbitraryPetServiceAccountToken(userEmail: WorkbenchEmail, scopes: Set[String], samRequestContext: SamRequestContext): IO[Option[String]] =
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
@@ -503,22 +503,32 @@ class GoogleExtensions(
       IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     }
 
-  private[google] def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
-    val projectName =
-      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
+  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): IO[String] = {
+    val googleProject: GoogleProject = GoogleExtensions.getShellGoogleProjectName(user, googleServicesConfig)
+
+    // try to get the key, if it fails with a 400, create the project and try again
+    getPetServiceAccountKey(user, googleProject, samRequestContext).recoverWith {
+      case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.BadRequest) =>
+        for {
+          _ <- IO.fromFuture(IO(createShellProject(googleProject, samRequestContext)))
+          key <- getPetServiceAccountKey(user, googleProject, samRequestContext)
+        } yield key
+    }
+  }
+
+  private[google] def createShellProject(project: GoogleProject, samRequestContext: SamRequestContext): Future[Unit] =
     for {
-      creationOperationId <- googleProjectDAO
-        .createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
-        .map(opId => Option(opId)) recover {
-        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
-      }
+      creationOperationId <-
+        googleProjectDAO
+          .createProject(project.value, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
+          .map(opId => Option(opId)) recover {
+          case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
+        }
       _ <- creationOperationId match {
         case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
         case None => Future.successful(())
       }
-      key <- getPetServiceAccountKey(user, GoogleProject(projectName), samRequestContext).unsafeToFuture()
-    } yield key
-  }
+    } yield ()
 
   private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
     def whenCreating(throwable: Throwable): Boolean =
