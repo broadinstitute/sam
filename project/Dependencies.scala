@@ -118,7 +118,7 @@ object Dependencies {
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
-  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.4.0" excludeAll excludeWorkbenchUtil2
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.9.1" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
