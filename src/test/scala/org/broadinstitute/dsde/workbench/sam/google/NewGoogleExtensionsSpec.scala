@@ -4,7 +4,7 @@ import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.testkit.TestKit
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import com.google.api.services.cloudresourcemanager.model.Operation
 import com.google.auth.oauth2.ServiceAccountCredentials
 import fs2.Stream
@@ -27,7 +27,7 @@ import org.broadinstitute.dsde.workbench.sam.Generator.{
   genWorkbenchUserId
 }
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LockDetails, PostgresDistributedLockDAO}
 import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.model.{ResourceType, ResourceTypeName}
@@ -228,9 +228,10 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
     val mockGoogleKeyCache = mock[GoogleKeyCache](RETURNS_SMART_NULLS)
     val mockGoogleProjectDAO = mock[GoogleProjectDAO](RETURNS_SMART_NULLS)
 
+    val mockLock = mock[PostgresDistributedLockDAO[IO]](RETURNS_SMART_NULLS)
     val googleExtensions: GoogleExtensions = spy(
       new GoogleExtensions(
-        mock[PostgresDistributedLockDAO[IO]](RETURNS_SMART_NULLS),
+        mockLock,
         mockDirectoryDAO,
         mock[AccessPolicyDAO](RETURNS_SMART_NULLS),
         mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS),
@@ -268,13 +269,20 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
     // really should be setup per test. The first call to getPetServiceAccountKey will throw an exception so we can
     // test that a project will be created if it fails. After that, a key will be returned so we can test that no project
     // is created if a key exists.
+    val shellGoogleProject = GoogleExtensions.getShellGoogleProjectName(user, TestSupport.googleServicesConfig)
     doReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, "bad"))), IO.pure(expectedKey))
       .when(googleExtensions)
-      .getPetServiceAccountKey(eqTo(user), eqTo(GoogleExtensions.getShellGoogleProjectName(user, TestSupport.googleServicesConfig)), any[SamRequestContext])
+      .getPetServiceAccountKey(eqTo(user), eqTo(shellGoogleProject), any[SamRequestContext])
 
     doReturn(IO.pure(expectedKey))
       .when(mockGoogleKeyCache)
       .getKey(eqTo(petServiceAccount))
+
+    when(mockLock.withLock(any[LockDetails]))
+      .thenReturn(Resource.make(IO.unit)(_ => IO.unit))
+
+    when(mockGoogleProjectDAO.getProjectName(eqTo(shellGoogleProject.value)))
+      .thenReturn(Future.successful(None))
 
     when(mockGoogleProjectDAO.createProject(any[String], any[String], any[GoogleParentResourceType]))
       .thenReturn(Future.successful("operation-id"))
@@ -348,7 +356,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
           // note that createShellProject is called because the first call to getPetServiceAccountKey failed
           // if test order changes, this may fail
           verify(googleExtensions).createShellProject(
-            eqTo(GoogleExtensions.getShellGoogleProjectName(user, TestSupport.googleServicesConfig)),
+            eqTo(shellGoogleProject),
             any[SamRequestContext]
           )
         }
@@ -365,7 +373,7 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
           // note that createShellProject is not called because the first call to getPetServiceAccountKey returned a key
           // if test order changes, this may fail
           verify(googleExtensions, never())
-            .createShellProject(eqTo(GoogleExtensions.getShellGoogleProjectName(user, TestSupport.googleServicesConfig)), any[SamRequestContext])
+            .createShellProject(eqTo(shellGoogleProject), any[SamRequestContext])
         }
       }
 

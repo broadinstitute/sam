@@ -510,25 +510,32 @@ class GoogleExtensions(
     getPetServiceAccountKey(user, googleProject, samRequestContext).recoverWith {
       case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.BadRequest) =>
         for {
-          _ <- IO.fromFuture(IO(createShellProject(googleProject, samRequestContext)))
+          _ <- createShellProject(googleProject, samRequestContext)
           key <- getPetServiceAccountKey(user, googleProject, samRequestContext)
         } yield key
     }
   }
 
-  private[google] def createShellProject(project: GoogleProject, samRequestContext: SamRequestContext): Future[Unit] =
-    for {
-      creationOperationId <-
-        googleProjectDAO
-          .createProject(project.value, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
-          .map(opId => Option(opId)) recover {
-          case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
+  private[google] def createShellProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Unit] =
+    distributedLock.withLock(LockDetails(s"${project.value}-createProject", "createProject", 30 seconds)).use { _ =>
+      IO.fromFuture(IO(for {
+        createProject <- googleProjectDAO.getProjectName(project.value).map(_.isEmpty)
+        creationOperationId <-
+          if (createProject) {
+            googleProjectDAO
+              .createProject(project.value, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
+              .map(opId => Option(opId)) recover {
+              case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
+            }
+          } else {
+            Future.successful(None)
+          }
+        _ <- creationOperationId match {
+          case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
+          case None => Future.successful(())
         }
-      _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
-        case None => Future.successful(())
-      }
-    } yield ()
+      } yield ()))
+    }
 
   private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
     def whenCreating(throwable: Throwable): Boolean =
