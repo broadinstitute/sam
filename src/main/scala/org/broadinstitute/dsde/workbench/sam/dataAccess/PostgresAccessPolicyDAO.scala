@@ -569,6 +569,28 @@ class PostgresAccessPolicyDAO(
 
   override def deleteResource(resource: FullyQualifiedResourceId, leaveTombStone: Boolean, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteResource", samRequestContext) { implicit session =>
+      val gm = GroupMemberTable.syntax("gm")
+      val p = PolicyTable.syntax("p")
+      val gmf = GroupMemberFlatTable.syntax("gmf")
+
+      val deleteQuery =
+        samsql"""delete from ${GroupMemberTable as gm}
+                 using ${PolicyTable as p}
+                 where ${gm.memberGroupId} = ${p.groupId}
+                 and ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
+                     """
+      logger.warn(s"deleteQuery: ${deleteQuery.statement}")
+      deleteQuery.update().apply()
+
+      val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf} where ${gmf.memberGroupId} in
+                         (select distinct ${gmf.result.memberGroupId}
+                          from ${GroupMemberFlatTable as gmf}
+                          join ${PolicyTable as p} on ${gmf.memberGroupId} = ${p.groupId}
+                          where ${p.resourceId} = (${loadResourcePKSubQuery(resource)}))
+                     """
+      logger.info(s"deleteFlatQuery: ${deleteFlatQuery.statement}")
+      deleteFlatQuery.update().apply()
+
       deleteAllResourcePolicies(resource, samRequestContext)
       deleteEffectivePolicies(resource, resourceTypePKsByName)
       removeAuthDomainFromResource(resource, samRequestContext)
