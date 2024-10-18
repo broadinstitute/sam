@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.model
 
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, SamUser}
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
@@ -274,6 +275,19 @@ final case class SamUserTos(id: WorkbenchUserId, version: String, action: String
   }
   def toHistoryRecord: TermsOfServiceHistoryRecord = TermsOfServiceHistoryRecord(action, version, createdAt)
 }
+
+final case class PetServiceAgents(
+    userId: WorkbenchUserId,
+    petServiceAccountProject: GoogleProject,
+    destinationProject: GoogleProject,
+    destinationProjectNumber: Long,
+    serviceAgents: Set[ServiceAgent]
+)
+
+final case class ServiceAgent(name: String, projectNumber: Long) {
+  val email: WorkbenchEmail = WorkbenchEmail(s"service-$projectNumber@$name.iam.gserviceaccount.com")
+}
+
 object SamLenses {
   val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource
   val resourceTypeNameInAccessPolicy = resourceIdentityAccessPolicy composeLens FullyQualifiedResourceId.resourceTypeName

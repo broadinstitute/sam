@@ -1465,4 +1465,130 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         .toSet
     }
 
+  def getPetServiceAgents(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      samRequestContext: SamRequestContext
+  ): IO[Option[PetServiceAgents]] =
+    readOnlyTransaction("getPetServiceAgents", samRequestContext) { implicit session =>
+      val petServiceAgentsTable = PetServiceAgentsTable.syntax
+      val loadPetServiceAgentsQuery = samsql"""select ${petServiceAgentsTable.resultAll}
+                  from ${PetServiceAgentsTable as petServiceAgentsTable}
+                  where ${petServiceAgentsTable.samUserId} = $userId
+                   and ${petServiceAgentsTable.petServiceAccountProject} = $petServiceAccountProject
+                   and ${petServiceAgentsTable.destinationProject} = $destinationProject"""
+      loadPetServiceAgentsQuery
+        .map(PetServiceAgentsTable(petServiceAgentsTable))
+        .single()
+        .apply()
+        .map(record =>
+          PetServiceAgents(
+            record.samUserId,
+            record.petServiceAccountProject,
+            record.destinationProject,
+            record.destinationProjectNumber,
+            record.serviceAgents.map(a => ServiceAgent(a, record.destinationProjectNumber))
+          )
+        )
+    }
+
+  def addPetServiceAgent(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      destinationProjectNumber: Long,
+      serviceAgent: String,
+      samRequestContext: SamRequestContext
+  ): IO[Set[ServiceAgent]] =
+    serializableWriteTransaction("addPetServiceAgent", samRequestContext) { implicit session =>
+      val updatedAt = Instant.now()
+      val petServiceAgentsTable = PetServiceAgentsTable.syntax
+      val petServiceAgentsColumns = PetServiceAgentsTable.column
+      samsql"""
+        insert into ${PetServiceAgentsTable as petServiceAgentsTable}
+         (${petServiceAgentsColumns.samUserId}, ${petServiceAgentsColumns.petServiceAccountProject}, ${petServiceAgentsColumns.destinationProject}, ${petServiceAgentsColumns.destinationProjectNumber}, ${petServiceAgentsColumns.serviceAgents}, ${petServiceAgentsColumns.updatedAt})
+          values ($userId, $petServiceAccountProject, $destinationProject, $destinationProjectNumber, ARRAY [$serviceAgent], $updatedAt)
+        on conflict (${petServiceAgentsColumns.samUserId}, ${petServiceAgentsColumns.petServiceAccountProject}, ${petServiceAgentsColumns.destinationProject})
+         do update set ${petServiceAgentsColumns.serviceAgents} = ARRAY_APPEND(${petServiceAgentsTable.serviceAgents}, $serviceAgent)
+         where ${petServiceAgentsTable.samUserId} = $userId
+          and ${petServiceAgentsTable.petServiceAccountProject} = $petServiceAccountProject
+          and ${petServiceAgentsTable.destinationProject} = $destinationProject
+        returning ${petServiceAgentsColumns.serviceAgents} as ${petServiceAgentsTable.resultName.serviceAgents}
+           """
+        .map { rs =>
+          rs.array(petServiceAgentsTable.resultName.serviceAgents)
+            .getArray()
+            .asInstanceOf[Array[String]]
+            .map(sa => ServiceAgent(sa, destinationProjectNumber))
+            .toSet
+        }
+        .single()
+        .apply()
+        .getOrElse(
+          throw new WorkbenchException(
+            s"PetServiceAgents not found for user $userId, petServiceAccountProject $petServiceAccountProject, destinationProject $destinationProject"
+          )
+        )
+    }
+
+  def removePetServiceAgent(
+      userId: WorkbenchUserId,
+      petServiceAccountProject: GoogleProject,
+      destinationProject: GoogleProject,
+      destinationProjectNumber: Long,
+      serviceAgent: String,
+      samRequestContext: SamRequestContext
+  ): IO[Set[ServiceAgent]] =
+    serializableWriteTransaction("removePetServiceAgent", samRequestContext) { implicit session =>
+      val updatedAt = Instant.now()
+      val petServiceAgentsTable = PetServiceAgentsTable.syntax
+      val petServiceAgentsColumns = PetServiceAgentsTable.column
+      val currentServiceAgents =
+        samsql"""
+        select ${petServiceAgentsTable.result.serviceAgents}
+        from ${PetServiceAgentsTable as petServiceAgentsTable}
+        where ${petServiceAgentsColumns.samUserId} = $userId
+            and ${petServiceAgentsColumns.petServiceAccountProject} = $petServiceAccountProject
+            and ${petServiceAgentsColumns.destinationProject} = $destinationProject
+              """
+          .map(rs =>
+            rs.array(petServiceAgentsTable.resultName.serviceAgents)
+              .getArray()
+              .asInstanceOf[Array[String]]
+              .map(sa => ServiceAgent(sa, destinationProjectNumber))
+              .toSet
+          )
+          .single()
+          .apply()
+          .getOrElse(Set.empty)
+
+      val updatedServiceAgents = ServiceAgentsArray(currentServiceAgents - ServiceAgent(serviceAgent, destinationProjectNumber))
+      samsql"""
+        insert into ${PetServiceAgentsTable as petServiceAgentsTable}
+         (${petServiceAgentsColumns.samUserId}, ${petServiceAgentsColumns.petServiceAccountProject}, ${petServiceAgentsColumns.destinationProject}, ${petServiceAgentsColumns.destinationProjectNumber}, ${petServiceAgentsColumns.serviceAgents}, ${petServiceAgentsColumns.updatedAt})
+          values ($userId, $petServiceAccountProject, $destinationProject, $destinationProjectNumber, $updatedServiceAgents, $updatedAt)
+        on conflict (${petServiceAgentsColumns.samUserId}, ${petServiceAgentsColumns.petServiceAccountProject}, ${petServiceAgentsColumns.destinationProject})
+         do update set ${petServiceAgentsColumns.serviceAgents} = $updatedServiceAgents
+         where ${petServiceAgentsTable.samUserId} = $userId
+          and ${petServiceAgentsTable.petServiceAccountProject} = $petServiceAccountProject
+          and ${petServiceAgentsTable.destinationProject} = $destinationProject
+        returning ${petServiceAgentsColumns.serviceAgents} as ${petServiceAgentsTable.resultName.serviceAgents}
+           """
+        .map { rs =>
+          rs.array(petServiceAgentsTable.resultName.serviceAgents)
+            .getArray()
+            .asInstanceOf[Array[String]]
+            .map(sa => ServiceAgent(sa, destinationProjectNumber))
+            .toSet
+        }
+        .single()
+        .apply()
+        .getOrElse(
+          throw new WorkbenchException(
+            s"PetServiceAgents not found for user $userId, petServiceAccountProject $petServiceAccountProject, destinationProject $destinationProject"
+          )
+        )
+    }
+
 }
