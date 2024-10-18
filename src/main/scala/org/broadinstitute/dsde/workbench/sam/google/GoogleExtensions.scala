@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.unsafe.implicits.global
 import cats.effect.{Clock, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
@@ -46,6 +45,10 @@ import scala.jdk.CollectionConverters._
 object GoogleExtensions {
   val resourceId = ResourceId("google")
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
+
+  def getShellGoogleProjectName(user: SamUser, googleServicesConfig: GoogleServicesConfig) =
+    // max 30 characters. subject ID is 21
+    GoogleProject(s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}")
 }
 
 class GoogleExtensions(
@@ -455,45 +458,84 @@ class GoogleExtensions(
       key <- googleKeyCache.getKey(pet)
     } yield key
 
-  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
-    getPetServiceAccountKey(user, project, samRequestContext).unsafeToFuture().flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
+  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
+    getPetServiceAccountKey(user, project, samRequestContext).flatMap { key =>
+      IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     }
+
+  def getPetServiceAccountToken(
+      userEmail: WorkbenchEmail,
+      project: GoogleProject,
+      scopes: Set[String],
+      samRequestContext: SamRequestContext
+  ): IO[Option[String]] =
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
+      token <- subject match {
+        case Some(userId: WorkbenchUserId) =>
+          getPetServiceAccountToken(SamUser(userId, None, userEmail, None, false), project, scopes, samRequestContext).map(Option(_))
+        case _ => IO.pure(None)
+      }
+    } yield token
 
   def getArbitraryPetServiceAccountKey(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[String]] =
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) =>
-          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), samRequestContext))).map(Option(_))
+          getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), samRequestContext).map(Option(_))
         case _ => IO.none
       }
     } yield key
 
-  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): Future[String] =
-    getDefaultServiceAccountForShellProject(user, samRequestContext)
+  def getArbitraryPetServiceAccountToken(userEmail: WorkbenchEmail, scopes: Set[String], samRequestContext: SamRequestContext): IO[Option[String]] =
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
+      token <- subject match {
+        case Some(userId: WorkbenchUserId) =>
+          getArbitraryPetServiceAccountToken(SamUser(userId, None, userEmail, None, false), scopes, samRequestContext).map(Option(_))
+        case _ => IO.none
+      }
+    } yield token
 
-  def getArbitraryPetServiceAccountToken(user: SamUser, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
+  def getArbitraryPetServiceAccountToken(user: SamUser, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
     getArbitraryPetServiceAccountKey(user, samRequestContext).flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
+      IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     }
 
-  private def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
-    val projectName =
-      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
-    for {
-      creationOperationId <- googleProjectDAO
-        .createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
-        .map(opId => Option(opId)) recover {
-        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
-      }
-      _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
-        case None => Future.successful(())
-      }
-      key <- getPetServiceAccountKey(user, GoogleProject(projectName), samRequestContext).unsafeToFuture()
-    } yield key
+  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): IO[String] = {
+    val googleProject: GoogleProject = GoogleExtensions.getShellGoogleProjectName(user, googleServicesConfig)
+
+    // try to get the key, if it fails with a 400, create the project and try again
+    getPetServiceAccountKey(user, googleProject, samRequestContext).recoverWith {
+      case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.BadRequest) =>
+        for {
+          _ <- createShellProject(googleProject, samRequestContext)
+          key <- getPetServiceAccountKey(user, googleProject, samRequestContext)
+        } yield key
+    }
   }
+
+  private[google] def createShellProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Unit] =
+    distributedLock.withLock(LockDetails(s"${project.value}-createProject", "createProject", 30 seconds)).use { _ =>
+      IO.fromFuture(IO(for {
+        createProject <- googleProjectDAO.getProjectName(project.value).map(_.isEmpty)
+        creationOperationId <-
+          if (createProject) {
+            googleProjectDAO
+              .createProject(project.value, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
+              .map(opId => Option(opId)) recover {
+              case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
+            }
+          } else {
+            Future.successful(None)
+          }
+        _ <- creationOperationId match {
+          case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
+          case None => Future.successful(())
+        }
+      } yield ()))
+    }
 
   private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
     def whenCreating(throwable: Throwable): Boolean =
@@ -690,7 +732,7 @@ class GoogleExtensions(
     val bucket = GcsBucketName(blobId.getBucket)
     val objectName = GcsBlobName(blobId.getName)
     for {
-      petKey <- IO.fromFuture(IO(getArbitraryPetServiceAccountKey(samUser, samRequestContext)))
+      petKey <- getArbitraryPetServiceAccountKey(samUser, samRequestContext)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
       url <- getSignedUrl(samUser, bucket, objectName, duration, urlParamsMap, serviceAccountCredentials)
     } yield url

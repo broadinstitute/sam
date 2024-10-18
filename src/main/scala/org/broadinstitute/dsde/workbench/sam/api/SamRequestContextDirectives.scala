@@ -56,7 +56,7 @@ trait SamRequestContextDirectives {
   def withSamRequestContext: Directive1[SamRequestContext] =
     for {
       clientIP <- extractClientIP
-      otelContext <- traceRequest
+      otelContext <- traceRequest()
     } yield SamRequestContext(Option(otelContext), clientIP.toOption)
 
   /** Adds the route and parameters to telemetry. The route is consistent across all requests to the same endpoint. For example, if the route is

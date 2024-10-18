@@ -28,7 +28,7 @@ import scala.concurrent.Future
 
 class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
-  implicit val errorReportSource = ErrorReportSource("sam")
+  implicit val errorReportSource: ErrorReportSource = ErrorReportSource("sam")
 
   val firecloudAdmin = Generator.genFirecloudUser.sample.get
   val broadUser = Generator.genBroadInstituteUser.sample.get

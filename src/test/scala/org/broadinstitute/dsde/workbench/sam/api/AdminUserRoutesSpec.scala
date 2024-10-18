@@ -395,4 +395,32 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       status shouldEqual StatusCodes.NotFound
     }
   }
+
+  "PUT /admin/v2/user/{userId}/repairCloudAccess" should "return no content when called as admin user" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminUser() // enabled "admin" user who is making the http request
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
+      .build
+
+    // Act and Assert
+    Put(s"/api/admin/v2/user/$defaultUserId/repairCloudAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
+
+  it should "forbid the request when the requesting user is a non admin" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
+      .withAllowedUser(defaultUser)
+      .callAsNonAdminUser()
+      .build
+
+    // Act and Assert
+    Put(s"/api/admin/v2/user/$defaultUserId/repairCloudAccess") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
 }

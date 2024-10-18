@@ -137,7 +137,7 @@ class SamProviderSpec
       when {
         googleExt.getArbitraryPetServiceAccountToken(any[SamUser], any[Set[String]], any[SamRequestContext])
       } thenReturn {
-        Future.successful("aToken")
+        IO.pure("aToken")
       }
     )
   } yield ()

@@ -98,6 +98,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v2/user/{userId}/repairCloudAccess:
+    put:
+      tags:
+        - Admin
+      summary: Ensures that a user's proxy group exists and that it is added to any google groups that it should be in.
+      operationId: adminRepairUserCloudAccess
+      parameters:
+        - name: userId
+          in: path
+          description: User ID of the user to have their cloud access repaired
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: User access was repaired successfully (as long as the group sync messages succeed)
+        403:
+          description: You do not have admin privileges
+          content: { }
+        404:
+          description: User not found
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/user/email/{email}:
     get:
       tags:
@@ -1081,6 +1109,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v1/petServiceAccount/{project}/{email}/token:
+    post:
+      tags:
+        - Google
+      summary: gets a token for the user's pet service account, get_pet_private_key
+        action on cloud-extension/google required
+      operationId: getUserPetServiceAccountToken
+      parameters:
+        - name: project
+          in: path
+          description: Google project of the pet
+          required: true
+          schema:
+            type: string
+        - name: email
+          in: path
+          description: User's email address
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Scopes for the token
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/ArrayOfScopes'
+        required: true
+      responses:
+        200:
+          description: an access token for the users pet service account
+          content:
+            application/json:
+              schema:
+                type: string
+        403:
+          description: caller has some access to cloud-extension/google but not to
+            the get_pet_private_key action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: user does not exist or caller does not have any access to cloud-extension/google
+            resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+      x-codegen-request-body-name: scopes
   /api/google/v1/petServiceAccount/{email}/key:
     get:
       tags:
@@ -1121,6 +1204,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/google/v1/petServiceAccount/{email}/token:
+    post:
+      tags:
+        - Google
+      summary: gets a token for the user's arbitrary pet service account, get_pet_private_key
+        action on cloud-extension/google required
+      operationId: getUserArbitraryPetServiceAccountToken
+      parameters:
+        - name: email
+          in: path
+          description: User's email address
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Scopes for the token
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/ArrayOfScopes'
+        required: true
+      responses:
+        200:
+          description: an access token for the users pet service account
+          content:
+            application/json:
+              schema:
+                type: string
+        403:
+          description: caller has some access to cloud-extension/google but not to
+            the get_pet_private_key action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        404:
+          description: user does not exist or caller does not have any access to cloud-extension/google
+            resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        x-codegen-request-body-name: scopes
   /api/google/v1/user/signedUrlForBlob:
     post:
       tags:
@@ -1774,8 +1906,8 @@ paths:
       tags:
         - Resources
       summary: List resources the calling user has been granted policies/roles/actions on.
-        This endpoint MUST NOT be used to determine if a user has an action on a resource. 
-        This endpoint is ONLY for determining the state of the user's permissions. 
+        This endpoint MUST NOT be used to determine if a user has an action on a resource.
+        This endpoint is ONLY for determining the state of the user's permissions.
         It does not take into account enabled status, or Terms of Service Compliance, nor does it take into account Auth Domains.
         To check if a user is allowed to execute an action on a resource, use /api/resources/v2/{resourceTypeName}/{resourceId}/action/{action}
         By default, public resources are not included. Including public resources incurs a 3x cost of DB performance.
@@ -2099,6 +2231,42 @@ paths:
       responses:
         204:
           description: Successfully updated domains
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/resources/v2/{resourceTypeName}/{resourceId}/authDomain/satisfied:
+    get:
+      tags:
+        - Resources
+      summary: Check whether the calling user satisfies all Authoriaztion Domain Constraints
+      operationId: isAuthDomainV2Satisfied
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: User satisfies all authorization domain constraints.
+            Empty if an Auth Domain has not been set
+        403:
+          description: User does not satisfy all authorization domain constraints.
+          content: { }
+        404:
+          description: Resource type or resource does not exist or you are not a member
+            of any policy on the resource
           content: { }
         500:
           description: Internal Server Error
@@ -3203,6 +3371,106 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/favoriteResources:
+    get:
+      tags:
+        - Users
+      summary: Gets a user's favorite resources.
+      operationId: getFavoriteResources
+      responses:
+        200:
+          description: list of the user's favorite resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FullyQualifiedResourceId'
+        403:
+          description: user not found or is not allowed to use Terra
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/favoriteResources/{resourceTypeName}:
+    get:
+      tags:
+        - Users
+      summary: Gets a user's favorite resources of a given resource type.
+      operationId: getFavoriteResourcesOfType
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Resource type to narrow favorite resources to
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: list of the user's favorite resources of a specific resource type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FullyQualifiedResourceId'
+        404:
+          description: resource type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+  /api/users/v2/self/favoriteResources/{resourceTypeName}/{resourceId}:
+    put:
+      tags:
+        - Users
+      summary: Add a resource to the calling user's favorites
+      operationId: addFavoriteResource
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Resource type of the resource to favorite
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Resource ID of the resource to favorite
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Favorite resource added
+          content: { }
+        404:
+          description: resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+    delete:
+      tags:
+        - Users
+      summary: Remove a resource from the calling user's favorites
+      operationId: removeFavoriteResource
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Resource type of the resource to favorite
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Resource ID of the resource to favorite
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: Favorite resource removed
+          content: { }
   /api/users/v2/{sam_user_id}:
     get:
       tags:
@@ -4354,7 +4622,7 @@ components:
           type: boolean
           description: true if there is a rolling acceptance window active. This
             means that users who have not accepted the latest terms of service
-            version (and who have accepted the previous version) will be allowed to use the system 
+            version (and who have accepted the previous version) will be allowed to use the system
             for a period of time after the terms of service have been updated.
     UserTermsOfServiceDetails:
       required:

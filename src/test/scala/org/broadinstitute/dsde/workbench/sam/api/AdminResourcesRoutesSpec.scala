@@ -17,7 +17,7 @@ import org.mockito.scalatest.MockitoSugar
 
 class AdminResourcesRoutesSpec extends AnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
-  implicit val errorReportSource = ErrorReportSource("sam")
+  implicit val errorReportSource: ErrorReportSource = ErrorReportSource("sam")
 
   val adminUser = Generator.genFirecloudUser.sample.get
   val broadUser = Generator.genBroadInstituteUser.sample.get

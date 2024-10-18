@@ -1378,4 +1378,91 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
 
       loadParentGroupsQuery.map(rs => WorkbenchGroupName(rs.string(parent.resultName.name))).list().apply().toSet
     }
+
+  override def addUserFavoriteResource(
+      userId: WorkbenchUserId,
+      fullyQualifiedResourceId: FullyQualifiedResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Boolean] =
+    serializableWriteTransaction("addUserFavoriteResource", samRequestContext) { implicit session =>
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
+      val userFavoriteResourcesTable = UserFavoriteResourcesTable.syntax
+      val userFavoriteResourcesColumns = UserFavoriteResourcesTable.column
+      Try {
+        samsql"""
+        insert into ${UserFavoriteResourcesTable as userFavoriteResourcesTable} (${userFavoriteResourcesColumns.samUserId}, ${userFavoriteResourcesColumns.resourceId})
+          values (
+          $userId,
+          (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${fullyQualifiedResourceId.resourceId} and ${resourceTypeTable.name} = ${fullyQualifiedResourceId.resourceTypeName})
+           )
+          on conflict do nothing
+           """.update().apply() > 0
+      }.getOrElse(false)
+    }
+
+  override def removeUserFavoriteResource(
+      userId: WorkbenchUserId,
+      fullyQualifiedResourceId: FullyQualifiedResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    serializableWriteTransaction("removeUserFavoriteResource", samRequestContext) { implicit session =>
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
+      val userFavoriteResourcesColumns = UserFavoriteResourcesTable.column
+      samsql"""
+        delete from ${UserFavoriteResourcesTable.table}
+        where ${userFavoriteResourcesColumns.samUserId} = $userId
+        and ${userFavoriteResourcesColumns.resourceId} = (select ${resourceTable.result.id} from ${ResourceTable as resourceTable} left join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id} where ${resourceTable.name} = ${fullyQualifiedResourceId.resourceId} and ${resourceTypeTable.name} = ${fullyQualifiedResourceId.resourceTypeName})
+           """.update().apply()
+    }
+
+  override def getUserFavoriteResources(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
+    readOnlyTransaction("getUserFavoriteResources", samRequestContext) { implicit session =>
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
+      val userFavoriteResourcesTable = UserFavoriteResourcesTable.syntax
+
+      val loadUserFavoriteResourcesQuery =
+        samsql"""select ${resourceTable.result.name}, ${resourceTypeTable.result.name}
+                 from ${ResourceTable as resourceTable}
+                 join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+                 join ${UserFavoriteResourcesTable as userFavoriteResourcesTable} on ${resourceTable.id} = ${userFavoriteResourcesTable.resourceId}
+                 where ${userFavoriteResourcesTable.samUserId} = $userId"""
+
+      loadUserFavoriteResourcesQuery
+        .map(rs =>
+          FullyQualifiedResourceId(ResourceTypeName(rs.string(resourceTypeTable.resultName.name)), ResourceId(rs.string(resourceTable.resultName.name)))
+        )
+        .list()
+        .apply()
+        .toSet
+    }
+
+  def getUserFavoriteResourcesOfType(
+      userId: WorkbenchUserId,
+      resourceTypeName: ResourceTypeName,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedResourceId]] =
+    readOnlyTransaction("getUserFavoriteResourcesOfType", samRequestContext) { implicit session =>
+      val resourceTable = ResourceTable.syntax
+      val resourceTypeTable = ResourceTypeTable.syntax
+      val userFavoriteResourcesTable = UserFavoriteResourcesTable.syntax
+
+      val loadUserFavoriteResourcesQuery =
+        samsql"""select ${resourceTable.result.name}
+                 from ${ResourceTable as resourceTable}
+                 join ${ResourceTypeTable as resourceTypeTable} on ${resourceTable.resourceTypeId} = ${resourceTypeTable.id}
+                 join ${UserFavoriteResourcesTable as userFavoriteResourcesTable} on ${resourceTable.id} = ${userFavoriteResourcesTable.resourceId}
+                 where ${userFavoriteResourcesTable.samUserId} = $userId
+                 and ${resourceTypeTable.name} = $resourceTypeName
+                 """
+
+      loadUserFavoriteResourcesQuery
+        .map(rs => FullyQualifiedResourceId(resourceTypeName, ResourceId(rs.string(resourceTable.resultName.name))))
+        .list()
+        .apply()
+        .toSet
+    }
+
 }

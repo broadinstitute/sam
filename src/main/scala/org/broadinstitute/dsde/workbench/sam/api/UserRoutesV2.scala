@@ -8,15 +8,17 @@ import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api._
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceRoleName, ResourceTypeName, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, ResourceRoleName, ResourceTypeName, TermsOfServiceDetails}
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.enrichAny
+import spray.json.DefaultJsonProtocol._
 
 /** Created by tlangs on 10/12/2023.
   */
-trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
+trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives with SamModelDirectives with SecurityDirectives {
   val userService: UserService
   val tosService: TosService
   val resourceService: ResourceService
@@ -79,6 +81,27 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
                 val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                 pathEndOrSingleSlash {
                   getSamUserCombinedState(samUser, samRequestContext)
+                }
+              }
+            } ~
+            // api/user/v2/self/favoriteResources
+            pathPrefix("favoriteResources") {
+              withActiveUser(samRequestContextWithoutUser) { samUser: SamUser =>
+                val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
+                pathEndOrSingleSlash {
+                  getFavoriteResources(samUser, samRequestContext)
+                } ~
+                // api/user/v2/self/favoriteResources/{resourceTypeName}
+                pathPrefix(Segment) { resourceTypeName =>
+                  withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
+                    getFavoriteResourcesOfType(samUser, resourceType.name, samRequestContext) ~
+                    // api/user/v2/self/favoriteResources/{resourceTypeName}/{resourceId}
+                    pathPrefix(Segment) { resourceId =>
+                      val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
+                      addFavoriteResource(samUser, resource, samRequestContext) ~
+                      removeFavoriteResource(samUser, resource, samRequestContext)
+                    }
+                  }
                 }
               }
             }
@@ -194,12 +217,14 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
               includePublic = false,
               samRequestContext
             )
+          favoriteResources <- resourceService.getUserFavoriteResources(samUser.id, samRequestContext)
         } yield SamUserCombinedStateResponse(
           samUser,
           allowances,
           maybeAttributes,
           termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
-          Map("enterpriseFeatures" -> enterpriseFeatures.toJson)
+          Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
+          favoriteResources
         )
       }
     }
@@ -215,6 +240,41 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives {
             userResponse <- samUserResponse(samUser, samRequestContext)
           } yield Created -> userResponse
         }
+      }
+    }
+
+  private def getFavoriteResources(samUser: SamUser, samRequestContext: SamRequestContext): Route =
+    getWithTelemetry(samRequestContext) {
+      complete {
+        resourceService.getUserFavoriteResources(samUser.id, samRequestContext).map(StatusCodes.OK -> _)
+      }
+    }
+
+  private def getFavoriteResourcesOfType(samUser: SamUser, resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): Route =
+    getWithTelemetry(samRequestContext) {
+      complete {
+        resourceService.getUserFavoriteResourcesOfType(samUser.id, resourceTypeName, samRequestContext).map(StatusCodes.OK -> _)
+      }
+    }
+
+  private def addFavoriteResource(samUser: SamUser, resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Route =
+    putWithTelemetry(samRequestContext) {
+      changeForbiddenToNotFound {
+        requireAnyAction(resource, samUser.id, samRequestContext) {
+          complete {
+            resourceService.addUserFavoriteResource(samUser.id, resource, samRequestContext).map {
+              case true => StatusCodes.NoContent
+              case false => StatusCodes.NotFound
+            }
+          }
+        }
+      }
+    }
+
+  private def removeFavoriteResource(samUser: SamUser, resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): Route =
+    deleteWithTelemetry(samRequestContext) {
+      complete {
+        resourceService.removeUserFavoriteResource(samUser.id, resource, samRequestContext).map(_ => StatusCodes.NoContent)
       }
     }
 }

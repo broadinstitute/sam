@@ -3,7 +3,7 @@ import sbt._
 object Dependencies {
   val scalaV = "2.13"
 
-  val jacksonV = "2.15.2"
+  val jacksonV = "2.17.0"
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.2"
 
@@ -43,10 +43,9 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
     "com.typesafe.akka" %% "akka-testkit" % akkaV % "test",
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
-    "org.scalatest" %% "scalatest" % "3.2.3" % Test,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
-    "org.scalatest" %% "scalatest" % "3.2.12" % Test,
-    "org.scalatestplus" %% "scalacheck-1-15" % "3.2.11.0" % Test,
+    "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+    "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % Test,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
     workbenchServiceTest,
     workbenchGoogle,

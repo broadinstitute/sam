@@ -145,6 +145,25 @@ trait SecurityDirectives {
     }
   }
 
+  def requireAnyAction(
+      resource: FullyQualifiedResourceId,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): Directive0 =
+    Directives.mapInnerRoute { innerRoute =>
+      onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId, samRequestContext)) { actions =>
+        if (actions.nonEmpty) {
+          innerRoute
+        } else {
+          Directives.failWith(
+            new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.Forbidden, s"You do not have access to ${resource.resourceTypeName.value}/${resource.resourceId.value}")
+            )
+          )
+        }
+      }
+    }
+
   /** in the case where we don't have the required action, we need to figure out if we should return a Not Found (you have no access) vs a Forbidden (you have
     * access, just not the right kind)
     */

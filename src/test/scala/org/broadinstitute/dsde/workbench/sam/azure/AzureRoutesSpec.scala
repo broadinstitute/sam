@@ -22,7 +22,7 @@ import org.mockito.scalatest.MockitoSugar
 import scala.concurrent.duration._
 
 class AzureRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteTest with TestSupport with MockitoSugar {
-  implicit val timeout = RouteTestTimeout(15.seconds.dilated)
+  implicit val timeout: RouteTestTimeout = RouteTestTimeout(15.seconds.dilated)
 
   "POST /api/azure/v1/user/petManagedIdentity" should "successfully create a pet managed identity using MRG in db" in {
     val samRoutes = genSamRoutes()

@@ -8,7 +8,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, truncateAll}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, googleServicesConfig, truncateAll}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.matchers.BeSameUserMatcher.beSameUserAs
@@ -714,5 +714,50 @@ class OldUserServiceSpec(_system: ActorSystem)
   it should "reject an un-invitable email domain" in {
     assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq.empty, Seq("bar.com")).attempt.unsafeRunSync().isLeft)
     assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq.empty, Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+  }
+
+  "UserService repairCloudAccess" should "create a proxy group for a user and add it to any groups they are a member of" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Create user
+    val inviteeEmail = genNonPetEmail.sample.get
+    service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
+    val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+
+    val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    userInPostgres.value should {
+      equal(SamUser(invitedUserId, None, inviteeEmail, None, false))
+    }
+
+    val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
+    runAndWait(service.createUser(registeringUser, samRequestContext))
+
+    verify(googleExtensions).onUserCreate(SamUser(invitedUserId, None, inviteeEmail, None, false), samRequestContext)
+
+    verify(googleExtensions).onGroupUpdate(Seq.empty, Set(invitedUserId), samRequestContext)
+
+    val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true)
+
+    // add user to group
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("testGroup"), Set.empty, WorkbenchEmail("fake@group.com"))
+    runAndWait(dirDAO.createGroup(group, None, samRequestContext))
+    runAndWait(dirDAO.addGroupMember(group.id, invitedUserId, samRequestContext))
+
+    val proxyGroup =
+      WorkbenchGroupName(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${invitedUserId.value}@${googleServicesConfig.appsDomain}")
+    // delete proxy group
+    runAndWait(dirDAO.deleteGroup(proxyGroup, samRequestContext))
+
+    // Run test
+    service.repairCloudAccess(invitedUserId, samRequestContext).unsafeRunSync()
+
+    verify(googleExtensions).onUserCreate(updatedUserInPostgres.get, samRequestContext)
+    verify(googleExtensions).onUserEnable(updatedUserInPostgres.get, samRequestContext)
+    verify(googleExtensions).onGroupUpdate(Seq(allUsersGroup.id, group.id), Set(invitedUserId), samRequestContext)
+
+    // get group from db
+    val groupWithUpdatedVersion = runAndWait(dirDAO.loadGroup(group.id, samRequestContext))
+    groupWithUpdatedVersion.get.version shouldBe group.version + 1
   }
 }
