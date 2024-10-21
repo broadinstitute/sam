@@ -573,6 +573,7 @@ class PostgresAccessPolicyDAO(
       val p = PolicyTable.syntax("p")
       val gmf = GroupMemberFlatTable.syntax("gmf")
 
+      // Remove policy members from group tables to prevent FK Violations
       val deleteQuery =
         samsql"""delete from ${GroupMemberTable as gm}
                  using ${PolicyTable as p}
@@ -582,11 +583,10 @@ class PostgresAccessPolicyDAO(
       logger.warn(s"deleteQuery: ${deleteQuery.statement}")
       deleteQuery.update().apply()
 
-      val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf} where ${gmf.memberGroupId} in
-                         (select distinct ${gmf.result.memberGroupId}
-                          from ${GroupMemberFlatTable as gmf}
-                          join ${PolicyTable as p} on ${gmf.memberGroupId} = ${p.groupId}
-                          where ${p.resourceId} = (${loadResourcePKSubQuery(resource)}))
+      val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf}
+                 using ${PolicyTable as p}
+                 where ${gmf.memberGroupId} = ${p.groupId}
+                 and ${p.resourceId} = (${loadResourcePKSubQuery(resource)})
                      """
       logger.info(s"deleteFlatQuery: ${deleteFlatQuery.statement}")
       deleteFlatQuery.update().apply()
@@ -997,36 +997,36 @@ class PostgresAccessPolicyDAO(
     }
   }
 
-  override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] = {
-    val g = GroupTable.syntax("g")
-    val pg = GroupTable.syntax("pg") // problematic group
-    val gm = GroupMemberTable.syntax("gm")
-    val p = PolicyTable.syntax("p")
-
-    readOnlyTransaction("checkPolicyGroupsInUse", samRequestContext) { implicit session =>
-      val problematicGroupsQuery =
-        samsql"""select ${g.result.id}, ${g.result.name}, array_agg(${pg.name}) as ${pg.resultName.name}
-                     from ${GroupTable as g}
-                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
-                     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
-                     where ${g.id} in
-                         (select distinct ${gm.result.memberGroupId}
-                          from ${GroupMemberTable as gm}
-                          join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
-                          where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
-                     group by ${g.id}, ${g.name}"""
-      problematicGroupsQuery
-        .map(rs =>
-          Map(
-            "groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
-            "groupName" -> rs.get[String](g.resultName.name),
-            "still used in group(s):" -> rs.get[String](pg.resultName.name)
-          )
-        )
-        .list()
-        .apply()
-    }
-  }
+//  override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] = {
+//    val g = GroupTable.syntax("g")
+//    val pg = GroupTable.syntax("pg") // problematic group
+//    val gm = GroupMemberTable.syntax("gm")
+//    val p = PolicyTable.syntax("p")
+//
+//    readOnlyTransaction("checkPolicyGroupsInUse", samRequestContext) { implicit session =>
+//      val problematicGroupsQuery =
+//        samsql"""select ${g.result.id}, ${g.result.name}, array_agg(${pg.name}) as ${pg.resultName.name}
+//                     from ${GroupTable as g}
+//                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
+//                     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
+//                     where ${g.id} in
+//                         (select distinct ${gm.result.memberGroupId}
+//                          from ${GroupMemberTable as gm}
+//                          join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
+//                          where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
+//                     group by ${g.id}, ${g.name}"""
+//      problematicGroupsQuery
+//        .map(rs =>
+//          Map(
+//            "groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
+//            "groupName" -> rs.get[String](g.resultName.name),
+//            "still used in group(s):" -> rs.get[String](pg.resultName.name)
+//          )
+//        )
+//        .list()
+//        .apply()
+//    }
+//  }
 
   override def loadPolicy(resourceAndPolicyName: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
     listPolicies(resourceAndPolicyName.resource, limitOnePolicy = Option(resourceAndPolicyName.accessPolicyName), samRequestContext).map(_.headOption)
