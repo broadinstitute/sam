@@ -4,6 +4,7 @@ import cats.data.NonEmptyList
 import com.azure.core.management.AzureEnvironment
 import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
+import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -37,7 +38,7 @@ final case class AppConfig(
     resourceAccessPolicies: Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]
 )
 
-object AppConfig {
+object AppConfig extends LazyLogging {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
     OidcConfig(
       config.getString("authorityEndpoint"),
@@ -198,11 +199,16 @@ object AppConfig {
   }
 
   implicit val azureEnvironmentConfigReader: ValueReader[Option[AzureEnvironment]] = new ValueReader[Option[AzureEnvironment]] {
-    def read(config: Config, path: String): Option[AzureEnvironment] =
+    def read(config: Config, path: String): Option[AzureEnvironment] = {
+
+      logger.info(s" azureEnvironmentConfigReader - path: $path")
+
       if (config.hasPath(path)) {
         val azureEnvironment: String = config.getString(path)
         val Azure: String = "AZURE"
         val AzureGov: String = "AZURE_GOV"
+
+        logger.info(s" azureEnvironmentConfigReader - azureEnvironment: $azureEnvironment")
 
         azureEnvironment match {
           case AzureGov => Some(AzureEnvironment.AZURE_US_GOVERNMENT)
@@ -212,6 +218,7 @@ object AppConfig {
       } else {
         None
       }
+    }
 
   }
 
