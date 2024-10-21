@@ -5,7 +5,6 @@ import bio.terra.cloudres.common.ClientConfig
 import bio.terra.cloudres.common.cleanup.CleanupConfig
 import cats.effect.IO
 import com.azure.core.credential.TokenCredential
-import com.azure.core.management.AzureEnvironment
 import com.azure.core.management.profile.AzureProfile
 import com.azure.identity.{ChainedTokenCredentialBuilder, ClientSecretCredentialBuilder, ManagedIdentityCredentialBuilder}
 import com.azure.resourcemanager.managedapplications.ApplicationManager
