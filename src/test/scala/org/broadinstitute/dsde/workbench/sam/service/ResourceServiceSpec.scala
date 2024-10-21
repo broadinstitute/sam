@@ -2278,7 +2278,7 @@ class ResourceServiceSpec
     testDeleteResource(managedGroupResourceType)
   }
 
-  it should "delete any action managed identites for the resource while it deletes the resource" in {
+  it should "delete any action managed identities for the resource while it deletes the resource" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
@@ -2376,6 +2376,64 @@ class ResourceServiceSpec
 
     // make sure the parent still exists
     assert(policyDAO.listAccessPolicies(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
+  }
+
+  it should "delete any policy members from groups before deleting resource" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Create a resource with a policy
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(
+      ResourceTypeName(UUID.randomUUID().toString),
+      Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)),
+      Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+      ownerRoleName
+    )
+    val resourceName = ResourceId("resource")
+
+    runAndWait(service.createResourceType(resourceType, samRequestContext))
+
+    // creating policy and to refer to by policy identifiers
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyName = AccessPolicyName("foo")
+    val resource =
+      runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy email
+    val resourceName2 = ResourceId("resource2")
+    val policyMembership2 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 =
+      runAndWait(
+        service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext)
+      )
+    val policies2: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName2), samRequestContext).unsafeRunSync()
+
+    // Add second resource to first policy
+    policies2.foreach { policy =>
+      runAndWait(
+        service.addSubjectToPolicy(
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceName), policyName),
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceName2), policyName2),
+          samRequestContext
+        )
+      )
+    }
+    val policy2Emails = policies2.map(p => p.email).toSet
+    // Verify that policies are in group
+    val updatedPolicies: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+    policy2Emails.subsetOf(updatedPolicies.head.policy.memberEmails) shouldBe true
+    // Delete resource; should not throw an error
+    runAndWait(service.deleteResource(FullyQualifiedResourceId(defaultResourceType.name, resourceName2), samRequestContext))
+
+    // Verify that policies are no longer in group
+    val updatedPolicies2: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+    policy2Emails.subsetOf(updatedPolicies2.head.policy.memberEmails) shouldBe false
   }
 
   "validatePolicy" should "succeed with a correct policy" in {

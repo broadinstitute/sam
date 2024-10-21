@@ -432,7 +432,6 @@ class ResourceService(
   def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       _ <- checkNoChildren(resource, samRequestContext)
-      _ <- checkNoPoliciesInUse(resource, samRequestContext)
 
       // remove from cloud first so a failure there does not leave sam in a bad state
       _ <- cloudDeletePolicies(resource, samRequestContext)
@@ -441,20 +440,10 @@ class ResourceService(
       // leave a tomb stone if the resource type does not allow reuse
       leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
       _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)
+      _ <- cloudSyncPolicies(resource, samRequestContext)
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
     } yield ()
-
-  private def checkNoPoliciesInUse(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
-    accessPolicyDAO.checkPolicyGroupsInUse(resource, samRequestContext).flatMap { problematicGroups =>
-      if (problematicGroups.nonEmpty)
-        IO.raiseError(
-          new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
-            ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")
-          )
-        )
-      else IO.unit
-    }
 
   private def deleteActionManagedIdentitiesForResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
     azureService
@@ -496,6 +485,14 @@ class ResourceService(
         cloudExtensions.onGroupDelete(policy.email)
       }
     } yield policiesToDelete
+
+  def cloudSyncPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] =
+    for {
+      policiesToSync <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
+      _ <- policiesToSync.traverse { policy =>
+        cloudExtensions.onGroupUpdate(Seq(policy.id), Set.empty, samRequestContext)
+      }
+    } yield policiesToSync
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] =
     accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext)
