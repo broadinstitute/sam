@@ -130,7 +130,6 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]]
 
-//  def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]]
 }
 
 sealed abstract class LoadResourceAuthDomainResult

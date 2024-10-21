@@ -2384,7 +2384,7 @@ class ResourceServiceSpec
     // Create a resource with a policy
     val ownerRoleName = ResourceRoleName("owner")
     val resourceType = ResourceType(
-      ResourceTypeName(UUID.randomUUID().toString),
+      defaultResourceType.name,
       Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)),
       Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
       ownerRoleName
@@ -2428,7 +2428,7 @@ class ResourceServiceSpec
       service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
     policy2Emails.subsetOf(updatedPolicies.head.policy.memberEmails) shouldBe true
     // Delete resource; should not throw an error
-    runAndWait(service.deleteResource(FullyQualifiedResourceId(defaultResourceType.name, resourceName2), samRequestContext))
+    runAndWait(service.deleteResource(FullyQualifiedResourceId(resourceType.name, resourceName2), samRequestContext))
 
     // Verify that policies are no longer in group
     val updatedPolicies2: Seq[AccessPolicyResponseEntry] =
