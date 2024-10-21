@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import com.azure.core.management.AzureEnvironment
 import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
@@ -196,6 +197,24 @@ object AppConfig {
     } yield AzureServicePrincipalConfig(clientId, clientSecret, tenantId)
   }
 
+  implicit val azureEnvironmentConfigReader: ValueReader[Option[AzureEnvironment]] = new ValueReader[Option[AzureEnvironment]] {
+    def read(config: Config, path: String): Option[AzureEnvironment] =
+      if (config.hasPath(path)) {
+        val azureEnvironment: String = config.getString(path)
+        val Azure: String = "AZURE"
+        val AzureGov: String = "AZURE_GOV"
+
+        azureEnvironment match {
+          case AzureGov => Some(AzureEnvironment.AZURE_US_GOVERNMENT)
+          case Azure => Some(AzureEnvironment.AZURE)
+          case _ => throw new IllegalArgumentException(s"Unknown Azure environment: $azureEnvironment")
+        }
+      } else {
+        None
+      }
+
+  }
+
   implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
     config
       .getAs[Boolean]("azureEnabled")
@@ -207,7 +226,8 @@ object AppConfig {
               config.as[Option[AzureServicePrincipalConfig]]("managedAppServicePrincipal"),
               config.as[Option[AzureMarketPlace]]("azureMarketPlace"),
               config.as[Option[AzureServiceCatalog]]("azureServiceCatalog"),
-              config.as[Option[Boolean]]("allowManagedIdentityUserCreation").getOrElse(false)
+              config.as[Option[Boolean]]("allowManagedIdentityUserCreation").getOrElse(false),
+              config.as[Option[AzureEnvironment]]("azureEnvironment").getOrElse(AzureEnvironment.AZURE)
             )
           )
         } else {

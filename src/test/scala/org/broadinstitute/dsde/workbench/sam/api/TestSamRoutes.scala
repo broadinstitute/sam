@@ -6,6 +6,7 @@ import akka.http.scaladsl.server.Directives.reject
 import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
 import cats.effect.unsafe.implicits.global
+import com.azure.core.management.AzureEnvironment
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
@@ -14,15 +15,7 @@ import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfigurat
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
-import org.broadinstitute.dsde.workbench.sam.config.{
-  AppConfig,
-  AzureMarketPlace,
-  AzureServiceCatalog,
-  AzureServicePrincipalConfig,
-  AzureServicesConfig,
-  LiquibaseConfig,
-  TermsOfServiceConfig
-}
+import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, AzureMarketPlace, AzureServiceCatalog, AzureServicePrincipalConfig, AzureServicesConfig, LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
@@ -224,7 +217,8 @@ object TestSamRoutes {
       Option(AzureServicePrincipalConfig("mock-managedapp-clientid", "mock-managedapp-clientsecret", "mock-managedapp-tenantid")),
       azureMarketPlace,
       azureServiceCatalog,
-      allowManagedIdentityUserCreation = true
+      allowManagedIdentityUserCreation = true,
+      azureEnvironment = AzureEnvironment.AZURE
     )
 
     val azureService =

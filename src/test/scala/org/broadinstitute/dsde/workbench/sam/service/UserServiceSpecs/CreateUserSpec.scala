@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
+import com.azure.core.management.AzureEnvironment
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{genNewWorkbenchUserAzureUami, genWorkbenchUserAzure, genWorkbenchUserBoth, genWorkbenchUserGoogle}
 import org.broadinstitute.dsde.workbench.sam.config.AzureServicesConfig
@@ -81,7 +82,7 @@ class CreateUserSpec extends UserServiceTestTraits {
             cloudExtensions,
             Seq.empty,
             defaultTosService,
-            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = true))
+            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = true,azureEnvironment = AzureEnvironment.AZURE))
           )
 
         // Act
@@ -295,7 +296,7 @@ class CreateUserSpec extends UserServiceTestTraits {
             cloudExtensions,
             Seq.empty,
             defaultTosService,
-            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = false))
+            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = false,azureEnvironment = AzureEnvironment.AZURE))
           )
 
         // Act and Assert

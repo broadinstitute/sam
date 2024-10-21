@@ -79,7 +79,7 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
       )
     }
 
-    val profile = new AzureProfile(tenantId.value, subscriptionId.value, AzureEnvironment.AZURE)
+    val profile = new AzureProfile(tenantId.value, subscriptionId.value, config.azureEnvironment)
 
     (credential.build(), profile)
   }
