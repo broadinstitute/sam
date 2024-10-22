@@ -72,14 +72,13 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) exte
     config.managedAppServicePrincipal.foreach { servicePrincipalConfig =>
       credential.addLast(
         new ClientSecretCredentialBuilder()
+          .authorityHost(config.azureEnvironment.getActiveDirectoryEndpoint)
           .clientId(servicePrincipalConfig.clientId)
           .clientSecret(servicePrincipalConfig.clientSecret)
           .tenantId(servicePrincipalConfig.tenantId)
           .build
       )
     }
-
-    logger.info(s" getCredentialAndProfile - ad endpoint: ${config.azureEnvironment.getActiveDirectoryEndpoint}")
 
     val profile = new AzureProfile(tenantId.value, subscriptionId.value, config.azureEnvironment)
 
