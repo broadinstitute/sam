@@ -219,7 +219,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                   ) {
                     getWithTelemetry(samRequestContext, "googleProject" -> projectResourceId) {
                       complete {
-                        googleExtensions.createUserPetServiceAccount(samUser, GoogleProject(project), samRequestContext).map { petSA =>
+                        googleExtensions.getArbitraryPetServiceAccount(samUser, samRequestContext).map { petSA =>
                           StatusCodes.OK -> petSA.serviceAccount.email
                         }
                       }
