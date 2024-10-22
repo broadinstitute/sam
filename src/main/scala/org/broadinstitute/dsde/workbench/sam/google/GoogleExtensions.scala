@@ -516,6 +516,15 @@ class GoogleExtensions(
     }
   }
 
+  def getArbitraryPetServiceAccount(user: SamUser, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
+    val googleProject: GoogleProject = GoogleExtensions.getShellGoogleProjectName(user, googleServicesConfig)
+
+    for {
+      _ <- createShellProject(googleProject, samRequestContext)
+      pet <- createUserPetServiceAccount(user, googleProject, samRequestContext)
+    } yield pet
+  }
+
   private[google] def createShellProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Unit] =
     distributedLock.withLock(LockDetails(s"${project.value}-createProject", "createProject", 30 seconds)).use { _ =>
       IO.fromFuture(IO(for {
