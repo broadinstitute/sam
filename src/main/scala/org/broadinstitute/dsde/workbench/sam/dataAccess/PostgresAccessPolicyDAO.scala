@@ -569,6 +569,7 @@ class PostgresAccessPolicyDAO(
 
   override def deleteResource(resource: FullyQualifiedResourceId, leaveTombStone: Boolean, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteResource", samRequestContext) { implicit session =>
+      deletePolicyMembersFromGroups(resource, samRequestContext)
       deleteAllResourcePolicies(resource, samRequestContext)
       deleteEffectivePolicies(resource, resourceTypePKsByName)
       removeAuthDomainFromResource(resource, samRequestContext)
@@ -951,6 +952,81 @@ class PostgresAccessPolicyDAO(
     }
   }
 
+  // TODO write the correct query
+  // Return value: [(policyToUpdate, policyToRemove)]
+  override def findAffectedPolicyGroups(
+      resourceId: FullyQualifiedResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]] =
+    readOnlyTransaction("findAffectedPolicyGroups", samRequestContext) { implicit session =>
+      val g = GroupTable.syntax("g")
+      val pg = GroupTable.syntax("pg")
+      val gm = GroupMemberTable.syntax("gm")
+      val p = PolicyTable.syntax("p")
+      val rt = ResourceTypeTable.syntax("rt")
+      val r = ResourceTable.syntax("r")
+
+      val query = samsql"""
+    select ${pg.result.name}, ${rt.result.name}, ${r.result.name}, ${p.result.name}
+    from ${GroupTable as g}
+    join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
+    join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
+    join ${PolicyTable as p} on ${pg.id} = ${p.groupId}
+    join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+    join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+    where ${g.id} in (
+      select distinct ${gm.result.memberGroupId}
+      from ${GroupMemberTable as gm}
+      join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
+      where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+    )
+  """
+      query.foreach { rs =>
+        println(s"pg.name: ${rs.string(pg.resultName.name)}, rt.name: ${rs.string(rt.resultName.name)}, r.name: ${rs.string(r.resultName.name)}, g.name: ${rs
+            .string(p.resultName.name)}")
+      }
+      query
+        .map { rs =>
+          val resourceTypeName1 = rs.get[ResourceTypeName](rt.resultName.name)
+          val resourceId1 = rs.get[ResourceId](r.resultName.name)
+          val accessPolicyName1 = rs.get[AccessPolicyName](pg.resultName.name)
+          val accessPolicyName2 = rs.get[AccessPolicyName](p.resultName.name)
+
+          val fullyQualifiedResourceId1 = FullyQualifiedResourceId(resourceTypeName1, resourceId1)
+          val fullyQualifiedPolicyId1 = FullyQualifiedPolicyId(fullyQualifiedResourceId1, accessPolicyName1)
+          val fullyQualifiedPolicyId2 = FullyQualifiedPolicyId(resourceId, accessPolicyName2)
+
+          (fullyQualifiedPolicyId1, fullyQualifiedPolicyId2)
+        }
+        .list()
+        .apply()
+
+    }
+
+  private def deletePolicyMembersFromGroups(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext)(implicit
+      session: DBSession
+  ): Unit = {
+    val gm = GroupMemberTable.syntax("gm")
+    val p = PolicyTable.syntax("p")
+    val gmf = GroupMemberFlatTable.syntax("gmf")
+
+    // Remove policy members from group tables to prevent FK Violations
+    val deleteQuery =
+      samsql"""delete from ${GroupMemberTable as gm}
+                 using ${PolicyTable as p}
+                 where ${gm.memberGroupId} = ${p.groupId}
+                 and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+                     """
+    deleteQuery.update().apply()
+
+    val deleteFlatQuery = samsql"""delete from ${GroupMemberFlatTable as gmf}
+                 using ${PolicyTable as p}
+                 where ${gmf.memberGroupId} = ${p.groupId}
+                 and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+                     """
+    deleteFlatQuery.update().apply()
+  }
+
   private def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext)(implicit
       session: DBSession
   ): Unit = {
@@ -972,37 +1048,6 @@ class PostgresAccessPolicyDAO(
     if (groupPKsToDelete.nonEmpty) {
       samsql"""delete from ${GroupTable as g}
                where ${g.id} in ($groupPKsToDelete)""".update().apply()
-    }
-  }
-
-  override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] = {
-    val g = GroupTable.syntax("g")
-    val pg = GroupTable.syntax("pg") // problematic group
-    val gm = GroupMemberTable.syntax("gm")
-    val p = PolicyTable.syntax("p")
-
-    readOnlyTransaction("checkPolicyGroupsInUse", samRequestContext) { implicit session =>
-      val problematicGroupsQuery =
-        samsql"""select ${g.result.id}, ${g.result.name}, array_agg(${pg.name}) as ${pg.resultName.name}
-                     from ${GroupTable as g}
-                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
-                     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
-                     where ${g.id} in
-                         (select distinct ${gm.result.memberGroupId}
-                          from ${GroupMemberTable as gm}
-                          join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
-                          where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
-                     group by ${g.id}, ${g.name}"""
-      problematicGroupsQuery
-        .map(rs =>
-          Map(
-            "groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
-            "groupName" -> rs.get[String](g.resultName.name),
-            "still used in group(s):" -> rs.get[String](pg.resultName.name)
-          )
-        )
-        .list()
-        .apply()
     }
   }
 
