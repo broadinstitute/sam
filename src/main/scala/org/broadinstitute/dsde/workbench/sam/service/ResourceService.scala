@@ -439,8 +439,10 @@ class ResourceService(
 
       // leave a tomb stone if the resource type does not allow reuse
       leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
+      affectedPolicies <- accessPolicyDAO.findAffectedPolicyGroups(resource, samRequestContext) // New method
+      _ <- affectedPolicies.traverse { case (policyToUpdate, policyToRemove) => removeSubjectFromPolicy(policyToUpdate, policyToRemove, samRequestContext) }
+      _ <- cloudSyncPolicies(affectedPolicies, samRequestContext) // TODO: use this on affected policies
       _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)
-      _ <- cloudSyncPolicies(resource, samRequestContext)
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
     } yield ()
@@ -486,13 +488,17 @@ class ResourceService(
       }
     } yield policiesToDelete
 
-  def cloudSyncPolicies(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicy]] =
+  def cloudSyncPolicies(
+      policiesList: List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)],
+      samRequestContext: SamRequestContext
+  ): IO[List[FullyQualifiedPolicyId]] = {
+    val policiesToSync: List[FullyQualifiedPolicyId] = policiesList.map { case (firstPolicy, _) => firstPolicy }.toSet.toList
     for {
-      policiesToSync <- accessPolicyDAO.listAccessPolicies(resource, samRequestContext)
       _ <- policiesToSync.traverse { policy =>
-        cloudExtensions.onGroupUpdate(Seq(policy.id), Set.empty, samRequestContext)
+        cloudExtensions.onGroupUpdate(Seq(policy), Set.empty, samRequestContext)
       }
     } yield policiesToSync
+  }
 
   def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] =
     accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext)
