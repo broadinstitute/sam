@@ -958,57 +958,7 @@ class PostgresAccessPolicyDAO(
       resourceId: FullyQualifiedResourceId,
       samRequestContext: SamRequestContext
   ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]] =
-//    val g = GroupTable.syntax("g")
-//    val pg = GroupTable.syntax("pg") // problematic group
-//    val gm = GroupMemberTable.syntax("gm")
-//    val p = PolicyTable.syntax("p")
-
     readOnlyTransaction("findAffectedPolicyGroups", samRequestContext) { implicit session =>
-//      samsql"""select * from ${GroupMemberTable as gm}
-//                 using ${PolicyTable as p}
-//                 where ${gm.memberGroupId} = ${p.groupId}
-//                 and ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})"""
-//      val problematicGroupsQuery =
-//        samsql"""select ${g.result.id}, ${g.result.name}, array_agg(${pg.name}) as ${pg.resultName.name}
-//                     from ${GroupTable as g}
-//                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
-//                     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
-//                     where ${g.id} in
-//                         (select distinct ${gm.result.memberGroupId}
-//                          from ${GroupMemberTable as gm}
-//                          join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
-//                          where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
-//                     group by ${g.id}, ${g.name}"""
-//      problematicGroupsQuery
-//        .map(rs =>
-//          Map(
-//            "groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
-//            "groupName" -> rs.get[String](g.resultName.name),
-//            "still used in group(s):" -> rs.get[String](pg.resultName.name)
-//          )
-//        )
-//        .list()
-//        .apply()
-
-//      val query = samsql"""
-//  select ${pg.result.name}, ${g.result.name}
-//  from ${GroupTable as g}
-//  join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
-//  join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
-//  where ${g.id} in (
-//    select distinct ${gm.result.memberGroupId}
-//    from ${GroupMemberTable as gm}
-//    join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
-//    where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
-//  )
-//"""
-
-//      val result: List[(String, String)] = query
-//        .map { rs =>
-//          (rs.string(pg.resultName.name), rs.string(g.resultName.name))
-//        }
-//        .list()
-//        .apply()
       val g = GroupTable.syntax("g")
       val pg = GroupTable.syntax("pg")
       val gm = GroupMemberTable.syntax("gm")
@@ -1017,7 +967,7 @@ class PostgresAccessPolicyDAO(
       val r = ResourceTable.syntax("r")
 
       val query = samsql"""
-    select ${pg.result.name}, ${rt.result.name}, ${r.result.name}, ${g.result.name}
+    select ${pg.result.name}, ${rt.result.name}, ${r.result.name}, ${p.result.name}
     from ${GroupTable as g}
     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
@@ -1031,13 +981,16 @@ class PostgresAccessPolicyDAO(
       where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)})
     )
   """
-
+      query.foreach { rs =>
+        println(s"pg.name: ${rs.string(pg.resultName.name)}, rt.name: ${rs.string(rt.resultName.name)}, r.name: ${rs.string(r.resultName.name)}, g.name: ${rs
+            .string(p.resultName.name)}")
+      }
       query
         .map { rs =>
           val resourceTypeName1 = rs.get[ResourceTypeName](rt.resultName.name)
           val resourceId1 = rs.get[ResourceId](r.resultName.name)
           val accessPolicyName1 = rs.get[AccessPolicyName](pg.resultName.name)
-          val accessPolicyName2 = rs.get[AccessPolicyName](g.resultName.name)
+          val accessPolicyName2 = rs.get[AccessPolicyName](p.resultName.name)
 
           val fullyQualifiedResourceId1 = FullyQualifiedResourceId(resourceTypeName1, resourceId1)
           val fullyQualifiedPolicyId1 = FullyQualifiedPolicyId(fullyQualifiedResourceId1, accessPolicyName1)
