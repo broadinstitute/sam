@@ -1009,14 +1009,14 @@ class PostgresAccessPolicyDAO(
 //        }
 //        .list()
 //        .apply()
-  val g = GroupTable.syntax("g")
-  val pg = GroupTable.syntax("pg")
-  val gm = GroupMemberTable.syntax("gm")
-  val p = PolicyTable.syntax("p")
-  val rt = ResourceTypeTable.syntax("rt")
-  val r = ResourceTable.syntax("r")
+      val g = GroupTable.syntax("g")
+      val pg = GroupTable.syntax("pg")
+      val gm = GroupMemberTable.syntax("gm")
+      val p = PolicyTable.syntax("p")
+      val rt = ResourceTypeTable.syntax("rt")
+      val r = ResourceTable.syntax("r")
 
-  val query = samsql"""
+      val query = samsql"""
     select ${pg.result.name}, ${rt.result.name}, ${r.result.name}, ${g.result.name}
     from ${GroupTable as g}
     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
@@ -1032,18 +1032,21 @@ class PostgresAccessPolicyDAO(
     )
   """
 
-  query.map { rs =>
-    val resourceTypeName1 = rs.get[ResourceTypeName](rt.resultName.name)
-    val resourceId1 = rs.get[ResourceId](r.resultName.name)
-    val accessPolicyName1 = rs.get[AccessPolicyName](pg.resultName.name)
-    val accessPolicyName2 = rs.get[AccessPolicyName](g.resultName.name)
+      query
+        .map { rs =>
+          val resourceTypeName1 = rs.get[ResourceTypeName](rt.resultName.name)
+          val resourceId1 = rs.get[ResourceId](r.resultName.name)
+          val accessPolicyName1 = rs.get[AccessPolicyName](pg.resultName.name)
+          val accessPolicyName2 = rs.get[AccessPolicyName](g.resultName.name)
 
-    val fullyQualifiedResourceId1 = FullyQualifiedResourceId(resourceTypeName1, resourceId1)
-    val fullyQualifiedPolicyId1 = FullyQualifiedPolicyId(fullyQualifiedResourceId1, accessPolicyName1)
-    val fullyQualifiedPolicyId2 = FullyQualifiedPolicyId(resourceId, accessPolicyName2)
+          val fullyQualifiedResourceId1 = FullyQualifiedResourceId(resourceTypeName1, resourceId1)
+          val fullyQualifiedPolicyId1 = FullyQualifiedPolicyId(fullyQualifiedResourceId1, accessPolicyName1)
+          val fullyQualifiedPolicyId2 = FullyQualifiedPolicyId(resourceId, accessPolicyName2)
 
-    (fullyQualifiedPolicyId1, fullyQualifiedPolicyId2)
-  }.list().apply()
+          (fullyQualifiedPolicyId1, fullyQualifiedPolicyId2)
+        }
+        .list()
+        .apply()
 
     }
 
