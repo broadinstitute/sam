@@ -569,7 +569,7 @@ class PostgresAccessPolicyDAO(
 
   override def deleteResource(resource: FullyQualifiedResourceId, leaveTombStone: Boolean, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteResource", samRequestContext) { implicit session =>
-      deletePolicyMembersFromGroups(resource, samRequestContext)
+      deletePolicyMembersFromGroups(resource)
       deleteAllResourcePolicies(resource, samRequestContext)
       deleteEffectivePolicies(resource, resourceTypePKsByName)
       removeAuthDomainFromResource(resource, samRequestContext)
@@ -958,45 +958,45 @@ class PostgresAccessPolicyDAO(
       samRequestContext: SamRequestContext
   ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]] =
     readOnlyTransaction("findAffectedPolicyGroups", samRequestContext) { implicit session =>
-      val group_member_table = GroupMemberTable.syntax("group_member_table")
-      val policy_table = PolicyTable.syntax("policy_table")
-      val parent_policy_table = PolicyTable.syntax("parent_policy_table")
-      val resource_type = ResourceTypeTable.syntax("resource_type")
-      val resource_table = ResourceTable.syntax("resource_table")
+      val groupMemberTable = GroupMemberTable.syntax("group_member_table")
+      val policyTable = PolicyTable.syntax("policy_table")
+      val parentPolicyTable = PolicyTable.syntax("parent_policy_table")
+      val resourceType = ResourceTypeTable.syntax("resource_type")
+      val resourceTable = ResourceTable.syntax("resource_table")
 
       val query = samsql"""
       WITH resourcePolicies as (
-        SELECT ${policy_table.groupId} as childGroupId, ${policy_table.name} as policyName
-      FROM ${PolicyTable as policy_table}
-        WHERE ${policy_table.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+        SELECT ${policyTable.groupId} as childGroupId, ${policyTable.name} as policyName
+      FROM ${PolicyTable as policyTable}
+        WHERE ${policyTable.resourceId} = (${loadResourcePKSubQuery(resourceId)})
       )
-      SELECT resourcePolicies.policyName as childPolicyName, ${parent_policy_table.name} as parentPolicyName, ${resource_table.name} as parentPolicyResourceName, ${resource_type.name} as parentPolicyResourceType
-from ${GroupMemberTable as group_member_table}
-        JOIN resourcePolicies ON ${group_member_table.memberGroupId} = resourcePolicies.childGroupId
-      JOIN ${PolicyTable as parent_policy_table} ON ${parent_policy_table.groupId} = ${group_member_table.groupId}
-      JOIN ${ResourceTable as resource_table} ON ${resource_table.id} = ${parent_policy_table.resourceId}
-      JOIN ${ResourceTypeTable as resource_type} ON ${resource_type.id} = ${resource_table.resourceTypeId}
+      SELECT resourcePolicies.policyName as childPolicyName, ${parentPolicyTable.name} as parentPolicyName, ${resourceTable.name} as parentPolicyResourceName, ${resourceType.name} as parentPolicyResourceType
+from ${GroupMemberTable as groupMemberTable}
+        JOIN resourcePolicies ON ${groupMemberTable.memberGroupId} = resourcePolicies.childGroupId
+      JOIN ${PolicyTable as parentPolicyTable} ON ${parentPolicyTable.groupId} = ${groupMemberTable.groupId}
+      JOIN ${ResourceTable as resourceTable} ON ${resourceTable.id} = ${parentPolicyTable.resourceId}
+      JOIN ${ResourceTypeTable as resourceType} ON ${resourceType.id} = ${resourceTable.resourceTypeId}
 """
       query
         .map { rs =>
-          val parent_policy_resource_type = rs.get[ResourceTypeName]("parentPolicyResourceType")
-          val parent_policy_resource_id = rs.get[ResourceId]("parentPolicyResourceName")
-          val parent_policy_access_name = rs.get[AccessPolicyName]("parentPolicyName")
-          val member_policy_access_name = rs.get[AccessPolicyName]("childPolicyName")
+          val parentPolicyResourceType = rs.get[ResourceTypeName]("parentPolicyResourceType")
+          val parentPolicyResourceId = rs.get[ResourceId]("parentPolicyResourceName")
+          val parentPolciyAccessName = rs.get[AccessPolicyName]("parentPolicyName")
+          val memberPolicyAccessName = rs.get[AccessPolicyName]("childPolicyName")
 
-          val parent_policy_full_resource_id =
-            FullyQualifiedResourceId(parent_policy_resource_type, parent_policy_resource_id)
-          val parent_policy_full_id = FullyQualifiedPolicyId(parent_policy_full_resource_id, parent_policy_access_name)
-          val member_policy_full_id = FullyQualifiedPolicyId(resourceId, member_policy_access_name)
+          val parentPolicyFullResourceId =
+            FullyQualifiedResourceId(parentPolicyResourceType, parentPolicyResourceId)
+          val parentPolicyFullId = FullyQualifiedPolicyId(parentPolicyFullResourceId, parentPolciyAccessName)
+          val memberPolicyFullId = FullyQualifiedPolicyId(resourceId, memberPolicyAccessName)
 
-          (parent_policy_full_id, member_policy_full_id)
+          (parentPolicyFullId, memberPolicyFullId)
         }
         .list()
         .apply()
 
     }
 
-  private def deletePolicyMembersFromGroups(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext)(implicit
+  private def deletePolicyMembersFromGroups(resourceId: FullyQualifiedResourceId)(implicit
       session: DBSession
   ): Unit = {
     val gm = GroupMemberTable.syntax("gm")
