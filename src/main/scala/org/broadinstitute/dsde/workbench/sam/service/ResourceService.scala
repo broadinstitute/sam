@@ -441,7 +441,6 @@ class ResourceService(
       leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
       affectedPolicies <- accessPolicyDAO.findPolicyGroupsInUse(resource, samRequestContext) // New method
       _ <- affectedPolicies.traverse { case (policyToUpdate, policyToRemove) => removeSubjectFromPolicy(policyToUpdate, policyToRemove, samRequestContext) }
-      _ <- cloudSyncPolicies(affectedPolicies, samRequestContext)
       _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)
 
       _ <- AuditLogger.logAuditEventIO(samRequestContext, ResourceEvent(ResourceDeleted, resource))
