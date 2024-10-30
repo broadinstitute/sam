@@ -487,18 +487,6 @@ class ResourceService(
       }
     } yield policiesToDelete
 
-  def cloudSyncPolicies(
-      policiesList: List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)],
-      samRequestContext: SamRequestContext
-  ): IO[List[FullyQualifiedPolicyId]] = {
-    val policiesToSync: List[FullyQualifiedPolicyId] = policiesList.map { case (firstPolicy, _) => firstPolicy }.toSet.toList
-    for {
-      _ <- policiesToSync.traverse { policy =>
-        cloudExtensions.onGroupUpdate(Seq(policy), Set.empty, samRequestContext)
-      }
-    } yield policiesToSync
-  }
-
   def listUserResourceRoles(resource: FullyQualifiedResourceId, samUser: SamUser, samRequestContext: SamRequestContext): IO[Set[ResourceRoleName]] =
     accessPolicyDAO.listUserResourceRoles(resource, samUser.id, samRequestContext)
 
