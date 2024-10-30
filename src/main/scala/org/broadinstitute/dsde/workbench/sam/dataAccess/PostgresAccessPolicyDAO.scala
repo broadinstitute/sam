@@ -569,7 +569,7 @@ class PostgresAccessPolicyDAO(
 
   override def deleteResource(resource: FullyQualifiedResourceId, leaveTombStone: Boolean, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteResource", samRequestContext) { implicit session =>
-      deletePolicyMembersFromGroups(resource)
+//      deletePolicyMembersFromGroups(resource)
       deleteAllResourcePolicies(resource, samRequestContext)
       deleteEffectivePolicies(resource, resourceTypePKsByName)
       removeAuthDomainFromResource(resource, samRequestContext)
@@ -953,7 +953,7 @@ class PostgresAccessPolicyDAO(
   }
 
   // Return value: [(policyToUpdate, policyToRemove)]
-  override def findAffectedPolicyGroups(
+  override def findPolicyGroupsInUse(
       resourceId: FullyQualifiedResourceId,
       samRequestContext: SamRequestContext
   ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]] =

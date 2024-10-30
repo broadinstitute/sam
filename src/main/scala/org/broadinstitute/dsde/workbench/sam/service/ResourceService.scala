@@ -439,7 +439,7 @@ class ResourceService(
 
       // leave a tomb stone if the resource type does not allow reuse
       leaveTombStone = !resourceTypes(resource.resourceTypeName).reuseIds
-      affectedPolicies <- accessPolicyDAO.findAffectedPolicyGroups(resource, samRequestContext) // New method
+      affectedPolicies <- accessPolicyDAO.findPolicyGroupsInUse(resource, samRequestContext) // New method
       _ <- affectedPolicies.traverse { case (policyToUpdate, policyToRemove) => removeSubjectFromPolicy(policyToUpdate, policyToRemove, samRequestContext) }
       _ <- cloudSyncPolicies(affectedPolicies, samRequestContext) // TODO: use this on affected policies
       _ <- accessPolicyDAO.deleteResource(resource, leaveTombStone, samRequestContext)

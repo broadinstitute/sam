@@ -123,7 +123,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
     policies -= policy
   }
 
-  override def findAffectedPolicyGroups(
+  override def findPolicyGroupsInUse(
       resourceId: FullyQualifiedResourceId,
       samRequestContext: SamRequestContext
   ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]] = IO.pure(List.empty)

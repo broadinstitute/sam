@@ -130,8 +130,7 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]]
 
-  // TODO: better name?
-  def findAffectedPolicyGroups(
+  def findPolicyGroupsInUse(
       resourceId: FullyQualifiedResourceId,
       samRequestContext: SamRequestContext
   ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]]

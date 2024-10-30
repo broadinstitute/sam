@@ -3586,6 +3586,37 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           false
         )
 
+        val otherParentResourceFullyQualifiedId = FullyQualifiedResourceId(resourceType.name, ResourceId("other_parent_resource"))
+        val otherParentPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(otherParentResourceFullyQualifiedId, AccessPolicyName("otherParentPolicyName")),
+          Set(user.id),
+          WorkbenchEmail("otherParentPolicy@email.com"),
+          resourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+
+        val otherChildPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(childResourceFullyQualifiedId, AccessPolicyName("otherChildPolicyName")),
+          Set(user.id),
+          WorkbenchEmail("otherChildPolicy@email.com"),
+          resourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+
+        val thirdPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(childResourceFullyQualifiedId, AccessPolicyName("thirdPolicyName")),
+          Set(user.id),
+          WorkbenchEmail("thirdPolicy@email.com"),
+          resourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+
         val parentResource =
           Resource(parentResourceFullyQualifiedId.resourceTypeName, parentResourceFullyQualifiedId.resourceId, Set.empty, Set(parentPolicy))
         val childResource =
@@ -3593,19 +3624,26 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
             childResourceFullyQualifiedId.resourceTypeName,
             childResourceFullyQualifiedId.resourceId,
             Set.empty,
-            Set(childPolicy)
+            Set(childPolicy, otherChildPolicy, thirdPolicy)
           )
+        val otherResource = Resource(
+          otherParentResourceFullyQualifiedId.resourceTypeName,
+          otherParentResourceFullyQualifiedId.resourceId,
+          Set.empty,
+          Set(otherParentPolicy)
+        )
         dao.createResource(parentResource, samRequestContext).unsafeRunSync()
         dao.createResource(childResource, samRequestContext).unsafeRunSync()
+        dao.createResource(otherResource, samRequestContext).unsafeRunSync()
+
+        dirDao.addGroupMember(otherParentPolicy.id, otherChildPolicy.id, samRequestContext).unsafeRunSync()
 
         // Add child policy to parent policy
         dirDao.addGroupMember(parentPolicy.id, childPolicy.id, samRequestContext).unsafeRunSync()
 
-        val policyGroups = dao.findAffectedPolicyGroups(childResourceFullyQualifiedId, samRequestContext).unsafeRunSync()
+        val policyGroups = dao.findPolicyGroupsInUse(childResourceFullyQualifiedId, samRequestContext).unsafeRunSync()
 
-        policyGroups should not be empty
-        policyGroups.head._1 shouldEqual parentPolicy.id
-        policyGroups.head._2 shouldEqual childPolicy.id
+        policyGroups should contain theSameElementsAs List((parentPolicy.id, childPolicy.id), (otherParentPolicy.id, otherChildPolicy.id))
       }
     }
   }
