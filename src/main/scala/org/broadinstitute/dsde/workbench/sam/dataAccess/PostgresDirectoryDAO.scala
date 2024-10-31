@@ -430,7 +430,19 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     } else {
       readOnlyTransaction("batchLoadUsers", samRequestContext) { implicit session =>
         val userTable = UserTable.syntax
-        val loadUserQuery = samsql"select ${userTable.resultAll} from ${UserTable as userTable} where ${userTable.id} in (${samUserIds})"
+        // the with clause is to keep the query size down, we only send the samUserIds once and reuse it in each unioned query
+        val loadUserQuery =
+          samsql"""
+                  with sam_user_ids (user_id) as (values ${samUserIds.map(id => samsqls"($id)")})
+                  select ${userTable.resultAll} from ${UserTable as userTable}
+                  join sam_user_ids ids on ids.user_id = ${userTable.id}
+                  union
+                  select ${userTable.resultAll} from ${UserTable as userTable}
+                  join sam_user_ids ids on ids.user_id = ${userTable.azureB2cId}
+                  union
+                  select ${userTable.resultAll} from ${UserTable as userTable}
+                  join sam_user_ids ids on ids.user_id = ${userTable.googleSubjectId}
+                  """
 
         loadUserQuery
           .map(UserTable(userTable))
