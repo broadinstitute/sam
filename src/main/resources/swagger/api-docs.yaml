@@ -199,7 +199,7 @@ paths:
     post:
       tags:
         - Admin
-      summary: Gets a list of users for a list of Sam User IDs
+      summary: Gets a list of users for a list of Sam, Azure B2C, or Google Subject IDs
       operationId: adminGetUsersByIDs
       requestBody:
         content:
