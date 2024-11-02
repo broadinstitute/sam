@@ -43,8 +43,6 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       AccessPolicyName(UUID.randomUUID().toString),
       Left(readerRoleName),
       true,
-      None,
-      false,
       false
     ),
     FilterResourcesResult(
@@ -53,19 +51,15 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       AccessPolicyName(UUID.randomUUID().toString),
       Left(readerRoleName),
       false,
-      None,
-      false,
       false
     ),
     // Testable DB Results
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy1, Left(readerRoleName), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy1, Left(readerRoleName), false, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
       testPolicy1,
       Left(readerRoleName),
-      false,
-      None,
       false,
       false
     ), // testing duplicate row results
@@ -75,22 +69,18 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       testPolicy1,
       Left(readerRoleName),
       false,
-      None,
-      false,
       false
     ), // testing duplicate row results
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy2, Left(nothingRoleName), true, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Left(ownerRoleName), false, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Left(ownerRoleName), false, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy5, Right(readAction), true, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy2, Left(nothingRoleName), true, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Left(ownerRoleName), false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Left(ownerRoleName), false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy5, Right(readAction), true, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
       testPolicy5,
       Right(readAction),
       true,
-      None,
-      false,
       false
     ), // testing duplicate row results
     // Auth Domain Results
@@ -100,8 +90,6 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       testPolicy6,
       Left(readerRoleName),
       false,
-      Some(authDomainGroup1),
-      true,
       false
     ),
     FilterResourcesResult(
@@ -109,8 +97,6 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       resourceTypeName,
       testPolicy6,
       Left(readerRoleName),
-      false,
-      Some(authDomainGroup2),
       false,
       false
     )
@@ -128,12 +114,16 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     )
   )
     .thenReturn(IO.pure(dbResult))
+  when(mockAccessPolicyDAO.listResourcesWithAuthdomains(any[ResourceTypeName], any[Set[ResourceId]], any[SamRequestContext]))
+    .thenReturn(IO.pure(Set(Resource(resourceTypeName, testResourceId2, Set(authDomainGroup1, authDomainGroup2), Set.empty))))
+  when(mockAccessPolicyDAO.listAccessPolicies(eqTo(ManagedGroupService.managedGroupTypeName), any[WorkbenchUserId], any[SamRequestContext]))
+    .thenReturn(IO.pure(Set(ResourceIdAndPolicyName(ResourceId(authDomainGroup1.value), ManagedGroupService.memberPolicyName))))
 
   val resourceService = new ResourceService(
     Map(
       resourceTypeName -> ResourceType(
         resourceTypeName,
-        Set.empty,
+        Set(ResourceActionPattern(readAction.value, "", true)),
         Set(
           ResourceRole(readerRoleName, Set(readAction)),
           ResourceRole(ownerRoleName, Set(readAction, writeAction)),

@@ -122,8 +122,6 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         accessPolicy.id.accessPolicyName,
         Left(role),
         accessPolicy.public,
-        None,
-        false,
         false
       )
     }.toSeq ++ accessPolicy.actions.map { action =>
@@ -133,8 +131,6 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         accessPolicy.id.accessPolicyName,
         Right(action),
         accessPolicy.public,
-        None,
-        false,
         false
       )
 

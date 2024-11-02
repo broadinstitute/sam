@@ -3436,50 +3436,6 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         publicNestedReaderRoles.size should be(6)
         publicNestedReaderRoles.filter(_.isPublic).map(_.resourceId).toSet should be(Set(publicResource.resourceId, publicChildResource.resourceId))
       }
-
-      "includes Authorization Domain information in its queries" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
-        val user = Generator.genWorkbenchUserGoogle.sample.get
-
-        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
-        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
-        val authDomainGroup1 = BasicWorkbenchGroup(WorkbenchGroupName("authDomainGroup1"), Set(parentGroup.id), WorkbenchEmail("authDomainGroup1@groups.com"))
-        val authDomainGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("authDomainGroup2"), Set.empty, WorkbenchEmail("authDomainGroup2@groups.com"))
-
-        dirDao.createUser(user, samRequestContext).unsafeRunSync()
-        dirDao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.addGroupMember(subGroup.id, user.id, samRequestContext).unsafeRunSync()
-        dirDao.addGroupMember(parentGroup.id, subGroup.id, samRequestContext).unsafeRunSync()
-        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-        dao.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
-
-        // can access via auth domain
-        val resource1 = createResource(Option(user.id), Set(writeAction), Set(readerRole.roleName), public = false, authDomainGroups = Set(authDomainGroup1))
-        // cannot access via auth domain
-        val resource2 =
-          createResource(Option(user.id), Set(writeAction), Set(readerRole.roleName), false, authDomainGroups = Set(authDomainGroup1, authDomainGroup2))
-
-        val byResource = dao
-          .filterResources(user.id, Set(resourceType.name), Set.empty, Set(readerRole.roleName), false, samRequestContext)
-          .unsafeRunSync()
-          .groupBy(_.resourceId)
-
-        val resource1Results = byResource(resource1.resourceId)
-        resource1Results.length should be(1)
-        resource1Results.head.authDomain should be(Some(authDomainGroup1.id))
-        resource1Results.head.inAuthDomain should be(true)
-
-        val resource2Results = byResource(resource2.resourceId)
-        resource2Results.length should be(2)
-        resource2Results.flatMap(_.authDomain).toSet should be(Set(authDomainGroup1.id, authDomainGroup2.id))
-        resource2Results.map(_.inAuthDomain).toSet should be(Set(true, false))
-        resource2Results.filter(_.inAuthDomain).head.authDomain should be(Some(authDomainGroup1.id))
-        resource2Results.filter(!_.inAuthDomain).head.authDomain should be(Some(authDomainGroup2.id))
-      }
     }
 
     "listResourcesUsingAuthDomain" - {

@@ -1031,7 +1031,12 @@ class ResourceService(
       authDomainGroups: Map[WorkbenchGroupName, Boolean] = Map.empty
   )
 
-  private def groupFlat(dbResult: Seq[FilterResourcesResult], filterActions: Set[ResourceAction]): FilteredResourcesFlat = {
+  private def groupFlat(
+      dbResult: Seq[FilterResourcesResult],
+      filterActions: Set[ResourceAction],
+      resourceAuthDomains: Map[FullyQualifiedResourceId, Set[WorkbenchGroupName]],
+      userGroups: Set[WorkbenchGroupName]
+  ): FilteredResourcesFlat = {
     val groupedFilteredResource = dbResult
       .groupBy(_.resourceId)
       .map { tuple =>
@@ -1047,19 +1052,19 @@ class ResourceService(
           acc.copy(
             policies = acc.policies + FilteredResourceFlatPolicy(r.policy, r.isPublic, r.inherited),
             roles = acc.roles ++ filteredRole,
-            actions = acc.actions ++ filteredPolicyActions ++ roleActions,
-            authDomainGroups = acc.authDomainGroups ++ r.authDomain.map(_ -> r.inAuthDomain)
+            actions = acc.actions ++ filteredPolicyActions ++ roleActions
           )
         }
 
+        val authDomainGroups = resourceAuthDomains.getOrElse(FullyQualifiedResourceId(v.head.resourceTypeName, k), Set.empty)
         FilteredResourceFlat(
           resourceId = k,
           resourceType = v.head.resourceTypeName,
           policies = grouped.policies,
           roles = grouped.roles,
           actions = grouped.actions,
-          authDomainGroups = grouped.authDomainGroups.keySet,
-          missingAuthDomainGroups = grouped.authDomainGroups.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
+          authDomainGroups = authDomainGroups,
+          missingAuthDomainGroups = authDomainGroups -- userGroups
         )
       }
       .toSet
@@ -1072,7 +1077,12 @@ class ResourceService(
       .find(_.roleName == roleName)
       .map(actions => if (filterActions.isEmpty) actions.actions else actions.actions.intersect(filterActions))
 
-  private def groupHierarchical(dbResult: Seq[FilterResourcesResult], filterActions: Set[ResourceAction]): FilteredResourcesHierarchical = {
+  private def groupHierarchical(
+      dbResult: Seq[FilterResourcesResult],
+      filterActions: Set[ResourceAction],
+      resourceAuthDomains: Map[FullyQualifiedResourceId, Set[WorkbenchGroupName]],
+      userGroups: Set[WorkbenchGroupName]
+  ): FilteredResourcesHierarchical = {
     val groupedFilteredResources = dbResult
       .groupBy(_.resourceId)
       .map { tuple =>
@@ -1098,13 +1108,14 @@ class ResourceService(
             FilteredResourceHierarchicalPolicy(policyName, filteredRoles, filteredPolicyActions, policyRows.head.isPublic, policyRows.head.inherited)
           }
           .toSet
-        val authDomainGroupMemberships = resourceRows.flatMap(r => r.authDomain.map(_ -> r.inAuthDomain)).toMap
+        val fullyQualifiedResourceId = FullyQualifiedResourceId(resourceRows.head.resourceTypeName, resourceId)
+        val authDomainGroups = resourceAuthDomains.getOrElse(fullyQualifiedResourceId, Set.empty)
         FilteredResourceHierarchical(
           resourceId = resourceId,
           resourceType = resourceRows.head.resourceTypeName,
           policies = policies,
-          authDomainGroups = authDomainGroupMemberships.keySet,
-          missingAuthDomainGroups = authDomainGroupMemberships.filter(!_._2).keySet // Get only the auth domains where the user is not a member.
+          authDomainGroups = authDomainGroups,
+          missingAuthDomainGroups = authDomainGroups -- userGroups
         )
       }
       .toSet
@@ -1146,20 +1157,16 @@ class ResourceService(
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesFlat] =
-    // note that filtering by actions is implemented by application logic, not by the database query
-    // adding actions to the query would make return many more rows than necessary because roles can have many actions
-    // and those actions are static and already in memory
-    accessPolicyDAO
-      .filterResources(samUserId, resourceTypeNames, policies, roles, includePublic, samRequestContext)
-      .map(groupFlat(_, actions))
-      .map(results =>
-        // If we are filtering by actions, remove any resources that don't have the actions
+    listResourcesAndTransform(samUserId, resourceTypeNames, policies, roles, includePublic, samRequestContext) {
+      case (filterResults, resourceAuthDomains, userGroups) =>
+        val groupedResults = groupFlat(filterResults, actions, resourceAuthDomains, userGroups)
+        // If we are filtering by actions, remove any resources that don't have the actions either directly or through a role
         if (actions.nonEmpty) {
-          results.copy(resources = results.resources.map(resource => resource.copy(actions = actions.intersect(resource.actions))).filter(_.actions.nonEmpty))
+          groupedResults.copy(resources = groupedResults.resources.filter(resource => resource.roles.nonEmpty || resource.actions.nonEmpty))
         } else {
-          results
+          groupedResults
         }
-      )
+    }
 
   def listResourcesHierarchical(
       samUserId: WorkbenchUserId,
@@ -1170,18 +1177,72 @@ class ResourceService(
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesHierarchical] =
+    listResourcesAndTransform(samUserId, resourceTypeNames, policies, roles, includePublic, samRequestContext) {
+      case (filterResults, resourceAuthDomains, userGroups) =>
+        val groupedResults = groupHierarchical(filterResults, actions, resourceAuthDomains, userGroups)
+        // If we are filtering by actions, remove any resources that don't have the actions either directly or through a role
+        if (actions.nonEmpty) {
+          groupedResults.copy(resources =
+            groupedResults.resources.filter(resource => resource.policies.exists(policy => policy.actions.nonEmpty || policy.roles.nonEmpty))
+          )
+        } else {
+          groupedResults
+        }
+    }
+
+  private def listResourcesAndTransform[T](
+      samUserId: WorkbenchUserId,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  )(transform: (Seq[FilterResourcesResult], Map[FullyQualifiedResourceId, Set[WorkbenchGroupName]], Set[WorkbenchGroupName]) => T): IO[T] =
     // note that filtering by actions is implemented by application logic, not by the database query
     // adding actions to the query would make return many more rows than necessary because roles can have many actions
     // and those actions are static and already in memory
-    accessPolicyDAO
-      .filterResources(samUserId, resourceTypeNames, policies, roles, includePublic, samRequestContext)
-      .map(groupHierarchical(_, actions))
-      .map(results =>
-        // If we are filtering by actions, remove any resources that don't have the actions either directly or through a role
-        if (actions.nonEmpty) {
-          results.copy(resources = results.resources.filter(resource => resource.policies.exists(policy => policy.actions.nonEmpty || policy.roles.nonEmpty)))
+    for {
+      filterResults <- accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, includePublic, samRequestContext)
+      resourceAuthDomains <- listResourceAuthDomains(filterResults, samRequestContext)
+      // only load user groups is there are auth domains
+      userGroups <-
+        if (resourceAuthDomains.values.exists(_.nonEmpty)) {
+          listUserManagedGroups(samUserId, samRequestContext)
         } else {
-          results
+          IO.pure(Set.empty[WorkbenchGroupName])
         }
-      )
+    } yield transform(filterResults, resourceAuthDomains, userGroups)
+
+  private def listResourceAuthDomains(
+      filteredResources: Seq[FilterResourcesResult],
+      samRequestContext: SamRequestContext
+  ): IO[Map[FullyQualifiedResourceId, Set[WorkbenchGroupName]]] =
+    filteredResources
+      .groupBy(_.resourceTypeName)
+      .toList
+      .traverse { case (resourceTypeName, resources) =>
+        for {
+          resourceTypeOpt <- getResourceType(resourceTypeName)
+          authDomainsByResourceId <- resourceTypeOpt match {
+            case Some(resourceType) if resourceType.isAuthDomainConstrainable =>
+              accessPolicyDAO.listResourcesWithAuthdomains(resourceTypeName, resources.map(_.resourceId).toSet, samRequestContext).map { authDomainResults =>
+                authDomainResults.map { authDomainResult =>
+                  authDomainResult.fullyQualifiedId -> authDomainResult.authDomain
+                }.toMap
+              }
+            case _ =>
+              IO.pure(Map.empty[FullyQualifiedResourceId, Set[WorkbenchGroupName]])
+          }
+        } yield authDomainsByResourceId
+      }
+      .map(_.flatten.toMap)
+
+  private def listUserManagedGroups(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupName]] =
+    for {
+      groupPolicies <- accessPolicyDAO.listAccessPolicies(ManagedGroupService.managedGroupTypeName, userId, samRequestContext)
+    } yield {
+      val membershipPolicies =
+        groupPolicies.filter(p => ManagedGroupService.userMembershipRoleNames.contains(ManagedGroupService.getRoleName(p.accessPolicyName.value)))
+      membershipPolicies.map(policy => WorkbenchGroupName(policy.resourceId.value))
+    }
 }

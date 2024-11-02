@@ -1831,8 +1831,6 @@ from ${GroupMemberTable as groupMemberTable}
                 rs.get[AccessPolicyName](resourcePolicy.resultName.name),
                 Left(rs.get[ResourceRoleName](resourceRole.resultName.role)),
                 rs.get[Boolean](resourcePolicy.resultName.public),
-                None,
-                false,
                 rs.booleanOpt("inherited").getOrElse(false)
               )
             )
@@ -1845,8 +1843,6 @@ from ${GroupMemberTable as groupMemberTable}
                 rs.get[AccessPolicyName](resourcePolicy.resultName.name),
                 Right(rs.get[ResourceAction](resourceAction.resultName.action)),
                 rs.get[Boolean](resourcePolicy.resultName.public),
-                None,
-                false,
                 rs.booleanOpt("inherited").getOrElse(false)
               )
             )
@@ -1871,9 +1867,6 @@ from ${GroupMemberTable as groupMemberTable}
     val roleAction = RoleActionTable.syntax("roleAction")
     val resourceAction = ResourceActionTable.syntax("resourceAction")
     val resource = ResourceTable.syntax("resource")
-    val authDomain = AuthDomainTable.syntax("authDomain")
-    val authDomainGroup = GroupTable.syntax("authDomainGroup")
-    val authDomainGroupMemberFlat = GroupMemberFlatTable.syntax("authDomainGroupMemberFlat")
 
     val resourceTypeConstraint =
       if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in (${resourceTypeNames.flatMap(resourceTypePKsByName.get)})"
@@ -1883,16 +1876,13 @@ from ${GroupMemberTable as groupMemberTable}
 
     val policyRoleActionQuery =
       samsql"""
-        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourcePolicy.result.public}, ${authDomainGroup.result.name}, ${authDomainGroupMemberFlat.memberUserId} is not null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourcePolicy.result.public}, ${resourcePolicy.resourceId} != ${resource.id} as inherited
           from ${GroupMemberFlatTable as groupMemberFlat}
             join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
             join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
             join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
             join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
             join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
-            left join ${AuthDomainTable as authDomain} on ${authDomain.resourceId} = ${resource.id}
-            left join ${GroupTable as authDomainGroup} on ${authDomainGroup.id} = ${authDomain.groupId}
-            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUserId}
           where ${groupMemberFlat.memberUserId} = ${samUserId}
             $resourceTypeConstraint
             $policyConstraint
@@ -1901,16 +1891,13 @@ from ${GroupMemberTable as groupMemberTable}
 
     val policyActionQuery =
       samsql"""
-        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, ${authDomainGroup.result.name}, ${authDomainGroupMemberFlat.memberUserId} is not null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, ${resourcePolicy.resourceId} != ${resource.id} as inherited
           from ${GroupMemberFlatTable as groupMemberFlat}
             join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
             join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
             join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
             join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
             join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
-            left join ${AuthDomainTable as authDomain} on ${authDomain.resourceId} = ${resource.id}
-            left join ${GroupTable as authDomainGroup} on ${authDomainGroup.id} = ${authDomain.groupId}
-            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUserId}
           where ${groupMemberFlat.memberUserId} = ${samUserId}
             $resourceTypeConstraint
             $policyConstraint
@@ -1925,8 +1912,6 @@ from ${GroupMemberTable as groupMemberTable}
             rs.get[AccessPolicyName](resourcePolicy.resultName.name),
             Left(rs.get[ResourceRoleName](resourceRole.resultName.role)),
             rs.get[Boolean](resourcePolicy.resultName.public),
-            rs.stringOpt(authDomainGroup.resultName.name).map(WorkbenchGroupName(_)),
-            rs.booleanOpt("in_auth_domain").getOrElse(false),
             rs.booleanOpt("inherited").getOrElse(false)
           )
         )
@@ -1945,8 +1930,6 @@ from ${GroupMemberTable as groupMemberTable}
               rs.get[AccessPolicyName](resourcePolicy.resultName.name),
               Right(rs.get[ResourceAction](resourceAction.resultName.action)),
               rs.get[Boolean](resourcePolicy.resultName.public),
-              rs.stringOpt(authDomainGroup.resultName.name).map(WorkbenchGroupName(_)),
-              rs.booleanOpt("in_auth_domain").getOrElse(false),
               rs.booleanOpt("inherited").getOrElse(false)
             )
           )
