@@ -1780,9 +1780,8 @@ from ${GroupMemberTable as groupMemberTable}
     }
   }
 
-  private val publicResourcesCache: ConcurrentMap[ResourceTypeName, Seq[FilterResourcesResult]] = {
+  private val publicResourcesCache: ConcurrentMap[ResourceTypeName, Seq[FilterResourcesResult]] =
     Caffeine.newBuilder().expireAfterWrite(1, TimeUnit.HOURS).build[ResourceTypeName, Seq[FilterResourcesResult]]().asMap()
-  }
 
   private def getPublicResourcesOfType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Seq[FilterResourcesResult]] = {
     val resourcePolicy = PolicyTable.syntax("resourcePolicy")
