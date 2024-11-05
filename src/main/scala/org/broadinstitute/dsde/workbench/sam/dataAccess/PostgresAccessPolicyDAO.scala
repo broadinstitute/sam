@@ -22,10 +22,11 @@ import scalikejdbc._
 import scala.collection.concurrent.TrieMap
 import scala.util.{Failure, Try}
 import cats.effect.Temporal
+import com.github.benmanes.caffeine.cache.Caffeine
 import org.apache.commons.collections4.map.PassiveExpiringMap
 
 import java.util.Collections
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ConcurrentMap, TimeUnit}
 
 class PostgresAccessPolicyDAO(
     protected val writeDbRef: DbReference,
@@ -1779,8 +1780,9 @@ from ${GroupMemberTable as groupMemberTable}
     }
   }
 
-  private val publicResourcesCache: java.util.Map[ResourceTypeName, Seq[FilterResourcesResult]] =
-    Collections.synchronizedMap(new PassiveExpiringMap(1, TimeUnit.HOURS))
+  private val publicResourcesCache: ConcurrentMap[ResourceTypeName, Seq[FilterResourcesResult]] = {
+    Caffeine.newBuilder().expireAfterWrite(1, TimeUnit.HOURS).build[ResourceTypeName, Seq[FilterResourcesResult]]().asMap()
+  }
 
   private def getPublicResourcesOfType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Seq[FilterResourcesResult]] = {
     val resourcePolicy = PolicyTable.syntax("resourcePolicy")
