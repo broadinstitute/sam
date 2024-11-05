@@ -23,9 +23,6 @@ import scala.collection.concurrent.TrieMap
 import scala.util.{Failure, Try}
 import cats.effect.Temporal
 import com.github.benmanes.caffeine.cache.Caffeine
-import org.apache.commons.collections4.map.PassiveExpiringMap
-
-import java.util.Collections
 import java.util.concurrent.{ConcurrentMap, TimeUnit}
 
 class PostgresAccessPolicyDAO(
