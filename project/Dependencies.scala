@@ -108,7 +108,7 @@ object Dependencies {
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
   val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.2"
-  val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "1.33"
+  val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "2.3"
 
   val scalikeCore = "org.scalikejdbc" %% "scalikejdbc" % scalikejdbcVersion
   val scalikeCoreConfig = "org.scalikejdbc" %% "scalikejdbc-config" % scalikejdbcVersion
@@ -137,7 +137,7 @@ object Dependencies {
   val cloudResourceLib: ModuleID =
     "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J, excludeAwsSdk)
   val azureManagedApplications: ModuleID =
-    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
+    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.4"
 
   def excludeSpringBoot = ExclusionRule("org.springframework.boot")
   def excludeSpringAop = ExclusionRule("org.springframework.spring-aop")
