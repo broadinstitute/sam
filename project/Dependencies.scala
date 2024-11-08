@@ -8,7 +8,7 @@ object Dependencies {
   val scalaTestV = "3.2.19"
   val scalaCheckV = "1.18.1"
   val scalikejdbcVersion = "3.4.2"
-  val postgresDriverVersion = "42.7.2"
+  val postgresDriverVersion = "42.7.4"
   val sentryVersion = "6.15.0"
 
   val workbenchLibV = "fa46370" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
@@ -53,7 +53,7 @@ object Dependencies {
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
 //  val stackdriverLogging: ModuleID = "org.springframework.cloud" % "spring-cloud-gcp-logging" % "1.2.8.RELEASE" excludeAll(excludeSpring, excludeSpringBoot)
   val stackdriverLogging: ModuleID = "com.google.cloud" % "google-cloud-logging-logback" % "0.127.11-alpha"
-  val janino: ModuleID = "org.codehaus.janino" % "janino" % "3.1.7" // For if-else logic in logging config
+  val janino: ModuleID = "org.codehaus.janino" % "janino" % "3.1.12" // For if-else logic in logging config
 
   val akkaActor: ModuleID = "com.typesafe.akka" %% "akka-actor" % akkaV
   val akkaSlf4j: ModuleID = "com.typesafe.akka" %% "akka-slf4j" % akkaV
@@ -169,7 +169,7 @@ object Dependencies {
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.1"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
