@@ -3277,18 +3277,11 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "filterResources" - {
 
-      def verify(
-          dbResultRows: Seq[FilterResourcesResult],
-          roles: Set[ResourceRoleName],
-          roleActions: Set[ResourceAction],
-          policyActions: Set[ResourceAction]
-      ) = {
-        val testRoles: Set[ResourceRoleName] = dbResultRows.flatMap(_.role).toSet
-        val testRoleActions: Set[ResourceAction] = dbResultRows.filter(_.role.isDefined).flatMap(_.action).toSet
-        val testPolicyActions: Set[ResourceAction] = dbResultRows.filter(_.role.isEmpty).flatMap(_.action).toSet
+      def verify(dbResultRows: Seq[FilterResourcesResult], roles: Set[ResourceRoleName], policyActions: Set[ResourceAction]): Any = {
+        val testRoles: Set[ResourceRoleName] = dbResultRows.flatMap(_.roleOrAction.flatMap(_.left.toOption)).toSet
+        val testPolicyActions: Set[ResourceAction] = dbResultRows.flatMap(_.roleOrAction.flatMap(_.toOption)).toSet
 
         testRoles should be(roles)
-        testRoleActions should be(roleActions)
         testPolicyActions should be(policyActions)
       }
 
@@ -3335,84 +3328,67 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           false
         )
         // No roles available
-        val publicProbePolicy = AccessPolicy(
+        val publicProbeEmptyPolicy = AccessPolicy(
           FullyQualifiedPolicyId(kitchenSink.fullyQualifiedId, AccessPolicyName(uuid)),
           Set.empty,
           WorkbenchEmail(s"${uuid}@policy.com"),
-          Set(actionlessRole.roleName),
+          Set.empty,
           Set.empty,
           Set.empty,
           true
         )
+        val privateProbeEmptyPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(kitchenSink.fullyQualifiedId, AccessPolicyName(uuid)),
+          Set(user.id),
+          WorkbenchEmail(s"${uuid}@policy.com"),
+          Set.empty,
+          Set.empty,
+          Set.empty,
+          false
+        )
         dao.createPolicy(directProbePolicy, samRequestContext).unsafeRunSync()
-        dao.createPolicy(publicProbePolicy, samRequestContext).unsafeRunSync()
-
-        val writeActions =
-          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, Set(writeAction), false, samRequestContext).unsafeRunSync()
-        writeActions.length should be(5)
-        writeActions.map(_.action).forall(a => a.exists(_.equals(writeAction))) should be(true)
-        writeActions.map(_.isPublic).forall(ip => !ip) should be(true)
-
-        val writerViaOwner = writeActions.filter(r => r.role.exists(_.equals(ownerRole.roleName)))
-        writerViaOwner.size should be(1)
-
-        val readActions = dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, Set(readAction), false, samRequestContext).unsafeRunSync()
-        readActions.length should be(6)
-
-        val readerViaOwner = readActions.filter(r => r.role.exists(_.equals(ownerRole.roleName)))
-        readerViaOwner.size should be(1)
+        dao.createPolicy(publicProbeEmptyPolicy, samRequestContext).unsafeRunSync()
+        dao.createPolicy(privateProbeEmptyPolicy, samRequestContext).unsafeRunSync()
 
         val readerRoles =
-          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set(readerRole.roleName), Set.empty, false, samRequestContext).unsafeRunSync()
+          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set(readerRole.roleName), false, samRequestContext).unsafeRunSync()
         readerRoles.size should be(5)
 
         val policies = dao
-          .filterResources(user.id, Set(resourceTypeName), Set(directProbePolicy.id.accessPolicyName), Set.empty, Set.empty, false, samRequestContext)
+          .filterResources(user.id, Set(resourceTypeName), Set(directProbePolicy.id.accessPolicyName), Set.empty, false, samRequestContext)
           .unsafeRunSync()
-        val foundPolicies = policies.flatMap(_.policy).toSet
+        val foundPolicies = policies.map(_.policy).toSet
         foundPolicies.size should be(1)
         foundPolicies.head should be(directProbePolicy.id.accessPolicyName)
 
-        val writeActionsIncludingPublic =
-          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, Set(writeAction), true, samRequestContext).unsafeRunSync()
-        writeActionsIncludingPublic.length should be(7)
-        writeActionsIncludingPublic.filter(_.isPublic).map(_.resourceId).toSet should be(Set(publicResource.resourceId, publicChildResource.resourceId))
-
         val readerRolesIncludingPublic =
-          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set(readerRole.roleName), Set.empty, true, samRequestContext).unsafeRunSync()
+          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set(readerRole.roleName), true, samRequestContext).unsafeRunSync()
         readerRolesIncludingPublic.size should be(7)
         readerRolesIncludingPublic.filter(_.isPublic).map(_.resourceId).toSet should be(Set(publicResource.resourceId, publicChildResource.resourceId))
 
-        println(dao.filterResources(user.id, Set(resourceTypeName), Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync())
-
         val inheritedReaderRoles =
-          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set(readerRole.roleName), Set.empty, true, samRequestContext).unsafeRunSync()
+          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set(readerRole.roleName), true, samRequestContext).unsafeRunSync()
 
         val inheritedPolicies = inheritedReaderRoles.filter(_.inherited)
         inheritedPolicies.map(_.resourceId).toSet should be(
           Set(childResource1.resourceId, childResource2.resourceId, publicChildResource.resourceId, kitchenSink.resourceId)
         )
 
-        val filtered = dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+        val filtered = dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
+
+        val emptyPublicResults = filtered.filter(_.policy == publicProbeEmptyPolicy.id.accessPolicyName)
+        emptyPublicResults.map(_.roleOrAction) should contain only None
+        val emptyPrivateResults = filtered.filter(_.policy == privateProbeEmptyPolicy.id.accessPolicyName)
+        emptyPrivateResults.map(_.roleOrAction) should contain only None
 
         val readRoleWriteActionResources =
           Seq(userReadRoleWriteAction, groupReadRoleWriteAction, childResource1, childResource2, publicResource, publicChildResource)
 
         readRoleWriteActionResources
           .map(resource =>
-            verify(
-              filtered.filter(_.resourceId.equals(resource.resourceId)),
-              roles = Set(readerRole.roleName),
-              roleActions = Set(readAction),
-              policyActions = Set(writeAction)
-            )
+            verify(filtered.filter(_.resourceId.equals(resource.resourceId)), roles = Set(readerRole.roleName), policyActions = Set(writeAction))
           )
-        verify(
-          filtered.filter(_.resourceId.equals(kitchenSink.resourceId)),
-          roles = Set(readerRole.roleName, ownerRole.roleName, actionlessRole.roleName),
-          roleActions = Set(readAction, writeAction),
-          policyActions = Set.empty
-        )
+        verify(filtered.filter(_.resourceId.equals(kitchenSink.resourceId)), roles = Set(readerRole.roleName, ownerRole.roleName), policyActions = Set.empty)
       }
 
       "filters on the user's policies, roles, and actions when using nested roles" in {
@@ -3449,59 +3425,16 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           createResourceHierarchy(Option(parentGroup.id), Set(writeAction), Set(includesRole.roleName, descendsRole.roleName), false, nestedResourceType.name)
 
         val nestedReaderRoles =
-          dao.filterResources(user.id, Set(nestedResourceType.name), Set.empty, Set(readerRole.roleName), Set.empty, false, samRequestContext).unsafeRunSync()
+          dao.filterResources(user.id, Set(nestedResourceType.name), Set.empty, Set(readerRole.roleName), false, samRequestContext).unsafeRunSync()
         nestedReaderRoles.size should be(4)
         nestedReaderRoles.map(_.resourceId).toSet should be(
           Set(directAccessResource.resourceId, groupAccessResource.resourceId, directAccessChildResource.resourceId, groupAccessChildResource.resourceId)
         )
 
         val publicNestedReaderRoles =
-          dao.filterResources(user.id, Set(nestedResourceType.name), Set.empty, Set(readerRole.roleName), Set.empty, true, samRequestContext).unsafeRunSync()
+          dao.filterResources(user.id, Set(nestedResourceType.name), Set.empty, Set(readerRole.roleName), true, samRequestContext).unsafeRunSync()
         publicNestedReaderRoles.size should be(6)
         publicNestedReaderRoles.filter(_.isPublic).map(_.resourceId).toSet should be(Set(publicResource.resourceId, publicChildResource.resourceId))
-      }
-
-      "includes Authorization Domain information in its queries" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
-        val user = Generator.genWorkbenchUserGoogle.sample.get
-
-        val subGroup = BasicWorkbenchGroup(WorkbenchGroupName("subGroup"), Set(user.id), WorkbenchEmail("sub@groups.com"))
-        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName("parent"), Set(subGroup.id), WorkbenchEmail("parent@groups.com"))
-        val authDomainGroup1 = BasicWorkbenchGroup(WorkbenchGroupName("authDomainGroup1"), Set(parentGroup.id), WorkbenchEmail("authDomainGroup1@groups.com"))
-        val authDomainGroup2 = BasicWorkbenchGroup(WorkbenchGroupName("authDomainGroup2"), Set.empty, WorkbenchEmail("authDomainGroup2@groups.com"))
-
-        dirDao.createUser(user, samRequestContext).unsafeRunSync()
-        dirDao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.createGroup(authDomainGroup1, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.createGroup(authDomainGroup2, samRequestContext = samRequestContext).unsafeRunSync()
-        dirDao.addGroupMember(subGroup.id, user.id, samRequestContext).unsafeRunSync()
-        dirDao.addGroupMember(parentGroup.id, subGroup.id, samRequestContext).unsafeRunSync()
-        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-        dao.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
-
-        // can access via auth domain
-        val resource1 = createResource(Option(user.id), Set(writeAction), Set(readerRole.roleName), public = false, authDomainGroups = Set(authDomainGroup1))
-        // cannot access via auth domain
-        val resource2 =
-          createResource(Option(user.id), Set(writeAction), Set(readerRole.roleName), false, authDomainGroups = Set(authDomainGroup1, authDomainGroup2))
-
-        val writeActions =
-          dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, Set(writeAction), false, samRequestContext).unsafeRunSync()
-        val byResource = writeActions.groupBy(_.resourceId)
-
-        val resource1Results = byResource(resource1.resourceId)
-        resource1Results.length should be(1)
-        resource1Results.head.authDomain should be(Some(authDomainGroup1.id))
-        resource1Results.head.inAuthDomain should be(true)
-
-        val resource2Results = byResource(resource2.resourceId)
-        resource2Results.length should be(2)
-        resource2Results.flatMap(_.authDomain).toSet should be(Set(authDomainGroup1.id, authDomainGroup2.id))
-        resource2Results.map(_.inAuthDomain).toSet should be(Set(true, false))
-        resource2Results.filter(_.inAuthDomain).head.authDomain should be(Some(authDomainGroup1.id))
-        resource2Results.filter(!_.inAuthDomain).head.authDomain should be(Some(authDomainGroup2.id))
       }
     }
 

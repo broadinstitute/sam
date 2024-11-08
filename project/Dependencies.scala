@@ -171,6 +171,8 @@ object Dependencies {
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.1"
 
+  val caffeine: ModuleID = "com.github.ben-manes.caffeine" % "caffeine" % "3.1.8"
+
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
@@ -222,7 +224,8 @@ object Dependencies {
     sentry,
     sentryLogback,
     okio,
-    terraCommonLib
+    terraCommonLib,
+    caffeine
   )
 
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...

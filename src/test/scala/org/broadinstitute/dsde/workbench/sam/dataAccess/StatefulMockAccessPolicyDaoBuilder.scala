@@ -92,7 +92,6 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         ArgumentMatchers.eq(Set(policy.id.resource.resourceTypeName)),
         ArgumentMatchers.eq(Set.empty),
         ArgumentMatchers.eq(Set.empty),
-        ArgumentMatchers.eq(Set.empty),
         ArgumentMatchers.eq(true),
         any[SamRequestContext]
       )
@@ -115,67 +114,42 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       )
     }
 
-  private def constructFilterResourcesResult(accessPolicy: AccessPolicy): Seq[FilterResourcesResult] =
-    if (accessPolicy.roles.isEmpty) {
+  private def constructFilterResourcesResult(accessPolicy: AccessPolicy): Seq[FilterResourcesResult] = {
+    val results = accessPolicy.roles.map { role =>
+      FilterResourcesResult(
+        accessPolicy.id.resource.resourceId,
+        accessPolicy.id.resource.resourceTypeName,
+        accessPolicy.id.accessPolicyName,
+        Option(Left(role)),
+        accessPolicy.public,
+        false
+      )
+    }.toSeq ++ accessPolicy.actions.map { action =>
+      FilterResourcesResult(
+        accessPolicy.id.resource.resourceId,
+        accessPolicy.id.resource.resourceTypeName,
+        accessPolicy.id.accessPolicyName,
+        Option(Right(action)),
+        accessPolicy.public,
+        false
+      )
+
+    }.toSeq
+    if (results.isEmpty) {
       Seq(
         FilterResourcesResult(
           accessPolicy.id.resource.resourceId,
           accessPolicy.id.resource.resourceTypeName,
-          Some(accessPolicy.id.accessPolicyName),
-          None,
+          accessPolicy.id.accessPolicyName,
           None,
           accessPolicy.public,
-          None,
-          false,
           false
         )
       )
-    } else
-      {
-        accessPolicy.roles.map { role =>
-          FilterResourcesResult(
-            accessPolicy.id.resource.resourceId,
-            accessPolicy.id.resource.resourceTypeName,
-            Some(accessPolicy.id.accessPolicyName),
-            Some(role),
-            None,
-            accessPolicy.public,
-            None,
-            false,
-            false
-          )
-        }.toSeq
-      } ++
-        (if (accessPolicy.actions.isEmpty) {
-           Seq(
-             FilterResourcesResult(
-               accessPolicy.id.resource.resourceId,
-               accessPolicy.id.resource.resourceTypeName,
-               Some(accessPolicy.id.accessPolicyName),
-               None,
-               None,
-               accessPolicy.public,
-               None,
-               false,
-               false
-             )
-           )
-         } else {
-           accessPolicy.actions.map { action =>
-             FilterResourcesResult(
-               accessPolicy.id.resource.resourceId,
-               accessPolicy.id.resource.resourceTypeName,
-               Some(accessPolicy.id.accessPolicyName),
-               None,
-               Some(action),
-               accessPolicy.public,
-               None,
-               false,
-               false
-             )
-
-           }.toSeq
-         })
+    } else {
+      results
+    }
+  }
 
   def withRandomAccessPolicy(resourceTypeName: ResourceTypeName, members: Set[WorkbenchSubject]): StatefulMockAccessPolicyDaoBuilder = {
     val policy = AccessPolicy(
