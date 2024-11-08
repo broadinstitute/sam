@@ -41,7 +41,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
       AccessPolicyName(UUID.randomUUID().toString),
-      Left(readerRoleName),
+      Option(Left(readerRoleName)),
       true,
       false
     ),
@@ -49,17 +49,17 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
       AccessPolicyName(UUID.randomUUID().toString),
-      Left(readerRoleName),
+      Option(Left(readerRoleName)),
       false,
       false
     ),
     // Testable DB Results
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy1, Left(readerRoleName), false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy1, Option(Left(readerRoleName)), false, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
       testPolicy1,
-      Left(readerRoleName),
+      Option(Left(readerRoleName)),
       false,
       false
     ), // testing duplicate row results
@@ -67,19 +67,20 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       testResourceId,
       resourceTypeName,
       testPolicy1,
-      Left(readerRoleName),
+      Option(Left(readerRoleName)),
       false,
       false
     ), // testing duplicate row results
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy2, Left(nothingRoleName), true, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Left(ownerRoleName), false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Left(ownerRoleName), false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy5, Right(readAction), true, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy2, Option(Left(nothingRoleName)), true, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy3, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Option(Left(ownerRoleName)), false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Option(Left(ownerRoleName)), false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy5, Option(Right(readAction)), true, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
       testPolicy5,
-      Right(readAction),
+      Option(Right(readAction)),
       true,
       false
     ), // testing duplicate row results
@@ -88,7 +89,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       testResourceId2,
       resourceTypeName,
       testPolicy6,
-      Left(readerRoleName),
+      Option(Left(readerRoleName)),
       false,
       false
     ),
@@ -96,7 +97,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       testResourceId2,
       resourceTypeName,
       testPolicy6,
-      Left(readerRoleName),
+      Option(Left(readerRoleName)),
       false,
       false
     )
@@ -149,6 +150,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       Set(
         FilteredResourceFlatPolicy(testPolicy1, false, false),
         FilteredResourceFlatPolicy(testPolicy2, true, false),
+        FilteredResourceFlatPolicy(testPolicy3, false, false),
         FilteredResourceFlatPolicy(testPolicy4, false, false),
         FilteredResourceFlatPolicy(testPolicy5, true, false)
       )
@@ -174,7 +176,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     oneResource.resourceType should be(resourceTypeName)
 
     val policies = oneResource.policies
-    policies.map(_.policy) should be(Set(testPolicy1, testPolicy2, testPolicy4, testPolicy5))
+    policies.map(_.policy) should be(Set(testPolicy1, testPolicy2, testPolicy3, testPolicy4, testPolicy5))
     val policyWithAction = policies.filter(_.policy.equals(testPolicy5)).head
     policyWithAction.roles should be(Set.empty)
     policyWithAction.actions should be(Set(readAction))
@@ -183,6 +185,9 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     val role = policyWithRoles.roles.head
     role.role should be(ownerRoleName)
     role.actions should be(Set(readAction, writeAction))
+
+    policies.filter(_.policy.equals(testPolicy3)).flatMap(_.roles) should be(empty)
+    policies.filter(_.policy.equals(testPolicy3)).flatMap(_.actions) should be(empty)
 
     val authDomainResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId2)).head
     authDomainResource.resourceType should be(resourceTypeName)

@@ -3277,14 +3277,9 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
     "filterResources" - {
 
-      def verify(
-          dbResultRows: Seq[FilterResourcesResult],
-          roles: Set[ResourceRoleName],
-          roleActions: Set[ResourceAction],
-          policyActions: Set[ResourceAction]
-      ) = {
-        val testRoles: Set[ResourceRoleName] = dbResultRows.flatMap(_.roleOrAction.left.toOption).toSet
-        val testPolicyActions: Set[ResourceAction] = dbResultRows.flatMap(_.roleOrAction.toOption).toSet
+      def verify(dbResultRows: Seq[FilterResourcesResult], roles: Set[ResourceRoleName], policyActions: Set[ResourceAction]): Any = {
+        val testRoles: Set[ResourceRoleName] = dbResultRows.flatMap(_.roleOrAction.flatMap(_.left.toOption)).toSet
+        val testPolicyActions: Set[ResourceAction] = dbResultRows.flatMap(_.roleOrAction.flatMap(_.toOption)).toSet
 
         testRoles should be(roles)
         testPolicyActions should be(policyActions)
@@ -3333,17 +3328,27 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           false
         )
         // No roles available
-        val publicProbePolicy = AccessPolicy(
+        val publicProbeEmptyPolicy = AccessPolicy(
           FullyQualifiedPolicyId(kitchenSink.fullyQualifiedId, AccessPolicyName(uuid)),
           Set.empty,
           WorkbenchEmail(s"${uuid}@policy.com"),
-          Set(actionlessRole.roleName),
+          Set.empty,
           Set.empty,
           Set.empty,
           true
         )
+        val privateProbeEmptyPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(kitchenSink.fullyQualifiedId, AccessPolicyName(uuid)),
+          Set(user.id),
+          WorkbenchEmail(s"${uuid}@policy.com"),
+          Set.empty,
+          Set.empty,
+          Set.empty,
+          false
+        )
         dao.createPolicy(directProbePolicy, samRequestContext).unsafeRunSync()
-        dao.createPolicy(publicProbePolicy, samRequestContext).unsafeRunSync()
+        dao.createPolicy(publicProbeEmptyPolicy, samRequestContext).unsafeRunSync()
+        dao.createPolicy(privateProbeEmptyPolicy, samRequestContext).unsafeRunSync()
 
         val readerRoles =
           dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set(readerRole.roleName), false, samRequestContext).unsafeRunSync()
@@ -3371,24 +3376,19 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
 
         val filtered = dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, true, samRequestContext).unsafeRunSync()
 
+        val emptyPublicResults = filtered.filter(_.policy == publicProbeEmptyPolicy.id.accessPolicyName)
+        emptyPublicResults.map(_.roleOrAction) should contain only None
+        val emptyPrivateResults = filtered.filter(_.policy == privateProbeEmptyPolicy.id.accessPolicyName)
+        emptyPrivateResults.map(_.roleOrAction) should contain only None
+
         val readRoleWriteActionResources =
           Seq(userReadRoleWriteAction, groupReadRoleWriteAction, childResource1, childResource2, publicResource, publicChildResource)
 
         readRoleWriteActionResources
           .map(resource =>
-            verify(
-              filtered.filter(_.resourceId.equals(resource.resourceId)),
-              roles = Set(readerRole.roleName),
-              roleActions = Set(readAction),
-              policyActions = Set(writeAction)
-            )
+            verify(filtered.filter(_.resourceId.equals(resource.resourceId)), roles = Set(readerRole.roleName), policyActions = Set(writeAction))
           )
-        verify(
-          filtered.filter(_.resourceId.equals(kitchenSink.resourceId)),
-          roles = Set(readerRole.roleName, ownerRole.roleName, actionlessRole.roleName),
-          roleActions = Set(readAction, writeAction),
-          policyActions = Set.empty
-        )
+        verify(filtered.filter(_.resourceId.equals(kitchenSink.resourceId)), roles = Set(readerRole.roleName, ownerRole.roleName), policyActions = Set.empty)
       }
 
       "filters on the user's policies, roles, and actions when using nested roles" in {

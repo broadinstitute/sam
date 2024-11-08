@@ -374,7 +374,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
                 fqPolicyId.resource.resourceId,
                 fqPolicyId.resource.resourceTypeName,
                 fqPolicyId.accessPolicyName,
-                Left(role),
+                Option(Left(role)),
                 accessPolicy.public,
                 false
               )
@@ -385,7 +385,7 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
                 fqPolicyId.resource.resourceId,
                 fqPolicyId.resource.resourceTypeName,
                 fqPolicyId.accessPolicyName,
-                Right(action),
+                Option(Right(action)),
                 accessPolicy.public,
                 false
               )

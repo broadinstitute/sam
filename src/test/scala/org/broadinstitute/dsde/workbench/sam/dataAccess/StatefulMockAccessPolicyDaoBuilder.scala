@@ -114,13 +114,13 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
       )
     }
 
-  private def constructFilterResourcesResult(accessPolicy: AccessPolicy): Seq[FilterResourcesResult] =
-    accessPolicy.roles.map { role =>
+  private def constructFilterResourcesResult(accessPolicy: AccessPolicy): Seq[FilterResourcesResult] = {
+    val results = accessPolicy.roles.map { role =>
       FilterResourcesResult(
         accessPolicy.id.resource.resourceId,
         accessPolicy.id.resource.resourceTypeName,
         accessPolicy.id.accessPolicyName,
-        Left(role),
+        Option(Left(role)),
         accessPolicy.public,
         false
       )
@@ -129,12 +129,27 @@ case class StatefulMockAccessPolicyDaoBuilder() extends MockitoSugar {
         accessPolicy.id.resource.resourceId,
         accessPolicy.id.resource.resourceTypeName,
         accessPolicy.id.accessPolicyName,
-        Right(action),
+        Option(Right(action)),
         accessPolicy.public,
         false
       )
 
     }.toSeq
+    if (results.isEmpty) {
+      Seq(
+        FilterResourcesResult(
+          accessPolicy.id.resource.resourceId,
+          accessPolicy.id.resource.resourceTypeName,
+          accessPolicy.id.accessPolicyName,
+          None,
+          accessPolicy.public,
+          false
+        )
+      )
+    } else {
+      results
+    }
+  }
 
   def withRandomAccessPolicy(resourceTypeName: ResourceTypeName, members: Set[WorkbenchSubject]): StatefulMockAccessPolicyDaoBuilder = {
     val policy = AccessPolicy(

@@ -1042,11 +1042,11 @@ class ResourceService(
       .map { tuple =>
         val (k, v) = tuple
         val grouped = v.foldLeft(GroupedDbRows()) { (acc: GroupedDbRows, r: FilterResourcesResult) =>
-          val role = r.roleOrAction.left.toOption
+          val role = r.roleOrAction.flatMap(_.left.toOption)
           val roleActions = role.flatMap(roleName => getRoleActions(r.resourceTypeName, roleName, filterActions)).getOrElse(Set.empty)
           // if filterActions is not emtpy, we only want to include roles that still have actions
           val filteredRole = if (filterActions.isEmpty) role else role.filter(_ => roleActions.nonEmpty)
-          val policyActions = r.roleOrAction.toOption.toSet
+          val policyActions = r.roleOrAction.flatMap(_.toOption).toSet
           // if filterActions is not emtpy, we only want to include actions that are in the filterActions set
           val filteredPolicyActions = if (filterActions.isEmpty) policyActions else policyActions.intersect(filterActions)
           acc.copy(
@@ -1092,10 +1092,10 @@ class ResourceService(
           .map { policyTuple =>
             val (policyName, policyRows) = policyTuple
             // if filterActions is not emtpy, we only want to include actions that are in the filterActions set
-            val policyActions = policyRows.flatMap(_.roleOrAction.toOption).toSet
+            val policyActions = policyRows.flatMap(_.roleOrAction.flatMap(_.toOption)).toSet
             val filteredPolicyActions = if (filterActions.isEmpty) policyActions else policyActions.intersect(filterActions)
             val roles = policyRows
-              .flatMap(_.roleOrAction.left.toOption)
+              .flatMap(_.roleOrAction.flatMap(_.left.toOption))
               .map { roleName =>
                 FilteredResourceHierarchicalRole(
                   roleName,

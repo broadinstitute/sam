@@ -4,7 +4,7 @@ case class FilterResourcesResult(
     resourceId: ResourceId,
     resourceTypeName: ResourceTypeName,
     policy: AccessPolicyName,
-    roleOrAction: Either[ResourceRoleName, ResourceAction],
+    roleOrAction: Option[Either[ResourceRoleName, ResourceAction]],
     isPublic: Boolean,
     inherited: Boolean
 )

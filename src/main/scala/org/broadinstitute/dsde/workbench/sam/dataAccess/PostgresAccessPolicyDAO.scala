@@ -1798,8 +1798,8 @@ from ${GroupMemberTable as groupMemberTable}
         select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourcePolicy.result.public}, ${resourcePolicy.resourceId} != ${resource.id} as inherited
         from ${PolicyTable as resourcePolicy}
           join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
-          join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
-          join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
+          left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
+          left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
           join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
         where ${resourcePolicy.public}
           $resourceTypeConstraint
@@ -1810,8 +1810,8 @@ from ${GroupMemberTable as groupMemberTable}
         select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceAction.result.action}, ${resourcePolicy.result.public}, ${resourcePolicy.resourceId} != ${resource.id} as inherited
         from ${PolicyTable as resourcePolicy}
           join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
-          join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
-          join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
+          left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
+          left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
           join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
         where ${resourcePolicy.public}
           $resourceTypeConstraint
@@ -1820,32 +1820,35 @@ from ${GroupMemberTable as groupMemberTable}
     readOnlyTransaction("filterResourcesPublic", samRequestContext) { implicit session =>
       publicResourcesCache.computeIfAbsent(
         resourceTypeName,
-        resourceTypeName =>
-          publicRoleActionQuery
+        resourceTypeName => {
+          val roles = publicRoleActionQuery
             .map(rs =>
               FilterResourcesResult(
                 rs.get[ResourceId](resource.resultName.name),
                 resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
                 rs.get[AccessPolicyName](resourcePolicy.resultName.name),
-                Left(rs.get[ResourceRoleName](resourceRole.resultName.role)),
-                rs.get[Boolean](resourcePolicy.resultName.public),
-                rs.booleanOpt("inherited").getOrElse(false)
-              )
-            )
-            .list()
-            .apply() ++ publicPolicyActionQuery
-            .map(rs =>
-              FilterResourcesResult(
-                rs.get[ResourceId](resource.resultName.name),
-                resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
-                rs.get[AccessPolicyName](resourcePolicy.resultName.name),
-                Right(rs.get[ResourceAction](resourceAction.resultName.action)),
+                rs.stringOpt(resourceRole.resultName.role).map(r => Left[ResourceRoleName, ResourceAction](ResourceRoleName(r))),
                 rs.get[Boolean](resourcePolicy.resultName.public),
                 rs.booleanOpt("inherited").getOrElse(false)
               )
             )
             .list()
             .apply()
+          val actions = publicPolicyActionQuery
+            .map(rs =>
+              FilterResourcesResult(
+                rs.get[ResourceId](resource.resultName.name),
+                resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
+                rs.get[AccessPolicyName](resourcePolicy.resultName.name),
+                rs.stringOpt(resourceAction.resultName.action).map(a => Right[ResourceRoleName, ResourceAction](ResourceAction(a))),
+                rs.get[Boolean](resourcePolicy.resultName.public),
+                rs.booleanOpt("inherited").getOrElse(false)
+              )
+            )
+            .list()
+            .apply()
+          roles ++ actions
+        }
       )
     }
   }
@@ -1878,9 +1881,9 @@ from ${GroupMemberTable as groupMemberTable}
           from ${GroupMemberFlatTable as groupMemberFlat}
             join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
             join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
-            join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
-            join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
             join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
+            left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
+            left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
           where ${groupMemberFlat.memberUserId} = ${samUserId}
             $resourceTypeConstraint
             $policyConstraint
@@ -1893,9 +1896,9 @@ from ${GroupMemberTable as groupMemberTable}
           from ${GroupMemberFlatTable as groupMemberFlat}
             join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
             join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
-            join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
-            join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
             join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
+            left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
+            left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
           where ${groupMemberFlat.memberUserId} = ${samUserId}
             $resourceTypeConstraint
             $policyConstraint
@@ -1908,7 +1911,7 @@ from ${GroupMemberTable as groupMemberTable}
             rs.get[ResourceId](resource.resultName.name),
             resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
             rs.get[AccessPolicyName](resourcePolicy.resultName.name),
-            Left(rs.get[ResourceRoleName](resourceRole.resultName.role)),
+            rs.stringOpt(resourceRole.resultName.role).map(r => Left[ResourceRoleName, ResourceAction](ResourceRoleName(r))),
             rs.get[Boolean](resourcePolicy.resultName.public),
             rs.booleanOpt("inherited").getOrElse(false)
           )
@@ -1926,7 +1929,7 @@ from ${GroupMemberTable as groupMemberTable}
               rs.get[ResourceId](resource.resultName.name),
               resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
               rs.get[AccessPolicyName](resourcePolicy.resultName.name),
-              Right(rs.get[ResourceAction](resourceAction.resultName.action)),
+              rs.stringOpt(resourceAction.resultName.action).map(a => Right[ResourceRoleName, ResourceAction](ResourceAction(a))),
               rs.get[Boolean](resourcePolicy.resultName.public),
               rs.booleanOpt("inherited").getOrElse(false)
             )
@@ -1958,7 +1961,7 @@ from ${GroupMemberTable as groupMemberTable}
       privateResources <- filterPrivateResources(samUserId, resourceTypeNames, policies, roles, samRequestContext)
     } yield publicResources
       .filter(r => policies.isEmpty || policies.contains(r.policy))
-      .filter(r => roles.isEmpty || r.roleOrAction.left.exists(role => roles.contains(role))) ++ privateResources
+      .filter(r => roles.isEmpty || r.roleOrAction.exists(_.left.exists(role => roles.contains(role)))) ++ privateResources
 
   private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName])(implicit session: DBSession): Int = {
     val resource = ResourceTable.syntax("resource")
