@@ -13,8 +13,8 @@ On the command line, you can try the following:
 source env/local.env
 source src/main/resources/rendered/secrets.env
 export PACT_BROKER_URL="https://pact-broker.dsp-eng-tools.broadinstitute.org/"
-export PACT_BROKER_USERNAME="$(gcloud secrets versions access latest --project 'broad-dsp-eng-tools' --secret 'pact-broker-users-read-only' | jq -r '.basic_auth_read_only_username')"
-export PACT_BROKER_PASSWORD="$(gcloud secrets versions access latest --project 'broad-dsp-eng-tools' --secret 'pact-broker-users-read-only' | jq -r '.basic_auth_read_only_password')"
+export PACT_BROKER_USERNAME=$(vault read -field=basic_auth_read_only_username secret/dsp/pact-broker/users/read-only)
+export PACT_BROKER_PASSWORD=$(vault read -field=basic_auth_read_only_password secret/dsp/pact-broker/users/read-only)
 ```
 
 In IntelliJ, you can create a Run Configuration for `SamProviderSpec.scala` and save `Environment Variables` for:
