@@ -40,64 +40,107 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     FilterResourcesResult(
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
-      AccessPolicyName(UUID.randomUUID().toString),
-      Option(Left(readerRoleName)),
+      Some(AccessPolicyName(UUID.randomUUID().toString)),
+      Some(readerRoleName),
+      Some(readAction),
       true,
+      None,
+      false,
       false
     ),
     FilterResourcesResult(
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
-      AccessPolicyName(UUID.randomUUID().toString),
-      Option(Left(readerRoleName)),
+      Some(AccessPolicyName(UUID.randomUUID().toString)),
+      None,
+      None,
+      true,
+      None,
+      false,
+      false
+    ),
+    FilterResourcesResult(
+      ResourceId(UUID.randomUUID().toString),
+      resourceTypeName,
+      Some(AccessPolicyName(UUID.randomUUID().toString)),
+      Some(readerRoleName),
+      Some(readAction),
+      false,
+      None,
+      false,
+      false
+    ),
+    FilterResourcesResult(
+      ResourceId(UUID.randomUUID().toString),
+      resourceTypeName,
+      Some(AccessPolicyName(UUID.randomUUID().toString)),
+      None,
+      None,
+      false,
+      None,
       false,
       false
     ),
     // Testable DB Results
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy1, Option(Left(readerRoleName)), false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), false, None, false, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
-      testPolicy1,
-      Option(Left(readerRoleName)),
+      Some(testPolicy1),
+      Some(readerRoleName),
+      Some(readAction),
+      false,
+      None,
       false,
       false
     ), // testing duplicate row results
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
-      testPolicy1,
-      Option(Left(readerRoleName)),
+      Some(testPolicy1),
+      Some(readerRoleName),
+      Some(readAction),
+      false,
+      None,
       false,
       false
     ), // testing duplicate row results
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy2, Option(Left(nothingRoleName)), true, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy3, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Option(Left(ownerRoleName)), false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy4, Option(Left(ownerRoleName)), false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, testPolicy5, Option(Right(readAction)), true, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, true, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), None, Some(readAction), true, None, false, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
-      testPolicy5,
-      Option(Right(readAction)),
+      Some(testPolicy5),
+      None,
+      Some(readAction),
       true,
+      None,
+      false,
       false
     ), // testing duplicate row results
     // Auth Domain Results
     FilterResourcesResult(
       testResourceId2,
       resourceTypeName,
-      testPolicy6,
-      Option(Left(readerRoleName)),
+      Some(testPolicy6),
+      Some(readerRoleName),
+      Some(readAction),
       false,
+      Some(authDomainGroup1),
+      true,
       false
     ),
     FilterResourcesResult(
       testResourceId2,
       resourceTypeName,
-      testPolicy6,
-      Option(Left(readerRoleName)),
+      Some(testPolicy6),
+      Some(readerRoleName),
+      Some(readAction),
+      false,
+      Some(authDomainGroup2),
       false,
       false
     )
@@ -110,29 +153,15 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       any[Set[ResourceTypeName]],
       any[Set[AccessPolicyName]],
       any[Set[ResourceRoleName]],
+      any[Set[ResourceAction]],
       any[Boolean],
       any[SamRequestContext]
     )
   )
     .thenReturn(IO.pure(dbResult))
-  when(mockAccessPolicyDAO.listResourcesWithAuthdomains(any[ResourceTypeName], any[Set[ResourceId]], any[SamRequestContext]))
-    .thenReturn(IO.pure(Set(Resource(resourceTypeName, testResourceId2, Set(authDomainGroup1, authDomainGroup2), Set.empty))))
-  when(mockAccessPolicyDAO.listAccessPolicies(eqTo(ManagedGroupService.managedGroupTypeName), any[WorkbenchUserId], any[SamRequestContext]))
-    .thenReturn(IO.pure(Set(ResourceIdAndPolicyName(ResourceId(authDomainGroup1.value), ManagedGroupService.memberPolicyName))))
 
   val resourceService = new ResourceService(
-    Map(
-      resourceTypeName -> ResourceType(
-        resourceTypeName,
-        Set(ResourceActionPattern(readAction.value, "", true)),
-        Set(
-          ResourceRole(readerRoleName, Set(readAction)),
-          ResourceRole(ownerRoleName, Set(readAction, writeAction)),
-          ResourceRole(nothingRoleName, Set.empty, Set.empty)
-        ),
-        ownerRoleName
-      )
-    ),
+    Map.empty,
     mock[PolicyEvaluatorService],
     mockAccessPolicyDAO,
     mock[DirectoryDAO],
@@ -185,9 +214,6 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     val role = policyWithRoles.roles.head
     role.role should be(ownerRoleName)
     role.actions should be(Set(readAction, writeAction))
-
-    policies.filter(_.policy.equals(testPolicy3)).flatMap(_.roles) should be(empty)
-    policies.filter(_.policy.equals(testPolicy3)).flatMap(_.actions) should be(empty)
 
     val authDomainResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId2)).head
     authDomainResource.resourceType should be(resourceTypeName)
