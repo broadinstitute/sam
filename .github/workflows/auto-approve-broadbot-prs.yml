@@ -5,9 +5,9 @@ permissions:
   pull-requests: write
 
 jobs:
-  dependabot:
+  broadbot:
     runs-on: ubuntu-latest
-    if: github.actor == 'broadbot[bot]'
+    if: github.actor == 'broadbot'
     steps:
       - name: Approve a PR
         run: gh pr review --approve "$PR_URL"

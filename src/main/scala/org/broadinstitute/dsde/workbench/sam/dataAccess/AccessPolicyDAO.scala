@@ -125,6 +125,7 @@ trait AccessPolicyDAO {
       resourceTypeNames: Set[ResourceTypeName],
       policies: Set[AccessPolicyName],
       roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[Seq[FilterResourcesResult]]
