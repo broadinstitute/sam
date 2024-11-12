@@ -3553,6 +3553,99 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         dao.listResourcesUsingAuthDomain(authDomainGroupName, samRequestContext).unsafeRunSync() shouldEqual Set.empty
       }
     }
+
+    "findAffectedPolicyGroups" - {
+      "returns parent and member policy groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        // Create a resource with a policy
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+        val user = Generator.genWorkbenchUserBoth.sample.get
+        dirDao.createUser(user, samRequestContext).unsafeRunSync()
+
+        val parentResourceFullyQualifiedId = FullyQualifiedResourceId(resourceType.name, ResourceId("parent_resource"))
+        val childResourceFullyQualifiedId = FullyQualifiedResourceId(resourceType.name, ResourceId("child_resource"))
+
+        val parentPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(parentResourceFullyQualifiedId, AccessPolicyName("parentPolicyName")),
+          Set(user.id),
+          WorkbenchEmail("parentPolicy@email.com"),
+          resourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+        val childPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(childResourceFullyQualifiedId, AccessPolicyName("childPolicyName")),
+          Set(user.id),
+          WorkbenchEmail("childPolicy@email.com"),
+          resourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+
+        val otherParentResourceFullyQualifiedId = FullyQualifiedResourceId(resourceType.name, ResourceId("other_parent_resource"))
+        val otherParentPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(otherParentResourceFullyQualifiedId, AccessPolicyName("otherParentPolicyName")),
+          Set(user.id),
+          WorkbenchEmail("otherParentPolicy@email.com"),
+          resourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+
+        val otherChildPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(childResourceFullyQualifiedId, AccessPolicyName("otherChildPolicyName")),
+          Set(user.id),
+          WorkbenchEmail("otherChildPolicy@email.com"),
+          resourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+
+        val thirdPolicy = AccessPolicy(
+          FullyQualifiedPolicyId(childResourceFullyQualifiedId, AccessPolicyName("thirdPolicyName")),
+          Set(user.id),
+          WorkbenchEmail("thirdPolicy@email.com"),
+          resourceType.roles.map(_.roleName),
+          Set(readAction, writeAction),
+          Set.empty,
+          false
+        )
+
+        val parentResource =
+          Resource(parentResourceFullyQualifiedId.resourceTypeName, parentResourceFullyQualifiedId.resourceId, Set.empty, Set(parentPolicy))
+        val childResource =
+          Resource(
+            childResourceFullyQualifiedId.resourceTypeName,
+            childResourceFullyQualifiedId.resourceId,
+            Set.empty,
+            Set(childPolicy, otherChildPolicy, thirdPolicy)
+          )
+        val otherResource = Resource(
+          otherParentResourceFullyQualifiedId.resourceTypeName,
+          otherParentResourceFullyQualifiedId.resourceId,
+          Set.empty,
+          Set(otherParentPolicy)
+        )
+        dao.createResource(parentResource, samRequestContext).unsafeRunSync()
+        dao.createResource(childResource, samRequestContext).unsafeRunSync()
+        dao.createResource(otherResource, samRequestContext).unsafeRunSync()
+
+        dirDao.addGroupMember(otherParentPolicy.id, otherChildPolicy.id, samRequestContext).unsafeRunSync()
+
+        // Add child policy to parent policy
+        dirDao.addGroupMember(parentPolicy.id, childPolicy.id, samRequestContext).unsafeRunSync()
+
+        val policyGroups = dao.findPolicyGroupsInUse(childResourceFullyQualifiedId, samRequestContext).unsafeRunSync()
+
+        policyGroups should contain theSameElementsAs List((parentPolicy.id, childPolicy.id), (otherParentPolicy.id, otherChildPolicy.id))
+      }
+    }
   }
 
   private def uuid: String =

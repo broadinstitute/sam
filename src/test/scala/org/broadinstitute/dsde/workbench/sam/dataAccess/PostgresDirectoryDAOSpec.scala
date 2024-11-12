@@ -630,8 +630,19 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         assume(databaseEnabled, databaseEnabledClue)
         val users = Seq.range(0, 10).map(_ => Generator.genWorkbenchUserBoth.sample.get)
         users.foreach(user => dao.createUser(user, samRequestContext).unsafeRunSync())
-        val loadedUsers = dao.batchLoadUsers(users.map(_.id).toSet, samRequestContext).unsafeRunSync()
-        loadedUsers should contain theSameElementsAs users
+        val loadedUsersBySamId = dao.batchLoadUsers(users.map(_.id).toSet, samRequestContext).unsafeRunSync()
+        loadedUsersBySamId should contain theSameElementsAs users
+
+        val b2cIds = users.flatMap(_.azureB2CId.map(id => WorkbenchUserId(id.value))).toSet
+        val loadedUsersByAzureB2cId = dao.batchLoadUsers(b2cIds, samRequestContext).unsafeRunSync()
+        loadedUsersByAzureB2cId should contain theSameElementsAs users
+
+        val googleSubjectIds = users.flatMap(_.googleSubjectId.map(id => WorkbenchUserId(id.value))).toSet
+        val loadedUsersByGoogleSubjectId = dao.batchLoadUsers(googleSubjectIds, samRequestContext).unsafeRunSync()
+        loadedUsersByGoogleSubjectId should contain theSameElementsAs users
+
+        val loadedBy2Ids = dao.batchLoadUsers(googleSubjectIds ++ b2cIds, samRequestContext).unsafeRunSync()
+        loadedBy2Ids should contain theSameElementsAs users
       }
     }
 
