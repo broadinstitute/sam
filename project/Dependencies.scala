@@ -103,7 +103,7 @@ object Dependencies {
   val workbenchGoogle2Tests: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.127.25" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.26" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
@@ -227,6 +227,6 @@ object Dependencies {
 
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
-    "org.apache.commons" % "commons-compress" % "1.26.0"
+    "org.apache.commons" % "commons-compress" % "1.26.2"
   )
 }
