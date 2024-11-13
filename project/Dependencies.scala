@@ -95,15 +95,26 @@ object Dependencies {
   val excludeGoogleAutoValue = ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
   val excludeBouncyCastle = ExclusionRule("org.bouncycastle")
   val workbenchGoogle2: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludeGoogleAutoValue, excludeBouncyCastle)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (
+      excludeWorkbenchModel,
+      excludeWorkbenchUtil,
+      excludeGoogleAutoValue,
+      excludeBouncyCastle
+    )
   val workbenchNotifications: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (
+      excludeWorkbenchUtil,
+      excludeWorkbenchModel
+    )
   val workbenchGoogle2Tests: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (
+      excludeWorkbenchUtil,
+      excludeWorkbenchModel
+    )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.127.25" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.26" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
@@ -135,7 +146,14 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J, excludeAwsSdk)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (
+      excludeGoogleServiceUsage,
+      excludeGoogleCloudResourceManager,
+      excludeJerseyCore,
+      excludeJerseyMedia,
+      excludeSLF4J,
+      excludeAwsSdk
+    )
   val azureManagedApplications: ModuleID =
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.4"
 
@@ -170,8 +188,6 @@ object Dependencies {
 
   // was included transitively before, now explicit
   val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.1"
-
-  val caffeine: ModuleID = "com.github.ben-manes.caffeine" % "caffeine" % "3.1.8"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -224,12 +240,11 @@ object Dependencies {
     sentry,
     sentryLogback,
     okio,
-    terraCommonLib,
-    caffeine
+    terraCommonLib
   )
 
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
-    "org.apache.commons" % "commons-compress" % "1.26.0"
+    "org.apache.commons" % "commons-compress" % "1.26.2"
   )
 }
