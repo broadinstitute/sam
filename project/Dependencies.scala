@@ -8,10 +8,10 @@ object Dependencies {
   val scalaTestV = "3.2.19"
   val scalaCheckV = "1.18.1"
   val scalikejdbcVersion = "3.4.2"
-  val postgresDriverVersion = "42.7.2"
+  val postgresDriverVersion = "42.7.4"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "80e4b8d" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchLibV = "fa46370" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
   val workbenchUtil2V = s"0.9-$workbenchLibV"
   val workbenchModelV = s"0.20-$workbenchLibV"
@@ -47,13 +47,13 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.14"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.12"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
 //  val stackdriverLogging: ModuleID = "org.springframework.cloud" % "spring-cloud-gcp-logging" % "1.2.8.RELEASE" excludeAll(excludeSpring, excludeSpringBoot)
   val stackdriverLogging: ModuleID = "com.google.cloud" % "google-cloud-logging-logback" % "0.127.11-alpha"
-  val janino: ModuleID = "org.codehaus.janino" % "janino" % "3.1.7" // For if-else logic in logging config
+  val janino: ModuleID = "org.codehaus.janino" % "janino" % "3.1.12" // For if-else logic in logging config
 
   val akkaActor: ModuleID = "com.typesafe.akka" %% "akka-actor" % akkaV
   val akkaSlf4j: ModuleID = "com.typesafe.akka" %% "akka-slf4j" % akkaV
@@ -71,7 +71,7 @@ object Dependencies {
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.34.1"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
-  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20220401-1.32.1" excludeAll excludIoGrpc // force this version
+  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20241008-2.0.0" excludeAll excludIoGrpc // force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %% "monocle-core" % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion
@@ -95,20 +95,31 @@ object Dependencies {
   val excludeGoogleAutoValue = ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
   val excludeBouncyCastle = ExclusionRule("org.bouncycastle")
   val workbenchGoogle2: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludeGoogleAutoValue, excludeBouncyCastle)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (
+      excludeWorkbenchModel,
+      excludeWorkbenchUtil,
+      excludeGoogleAutoValue,
+      excludeBouncyCastle
+    )
   val workbenchNotifications: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (
+      excludeWorkbenchUtil,
+      excludeWorkbenchModel
+    )
   val workbenchGoogle2Tests: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (
+      excludeWorkbenchUtil,
+      excludeWorkbenchModel
+    )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.127.25" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.26" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.2.2"
 
-  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.14.2"
-  val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "1.33"
+  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.0"
+  val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "2.3"
 
   val scalikeCore = "org.scalikejdbc" %% "scalikejdbc" % scalikejdbcVersion
   val scalikeCoreConfig = "org.scalikejdbc" %% "scalikejdbc-config" % scalikejdbcVersion
@@ -135,9 +146,16 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J, excludeAwsSdk)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (
+      excludeGoogleServiceUsage,
+      excludeGoogleCloudResourceManager,
+      excludeJerseyCore,
+      excludeJerseyMedia,
+      excludeSLF4J,
+      excludeAwsSdk
+    )
   val azureManagedApplications: ModuleID =
-    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.1"
+    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.4"
 
   def excludeSpringBoot = ExclusionRule("org.springframework.boot")
   def excludeSpringAop = ExclusionRule("org.springframework.spring-aop")
@@ -169,7 +187,7 @@ object Dependencies {
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.15"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.1"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -227,6 +245,6 @@ object Dependencies {
 
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
-    "org.apache.commons" % "commons-compress" % "1.26.0"
+    "org.apache.commons" % "commons-compress" % "1.26.2"
   )
 }
