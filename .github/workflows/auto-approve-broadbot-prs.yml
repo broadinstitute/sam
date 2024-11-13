@@ -11,10 +11,11 @@ jobs:
     - name: "Echo github actor"
       env:
         GH_ACTOR: ${{ github.actor }}
-      run: echo "$GH_ACTOR"
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+      run: echo "$GH_ACTOR" && echo "$PR_AUTHOR"
   broadbot:
     runs-on: ubuntu-latest
-    if: github.actor == 'broadbot'
+    if: github.event.pull_request.user.login == 'broadbot'
     steps:
       - name: Approve a PR
         run: gh pr review --approve "$PR_URL"
