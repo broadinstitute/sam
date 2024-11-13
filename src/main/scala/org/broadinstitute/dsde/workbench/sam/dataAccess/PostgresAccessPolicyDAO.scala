@@ -951,6 +951,50 @@ class PostgresAccessPolicyDAO(
     }
   }
 
+  // Return value: [(policyToUpdate, policyToRemove)]
+  override def findPolicyGroupsInUse(
+      resourceId: FullyQualifiedResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]] =
+    readOnlyTransaction("findAffectedPolicyGroups", samRequestContext) { implicit session =>
+      val groupMemberTable = GroupMemberTable.syntax("group_member_table")
+      val policyTable = PolicyTable.syntax("policy_table")
+      val parentPolicyTable = PolicyTable.syntax("parent_policy_table")
+      val resourceType = ResourceTypeTable.syntax("resource_type")
+      val resourceTable = ResourceTable.syntax("resource_table")
+
+      val query = samsql"""
+      WITH resourcePolicies as (
+        SELECT ${policyTable.groupId} as childGroupId, ${policyTable.name} as policyName
+      FROM ${PolicyTable as policyTable}
+        WHERE ${policyTable.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+      )
+      SELECT resourcePolicies.policyName as childPolicyName, ${parentPolicyTable.name} as parentPolicyName, ${resourceTable.name} as parentPolicyResourceName, ${resourceType.name} as parentPolicyResourceType
+from ${GroupMemberTable as groupMemberTable}
+        JOIN resourcePolicies ON ${groupMemberTable.memberGroupId} = resourcePolicies.childGroupId
+      JOIN ${PolicyTable as parentPolicyTable} ON ${parentPolicyTable.groupId} = ${groupMemberTable.groupId}
+      JOIN ${ResourceTable as resourceTable} ON ${resourceTable.id} = ${parentPolicyTable.resourceId}
+      JOIN ${ResourceTypeTable as resourceType} ON ${resourceType.id} = ${resourceTable.resourceTypeId}
+"""
+      query
+        .map { rs =>
+          val parentPolicyResourceType = rs.get[ResourceTypeName]("parentPolicyResourceType")
+          val parentPolicyResourceId = rs.get[ResourceId]("parentPolicyResourceName")
+          val parentPolciyAccessName = rs.get[AccessPolicyName]("parentPolicyName")
+          val memberPolicyAccessName = rs.get[AccessPolicyName]("childPolicyName")
+
+          val parentPolicyFullResourceId =
+            FullyQualifiedResourceId(parentPolicyResourceType, parentPolicyResourceId)
+          val parentPolicyFullId = FullyQualifiedPolicyId(parentPolicyFullResourceId, parentPolciyAccessName)
+          val memberPolicyFullId = FullyQualifiedPolicyId(resourceId, memberPolicyAccessName)
+
+          (parentPolicyFullId, memberPolicyFullId)
+        }
+        .list()
+        .apply()
+
+    }
+
   private def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext)(implicit
       session: DBSession
   ): Unit = {
@@ -972,37 +1016,6 @@ class PostgresAccessPolicyDAO(
     if (groupPKsToDelete.nonEmpty) {
       samsql"""delete from ${GroupTable as g}
                where ${g.id} in ($groupPKsToDelete)""".update().apply()
-    }
-  }
-
-  override def checkPolicyGroupsInUse(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[List[Map[String, String]]] = {
-    val g = GroupTable.syntax("g")
-    val pg = GroupTable.syntax("pg") // problematic group
-    val gm = GroupMemberTable.syntax("gm")
-    val p = PolicyTable.syntax("p")
-
-    readOnlyTransaction("checkPolicyGroupsInUse", samRequestContext) { implicit session =>
-      val problematicGroupsQuery =
-        samsql"""select ${g.result.id}, ${g.result.name}, array_agg(${pg.name}) as ${pg.resultName.name}
-                     from ${GroupTable as g}
-                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
-                     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
-                     where ${g.id} in
-                         (select distinct ${gm.result.memberGroupId}
-                          from ${GroupMemberTable as gm}
-                          join ${PolicyTable as p} on ${gm.memberGroupId} = ${p.groupId}
-                          where ${p.resourceId} = (${loadResourcePKSubQuery(resourceId)}))
-                     group by ${g.id}, ${g.name}"""
-      problematicGroupsQuery
-        .map(rs =>
-          Map(
-            "groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
-            "groupName" -> rs.get[String](g.resultName.name),
-            "still used in group(s):" -> rs.get[String](pg.resultName.name)
-          )
-        )
-        .list()
-        .apply()
     }
   }
 
