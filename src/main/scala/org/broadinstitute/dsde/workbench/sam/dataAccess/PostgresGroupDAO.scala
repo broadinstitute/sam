@@ -28,8 +28,8 @@ import scala.util.{Failure, Try}
   *
   * Example database records: group(7795) contains user(userid) group(7798) contains user(userid) group(7801) contains group(7798) and group(7799)
   *
-  * testdb=# select * from sam_group_member; id | group_id | member_group_id | member_user_id
-  * -------+----------+-----------------+---------------- 15636 | 7795 | | userid 15637 | 7798 | | userid 15638 | 7801 | 7798 | 15639 | 7801 | 7799 |
+  * testdb=# select * from sam_group_member; id | group_id | member_group_id | member_user_id -------+----------+-----------------+---------------- 15636 | 7795
+  * \| | userid 15637 | 7798 | | userid 15638 | 7801 | 7798 | 15639 | 7801 | 7799 |
   *
   * testdb=# select * from sam_group_member_flat; id | group_id | member_group_id | member_user_id | group_membership_path | last_group_membership_element
   * --------+----------+-----------------+----------------+-----------------------+------------------------------ 345985 | 7795 | | userid | {7795} | 7795
@@ -115,19 +115,16 @@ trait PostgresGroupDAO {
     * the head path + tail path
     *
     * Example: Insert group T into group H. H starts empty but is already a member of groups A and B. T already has member groups X and Y which are empty. The
-    * flat group model starts containing: Group | Member Group | Path
-    * ------|--------------|------ A | H | {A} B | H | {B} T | X | {T} T | Y | {T}
+    * flat group model starts containing: Group | Member Group | Path ------|--------------|------ A | H | {A} B | H | {B} T | X | {T} T | Y | {T}
     *
-    * step 1 inserts direct membership of T in H Group | Member Group | Path
-    * ------|--------------|------ H | T | {H}
+    * step 1 inserts direct membership of T in H Group | Member Group | Path ------|--------------|------ H | T | {H}
     *
-    * step 2 inserts indirect memberships T in A and B Group | Member Group | Path
-    * ------|--------------|------ A | T | {A,H} B | T | {B,H}
+    * step 2 inserts indirect memberships T in A and B Group | Member Group | Path ------|--------------|------ A | T | {A,H} B | T | {B,H}
     *
     * step 3 inserts T's lower group hierarchy so that X and Y are members of H, A and B. The tail records are all of the records above where Group is T: ((T,
     * X, {T}), (T, Y, {T}) The head records are all of the records above where Member Group is T and the last path element is H: ((H, T, {H}), (A, T, {A,H}),
-    * (B, T, {B,H})) Group | Member Group | Path
-    * ------|--------------|------ H | X | {H,T} H | Y | {H,T} A | X | {A,H,T} A | Y | {A,H,T} B | X | {B,H,T} B | Y | {B,H,T}
+    * (B, T, {B,H})) Group | Member Group | Path ------|--------------|------ H | X | {H,T} H | Y | {H,T} A | X | {A,H,T} A | Y | {A,H,T} B | X | {B,H,T} B | Y
+    * \| {B,H,T}
     *
     * @param groupId
     *   group being added to
