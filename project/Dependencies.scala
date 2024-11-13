@@ -46,8 +46,8 @@ object Dependencies {
   val jacksonDatabind: ModuleID = "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
-  val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "6.6"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.4.14"
+  val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "8.0"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.12"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
@@ -65,7 +65,7 @@ object Dependencies {
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
   val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.100.Final"
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.0.39"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.0.48"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.68.1"
@@ -95,13 +95,24 @@ object Dependencies {
   val excludeGoogleAutoValue = ExclusionRule(organization = "com.google.auto.value", name = "auto-value")
   val excludeBouncyCastle = ExclusionRule("org.bouncycastle")
   val workbenchGoogle2: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (excludeWorkbenchModel, excludeWorkbenchUtil, excludeGoogleAutoValue, excludeBouncyCastle)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V excludeAll (
+      excludeWorkbenchModel,
+      excludeWorkbenchUtil,
+      excludeGoogleAutoValue,
+      excludeBouncyCastle
+    )
   val workbenchNotifications: ModuleID =
     "org.broadinstitute.dsde.workbench" %% "workbench-notifications" % workbenchNotificationsV excludeAll (excludeWorkbenchGoogle, excludeWorkbenchModel)
   val workbenchGoogleTests: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google" % workbenchGoogleV % "test" classifier "tests" excludeAll (
+      excludeWorkbenchUtil,
+      excludeWorkbenchModel
+    )
   val workbenchGoogle2Tests: ModuleID =
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (excludeWorkbenchUtil, excludeWorkbenchModel)
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests" excludeAll (
+      excludeWorkbenchUtil,
+      excludeWorkbenchModel
+    )
   val googleStorageLocal: ModuleID =
     "com.google.cloud" % "google-cloud-nio" % "0.127.26" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
@@ -118,7 +129,7 @@ object Dependencies {
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
-  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.4.0" excludeAll excludeWorkbenchUtil2
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.9.1" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
@@ -135,7 +146,14 @@ object Dependencies {
   )
 
   val cloudResourceLib: ModuleID =
-    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (excludeGoogleServiceUsage, excludeGoogleCloudResourceManager, excludeJerseyCore, excludeJerseyMedia, excludeSLF4J, excludeAwsSdk)
+    "bio.terra" % "terra-cloud-resource-lib" % crlVersion excludeAll (
+      excludeGoogleServiceUsage,
+      excludeGoogleCloudResourceManager,
+      excludeJerseyCore,
+      excludeJerseyMedia,
+      excludeSLF4J,
+      excludeAwsSdk
+    )
   val azureManagedApplications: ModuleID =
     "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.4"
 
