@@ -116,7 +116,7 @@ object Dependencies {
   val googleStorageLocal: ModuleID =
     "com.google.cloud" % "google-cloud-nio" % "0.127.26" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
-  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.30.0"
+  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.4.3"
 
   val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.0"
   val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "2.3"
