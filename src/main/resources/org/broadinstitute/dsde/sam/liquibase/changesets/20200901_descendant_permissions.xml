@@ -6,7 +6,12 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
 
     <changeSet logicalFilePath="dummy" author="mtalbott" id="drop_policy_action_PK">
-        <dropPrimaryKey tableName="sam_policy_action" constraintName="sam_policy_action_pkey"/>
+        <validCheckSum>8:d1a7c5eb7d920c6417cf2931a65af191</validCheckSum>
+        <comment>
+            Liquibase 4.4+ changed case of constraints. This changeSet has been modified to reflect that; the
+            validCheckSum is the checksum from when the constraint was all lowercase.
+        </comment>
+        <dropPrimaryKey tableName="sam_policy_action" constraintName="SAM_POLICY_ACTION_pkey"/>
     </changeSet>
 
     <changeSet logicalFilePath="dummy" author="mtalbott" id="descendant_policy_actions">
@@ -22,7 +27,12 @@
     </changeSet>
 
     <changeSet logicalFilePath="dummy" author="mtalbott" id="drop_policy_role_PK">
-        <dropPrimaryKey tableName="sam_policy_role" constraintName="sam_policy_role_pkey"/>
+        <validCheckSum>8:b403ff59915892851c35ab590914c925</validCheckSum>
+        <comment>
+            Liquibase 4.4+ changed case of constraints. This changeSet has been modified to reflect that; the
+            validCheckSum is the checksum from when the constraint was all lowercase.
+        </comment>
+        <dropPrimaryKey tableName="sam_policy_role" constraintName="SAM_POLICY_ROLE_pkey"/>
     </changeSet>
 
     <changeSet logicalFilePath="dummy" author="mtalbott" id="descendant_policy_roles">

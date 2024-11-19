@@ -6,7 +6,12 @@
   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
 
   <changeSet logicalFilePath="dummy"  author="garwood" id="add_tos_audit_table_created_at_pk">
-    <dropPrimaryKey  tableName= "SAM_USER_TERMS_OF_SERVICE" constraintName="sam_user_terms_of_service_pkey"/>
+    <validCheckSum>8:2d412b3cac7e1cd4811c012953c8d310</validCheckSum>
+    <comment>
+        Liquibase 4.4+ changed case of constraints. This changeSet has been modified to reflect that; the
+        validCheckSum is the checksum from when the constraint was all lowercase.
+    </comment>
+    <dropPrimaryKey  tableName= "SAM_USER_TERMS_OF_SERVICE" constraintName="SAM_USER_TERMS_OF_SERVICE_pkey"/>
     <addPrimaryKey tableName="SAM_USER_TERMS_OF_SERVICE" columnNames="sam_user_id,version,action,created_at" constraintName="sam_user_terms_of_service_pkey"/>
 
     <createIndex indexName="sam_user_id_tos_idx" tableName="SAM_USER_TERMS_OF_SERVICE">
