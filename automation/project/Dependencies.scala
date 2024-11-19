@@ -29,13 +29,15 @@ object Dependencies {
     "com.fasterxml.jackson.module" % ("jackson-module-scala_" + scalaV) % jacksonV,
     "ch.qos.logback" % "logback-classic" % "1.4.5",
     "org.slf4j" % "slf4j-api" % "2.0.3",
-    "net.logstash.logback" % "logstash-logback-encoder" % "6.6",
+    "net.logstash.logback" % "logstash-logback-encoder" % "8.0",
     "com.google.apis" % "google-api-services-oauth2" % "v1-rev112-1.20.0" excludeAll (
       ExclusionRule("com.google.guava", "guava-jdk5"),
       ExclusionRule("org.apache.httpcomponents", "httpclient")
     ),
-    "com.google.api-client" % "google-api-client" % "1.22.0" excludeAll (ExclusionRule("com.google.guava", "guava-jdk5"),
-    ExclusionRule("org.apache.httpcomponents", "httpclient")),
+    "com.google.api-client" % "google-api-client" % "1.22.0" excludeAll (
+      ExclusionRule("com.google.guava", "guava-jdk5"),
+      ExclusionRule("org.apache.httpcomponents", "httpclient")
+    ),
     "com.typesafe.akka" %% "akka-http-core" % akkaHttpV,
     "com.typesafe.akka" %% "akka-stream-testkit" % akkaV,
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
