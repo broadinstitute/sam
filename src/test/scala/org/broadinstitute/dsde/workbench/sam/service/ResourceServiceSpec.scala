@@ -133,6 +133,14 @@ class ResourceServiceSpec
   private val parentResourceType =
     ResourceType(ResourceTypeName("parent-resource-type"), defaultResourceTypeActionPatterns, parentResourceTypeRoles, ownerRoleName)
   val otherParentResourceType: ResourceType = parentResourceType.copy(name = ResourceTypeName("parent-resource-type-2"))
+  private val prerequisiteAction = ResourceAction("prerequisite_action")
+  private val prereqActionResourceType = ResourceType(
+    genResourceTypeNameExcludeManagedGroup.sample.get,
+    Set.empty,
+    Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+    ownerRoleName,
+    prerequisiteAction = Option(prerequisiteAction)
+  )
 
   private val constrainableActionPatterns = Set(ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true))
   private val constrainableViewAction = ResourceAction("constrainable_view")
@@ -158,7 +166,8 @@ class ResourceServiceSpec
     parentResourceType.name -> parentResourceType,
     childResourceType.name -> childResourceType,
     managedGroupResourceType.name -> managedGroupResourceType,
-    otherParentResourceType.name -> otherParentResourceType
+    otherParentResourceType.name -> otherParentResourceType,
+    prereqActionResourceType.name -> prereqActionResourceType
   )
   private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, dirDAO)
   private val service = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set("test.firecloud.org"))
@@ -460,6 +469,52 @@ class ResourceServiceSpec
         .hasPermission(FullyQualifiedResourceId(defaultResourceType.name, resourceName2), ResourceAction("non_owner_action"), dummyUser.id, samRequestContext)
         .unsafeRunSync()
     )
+  }
+
+  it should "return empty when caller does not have prerequisite action" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName1 = ResourceId("resource1")
+    val resourceName2 = ResourceId("resource2")
+
+    service.initResourceTypes(samRequestContext).unsafeRunSync()
+    val resource1 = service.createResource(prereqActionResourceType, resourceName1, dummyUser, samRequestContext).unsafeRunSync()
+    val resource2 = service.createResource(prereqActionResourceType, resourceName2, dummyUser, samRequestContext).unsafeRunSync()
+    val resource3 = service.createResource(defaultResourceType, resourceName2, dummyUser, samRequestContext).unsafeRunSync()
+
+    policyDAO
+      .createPolicy(
+        AccessPolicy(
+          FullyQualifiedPolicyId(resource2.fullyQualifiedId, AccessPolicyName("prereq")),
+          Set(dummyUser.id),
+          WorkbenchEmail("a@b.c"),
+          Set.empty,
+          Set(prerequisiteAction),
+          Set.empty,
+          public = false
+        ),
+        samRequestContext
+      )
+      .unsafeRunSync()
+
+    // missing prerequisite action so should not have any actions
+    assertResult(Set.empty) {
+      service.policyEvaluatorService
+        .listUserResourceActions(resource1.fullyQualifiedId, dummyUser.id, samRequestContext = samRequestContext)
+        .unsafeRunSync()
+    }
+    // has prerequisite action so should have actions from owner role
+    assertResult(prereqActionResourceType.roles.find(_.roleName.equals(ownerRoleName)).get.actions + prerequisiteAction) {
+      service.policyEvaluatorService
+        .listUserResourceActions(resource2.fullyQualifiedId, dummyUser.id, samRequestContext = samRequestContext)
+        .unsafeRunSync()
+    }
+    // no prerequisite action required so should have actions from owner role
+    assertResult(defaultResourceType.roles.find(_.roleName.equals(ownerRoleName)).get.actions) {
+      service.policyEvaluatorService
+        .listUserResourceActions(resource3.fullyQualifiedId, dummyUser.id, samRequestContext = samRequestContext)
+        .unsafeRunSync()
+    }
   }
 
   "createResource" should "detect conflict on create" in {

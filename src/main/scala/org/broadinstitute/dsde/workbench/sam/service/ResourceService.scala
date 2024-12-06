@@ -25,7 +25,7 @@ import scala.concurrent.ExecutionContext
 class ResourceService(
     private val resourceTypes: Map[ResourceTypeName, ResourceType],
     private[service] val policyEvaluatorService: PolicyEvaluatorService,
-    private val accessPolicyDAO: AccessPolicyDAO,
+    private[service] val accessPolicyDAO: AccessPolicyDAO,
     private val directoryDAO: DirectoryDAO,
     private val cloudExtensions: CloudExtensions,
     val emailDomain: String,

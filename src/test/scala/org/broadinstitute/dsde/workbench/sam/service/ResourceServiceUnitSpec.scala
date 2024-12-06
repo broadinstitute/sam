@@ -221,4 +221,58 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
     authDomainResource.authDomainGroups should be(Set(authDomainGroup1, authDomainGroup2))
     authDomainResource.missingAuthDomainGroups should be(Set(authDomainGroup2))
   }
+
+  it should "handle prerequisite action in listResources" in {
+    val prerequisiteAction = ResourceAction("prerequisiteAction")
+    val localResourceService = new ResourceService(
+      Map(
+        resourceTypeName -> ResourceType(
+          resourceTypeName,
+          Set.empty,
+          Set.empty,
+          ownerRoleName,
+          prerequisiteAction = Some(prerequisiteAction)
+        )
+      ),
+      mock[PolicyEvaluatorService],
+      mock[AccessPolicyDAO],
+      mock[DirectoryDAO],
+      NoExtensions,
+      emailDomain,
+      Set("test.firecloud.org")
+    )
+
+    when(
+      localResourceService.accessPolicyDAO.filterResources(
+        any[WorkbenchUserId],
+        any[Set[ResourceTypeName]],
+        any[Set[AccessPolicyName]],
+        any[Set[ResourceRoleName]],
+        any[Set[ResourceAction]],
+        any[Boolean],
+        any[SamRequestContext]
+      )
+    )
+      .thenReturn(
+        IO.pure(
+          Seq(
+            FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), None, Some(prerequisiteAction), false, None, false, false),
+            FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), None, Some(writeAction), false, None, false, false),
+            FilterResourcesResult(testResourceId2, resourceTypeName, Some(testPolicy1), None, Some(writeAction), false, None, false, false)
+          )
+        )
+      )
+
+    val filteredResources =
+      localResourceService.listResourcesFlat(dummyUser.id, Set.empty, Set.empty, Set.empty, Set.empty, false, samRequestContext).unsafeRunSync()
+    filteredResources.resources.size should be(1)
+    val oneResource = filteredResources.resources.filter(_.resourceId.equals(testResourceId)).head
+    oneResource.actions should be(Set(prerequisiteAction, writeAction))
+
+    val filteredResourcesHierarchical =
+      localResourceService.listResourcesHierarchical(dummyUser.id, Set.empty, Set.empty, Set.empty, Set.empty, false, samRequestContext).unsafeRunSync()
+    filteredResourcesHierarchical.resources.size should be(1)
+    val oneResourceHierarchical = filteredResourcesHierarchical.resources.filter(_.resourceId.equals(testResourceId)).head
+    oneResourceHierarchical.policies.head.actions should be(Set(prerequisiteAction, writeAction))
+  }
 }
