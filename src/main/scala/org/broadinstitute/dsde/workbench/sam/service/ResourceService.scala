@@ -1116,6 +1116,16 @@ class ResourceService(
       resources <- listResourcesHierarchical(userId, Set(resourceTypeName), Set.empty, Set.empty, Set.empty, true, samRequestContext)
     } yield resources.resources.map(toUserResourcesResponse)
 
+  private def hasPrerequisiteAction(resource: FilteredResourceHierarchical): Boolean =
+    resourceTypes.get(resource.resourceType).flatMap(_.prerequisiteAction).forall { prereq =>
+      resource.policies.flatMap(p => p.actions ++ p.roles.flatMap(_.actions)).contains(prereq)
+    }
+
+  private def hasPrerequisiteAction(resource: FilteredResourceFlat): Boolean =
+    resourceTypes.get(resource.resourceType).flatMap(_.prerequisiteAction).forall { prereq =>
+      resource.actions.contains(prereq)
+    }
+
   def listResourcesFlat(
       samUserId: WorkbenchUserId,
       resourceTypeNames: Set[ResourceTypeName],
@@ -1125,7 +1135,14 @@ class ResourceService(
       includePublic: Boolean,
       samRequestContext: SamRequestContext
   ): IO[FilteredResourcesFlat] =
-    accessPolicyDAO.filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext).map(groupFlat)
+    accessPolicyDAO
+      .filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
+      .map(groupFlat)
+      .map { result =>
+        result.copy(
+          resources = result.resources.filter(hasPrerequisiteAction)
+        )
+      }
 
   def listResourcesHierarchical(
       samUserId: WorkbenchUserId,
@@ -1139,4 +1156,9 @@ class ResourceService(
     accessPolicyDAO
       .filterResources(samUserId, resourceTypeNames, policies, roles, actions, includePublic, samRequestContext)
       .map(groupHierarchical)
+      .map { result =>
+        result.copy(
+          resources = result.resources.filter(hasPrerequisiteAction)
+        )
+      }
 }

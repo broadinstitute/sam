@@ -4354,7 +4354,7 @@ components:
       description: specification of a role for a resource
     ResourceType:
       required:
-        - actions
+        - actionPatterns
         - name
         - ownerRoleName
         - roles
@@ -4363,7 +4363,7 @@ components:
         name:
           type: string
           description: The name of the resource type
-        actions:
+        actionPatterns:
           type: array
           description: List of actions that can be performed on a resource of this
             type
@@ -4378,6 +4378,15 @@ components:
           type: string
           description: The name of the role that can perform administrative functions
             on a resource of this type
+        reuseIds:
+          type: boolean
+          description: Whether resource ids can be reused
+        allowLeaving:
+          type: boolean
+          description: Whether users can leave a resource of this type
+        prerequisiteAction:
+          type: string
+          description: An action that is required but not sufficient to perform any other action on a resource of this type
       description: specification of a type of resource
     RolesAndActions:
       required:
