@@ -20,7 +20,7 @@ object Dependencies {
   val workbenchNotificationsV = s"0.8-$workbenchLibV"
   val workbenchOauth2V = s"0.8-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.30-SNAPSHOT"
+  val crlVersion = "1.2.33-SNAPSHOT"
   val tclVersion = "1.1.12-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
