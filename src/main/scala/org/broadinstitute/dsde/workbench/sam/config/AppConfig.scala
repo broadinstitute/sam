@@ -38,7 +38,7 @@ final case class AppConfig(
     resourceAccessPolicies: Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]
 )
 
-object AppConfig extends LazyLogging {
+object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
     OidcConfig(
       config.getString("authorityEndpoint"),
@@ -200,9 +200,6 @@ object AppConfig extends LazyLogging {
 
   implicit val azureEnvironmentConfigReader: ValueReader[Option[AzureEnvironment]] = new ValueReader[Option[AzureEnvironment]] {
     def read(config: Config, path: String): Option[AzureEnvironment] = {
-
-      logger.info(s" azureEnvironmentConfigReader - path: $path")
-
       if (config.hasPath(path)) {
         val azureEnvironment: String = config.getString(path)
         val Azure: String = "AZURE"
