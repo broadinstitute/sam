@@ -10,6 +10,7 @@ object Merging {
     case PathList("org", "bouncycastle", _ @_*) => MergeStrategy.first
     case x if x.endsWith("/ModuleUtil.class") => MergeStrategy.first
     case PathList("META-INF", "versions", "9", "module-info.class") => MergeStrategy.first
+    case PathList("META-INF", "versions", "11", "module-info.class") => MergeStrategy.first
     case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.first
     case PathList("META-INF", "kotlin-result.kotlin_module") => MergeStrategy.first
     case PathList("META-INF", "kotlin-stdlib.kotlin_module") => MergeStrategy.first
