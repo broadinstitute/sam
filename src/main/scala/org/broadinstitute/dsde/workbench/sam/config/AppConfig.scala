@@ -4,7 +4,6 @@ import cats.data.NonEmptyList
 import com.azure.core.management.AzureEnvironment
 import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
-import com.typesafe.scalalogging.LazyLogging
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
