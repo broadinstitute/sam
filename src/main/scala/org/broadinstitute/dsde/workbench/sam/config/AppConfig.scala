@@ -199,12 +199,12 @@ object AppConfig {
   }
 
   implicit val azureEnvironmentConfigReader: ValueReader[Option[AzureEnvironment]] = new ValueReader[Option[AzureEnvironment]] {
-    def read(config: Config, path: String): Option[AzureEnvironment] = {
+    def read(config: Config, path: String): Option[AzureEnvironment] =
       if (config.hasPath(path)) {
         val azureEnvironment: String = config.getString(path)
         val Azure: String = "AZURE"
         val AzureGov: String = "AZURE_GOV"
-        
+
         azureEnvironment match {
           case AzureGov => Some(AzureEnvironment.AZURE_US_GOVERNMENT)
           case Azure => Some(AzureEnvironment.AZURE)
@@ -213,7 +213,6 @@ object AppConfig {
       } else {
         None
       }
-    }
 
   }
 

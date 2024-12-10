@@ -82,7 +82,7 @@ class CreateUserSpec extends UserServiceTestTraits {
             cloudExtensions,
             Seq.empty,
             defaultTosService,
-            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = true,azureEnvironment = AzureEnvironment.AZURE))
+            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = true, azureEnvironment = AzureEnvironment.AZURE))
           )
 
         // Act
@@ -296,7 +296,7 @@ class CreateUserSpec extends UserServiceTestTraits {
             cloudExtensions,
             Seq.empty,
             defaultTosService,
-            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = false,azureEnvironment = AzureEnvironment.AZURE))
+            Some(AzureServicesConfig(None, None, None, None, allowManagedIdentityUserCreation = false, azureEnvironment = AzureEnvironment.AZURE))
           )
 
         // Act and Assert

@@ -11,7 +11,6 @@ case class AzureServicePrincipalConfig(
     tenantId: String
 )
 
-
 case class AzureServicesConfig(
     managedAppWorkloadClientId: Option[String],
     managedAppServicePrincipal: Option[AzureServicePrincipalConfig],

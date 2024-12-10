@@ -15,7 +15,15 @@ import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfigurat
 import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
-import org.broadinstitute.dsde.workbench.sam.config.{AppConfig, AzureMarketPlace, AzureServiceCatalog, AzureServicePrincipalConfig, AzureServicesConfig, LiquibaseConfig, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.config.{
+  AppConfig,
+  AzureMarketPlace,
+  AzureServiceCatalog,
+  AzureServicePrincipalConfig,
+  AzureServicesConfig,
+  LiquibaseConfig,
+  TermsOfServiceConfig
+}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
