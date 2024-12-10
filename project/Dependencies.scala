@@ -20,8 +20,8 @@ object Dependencies {
   val workbenchNotificationsV = s"0.8-$workbenchLibV"
   val workbenchOauth2V = s"0.8-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.30-SNAPSHOT"
-  val tclVersion = "1.1.12-SNAPSHOT"
+  val crlVersion = "1.2.33-SNAPSHOT"
+  val tclVersion = "1.1.24-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -68,7 +68,7 @@ object Dependencies {
   val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.0"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.68.1"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.68.2"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20241008-2.0.0" excludeAll excludIoGrpc // force this version
