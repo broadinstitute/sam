@@ -204,9 +204,7 @@ object AppConfig {
         val azureEnvironment: String = config.getString(path)
         val Azure: String = "AZURE"
         val AzureGov: String = "AZURE_GOV"
-
-        logger.info(s" azureEnvironmentConfigReader - azureEnvironment: $azureEnvironment")
-
+        
         azureEnvironment match {
           case AzureGov => Some(AzureEnvironment.AZURE_US_GOVERNMENT)
           case Azure => Some(AzureEnvironment.AZURE)
