@@ -65,7 +65,7 @@ object Dependencies {
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
   val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.114.Final"
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.0"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.1"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.69.0"
