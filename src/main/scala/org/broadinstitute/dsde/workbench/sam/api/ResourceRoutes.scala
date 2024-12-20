@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.model.RootPrimitiveJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, BulkMembershipUpdate, SamUser}
 import org.broadinstitute.dsde.workbench.sam.model.api.FilteredResourcesHierarchical._
 import org.broadinstitute.dsde.workbench.sam.model.api.FilteredResourcesFlat._
 import org.broadinstitute.dsde.workbench.sam.service.ResourceService
@@ -129,6 +129,20 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
         pathEnd {
           getWithTelemetry(samRequestContext) {
             listUserResources(samUser, samRequestContext)
+          }
+        } ~
+        path("bulkMembershipUpdate") {
+          postWithTelemetry(samRequestContext) {
+            import BulkMembershipUpdate.bulkMembershipUpdateFormat
+            entity(as[Seq[BulkMembershipUpdate]]) { membershipUpdates =>
+              verifyBulkMembershipUpdateAccess(membershipUpdates, samUser.id, samRequestContext) {
+                complete(
+                  resourceService
+                    .bulkMembershipUpdate(membershipUpdates, samRequestContext)
+                    .map(_ => StatusCodes.OK)
+                )
+              }
+            }
           }
         } ~
         pathPrefix(Segment) { resourceTypeName =>

@@ -1975,6 +1975,49 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/FilteredResourcesFlatResponse'
                   - $ref: '#/components/schemas/FilteredResourcesHierarchicalResponse'
+  /api/resources/v2/bulkMembershipUpdate:
+    post:
+      tags:
+        - Resources
+      summary: Bulk update the membership for resources
+      description: |
+        This endpoint is used to add and remove members of multiple policies across multiple resource in one api call.
+        Each policy is updated in order in its own transaction. If a policy does not exist on a resource, 
+        processing stops with an error but all updates up to that point are committed. Missing member emails or policies fail fast. Additions are processed
+        before removals so if a subject is in both the add and remove lists for a policy, the ultimate result is removal.
+        This call is idempotent, if members being added already exist or members being removed do not exist, nothing will happen.
+      operationId: bulkMembershipUpdateV2
+      requestBody:
+        description: The details of the membership updates
+        content:
+          'application/json':
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BulkMembershipUpdateRequestV2'
+        required: true
+      responses:
+        200:
+          description: Successfully updated membership
+          content: { }
+        400:
+          description: members or policies are not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        403:
+          description: Caller does not have permission to update the membership of one or more of the policies or one or more resources do not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/resources/v2/{resourceTypeName}:
     get:
       tags:
@@ -5062,6 +5105,51 @@ components:
           description: Actions on the role
           items:
             type: string
+    BulkMembershipUpdateRequestV2:
+      type: object
+      required:
+        - resourceTypeName
+        - resourceId
+        - policyUpdates
+      properties:
+        resourceTypeName:
+          type: string
+          description: The type of the resource
+        resourceId:
+          type: string
+          description: The id of the resource
+        policyUpdates:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyMembershipUpdate'
+    PolicyMembershipUpdate:
+      type: object
+      required:
+          - policyName
+      properties:
+        policyName:
+          type: string
+          description: The name of the policy
+        addEmails:
+          type: array
+          description: Emails to add to the policy
+          items:
+            type: string
+        addPolicies:
+          type: array
+          description: Other policies to add to the specified policy
+          items:
+            $ref: '#/components/schemas/PolicyIdentifiers'
+        removeEmails:
+          type: array
+          description: Emails to remove from the policy
+          items:
+            type: string
+        removePolicies:
+          type: array
+          description: Other policies to remove from the specified policy
+          items:
+              $ref: '#/components/schemas/PolicyIdentifiers'
   securitySchemes:
     oidc:
       type: oauth2

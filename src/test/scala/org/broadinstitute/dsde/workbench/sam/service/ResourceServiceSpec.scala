@@ -1602,7 +1602,7 @@ class ResourceServiceSpec
     val policies =
       policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
 
-    assert(policies.contains(newPolicy.copy(version = 2)))
+    assert(policies.contains(newPolicy))
   }
 
   it should "should add a memberPolicy as a member when specified through policy identifiers" in {
@@ -1714,18 +1714,12 @@ class ResourceServiceSpec
       IO.pure(LazyList(accessPolicy)), // first call with empty membership
       IO.pure(LazyList(updatedPolicy)) // second call with updated membership
     )
+    when(mockAccessPolicyDAO.loadPolicy(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Some(accessPolicy)))
     when(mockAccessPolicyDAO.overwritePolicy(any[AccessPolicy], any[SamRequestContext])).thenReturn(IO.pure(updatedPolicy))
     when(
       mockCloudExtensions.onGroupUpdate(
         ArgumentMatchers.eq(Seq(policyId)),
         ArgumentMatchers.eq(memberPolicyIdSet.map(_.toFullyQualifiedPolicyId)),
-        any[SamRequestContext]
-      )
-    ).thenReturn(IO.unit)
-
-    when(
-      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
-        any[WorkbenchGroupIdentity],
         any[SamRequestContext]
       )
     ).thenReturn(IO.unit)
@@ -1770,12 +1764,6 @@ class ResourceServiceSpec
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
     when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
-    when(
-      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
-        any[WorkbenchGroupIdentity],
-        any[SamRequestContext]
-      )
-    ).thenReturn(IO.unit)
 
     // overwrite policy with no members
     runAndWait(
@@ -1864,7 +1852,7 @@ class ResourceServiceSpec
     val policies =
       policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
 
-    assert(policies.contains(newPolicy.copy(version = 2)))
+    assert(policies.contains(newPolicy))
   }
 
   it should "fail if any members are not test.firecloud.org accounts" in {
@@ -1933,12 +1921,12 @@ class ResourceServiceSpec
       )
     )
 
-    runAndWait(service.overwritePolicyMembers(newPolicy.id, Set.empty, samRequestContext))
+    runAndWait(service.overwritePolicyMembers(newPolicy.id, Set(dummyUser.email), samRequestContext))
 
     val policies =
       policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
 
-    assert(policies.contains(newPolicy.copy(version = 2)))
+    assert(policies.contains(newPolicy.copy(version = 2, members = Set(dummyUser.id))))
   }
 
   it should "call CloudExtensions.onGroupUpdate when members change" in {
@@ -1968,12 +1956,6 @@ class ResourceServiceSpec
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
     when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
-    when(
-      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
-        any[WorkbenchGroupIdentity],
-        any[SamRequestContext]
-      )
-    ).thenReturn(IO.unit)
 
     // overwrite policy members with empty set
     runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
@@ -2034,7 +2016,7 @@ class ResourceServiceSpec
 
     val policies = policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync()
 
-    assert(policies.contains(newPolicy.copy(version = 2)))
+    assert(policies.contains(newPolicy))
   }
 
   it should "fail when given an invalid action" in {
@@ -2623,12 +2605,6 @@ class ResourceServiceSpec
         IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))),
         IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)))
       )
-    when(
-      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
-        any[WorkbenchGroupIdentity],
-        any[SamRequestContext]
-      )
-    ).thenReturn(IO.unit)
 
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
 
@@ -2687,12 +2663,6 @@ class ResourceServiceSpec
         IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))),
         IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)))
       )
-    when(
-      mockDirectoryDAO.updateGroupUpdatedDateAndVersionWithSession(
-        any[WorkbenchGroupIdentity],
-        any[SamRequestContext]
-      )
-    ).thenReturn(IO.unit)
 
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
 
@@ -3719,7 +3689,7 @@ class ResourceServiceSpec
     returnedPolicies should contain theSameElementsAs Set(expectedPolicy)
 
     policyDAO.loadPolicy(testPolicyId, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail(""))) shouldBe Some(
-      expectedPolicy.copy(version = 2)
+      expectedPolicy
     )
   }
 
