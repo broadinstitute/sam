@@ -146,6 +146,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStatus'
+  /api/admin/v1/user/email/{email}/supportSummary:
+    get:
+      tags:
+        - Admin
+      summary: Get information about a user useful for Terra support
+      operationId: getAdminUserSummaryInfo
+      parameters:
+        - name: email
+          in: path
+          description: Email address of user to check
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user summary information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserSupportSummary'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v2/users:
     get:
       tags:
@@ -4277,6 +4303,21 @@ components:
           items:
             type: string
           description: The parent groups of the group
+    SamUserSupportSummary:
+      type: object
+      properties:
+        additionalDetails:
+          type: object
+          description: >
+            additional details about the user, such as enterprise features they have access to example: '{ "enterpriseFeatures": ["feature1", "feature2"] }'
+        allowances:
+          $ref: '#/components/schemas/SamUserAllowances'
+        attributes:
+          $ref: '#/components/schemas/SamUserAttributes'
+        samUser:
+          $ref: '#/components/schemas/SamUserResponse'
+        termsOfServiceDetails:
+          $ref: '#/components/schemas/UserTermsOfServiceDetails'
     PolicyIdentifiers:
       required:
         - policyName

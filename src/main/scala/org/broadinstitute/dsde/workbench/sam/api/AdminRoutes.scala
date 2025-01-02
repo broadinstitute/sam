@@ -15,10 +15,11 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AdminUpdateUserRequest, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AdminUpdateUserRequest, SamUser, SamUserSupportSummaryResponse}
 import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, ResourceService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
+import spray.json.enrichAny
 import spray.json.JsBoolean
 import org.broadinstitute.dsde.workbench.sam.model.api.ManagedGroupModelJsonSupport._
 
@@ -48,13 +49,24 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
   def adminUserRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("user") {
       asWorkbenchAdmin(samUser) {
-        path("email" / Segment) { email =>
+        pathPrefix("email" / Segment) { email =>
           val workbenchEmail = WorkbenchEmail(email)
-          getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
-            complete {
-              userService
-                .getUserStatusFromEmail(workbenchEmail, samRequestContext)
-                .map(status => (if (status.isDefined) OK else NotFound) -> status)
+          pathEndOrSingleSlash {
+            getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
+              complete {
+                userService
+                  .getUserStatusFromEmail(workbenchEmail, samRequestContext)
+                  .map(status => (if (status.isDefined) OK else NotFound) -> status)
+              }
+            }
+          } ~
+          pathPrefix("supportSummary") {
+            pathEndOrSingleSlash {
+              getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
+                complete {
+                  getSamUserSupportSummary(workbenchEmail, samRequestContext)
+                }
+              }
             }
           }
         } ~
@@ -283,5 +295,34 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
       action,
       user.id,
       samRequestContext
+    )
+
+  // TODO: retrieve more information, such as:
+  //  - direct group membership counts
+  //  - indirect group membership counts
+  //  - maybe: group membership details (could be large)
+  private def getSamUserSupportSummary(workbenchEmail: WorkbenchEmail, samRequestContext: SamRequestContext) =
+    for {
+      samUserOption <- userService.getUserFromEmail(workbenchEmail, samRequestContext)
+      samUser = samUserOption.getOrElse(throw new RuntimeException("user not found"))
+      allowances <- userService.getUserAllowances(samUser, samRequestContext)
+      maybeAttributes <- userService.getUserAttributes(samUser.id, samRequestContext)
+      termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
+      enterpriseFeatures <- resourceService
+        .listResourcesFlat(
+          samUser.id,
+          Set(ResourceTypeName("enterprise-feature")),
+          Set.empty,
+          Set(ResourceRoleName("user")),
+          Set.empty,
+          includePublic = false,
+          samRequestContext
+        )
+    } yield SamUserSupportSummaryResponse(
+      samUser,
+      allowances,
+      maybeAttributes,
+      termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
+      Map("enterpriseFeatures" -> enterpriseFeatures.toJson)
     )
 }

@@ -394,6 +394,13 @@ class UserService(
       case _ => IO.pure(Left(()))
     }
 
+  def getUserFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.loadSubjectFromEmail(email, samRequestContext).flatMap {
+      // don't attempt to handle groups or service accounts - just users
+      case Some(user: WorkbenchUserId) => directoryDAO.loadUser(user, samRequestContext = samRequestContext)
+      case _ => IO.pure(None)
+    }
+
   def getUserStatusFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
     directoryDAO.loadSubjectFromEmail(email, samRequestContext).flatMap {
       // don't attempt to handle groups or service accounts - just users
