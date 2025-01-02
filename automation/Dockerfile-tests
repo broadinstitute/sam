@@ -1,4 +1,4 @@
-FROM sbtscala/scala-sbt:eclipse-temurin-17.0.13_11_1.10.6_2.13.15
+FROM sbtscala/scala-sbt:eclipse-temurin-17.0.13_11_1.10.7_2.13.15
 
 COPY src /app/src
 COPY test.sh /app
