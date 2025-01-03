@@ -528,6 +528,20 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       }
     }
 
+  override def loadUserByEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    readOnlyTransaction("loadUserByEmail", samRequestContext) { implicit session =>
+      val userTable = UserTable.syntax
+
+      val loadUserQuery = samsql"""select ${userTable.resultAll}
+                                    from ${UserTable as userTable}
+                                    where ${userTable.email} = ${email}"""
+      loadUserQuery
+        .map(UserTable(userTable))
+        .single()
+        .apply()
+        .map(UserTable.unmarshalUserRecord)
+    }
+
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =

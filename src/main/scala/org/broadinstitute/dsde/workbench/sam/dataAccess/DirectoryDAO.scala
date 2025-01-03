@@ -82,6 +82,8 @@ trait DirectoryDAO {
 
   def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit]
 
+  def loadUserByEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]]
+
   def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit]
 
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]

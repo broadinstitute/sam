@@ -279,6 +279,9 @@ class UserService(
   def getUserFromPetManagedIdentity(petManagedIdentityObjectId: ManagedIdentityObjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     directoryDAO.getUserFromPetManagedIdentity(petManagedIdentityObjectId, samRequestContext)
 
+  def getUserFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    directoryDAO.loadUserByEmail(email, samRequestContext)
+
   def getSubjectFromGoogleSubjectId(googleSubjectId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
     directoryDAO.loadSubjectFromGoogleSubjectId(googleSubjectId, samRequestContext)
   def getSubjectFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchSubject]] =
@@ -392,13 +395,6 @@ class UserService(
         }
       case Some(_: WorkbenchGroupName) => IO.pure(Right(None))
       case _ => IO.pure(Left(()))
-    }
-
-  def getUserFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
-    directoryDAO.loadSubjectFromEmail(email, samRequestContext).flatMap {
-      // don't attempt to handle groups or service accounts - just users
-      case Some(user: WorkbenchUserId) => directoryDAO.loadUser(user, samRequestContext = samRequestContext)
-      case _ => IO.pure(None)
     }
 
   def getUserStatusFromEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[UserStatus]] =
