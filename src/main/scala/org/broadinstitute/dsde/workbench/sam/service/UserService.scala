@@ -512,6 +512,12 @@ class UserService(
       case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"User $workbenchUserId not found")))
     }
   }
+
+  def countDirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    directoryDAO.countDirectGroupMemberships(samUser, samRequestContext)
+
+  def countIndirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    directoryDAO.countIndirectGroupMemberships(samUser, samRequestContext)
 }
 
 object UserService {

@@ -98,6 +98,10 @@ trait DirectoryDAO {
 
   def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]]
 
+  def countDirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
+
+  def countIndirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
+
   def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
 
   def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]

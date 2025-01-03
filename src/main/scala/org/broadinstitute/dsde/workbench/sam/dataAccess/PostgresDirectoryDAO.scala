@@ -718,6 +718,30 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
+  override def countDirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    readOnlyTransaction("countDirectGroupMemberships", samRequestContext) { implicit session =>
+      val query = samsql"""select count(distinct g.id) directMembershipCount
+                          from sam_group g
+                          join sam_group_member gm on g.id = gm.group_id
+                          join sam_user u on gm.member_user_id = u.id
+                          where g.synchronized_date is not null
+                          and u.email = ${samUser.email}"""
+
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0)
+    }
+
+  override def countIndirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    readOnlyTransaction("countDirectGroupMemberships", samRequestContext) { implicit session =>
+      val query = samsql"""select count(distinct g.id) indirectMembershipCount
+                          from sam_group g
+                          join sam_group_member_flat gmf on g.id = gmf.group_id
+                          join sam_user u on gmf.member_user_id = u.id
+                          where g.synchronized_date is not null
+                          and u.email = ${samUser.email}"""
+
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0)
+    }
+
   override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
     subject match {
       case userId: WorkbenchUserId =>

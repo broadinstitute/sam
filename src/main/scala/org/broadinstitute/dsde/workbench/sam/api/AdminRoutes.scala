@@ -318,11 +318,15 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           includePublic = false,
           samRequestContext
         )
+      directGroupMemberships <- userService.countDirectGroupMemberships(samUser, samRequestContext)
+      indirectGroupMemberships <- userService.countIndirectGroupMemberships(samUser, samRequestContext)
     } yield SamUserSupportSummaryResponse(
       samUser,
       allowances,
       maybeAttributes,
       termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
-      Map("enterpriseFeatures" -> enterpriseFeatures.toJson)
+      Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
+      directGroupMembershipCount = directGroupMemberships,
+      indirectGroupMembershipCount = indirectGroupMemberships
     )
 }
