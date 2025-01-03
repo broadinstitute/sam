@@ -739,7 +739,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                           join sam_group_member gm on g.id = gm.group_id
                           join sam_user u on gm.member_user_id = u.id
                           where g.synchronized_date is not null
-                          and u.email = ${samUser.email}"""
+                          and u.id = ${samUser.id}"""
 
       query.map(rs => rs.int(1)).single().apply().getOrElse(0)
     }
@@ -751,7 +751,7 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                           join sam_group_member_flat gmf on g.id = gmf.group_id
                           join sam_user u on gmf.member_user_id = u.id
                           where g.synchronized_date is not null
-                          and u.email = ${samUser.email}"""
+                          and u.id = ${samUser.id}"""
 
       query.map(rs => rs.int(1)).single().apply().getOrElse(0)
     }
