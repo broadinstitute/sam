@@ -1710,6 +1710,15 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
     }
 
+    "loadUserByEmail" - {
+      "load a user from their email" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.loadUserByEmail(defaultUser.email, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
+      }
+    }
+
     "createPetManagedIdentity" - {
       "create pet managed identity" in {
         assume(databaseEnabled, databaseEnabledClue)
