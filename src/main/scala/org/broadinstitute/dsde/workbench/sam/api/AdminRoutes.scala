@@ -297,10 +297,6 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
       samRequestContext
     )
 
-  // TODO: retrieve more information, such as:
-  //  - direct group membership counts
-  //  - indirect group membership counts
-  //  - maybe: group membership details (could be large)
   private def getSamUserSupportSummary(workbenchEmail: WorkbenchEmail, samRequestContext: SamRequestContext) =
     for {
       samUserOption <- userService.getUserFromEmail(workbenchEmail, samRequestContext)
