@@ -4314,6 +4314,12 @@ components:
           $ref: '#/components/schemas/SamUserAllowances'
         attributes:
           $ref: '#/components/schemas/SamUserAttributes'
+        directGroupMembershipCount:
+          type: integer
+          description: number of groups to which this user is a direct member
+        indirectGroupMembershipCount:
+          type: integer
+          description: number of groups to which this user is a direct or indirect member
         samUser:
           $ref: '#/components/schemas/SamUserResponse'
         termsOfServiceDetails:
