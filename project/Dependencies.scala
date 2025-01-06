@@ -155,7 +155,7 @@ object Dependencies {
       excludeAwsSdk
     )
   val azureManagedApplications: ModuleID =
-    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.4"
+    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0"
 
   def excludeSpringBoot = ExclusionRule("org.springframework.boot")
   def excludeSpringAop = ExclusionRule("org.springframework.spring-aop")
