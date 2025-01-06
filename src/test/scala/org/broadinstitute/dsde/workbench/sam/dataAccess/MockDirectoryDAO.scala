@@ -338,9 +338,9 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] =
     IO(listGroupUsers(groupName, Set.empty))
 
-  override def countDirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] = ???
+  override def countDirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] = ???
 
-  override def countIndirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] = ???
+  override def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] = ???
 
   override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(users.values.find(_.azureB2CId.contains(userId)))
