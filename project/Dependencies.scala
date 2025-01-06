@@ -21,7 +21,7 @@ object Dependencies {
   val workbenchOauth2V = s"0.8-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.34-SNAPSHOT"
-  val tclVersion = "1.1.26-SNAPSHOT"
+  val tclVersion = "1.1.27-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -47,7 +47,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "8.0"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.15"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.16"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
