@@ -104,6 +104,8 @@ trait DirectoryDAO {
 
   def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
 
+  def countUnsynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
+
   def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
 
   def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]

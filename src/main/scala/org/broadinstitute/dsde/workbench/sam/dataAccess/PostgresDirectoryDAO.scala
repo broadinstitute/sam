@@ -754,6 +754,17 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       query.map(rs => rs.int(1)).single().apply().getOrElse(0)
     }
 
+  override def countUnsynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    readOnlyTransaction("countUnsynchronizedGroupMemberships", samRequestContext) { implicit session =>
+      val query = samsql"""select count(distinct g.id) unsynchronizedMembershipCount
+                          from sam_group g
+                          join sam_group_member_flat gmf on g.id = gmf.group_id
+                          where g.synchronized_date is null
+                          and gmf.member_user_id = ${samUser.id}"""
+
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0)
+    }
+
   override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
     subject match {
       case userId: WorkbenchUserId =>

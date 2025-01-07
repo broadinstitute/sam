@@ -88,13 +88,17 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         .doReturn(IO.pure(42))
         .when(directoryDAO)
         .countIndirectSynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
+      lenient()
+        .doReturn(IO.pure(1234))
+        .when(directoryDAO)
+        .countUnsynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
 
       val userCombinedStateResponse = SamUserCombinedStateResponse(
         defaultUser,
         SamUserAllowances(enabled = true, termsOfService = true),
         Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
         TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
-        GroupMembershipCounts(7, 42),
+        GroupMembershipCounts(7, 42, 1234),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )
@@ -176,13 +180,17 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         .doReturn(IO.pure(42))
         .when(directoryDAO)
         .countIndirectSynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
+      lenient()
+        .doReturn(IO.pure(1234))
+        .when(directoryDAO)
+        .countUnsynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
 
       val userCombinedStateResponse = SamUserCombinedStateResponse(
         defaultUser,
         SamUserAllowances(enabled = true, termsOfService = true),
         None,
         TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
-        GroupMembershipCounts(7, 42),
+        GroupMembershipCounts(7, 42, 1234),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )
@@ -263,13 +271,17 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         .doReturn(IO.pure(42))
         .when(directoryDAO)
         .countIndirectSynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
+      lenient()
+        .doReturn(IO.pure(1234))
+        .when(directoryDAO)
+        .countUnsynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
 
       val userCombinedStateResponse = SamUserCombinedStateResponse(
         defaultUser,
         SamUserAllowances(enabled = true, termsOfService = false),
         Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
         TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false),
-        GroupMembershipCounts(7, 42),
+        GroupMembershipCounts(7, 42, 1234),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )
