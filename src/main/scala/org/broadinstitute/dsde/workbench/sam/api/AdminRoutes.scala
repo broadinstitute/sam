@@ -314,8 +314,8 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           includePublic = false,
           samRequestContext
         )
-      directGroupMemberships <- userService.countDirectGroupMemberships(samUser, samRequestContext)
-      indirectGroupMemberships <- userService.countIndirectGroupMemberships(samUser, samRequestContext)
+      directGroupMemberships <- userService.countDirectSynchronizedGroupMemberships(samUser, samRequestContext)
+      indirectGroupMemberships <- userService.countIndirectSynchronizedGroupMemberships(samUser, samRequestContext)
     } yield SamUserSupportSummaryResponse(
       samUser,
       allowances,

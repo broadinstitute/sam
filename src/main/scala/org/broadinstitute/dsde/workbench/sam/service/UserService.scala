@@ -509,11 +509,11 @@ class UserService(
     }
   }
 
-  def countDirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
-    directoryDAO.countDirectGroupMemberships(samUser, samRequestContext)
+  def countDirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    directoryDAO.countDirectSynchronizedGroupMemberships(samUser, samRequestContext)
 
-  def countIndirectGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
-    directoryDAO.countIndirectGroupMemberships(samUser, samRequestContext)
+  def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    directoryDAO.countIndirectSynchronizedGroupMemberships(samUser, samRequestContext)
 }
 
 object UserService {
