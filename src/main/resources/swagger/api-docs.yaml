@@ -165,7 +165,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SamUserSupportSummary'
+                $ref: '#/components/schemas/SamUserCombinedState'
         500:
           description: Internal Server Error
           content:
@@ -4262,6 +4262,21 @@ components:
           type: string
           description: The id of the resource
       description: type and id of a resource
+    GroupMembershipCounts:
+      type: object
+      properties:
+        directSynchronized:
+          type: integer
+          description: |
+            Number of groups to which the user is a direct member
+            and which have been successfully synchronized to the cloud.
+            Does not include groups from public resources.
+        totalSynchronized:
+          type: integer
+          description: |
+            Number of groups to which the user is a direct or indirect member
+            and which have been successfully synchronized to the cloud.
+            Does not include groups from public resources.
     ManagedGroupMembershipEntry:
       required:
         - groupEmail
@@ -4303,27 +4318,6 @@ components:
           items:
             type: string
           description: The parent groups of the group
-    SamUserSupportSummary:
-      type: object
-      properties:
-        additionalDetails:
-          type: object
-          description: >
-            additional details about the user, such as enterprise features they have access to example: '{ "enterpriseFeatures": ["feature1", "feature2"] }'
-        allowances:
-          $ref: '#/components/schemas/SamUserAllowances'
-        attributes:
-          $ref: '#/components/schemas/SamUserAttributes'
-        directGroupMembershipCount:
-          type: integer
-          description: number of groups to which this user is a direct member
-        indirectGroupMembershipCount:
-          type: integer
-          description: number of groups to which this user is a direct or indirect member
-        samUser:
-          $ref: '#/components/schemas/SamUserResponse'
-        termsOfServiceDetails:
-          $ref: '#/components/schemas/UserTermsOfServiceDetails'
     PolicyIdentifiers:
       required:
         - policyName
@@ -4951,6 +4945,8 @@ components:
           type: object
           description: >
             additional details about the user, such as enterprise features they have access to example: '{ "enterpriseFeatures": ["feature1", "feature2"] }'
+        groupMemberhipCounts:
+          $ref: '#/components/schemas/GroupMembershipCounts'
     SamUserRegistrationRequest:
       type: object
       properties:

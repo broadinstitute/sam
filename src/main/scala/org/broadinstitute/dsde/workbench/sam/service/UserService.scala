@@ -15,6 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service.UserService.genWorkbenchUserId
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.IOWithLogging
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import spray.json.enrichAny
 
 import java.security.SecureRandom
 import java.time.Instant
@@ -514,6 +515,46 @@ class UserService(
 
   def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
     directoryDAO.countIndirectSynchronizedGroupMemberships(samUser, samRequestContext)
+
+  def getSamUserCombinedState(
+      workbenchEmail: WorkbenchEmail,
+      samRequestContext: SamRequestContext,
+      resourceService: ResourceService
+  ): IO[SamUserCombinedStateResponse] =
+    for {
+      samUserOption <- getUserFromEmail(workbenchEmail, samRequestContext)
+      samUser = samUserOption.getOrElse(throw new WorkbenchException("user not found"))
+      combinedState <- getSamUserCombinedState(samUser, samRequestContext, resourceService)
+    } yield combinedState
+
+  def getSamUserCombinedState(samUser: SamUser, samRequestContext: SamRequestContext, resourceService: ResourceService): IO[SamUserCombinedStateResponse] =
+    for {
+      allowances <- getUserAllowances(samUser, samRequestContext)
+      maybeAttributes <- getUserAttributes(samUser.id, samRequestContext)
+      directGroupMemberships <- countDirectSynchronizedGroupMemberships(samUser, samRequestContext)
+      indirectGroupMemberships <- countIndirectSynchronizedGroupMemberships(samUser, samRequestContext)
+      termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
+      enterpriseFeatures <- resourceService
+        .listResourcesFlat(
+          samUser.id,
+          Set(ResourceTypeName("enterprise-feature")),
+          Set.empty,
+          Set(ResourceRoleName("user")),
+          Set.empty,
+          includePublic = false,
+          samRequestContext
+        )
+      favoriteResources <- resourceService.getUserFavoriteResources(samUser.id, samRequestContext)
+    } yield SamUserCombinedStateResponse(
+      samUser,
+      allowances,
+      maybeAttributes,
+      termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
+      GroupMembershipCounts(directSynchronized = directGroupMemberships, totalSynchronized = indirectGroupMemberships),
+      Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
+      favoriteResources
+    )
+
 }
 
 object UserService {
