@@ -1,6 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.model.api
 
-
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 
