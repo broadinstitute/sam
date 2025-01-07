@@ -557,7 +557,8 @@ class UserService(
       GroupMembershipCounts(
         directSynchronized = directGroupMemberships,
         totalSynchronized = indirectGroupMemberships,
-        unsynchronized = unsynchronizedGroupMemberships),
+        unsynchronized = unsynchronizedGroupMemberships
+      ),
       Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
       favoriteResources
     )
