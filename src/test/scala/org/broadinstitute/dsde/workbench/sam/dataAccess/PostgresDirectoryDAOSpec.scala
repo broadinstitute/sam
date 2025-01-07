@@ -726,7 +726,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.updateSynchronizedDateAndVersion(subGroup, samRequestContext).unsafeRunSync()
         dao.updateSynchronizedDateAndVersion(parentGroup, samRequestContext).unsafeRunSync()
 
-        val directCount = dao.countDirectGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
+        val directCount = dao.countDirectSynchronizedGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
         directCount shouldBe 1
       }
     }
@@ -749,7 +749,7 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         dao.updateSynchronizedDateAndVersion(subGroup, samRequestContext).unsafeRunSync()
         dao.updateSynchronizedDateAndVersion(parentGroup, samRequestContext).unsafeRunSync()
 
-        val indirectCount = dao.countIndirectGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
+        val indirectCount = dao.countIndirectSynchronizedGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
         indirectCount shouldBe 2
       }
     }
