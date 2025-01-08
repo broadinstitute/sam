@@ -98,7 +98,6 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
       .getTermsOfServiceDetailsForUser(ArgumentMatchers.eq(testUser.id), any[SamRequestContext])
   }
 
-
   describe("getSamUserCombinedState") {
     it("should get the user combined state of the calling user") {
       // Arrange
