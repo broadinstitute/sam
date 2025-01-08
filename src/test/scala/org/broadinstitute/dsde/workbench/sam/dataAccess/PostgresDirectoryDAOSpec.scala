@@ -708,49 +708,60 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
     }
 
-    "countDirectGroupMemberships" - {
+    def createDirectAndIndirectGroups(syncGroups: Boolean): (BasicWorkbenchGroup, BasicWorkbenchGroup) = {
+      val subGroupId = WorkbenchGroupName("childWithDirectMembership") // default user is a direct member
+      val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUser.id), WorkbenchEmail("childWithDirectMembership@example.com"))
+      val parentGroupId = WorkbenchGroupName("parentWithIndirectMembership") // default user is an indirect member
+      val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(subGroupId), WorkbenchEmail("parentWithIndirectMembership@example.com"))
+
+      dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+      dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+      dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+      if (syncGroups) {
+        dao.updateSynchronizedDateAndVersion(subGroup, samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(parentGroup, samRequestContext).unsafeRunSync()
+      }
+
+      (parentGroup, subGroup)
+    }
+
+    "countDirectSynchronizedGroupMemberships" - {
       "calculate the direct count" in {
         assume(databaseEnabled, databaseEnabledClue)
 
-        val subGroupId = WorkbenchGroupName("subGroup")
-        val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUser.id), WorkbenchEmail("subGroup@foo.com"))
-        val parentGroupId = WorkbenchGroupName("parentGroup")
-        val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(subGroupId), WorkbenchEmail("parentGroup@foo.com"))
-
-        val createdUser = dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
-
-        // countDirectGroupMemberships() only counts synchronized groups;
-        // update the sync date for the groups we just created
-        dao.updateSynchronizedDateAndVersion(subGroup, samRequestContext).unsafeRunSync()
-        dao.updateSynchronizedDateAndVersion(parentGroup, samRequestContext).unsafeRunSync()
+        // create and synchronize the test groups;
+        // countDirectSynchronizedGroupMemberships() only counts synchronized groups.
+        createDirectAndIndirectGroups(syncGroups = true)
 
         val directCount = dao.countDirectSynchronizedGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
         directCount shouldBe 1
       }
     }
 
-    "countIndirectGroupMemberships" - {
+    "countIndirectSynchronizedGroupMemberships" - {
       "calculate the indirect count" in {
         assume(databaseEnabled, databaseEnabledClue)
 
-        val subGroupId = WorkbenchGroupName("subGroup")
-        val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUser.id), WorkbenchEmail("subGroup@foo.com"))
-        val parentGroupId = WorkbenchGroupName("parentGroup")
-        val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(subGroupId), WorkbenchEmail("parentGroup@foo.com"))
-
-        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
-        dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
-
-        // countIndirectGroupMemberships() only counts synchronized groups;
-        // update the sync date for the groups we just created
-        dao.updateSynchronizedDateAndVersion(subGroup, samRequestContext).unsafeRunSync()
-        dao.updateSynchronizedDateAndVersion(parentGroup, samRequestContext).unsafeRunSync()
+        // create and synchronize the test groups;
+        // countIndirectSynchronizedGroupMemberships() only counts synchronized groups.
+        createDirectAndIndirectGroups(syncGroups = true)
 
         val indirectCount = dao.countIndirectSynchronizedGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
         indirectCount shouldBe 2
+      }
+    }
+
+    "countUnsynchronizedGroupMemberships" - {
+      "calculate the unsynchronized count" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        // create but do not synchronize the test groups;
+        // countUnsynchronizedGroupMemberships() only counts unsynchronized groups.
+        createDirectAndIndirectGroups(syncGroups = false)
+
+        val unsyncedCount = dao.countUnsynchronizedGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
+        unsyncedCount shouldBe 2
       }
     }
 
