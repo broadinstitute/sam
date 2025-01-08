@@ -1983,7 +1983,7 @@ paths:
       description: |
         This endpoint is used to add and remove members of multiple policies across multiple resource in one api call.
         Each policy is updated in order in its own transaction. If a policy does not exist on a resource, 
-        processing stops with an error but all updates up to that point are committed. Missing member emails or policies fail fast. Additions are processed
+        processing stops with an error but all updates up to that point are committed. Missing member ids, emails or policies fail fast. Additions are processed
         before removals so if a subject is in both the add and remove lists for a policy, the ultimate result is removal.
         This call is idempotent, if members being added already exist or members being removed do not exist, nothing will happen.
       operationId: bulkMembershipUpdateV2
@@ -5130,6 +5130,11 @@ components:
         policyName:
           type: string
           description: The name of the policy
+        addUserIds:
+          type: array
+          description: Sam user ids to add to the policy
+          items:
+            type: string
         addEmails:
           type: array
           description: Emails to add to the policy
@@ -5140,6 +5145,11 @@ components:
           description: Other policies to add to the specified policy
           items:
             $ref: '#/components/schemas/PolicyIdentifiers'
+        removeUserIds:
+          type: array
+          description: Sam user ids to remove from the policy
+          items:
+            type: string
         removeEmails:
           type: array
           description: Emails to remove from the policy

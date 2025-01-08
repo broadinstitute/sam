@@ -152,18 +152,22 @@ class ResourceService(
     for {
       emailsToSubjects <- mapEmailsToSubjects(emails, samRequestContext)
       maybeEmailsError = validateMemberEmails(emailsToSubjects)
-      _ <- maybeRaiseBadRequest(maybeEmailsError)
-
       maybeMemberPoliciesError <- validateMemberPolicies(memberPolicies, samRequestContext)
-      _ <- maybeRaiseBadRequest(maybeMemberPoliciesError)
+      maybeUserIdError <- validateUserIds(membershipUpdates.flatMap(_.policyUpdates.flatMap(up => up.addUserIds ++ up.removeUserIds)).toSet, samRequestContext)
+
+      _ <- maybeRaiseBadRequest(maybeUserIdError ++ maybeEmailsError ++ maybeMemberPoliciesError)
 
       _ <- membershipUpdates.toList.traverse { bulkMembershipUpdate =>
         val resource = FullyQualifiedResourceId(bulkMembershipUpdate.resourceTypeName, bulkMembershipUpdate.resourceId)
         bulkMembershipUpdate.policyUpdates.toList.traverse { policyMembershipUpdate =>
           val policyId = FullyQualifiedPolicyId(resource, policyMembershipUpdate.policyName)
-          val addSubjects = policyMembershipUpdate.addEmails.flatMap(emailsToSubjects) ++ policyMembershipUpdate.addPolicies.map(_.toFullyQualifiedPolicyId)
+          val addSubjects = policyMembershipUpdate.addEmails.flatMap(emailsToSubjects) ++ policyMembershipUpdate.addPolicies.map(
+            _.toFullyQualifiedPolicyId
+          ) ++ policyMembershipUpdate.addUserIds
           val removeSubjects =
-            policyMembershipUpdate.removeEmails.flatMap(emailsToSubjects) ++ policyMembershipUpdate.removePolicies.map(_.toFullyQualifiedPolicyId)
+            policyMembershipUpdate.removeEmails.flatMap(emailsToSubjects) ++ policyMembershipUpdate.removePolicies.map(
+              _.toFullyQualifiedPolicyId
+            ) ++ policyMembershipUpdate.removeUserIds
           for {
             originalPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
             _ <- IO.raiseWhen(!originalPolicies.exists(_.id == policyId))(
@@ -177,9 +181,21 @@ class ResourceService(
     } yield ()
   }
 
-  private def maybeRaiseBadRequest(maybeError: Option[ErrorReport]) =
-    IO.raiseWhen(maybeError.isDefined)(
-      new WorkbenchExceptionWithErrorReport(maybeError.get.copy(statusCode = Option(StatusCodes.BadRequest)))
+  private def validateUserIds(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Option[ErrorReport]] =
+    userIds.toList.traverse { userId =>
+      directoryDAO.loadUser(userId, samRequestContext).map {
+        case None => Option(ErrorReport(s"User $userId not found"))
+        case _ => None
+      }
+    } map { errors =>
+      if (errors.nonEmpty) {
+        Option(ErrorReport("Invalid user ids specified", errors.flatten))
+      } else None
+    }
+
+  private def maybeRaiseBadRequest(maybeErrors: Iterable[ErrorReport]) =
+    IO.raiseWhen(maybeErrors.nonEmpty)(
+      new WorkbenchExceptionWithErrorReport(ErrorReport("Bad Request", Option(StatusCodes.BadRequest), maybeErrors.toSeq, Seq.empty, None, None))
     )
 
   /** Validates the resource first and if any validations fail, an exception is thrown with an error report that describes what failed. If validations pass,
