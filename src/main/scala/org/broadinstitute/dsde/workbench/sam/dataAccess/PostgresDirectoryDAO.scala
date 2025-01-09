@@ -528,6 +528,20 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       }
     }
 
+  override def loadUserByEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    readOnlyTransaction("loadUserByEmail", samRequestContext) { implicit session =>
+      val userTable = UserTable.syntax
+
+      val loadUserQuery = samsql"""select ${userTable.resultAll}
+                                    from ${UserTable as userTable}
+                                    where ${userTable.email} = ${email}"""
+      loadUserQuery
+        .map(UserTable(userTable))
+        .single()
+        .apply()
+        .map(UserTable.unmarshalUserRecord)
+    }
+
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def updateUser(samUser: SamUser, userUpdate: AdminUpdateUserRequest, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
@@ -717,6 +731,39 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       query.map(_.get[WorkbenchUserId](f.resultName.memberUserId)).list().apply().toSet
     }
   }
+
+  override def countDirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    readOnlyTransaction("countDirectSynchronizedGroupMemberships", samRequestContext) { implicit session =>
+      val query = samsql"""select count(distinct g.id) directMembershipCount
+                          from sam_group g
+                          join sam_group_member gm on g.id = gm.group_id
+                          where g.synchronized_date is not null
+                          and gm.member_user_id = ${samUser.id}"""
+
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0)
+    }
+
+  override def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    readOnlyTransaction("countIndirectSynchronizedGroupMemberships", samRequestContext) { implicit session =>
+      val query = samsql"""select count(distinct g.id) indirectMembershipCount
+                          from sam_group g
+                          join sam_group_member_flat gmf on g.id = gmf.group_id
+                          where g.synchronized_date is not null
+                          and gmf.member_user_id = ${samUser.id}"""
+
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0)
+    }
+
+  override def countUnsynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    readOnlyTransaction("countUnsynchronizedGroupMemberships", samRequestContext) { implicit session =>
+      val query = samsql"""select count(distinct g.id) unsynchronizedMembershipCount
+                          from sam_group g
+                          join sam_group_member_flat gmf on g.id = gmf.group_id
+                          where g.synchronized_date is null
+                          and gmf.member_user_id = ${samUser.id}"""
+
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0)
+    }
 
   override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
     subject match {

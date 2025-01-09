@@ -338,6 +338,12 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   override def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]] =
     IO(listGroupUsers(groupName, Set.empty))
 
+  override def countDirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] = ???
+
+  override def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] = ???
+
+  override def countUnsynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] = ???
+
   override def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
     IO.pure(users.values.find(_.azureB2CId.contains(userId)))
 
@@ -346,6 +352,9 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       user <- users.get(userId)
     } yield users += user.id -> user.copy(azureB2CId = Option(b2CId))
   }
+
+  override def loadUserByEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]] =
+    IO.pure(users.values.find(_.email.equals(email)))
 
   override def checkStatus(samRequestContext: SamRequestContext): IO[Boolean] = IO(passStatusCheck)
 

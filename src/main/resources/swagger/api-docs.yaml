@@ -146,6 +146,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStatus'
+  /api/admin/v1/user/email/{email}/supportSummary:
+    get:
+      tags:
+        - Admin
+      summary: Get information about a user useful for Terra support
+      operationId: getAdminUserSummaryInfo
+      parameters:
+        - name: email
+          in: path
+          description: Email address of user to check
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user summary information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserCombinedState'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v2/users:
     get:
       tags:
@@ -4279,6 +4305,27 @@ components:
           type: string
           description: The id of the resource
       description: type and id of a resource
+    GroupMembershipCounts:
+      type: object
+      properties:
+        directSynchronized:
+          type: integer
+          description: |
+            Number of groups to which the user is a direct member
+            and which have been successfully synchronized to the cloud.
+            Does not include groups from public resources.
+        totalSynchronized:
+          type: integer
+          description: |
+            Number of groups to which the user is a direct or indirect member
+            and which have been successfully synchronized to the cloud.
+            Does not include groups from public resources.
+        unsynchronized:
+          type: integer
+          description: |
+            Number of groups to which the user is a direct or indirect member
+            and which have not yet been synchronized to the cloud.
+            Does not include groups from public resources.
     ManagedGroupMembershipEntry:
       required:
         - groupEmail
@@ -4947,6 +4994,8 @@ components:
           type: object
           description: >
             additional details about the user, such as enterprise features they have access to example: '{ "enterpriseFeatures": ["feature1", "feature2"] }'
+        groupMemberhipCounts:
+          $ref: '#/components/schemas/GroupMembershipCounts'
     SamUserRegistrationRequest:
       type: object
       properties:
