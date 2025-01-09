@@ -188,7 +188,7 @@ class ResourceService(
         case _ => None
       }
     } map { errors =>
-      if (errors.nonEmpty) {
+      if (errors.flatten.nonEmpty) {
         Option(ErrorReport("Invalid user ids specified", errors.flatten))
       } else None
     }

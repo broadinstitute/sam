@@ -139,7 +139,7 @@ trait ResourceRoutes extends SamUserDirectives with SecurityDirectives with SamM
                 complete(
                   resourceService
                     .bulkMembershipUpdate(membershipUpdates, samRequestContext)
-                    .map(_ => StatusCodes.OK)
+                    .map(_ => StatusCodes.NoContent)
                 )
               }
             }

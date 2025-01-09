@@ -3771,6 +3771,202 @@ class ResourceServiceSpec
     service.getUserFavoriteResources(otherUser.id, samRequestContext).unsafeRunSync() shouldBe empty
   }
 
+  "bulkMembershipUpdate" should "validate emails, policies and ids" in {
+    val mockAccessPolicyDao = mock[AccessPolicyDAO]
+    val mockDirectoryDao = mock[DirectoryDAO]
+    val resourceServiceWithMocks =
+      new ResourceService(Map.empty, mock[PolicyEvaluatorService], mockAccessPolicyDao, mockDirectoryDao, NoExtensions, "", Set.empty)
+
+    val rtName = ResourceTypeName("rt")
+    val rid = ResourceId("rid")
+
+    when(mockAccessPolicyDao.loadPolicy(argThat[FullyQualifiedPolicyId](_.accessPolicyName.value.endsWith("missing")), any[SamRequestContext]))
+      .thenReturn(IO.pure(None))
+    when(mockAccessPolicyDao.loadPolicy(argThat[FullyQualifiedPolicyId](_.accessPolicyName.value.endsWith("exists")), any[SamRequestContext])).thenReturn(
+      IO.pure(
+        Option(
+          AccessPolicy(
+            FullyQualifiedPolicyId(FullyQualifiedResourceId(rtName, rid), AccessPolicyName("exists")),
+            Set.empty,
+            WorkbenchEmail(""),
+            Set.empty,
+            Set.empty,
+            Set.empty,
+            false
+          )
+        )
+      )
+    )
+    when(mockDirectoryDao.loadSubjectFromEmail(argThat[WorkbenchEmail](_.value.endsWith("missing")), any[SamRequestContext])).thenReturn(IO.pure(None))
+    when(mockDirectoryDao.loadSubjectFromEmail(argThat[WorkbenchEmail](_.value.endsWith("exists")), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(WorkbenchUserId("exists"))))
+    when(mockDirectoryDao.loadUser(argThat[WorkbenchUserId](_.value.endsWith("missing")), any[SamRequestContext])).thenReturn(IO.pure(None))
+    when(mockDirectoryDao.loadUser(argThat[WorkbenchUserId](_.value.endsWith("exists")), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(SamUser(WorkbenchUserId("exists"), None, WorkbenchEmail("exists"), None, false))))
+
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      resourceServiceWithMocks
+        .bulkMembershipUpdate(
+          Seq(
+            BulkMembershipUpdate(
+              rtName,
+              ResourceId("one"),
+              Seq(
+                PolicyMembershipUpdate(AccessPolicyName("ap1"), addUserIds = Set(WorkbenchUserId("add id exists"), WorkbenchUserId("add id missing"))),
+                PolicyMembershipUpdate(AccessPolicyName("ap1"), removeUserIds = Set(WorkbenchUserId("remove id exists"), WorkbenchUserId("remove id missing"))),
+                PolicyMembershipUpdate(AccessPolicyName("ap1"), addEmails = Set(WorkbenchEmail("add email exists"), WorkbenchEmail("add email missing"))),
+                PolicyMembershipUpdate(
+                  AccessPolicyName("ap1"),
+                  removeEmails = Set(WorkbenchEmail("remove email exists"), WorkbenchEmail("remove email missing"))
+                ),
+                PolicyMembershipUpdate(
+                  AccessPolicyName("ap1"),
+                  addPolicies = Set(
+                    PolicyIdentifiers(AccessPolicyName("add policy exists"), rtName, rid),
+                    PolicyIdentifiers(AccessPolicyName("add policy missing"), rtName, rid)
+                  )
+                ),
+                PolicyMembershipUpdate(
+                  AccessPolicyName("ap1"),
+                  removePolicies = Set(
+                    PolicyIdentifiers(AccessPolicyName("remove policy exists"), rtName, rid),
+                    PolicyIdentifiers(AccessPolicyName("remove policy missing"), rtName, rid)
+                  )
+                )
+              )
+            )
+          ),
+          samRequestContext
+        )
+        .unsafeRunSync()
+    }
+
+    error.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
+    error.errorReport.causes.size shouldBe 3 // 1 for each type of failure (id, email, policy)
+    error.errorReport.causes.map(_.causes.size).sum shouldBe 6 // there should be a failure for add and remove for each type
+    error.errorReport.causes.flatMap(_.causes.map(_.message)).forall(_.contains("missing")) shouldBe true
+  }
+
+  it should "call addAndRemovePolicyMembers with correct subjects and not call onPolicyUpdate" in {
+    val mockAccessPolicyDao = mock[AccessPolicyDAO]
+    val mockDirectoryDao = mock[DirectoryDAO]
+    // using mock[CloudExtensions] here is intentional to make sure onGroupUpdate is not called
+    val resourceServiceWithMocks =
+      new ResourceService(Map.empty, mock[PolicyEvaluatorService], mockAccessPolicyDao, mockDirectoryDao, mock[CloudExtensions], "", Set.empty)
+
+    val rtName = ResourceTypeName("rt")
+    val rid = ResourceId("rid")
+
+    val addId = WorkbenchUserId("add id exists")
+    val removeId = WorkbenchUserId("remove id exists")
+    val addEmail = WorkbenchEmail("add email exists")
+    val removeEmail = WorkbenchEmail("remove email exists")
+    val addPolicy = PolicyIdentifiers(AccessPolicyName("add policy exists"), rtName, rid)
+    val removePolicy = PolicyIdentifiers(AccessPolicyName("remove policy exists"), rtName, rid)
+
+    when(mockAccessPolicyDao.loadPolicy(ArgumentMatchers.eq(addPolicy.toFullyQualifiedPolicyId), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(AccessPolicy(addPolicy.toFullyQualifiedPolicyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+    when(mockAccessPolicyDao.loadPolicy(ArgumentMatchers.eq(removePolicy.toFullyQualifiedPolicyId), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(AccessPolicy(removePolicy.toFullyQualifiedPolicyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+    when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(addEmail), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(WorkbenchUserId(addEmail.value))))
+    when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(removeEmail), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(WorkbenchUserId(removeEmail.value))))
+    when(mockDirectoryDao.loadUser(ArgumentMatchers.eq(addId), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(SamUser(addId, None, WorkbenchEmail("add"), None, false))))
+    when(mockDirectoryDao.loadUser(ArgumentMatchers.eq(removeId), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(SamUser(removeId, None, WorkbenchEmail("remove"), None, false))))
+
+    when(mockAccessPolicyDao.listAccessPolicies(FullyQualifiedResourceId(rtName, rid), samRequestContext)).thenReturn(
+      IO.pure(
+        LazyList(
+          AccessPolicy(
+            FullyQualifiedPolicyId(FullyQualifiedResourceId(rtName, rid), AccessPolicyName("ap1")),
+            Set.empty,
+            WorkbenchEmail(""),
+            Set.empty,
+            Set.empty,
+            Set.empty,
+            false
+          )
+        )
+      )
+    )
+
+    val bulkMembershipUpdate = BulkMembershipUpdate(
+      rtName,
+      rid,
+      Seq(
+        PolicyMembershipUpdate(
+          AccessPolicyName("ap1"),
+          addUserIds = Set(addId),
+          removeUserIds = Set(removeId),
+          addEmails = Set(addEmail),
+          removeEmails = Set(removeEmail),
+          addPolicies = Set(addPolicy),
+          removePolicies = Set(removePolicy)
+        )
+      )
+    )
+
+    // test will fail with a Strict stubbing argument mismatch if actual arguments do not match this mock
+    when(
+      mockAccessPolicyDao.addAndRemovePolicyMembers(
+        any[FullyQualifiedPolicyId],
+        ArgumentMatchers.eq(Set(addPolicy.toFullyQualifiedPolicyId, addId, WorkbenchUserId(addEmail.value))),
+        ArgumentMatchers.eq(Set(removePolicy.toFullyQualifiedPolicyId, removeId, WorkbenchUserId(removeEmail.value))),
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.pure(0)) // returning 0 should not trigger onPolicyUpdate
+
+    resourceServiceWithMocks.bulkMembershipUpdate(Seq(bulkMembershipUpdate), samRequestContext).unsafeRunSync()
+  }
+
+  it should "call onPolicyUpdate when policy changes" in {
+    val mockAccessPolicyDao = mock[AccessPolicyDAO]
+    val mockDirectoryDao = mock[DirectoryDAO]
+    val mockCloudExtensions = mock[CloudExtensions]
+    val resourceServiceWithMocks =
+      new ResourceService(Map.empty, mock[PolicyEvaluatorService], mockAccessPolicyDao, mockDirectoryDao, mockCloudExtensions, "", Set.empty)
+
+    val rtName = ResourceTypeName("rt")
+    val rid = ResourceId("rid")
+
+    when(mockAccessPolicyDao.listAccessPolicies(FullyQualifiedResourceId(rtName, rid), samRequestContext)).thenReturn(
+      IO.pure(
+        LazyList(
+          AccessPolicy(
+            FullyQualifiedPolicyId(FullyQualifiedResourceId(rtName, rid), AccessPolicyName("ap1")),
+            Set.empty,
+            WorkbenchEmail(""),
+            Set.empty,
+            Set.empty,
+            Set.empty,
+            false
+          )
+        )
+      )
+    )
+
+    val bulkMembershipUpdate = BulkMembershipUpdate(
+      rtName,
+      rid,
+      Seq(
+        PolicyMembershipUpdate(AccessPolicyName("ap1"))
+      )
+    )
+
+    // test will fail with a Strict stubbing argument mismatch if actual arguments do not match this mock
+    when(
+      mockAccessPolicyDao.addAndRemovePolicyMembers(any[FullyQualifiedPolicyId], any[Set[WorkbenchSubject]], any[Set[WorkbenchSubject]], any[SamRequestContext])
+    ).thenReturn(IO.pure(1)) // returning 1 should trigger onPolicyUpdate
+
+    // test will fail if onGroupUpdate is not called due to strict stubbing
+    when(mockCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext])).thenReturn(IO.unit)
+
+    resourceServiceWithMocks.bulkMembershipUpdate(Seq(bulkMembershipUpdate), samRequestContext).unsafeRunSync()
+  }
+
   /** Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures that `events` were appended. If tryTwice` run `test` again to make
     * sure subsequent calls to no log more messages. Ends by tearing down the log appender.
     */

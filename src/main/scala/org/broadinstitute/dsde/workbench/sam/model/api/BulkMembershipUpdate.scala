@@ -6,12 +6,12 @@ import spray.json.RootJsonFormat
 
 case class PolicyMembershipUpdate(
     policyName: AccessPolicyName,
-    addUserIds: Set[WorkbenchUserId],
-    addEmails: Set[WorkbenchEmail],
-    addPolicies: Set[PolicyIdentifiers],
-    removeUserIds: Set[WorkbenchUserId],
-    removeEmails: Set[WorkbenchEmail],
-    removePolicies: Set[PolicyIdentifiers]
+    addUserIds: Set[WorkbenchUserId] = Set.empty,
+    addEmails: Set[WorkbenchEmail] = Set.empty,
+    addPolicies: Set[PolicyIdentifiers] = Set.empty,
+    removeUserIds: Set[WorkbenchUserId] = Set.empty,
+    removeEmails: Set[WorkbenchEmail] = Set.empty,
+    removePolicies: Set[PolicyIdentifiers] = Set.empty
 )
 object PolicyMembershipUpdate {
   import spray.json.DefaultJsonProtocol._
