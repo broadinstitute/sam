@@ -10,10 +10,9 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUserResponse._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api._
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, ResourceRoleName, ResourceTypeName, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceId, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.service.{ResourceService, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
-import spray.json.enrichAny
 import spray.json.DefaultJsonProtocol._
 
 /** Created by tlangs on 10/12/2023.
@@ -80,7 +79,11 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives wi
               withUserAllowInactive(samRequestContextWithoutUser) { samUser: SamUser =>
                 val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                 pathEndOrSingleSlash {
-                  getSamUserCombinedState(samUser, samRequestContext)
+                  get {
+                    complete {
+                      userService.getSamUserCombinedState(samUser, samRequestContext, resourceService)
+                    }
+                  }
                 }
               }
             } ~
@@ -197,35 +200,6 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives wi
         complete {
           userService.setUserAttributesFromRequest(samUser.id, userAttributesRequest, samRequestContext).map(OK -> _)
         }
-      }
-    }
-
-  private def getSamUserCombinedState(samUser: SamUser, samRequestContext: SamRequestContext): Route =
-    get {
-      complete {
-        for {
-          allowances <- userService.getUserAllowances(samUser, samRequestContext)
-          maybeAttributes <- userService.getUserAttributes(samUser.id, samRequestContext)
-          termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
-          enterpriseFeatures <- resourceService
-            .listResourcesFlat(
-              samUser.id,
-              Set(ResourceTypeName("enterprise-feature")),
-              Set.empty,
-              Set(ResourceRoleName("user")),
-              Set.empty,
-              includePublic = false,
-              samRequestContext
-            )
-          favoriteResources <- resourceService.getUserFavoriteResources(samUser.id, samRequestContext)
-        } yield SamUserCombinedStateResponse(
-          samUser,
-          allowances,
-          maybeAttributes,
-          termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
-          Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
-          favoriteResources
-        )
       }
     }
 
