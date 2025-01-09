@@ -100,11 +100,15 @@ trait DirectoryDAO {
 
   def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]]
 
+  /** @return
+    *   the number of groups to which the user is a direct member, not including public resources.
+    */
   def countDirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
 
+  /** @return
+    *   the number of groups to which the user is a direct or indirect member, not including public resources.
+    */
   def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
-
-  def countUnsynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
 
   def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
 
