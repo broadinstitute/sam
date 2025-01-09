@@ -567,6 +567,9 @@ class UserService(
 
 object UserService {
 
+  // the "user" resource type is only used for resource_type_admin checks
+  val userTypeName: ResourceTypeName = ResourceTypeName("user")
+
   val random = SecureRandom.getInstance("NativePRNGNonBlocking")
 
   // from https://www.regular-expressions.info/email.html
