@@ -410,4 +410,20 @@ class MockAccessPolicyDAO(private val resourceTypes: mutable.Map[ResourceTypeNam
 
   override def listResourcesUsingAuthDomain(authDomainGroupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[FullyQualifiedResourceId]] =
     IO.pure(Set.empty)
+
+  override def addAndRemovePolicyMembers(
+      policyId: FullyQualifiedPolicyId,
+      addSubjects: Set[WorkbenchSubject],
+      removeSubjects: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[Int] =
+    loadPolicy(policyId, samRequestContext).flatMap {
+      case None => throw new Exception("not found")
+      case Some(policy) =>
+        val withAddedMembers = policy.members ++ addSubjects
+        val lessRemovedMembers = withAddedMembers -- removeSubjects
+        overwritePolicy(policy.copy(members = lessRemovedMembers), samRequestContext).map(_ =>
+          (withAddedMembers.size - policy.members.size) + (withAddedMembers.size - lessRemovedMembers.size)
+        )
+    }
 }

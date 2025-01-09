@@ -135,6 +135,13 @@ trait AccessPolicyDAO {
       samRequestContext: SamRequestContext
   ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]]
 
+  def addAndRemovePolicyMembers(
+      policyId: FullyQualifiedPolicyId,
+      addSubjects: Set[WorkbenchSubject],
+      removeSubjects: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[Int]
+
 }
 
 sealed abstract class LoadResourceAuthDomainResult

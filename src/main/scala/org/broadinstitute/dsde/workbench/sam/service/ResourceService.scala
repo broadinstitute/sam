@@ -142,6 +142,62 @@ class ResourceService(
     createResource(resourceType, resourceId, defaultPolicies, Set.empty, None, samUser.id, samRequestContext)
   }
 
+  /** Adds and removes members from policies across multiple resources. Each policy is updated in order in its own transaction. If a resource or policy does not
+    * exist, processing stops with an error but all updates up to that point are committed. Missing member emails or policies fail fast. Additions are processed
+    * before removals so if a subject is in both the add and remove lists for a policy, the ultimate result is removal.
+    */
+  def bulkMembershipUpdate(membershipUpdates: Seq[BulkMembershipUpdate], samRequestContext: SamRequestContext): IO[Unit] = {
+    val emails = membershipUpdates.flatMap(_.policyUpdates.flatMap(up => up.addEmails ++ up.removeEmails)).toSet
+    val memberPolicies = membershipUpdates.flatMap(_.policyUpdates.flatMap(up => up.addPolicies ++ up.removePolicies)).toSet
+    for {
+      emailsToSubjects <- mapEmailsToSubjects(emails, samRequestContext)
+      maybeEmailsError = validateMemberEmails(emailsToSubjects)
+      maybeMemberPoliciesError <- validateMemberPolicies(memberPolicies, samRequestContext)
+      maybeUserIdError <- validateUserIds(membershipUpdates.flatMap(_.policyUpdates.flatMap(up => up.addUserIds ++ up.removeUserIds)).toSet, samRequestContext)
+
+      _ <- maybeRaiseBadRequest(maybeUserIdError ++ maybeEmailsError ++ maybeMemberPoliciesError)
+
+      _ <- membershipUpdates.toList.traverse { bulkMembershipUpdate =>
+        val resource = FullyQualifiedResourceId(bulkMembershipUpdate.resourceTypeName, bulkMembershipUpdate.resourceId)
+        bulkMembershipUpdate.policyUpdates.toList.traverse { policyMembershipUpdate =>
+          val policyId = FullyQualifiedPolicyId(resource, policyMembershipUpdate.policyName)
+          val addSubjects = policyMembershipUpdate.addEmails.flatMap(emailsToSubjects) ++ policyMembershipUpdate.addPolicies.map(
+            _.toFullyQualifiedPolicyId
+          ) ++ policyMembershipUpdate.addUserIds
+          val removeSubjects =
+            policyMembershipUpdate.removeEmails.flatMap(emailsToSubjects) ++ policyMembershipUpdate.removePolicies.map(
+              _.toFullyQualifiedPolicyId
+            ) ++ policyMembershipUpdate.removeUserIds
+          for {
+            originalPolicies <- accessPolicyDAO.listAccessPolicies(policyId.resource, samRequestContext)
+            _ <- IO.raiseWhen(!originalPolicies.exists(_.id == policyId))(
+              new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Policy $policyId not found"))
+            )
+            count <- accessPolicyDAO.addAndRemovePolicyMembers(policyId, addSubjects, removeSubjects, samRequestContext)
+            _ <- onPolicyUpdateIfChanged(policyId, originalPolicies, samRequestContext)(count > 0)
+          } yield ()
+        }
+      }
+    } yield ()
+  }
+
+  private def validateUserIds(userIds: Set[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Option[ErrorReport]] =
+    userIds.toList.traverse { userId =>
+      directoryDAO.loadUser(userId, samRequestContext).map {
+        case None => Option(ErrorReport(s"User $userId not found"))
+        case _ => None
+      }
+    } map { errors =>
+      if (errors.flatten.nonEmpty) {
+        Option(ErrorReport("Invalid user ids specified", errors.flatten))
+      } else None
+    }
+
+  private def maybeRaiseBadRequest(maybeErrors: Iterable[ErrorReport]) =
+    IO.raiseWhen(maybeErrors.nonEmpty)(
+      new WorkbenchExceptionWithErrorReport(ErrorReport("Bad Request", Option(StatusCodes.BadRequest), maybeErrors.toSeq, Seq.empty, None, None))
+    )
+
   /** Validates the resource first and if any validations fail, an exception is thrown with an error report that describes what failed. If validations pass,
     * then the Resource should be persisted.
     *
@@ -215,7 +271,9 @@ class ResourceService(
   private def constructAccessPolicy(resourceType: ResourceType, resourceId: ResourceId, validatableAccessPolicy: ValidatableAccessPolicy, public: Boolean) =
     AccessPolicy(
       FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceId), validatableAccessPolicy.policyName),
-      validatableAccessPolicy.emailsToSubjects.values.flatten.toSet,
+      validatableAccessPolicy.emailsToSubjects.values.flatten.toSet ++ validatableAccessPolicy.memberPolicies
+        .getOrElse(Set.empty)
+        .map(_.toFullyQualifiedPolicyId),
       generateGroupEmail(),
       validatableAccessPolicy.roles,
       validatableAccessPolicy.actions,
@@ -365,7 +423,7 @@ class ResourceService(
     for {
       resourceType <- getResourceType(resource.resourceTypeName)
       error <- userId.map(validateAuthDomain(resourceType.get, authDomains, _, samRequestContext)).getOrElse(IO.none)
-      _ <- IO.raiseWhen(error.isDefined)(new WorkbenchExceptionWithErrorReport(error.get.copy(statusCode = Option(StatusCodes.BadRequest))))
+      _ <- maybeRaiseBadRequest(error)
       resourceAndDescendants <- listResourceAndDescendants(resource, samRequestContext)
       _ <- resourceAndDescendants.traverse(validateNoPublicPolicies(_, samRequestContext))
       _ <- resourceAndDescendants.traverse(accessPolicyDAO.addResourceAuthDomain(_, authDomains, samRequestContext))
@@ -586,7 +644,7 @@ class ResourceService(
       samRequestContext: SamRequestContext
   ): IO[AccessPolicy] = {
     val workbenchSubjects = policy.emailsToSubjects.values.flatten.toSet ++
-      policy.memberPolicies.getOrElse(Set.empty).map(p => FullyQualifiedPolicyId(FullyQualifiedResourceId(p.resourceTypeName, p.resourceId), p.policyName))
+      policy.memberPolicies.getOrElse(Set.empty).map(p => p.toFullyQualifiedPolicyId)
     accessPolicyDAO.listAccessPolicies(policyIdentity.resource, samRequestContext).flatMap { originalPolicies =>
       originalPolicies.find(_.id == policyIdentity) match {
         case None =>
@@ -680,12 +738,17 @@ class ResourceService(
   private[service] def validatePolicy(resourceType: ResourceType, resourceId: ResourceId, policy: ValidatableAccessPolicy) =
     for {
       descendantPermissionsErrors <- validateDescendantPermissions(policy.descendantPermissions)
+      memberPolicyErrors <- policy.memberPolicies match {
+        case Some(memberPolicies) => validateMemberPolicies(memberPolicies, SamRequestContext())
+        case None => IO.pure(None)
+      }
     } yield {
       val validationErrors =
         validateMemberEmails(policy.emailsToSubjects) ++
           validateActions(resourceType, policy.actions) ++
           validateRoles(resourceType, policy.roles) ++
           validateUrlSafe(policy.policyName.value) ++
+          memberPolicyErrors ++
           descendantPermissionsErrors ++
           validateResourceTypeAdminDescendantPermissions(resourceType, resourceId, policy.descendantPermissions)
 
@@ -723,6 +786,18 @@ class ResourceService(
       Some(ErrorReport(s"You have specified at least one invalid member email", emailCauses.toSeq))
     } else None
   }
+
+  private def validateMemberPolicies(memberPolicies: Set[PolicyIdentifiers], samRequestContext: SamRequestContext): IO[Option[ErrorReport]] =
+    memberPolicies.toList.traverse { policy =>
+      accessPolicyDAO.loadPolicy(policy.toFullyQualifiedPolicyId, samRequestContext).map {
+        case None => Some(ErrorReport(s"Invalid member policy: ${policy}"))
+        case _ => None
+      }
+    } map { errors =>
+      if (errors.flatten.nonEmpty) {
+        Some(ErrorReport(s"You have specified at least one invalid member policy", errors.flatten))
+      } else None
+    }
 
   private[service] def validateRoles(resourceType: ResourceType, roles: Set[ResourceRoleName]) = {
     val invalidRoles = roles -- resourceType.roles.map(_.roleName)
@@ -778,10 +853,6 @@ class ResourceService(
       changeEvents = createAccessChangeEvents(policyId.resource, originalPolicies, updatedPolicies)
       _ <- AuditLogger.logAuditEventIO(samRequestContext, changeEvents.toSeq: _*)
 
-      _ <- directoryDAO.updateGroupUpdatedDateAndVersionWithSession(
-        FullyQualifiedPolicyId(policyId.resource, policyId.accessPolicyName),
-        samRequestContext
-      )
       _ <- cloudExtensions.onGroupUpdate(Seq(policyId), removedMembers ++ addedMembers, samRequestContext).attempt.flatMap {
         case Left(regrets) => IO(logger.error(s"error calling cloudExtensions.onGroupUpdate for $policyId", regrets))
         case Right(_) => IO.unit
@@ -851,50 +922,13 @@ class ResourceService(
   ): IO[Set[ValidatableAccessPolicy]] =
     policies.toList
       .traverse { case (accessPolicyName, accessPolicyMembershipRequest) =>
-        for {
-          // grouping member emails and policy emails together
-          allEmails <- getPolicyEmailsFromAccessPolicyMembership(accessPolicyMembershipRequest, samRequestContext)
-            .map { ioPolicyEmails =>
-              for {
-                policyEmails <- ioPolicyEmails
-              } yield accessPolicyMembershipRequest.memberEmails ++ policyEmails
-            }
-            .getOrElse(IO(accessPolicyMembershipRequest.memberEmails))
-          validatablePolicy <- makeValidatablePolicy(
-            accessPolicyName,
-            accessPolicyMembershipRequest.copy(memberEmails = allEmails),
-            samRequestContext
-          )
-        } yield validatablePolicy
+        makeValidatablePolicy(
+          accessPolicyName,
+          accessPolicyMembershipRequest,
+          samRequestContext
+        )
       }
       .map(_.toSet)
-
-  private def getPolicyEmailsFromAccessPolicyMembership(
-      accessPolicyMembership: AccessPolicyMembershipRequest,
-      samRequestContext: SamRequestContext
-  ): Option[IO[Set[WorkbenchEmail]]] = {
-    val maybePolicyEmails = accessPolicyMembership.memberPolicies.map { memberPolicy =>
-      memberPolicy.map { memberPolicy =>
-        val ownerPolicy = loadPolicyByPolicyIdentifiers(memberPolicy, samRequestContext)
-        ownerPolicy.map(p => p.map(_.email))
-      }
-    }
-    // this mainly serves to simplify the complex structure of policy emails
-    maybePolicyEmails.map { policyEmails =>
-      val listIOPolicyEmails = policyEmails.toList
-      val ioListPolicyEmails = listIOPolicyEmails.sequence
-      val ioSetPolicyEmails = for {
-        listPolicyEmails <- ioListPolicyEmails
-      } yield listPolicyEmails.flatten.toSet
-      ioSetPolicyEmails
-    }
-  }
-
-  private def loadPolicyByPolicyIdentifiers(policyIdentifiers: PolicyIdentifiers, samRequestContext: SamRequestContext): IO[Option[AccessPolicy]] =
-    accessPolicyDAO.loadPolicy(
-      FullyQualifiedPolicyId(FullyQualifiedResourceId(policyIdentifiers.resourceTypeName, policyIdentifiers.resourceId), policyIdentifiers.policyName),
-      samRequestContext
-    )
 
   private def makeValidatablePolicy(
       accessPolicyName: AccessPolicyName,

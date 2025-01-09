@@ -1028,6 +1028,7 @@ from ${GroupMemberTable as groupMemberTable}
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("overwritePolicyMembers", samRequestContext) { implicit session =>
       overwritePolicyMembersInternal(id, memberList)
+      updateGroupUpdatedDateAndVersion(id)
     }
 
   // Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
@@ -1038,7 +1039,6 @@ from ${GroupMemberTable as groupMemberTable}
     }
     removeAllGroupMembers(groupId)
     insertGroupMembers(groupId, memberList)
-    updateGroupUpdatedDateAndVersion(id)
   }
 
   override def overwritePolicy(newPolicy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] =
@@ -1056,7 +1056,7 @@ from ${GroupMemberTable as groupMemberTable}
         newPolicy
       )
       setPolicyIsPublicInternal(policyPK, newPolicy.public)
-
+      updateGroupUpdatedDateAndVersion(newPolicy.id)
       newPolicy
     }
 
@@ -1661,7 +1661,11 @@ from ${GroupMemberTable as groupMemberTable}
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Boolean] =
     serializableWriteTransaction("setPolicyIsPublic", samRequestContext) { implicit session =>
       val policyPK = loadPolicyPK(policyId)
-      setPolicyIsPublicInternal(policyPK, isPublic) > 0
+      val changed = setPolicyIsPublicInternal(policyPK, isPublic) > 0
+      if (changed) {
+        updateGroupUpdatedDateAndVersion(policyId)
+      }
+      changed
     }
 
   override def getResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = {
@@ -1974,6 +1978,28 @@ from ${GroupMemberTable as groupMemberTable}
       .filter(r => policies.isEmpty || r.policy.exists(p => policies.contains(p)))
       .filter(r => roles.isEmpty || r.role.exists(role => roles.contains(role)))
       .filter(r => actions.isEmpty || r.action.exists(action => actions.contains(action))) ++ privateResources
+
+  override def addAndRemovePolicyMembers(
+      policyId: FullyQualifiedPolicyId,
+      addSubjects: Set[WorkbenchSubject],
+      removeSubjects: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[Int] =
+    serializableWriteTransaction("addAndRemovePolicyMembers", samRequestContext) { implicit session =>
+      val groupId = samsql"${workbenchGroupIdentityToGroupPK(policyId)}".map(rs => rs.get[GroupPK](1)).single().apply().getOrElse {
+        throw new WorkbenchException(s"Group for policy [$policyId] not found")
+      }
+      val insertedCount = insertGroupMembers(groupId, addSubjects)
+      // there is no bulk removeGroupMembers because figuring out which records to remove from the flat structure
+      // can't be done with an in clause because it needs to use array functions
+      val removedCount = removeSubjects
+        .map { subject =>
+          removeGroupMember(policyId, subject)
+        }
+        .count(identity) // counts all that were true
+      updateGroupUpdatedDateAndVersion(policyId)
+      insertedCount + removedCount
+    }
 
   private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName])(implicit session: DBSession): Int = {
     val resource = ResourceTable.syntax("resource")

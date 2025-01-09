@@ -3646,6 +3646,94 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         policyGroups should contain theSameElementsAs List((parentPolicy.id, childPolicy.id), (otherParentPolicy.id, otherChildPolicy.id))
       }
     }
+
+    "addAndRemovePolicyMembers" - {
+      "adds members and is idempotent" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dirDao.createUser(user, samRequestContext).unsafeRunSync()
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        dao.createResource(resource, samRequestContext).unsafeRunSync()
+
+        val policy = AccessPolicy(
+          FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")),
+          Set.empty,
+          WorkbenchEmail("foo"),
+          Set.empty,
+          Set.empty,
+          Set.empty,
+          false
+        )
+        dao.createPolicy(policy, samRequestContext).unsafeRunSync()
+
+        dao.addAndRemovePolicyMembers(policy.id, Set(user.id), Set.empty, samRequestContext).unsafeRunSync() should be(1)
+        dao.addAndRemovePolicyMembers(policy.id, Set(user.id), Set.empty, samRequestContext).unsafeRunSync() should be(0)
+
+        dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync().get.members should contain(user.id)
+      }
+
+      "removes members and is idempotent" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val user = Generator.genWorkbenchUserGoogle.sample.get
+        dirDao.createUser(user, samRequestContext).unsafeRunSync()
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        dao.createResource(resource, samRequestContext).unsafeRunSync()
+
+        val policy = AccessPolicy(
+          FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")),
+          Set(user.id),
+          WorkbenchEmail("foo"),
+          Set.empty,
+          Set.empty,
+          Set.empty,
+          false
+        )
+        dao.createPolicy(policy, samRequestContext).unsafeRunSync()
+
+        dao.addAndRemovePolicyMembers(policy.id, Set.empty, Set(user.id), samRequestContext).unsafeRunSync() should be(1)
+        dao.addAndRemovePolicyMembers(policy.id, Set.empty, Set(user.id), samRequestContext).unsafeRunSync() should be(0)
+
+        dao.loadPolicy(policy.id, samRequestContext).unsafeRunSync().get.members should not contain user.id
+      }
+
+      "returns correct count" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        val existsForAdd = Generator.genWorkbenchUserGoogle.sample.get
+        val existsForRemove = Generator.genWorkbenchUserGoogle.sample.get
+        val notExistsForAdd = Generator.genWorkbenchUserGoogle.sample.get
+        val notExistsForRemove = Generator.genWorkbenchUserGoogle.sample.get
+        dirDao.createUser(existsForAdd, samRequestContext).unsafeRunSync()
+        dirDao.createUser(existsForRemove, samRequestContext).unsafeRunSync()
+        dirDao.createUser(notExistsForAdd, samRequestContext).unsafeRunSync()
+        dirDao.createUser(notExistsForRemove, samRequestContext).unsafeRunSync()
+
+        val resource = Resource(resourceType.name, ResourceId("resource"), Set.empty)
+        dao.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        dao.createResource(resource, samRequestContext).unsafeRunSync()
+
+        val policy = AccessPolicy(
+          FullyQualifiedPolicyId(resource.fullyQualifiedId, AccessPolicyName("policyName")),
+          Set(existsForAdd.id, existsForRemove.id),
+          WorkbenchEmail("foo"),
+          Set.empty,
+          Set.empty,
+          Set.empty,
+          false
+        )
+        dao.createPolicy(policy, samRequestContext).unsafeRunSync()
+
+        dao
+          .addAndRemovePolicyMembers(policy.id, Set(existsForAdd.id, notExistsForAdd.id), Set(existsForRemove.id, notExistsForRemove.id), samRequestContext)
+          .unsafeRunSync() should be(2)
+      }
+    }
   }
 
   private def uuid: String =
