@@ -48,13 +48,24 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
   def adminUserRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("user") {
       asWorkbenchAdmin(samUser) {
-        path("email" / Segment) { email =>
+        pathPrefix("email" / Segment) { email =>
           val workbenchEmail = WorkbenchEmail(email)
-          getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
-            complete {
-              userService
-                .getUserStatusFromEmail(workbenchEmail, samRequestContext)
-                .map(status => (if (status.isDefined) OK else NotFound) -> status)
+          pathEndOrSingleSlash {
+            getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
+              complete {
+                userService
+                  .getUserStatusFromEmail(workbenchEmail, samRequestContext)
+                  .map(status => (if (status.isDefined) OK else NotFound) -> status)
+              }
+            }
+          } ~
+          pathPrefix("supportSummary") {
+            pathEndOrSingleSlash {
+              getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
+                complete {
+                  userService.getSamUserCombinedState(workbenchEmail, samRequestContext, resourceService)
+                }
+              }
             }
           }
         } ~
@@ -284,4 +295,5 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
       user.id,
       samRequestContext
     )
+
 }

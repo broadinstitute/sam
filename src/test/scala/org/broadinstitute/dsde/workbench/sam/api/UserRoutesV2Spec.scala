@@ -4,19 +4,16 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForSamUserResponseMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.{
-  FilteredResourceFlat,
-  FilteredResourcesFlat,
   SamUser,
   SamUserAllowances,
   SamUserAttributes,
   SamUserAttributesRequest,
-  SamUserCombinedStateResponse,
   SamUserRegistrationRequest,
   SamUserResponse
 }
@@ -26,12 +23,9 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import java.time.Instant
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
-import org.mockito.Mockito.lenient
-import spray.json.enrichAny
 import spray.json.DefaultJsonProtocol._
 
 class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with ScalatestRouteTest with MockitoSugar with TestSupport {
@@ -257,184 +251,6 @@ class UserRoutesV2Spec extends AnyFlatSpec with Matchers with TimeMatchers with 
     Patch(s"/api/users/v2/self/attributes", userAttributesRequest) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[SamUserAttributes] should be(userAttributes)
-    }
-  }
-
-  "GET /api/users/v2/self/combinedState" should "get the user combined state of the calling user" in {
-    // Arrange
-    val userAttributes = SamUserAttributes(defaultUser.id, marketingConsent = true)
-    val favoriteResources = Set(FullyQualifiedResourceId(ResourceTypeName("workspaceType"), ResourceId("workspaceName")))
-    val enterpriseFeature = FilteredResourceFlat(
-      resourceType = ResourceTypeName("enterprise-feature"),
-      resourceId = ResourceId("enterprise-feature"),
-      policies = Set.empty,
-      roles = Set(ResourceRoleName("user")),
-      actions = Set.empty,
-      authDomainGroups = Set.empty,
-      missingAuthDomainGroups = Set.empty
-    )
-    val filteresResourcesFlat = FilteredResourcesFlat(Set(enterpriseFeature))
-    val userCombinedStateResponse = SamUserCombinedStateResponse(
-      defaultUser,
-      SamUserAllowances(enabled = true, termsOfService = true),
-      Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
-      TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
-      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
-      favoriteResources
-    )
-
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
-      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
-      .withUserAttributes(defaultUser, userAttributes)
-      .callAsNonAdminUser()
-      .build
-
-    lenient()
-      .doReturn(IO.pure(FilteredResourcesFlat(Set(enterpriseFeature))))
-      .when(samRoutes.resourceService)
-      .listResourcesFlat(
-        any[WorkbenchUserId],
-        any[Set[ResourceTypeName]],
-        any[Set[AccessPolicyName]],
-        any[Set[ResourceRoleName]],
-        any[Set[ResourceAction]],
-        any[Boolean],
-        any[SamRequestContext]
-      )
-
-    lenient()
-      .doReturn(IO.pure(favoriteResources))
-      .when(samRoutes.resourceService)
-      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
-
-    // Act and Assert
-    Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      val response = responseAs[SamUserCombinedStateResponse]
-      response.samUser should be(defaultUser)
-      response.allowances should be(userCombinedStateResponse.allowances)
-      response.attributes should be(userCombinedStateResponse.attributes)
-      response.termsOfServiceDetails.acceptedOn.get should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn.get)
-      response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
-      response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
-      response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
-      response.favoriteResources should be(favoriteResources)
-    }
-  }
-
-  it should "return null attributes if the user has no attributes" in {
-    // Arrange
-    val enterpriseFeature = FilteredResourceFlat(
-      resourceType = ResourceTypeName("enterprise-feature"),
-      resourceId = ResourceId("enterprise-feature"),
-      policies = Set.empty,
-      roles = Set(ResourceRoleName("user")),
-      actions = Set.empty,
-      authDomainGroups = Set.empty,
-      missingAuthDomainGroups = Set.empty
-    )
-    val filteresResourcesFlat = FilteredResourcesFlat(Set(enterpriseFeature))
-    val userCombinedStateResponse = SamUserCombinedStateResponse(
-      defaultUser,
-      SamUserAllowances(enabled = true, termsOfService = true),
-      Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
-      TermsOfServiceDetails(Option("v1"), Option(Instant.now()), permitsSystemUsage = true, isCurrentVersion = true),
-      Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
-      Set.empty
-    )
-
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .withEnabledUser(defaultUser) // "persisted/enabled" user we will check the status of
-      .withAllowedUser(defaultUser) // "allowed" user we will check the status of
-      .callAsNonAdminUser()
-      .build
-
-    lenient()
-      .doReturn(IO.pure(FilteredResourcesFlat(Set(enterpriseFeature))))
-      .when(samRoutes.resourceService)
-      .listResourcesFlat(
-        any[WorkbenchUserId],
-        any[Set[ResourceTypeName]],
-        any[Set[AccessPolicyName]],
-        any[Set[ResourceRoleName]],
-        any[Set[ResourceAction]],
-        any[Boolean],
-        any[SamRequestContext]
-      )
-
-    lenient()
-      .doReturn(IO.pure(Set.empty))
-      .when(samRoutes.resourceService)
-      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
-
-    // Act and Assert
-    Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      val response = responseAs[SamUserCombinedStateResponse]
-      response.samUser should be(defaultUser)
-      response.allowances should be(userCombinedStateResponse.allowances)
-      response.attributes should be(None)
-      response.termsOfServiceDetails.acceptedOn.get should beAround(userCombinedStateResponse.termsOfServiceDetails.acceptedOn.get)
-      response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
-      response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
-      response.termsOfServiceDetails.latestAcceptedVersion should be(userCombinedStateResponse.termsOfServiceDetails.latestAcceptedVersion)
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteresResourcesFlat.toJson))
-
-    }
-  }
-
-  it should "return falsy terms of service if the user has no tos history" in {
-    // Arrange
-    val filteredResourcesFlat = FilteredResourcesFlat(Set.empty)
-    val userCombinedStateResponse = SamUserCombinedStateResponse(
-      defaultUser,
-      SamUserAllowances(enabled = false, termsOfService = false),
-      Option(SamUserAttributes(defaultUser.id, marketingConsent = true)),
-      TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false),
-      Map("enterpriseFeatures" -> filteredResourcesFlat.toJson),
-      Set.empty
-    )
-
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .withDisabledUser(defaultUser)
-      .withDisallowedUser(defaultUser)
-      .callAsNonAdminUser()
-      .build
-
-    lenient()
-      .doReturn(IO.pure(FilteredResourcesFlat(Set.empty)))
-      .when(samRoutes.resourceService)
-      .listResourcesFlat(
-        any[WorkbenchUserId],
-        any[Set[ResourceTypeName]],
-        any[Set[AccessPolicyName]],
-        any[Set[ResourceRoleName]],
-        any[Set[ResourceAction]],
-        any[Boolean],
-        any[SamRequestContext]
-      )
-
-    lenient()
-      .doReturn(IO.pure(Set.empty))
-      .when(samRoutes.resourceService)
-      .getUserFavoriteResources(any[WorkbenchUserId], any[SamRequestContext])
-
-    // Act and Assert
-    Get(s"/api/users/v2/self/combinedState") ~> samRoutes.route ~> check {
-      status shouldEqual StatusCodes.OK
-      val response = responseAs[SamUserCombinedStateResponse]
-      response.samUser should be(defaultUser)
-      response.allowances should be(userCombinedStateResponse.allowances)
-      response.attributes should be(None)
-      response.termsOfServiceDetails.acceptedOn shouldBe None
-      response.termsOfServiceDetails.isCurrentVersion should be(userCombinedStateResponse.termsOfServiceDetails.isCurrentVersion)
-      response.termsOfServiceDetails.permitsSystemUsage should be(userCombinedStateResponse.termsOfServiceDetails.permitsSystemUsage)
-      response.termsOfServiceDetails.latestAcceptedVersion shouldBe None
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
-      response.favoriteResources should be(Set.empty)
-
     }
   }
 
