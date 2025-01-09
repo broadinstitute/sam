@@ -47,18 +47,14 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
 
   def adminUserRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("user") {
-      // routes requiring resource_type_admin/user admin_read_summary_information:
-      withResourceType(UserService.userTypeName) { userType =>
-        requireAdminResourceAction(SamResourceActions.adminReadSummaryInformation, userType, samUser, samRequestContext) {
-          pathPrefix("email" / Segment) { email =>
+      // routes requiring resource_type_admin/user actions:
+      path("email" / Segment / "supportSummary") { email =>
+        withResourceType(UserService.userTypeName) { userType =>
+          requireAdminResourceAction(SamResourceActions.adminReadSummaryInformation, userType, samUser, samRequestContext) {
             val workbenchEmail = WorkbenchEmail(email)
-            pathPrefix("supportSummary") {
-              pathEndOrSingleSlash {
-                getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
-                  complete {
-                    userService.getSamUserCombinedState(workbenchEmail, samRequestContext, resourceService)
-                  }
-                }
+            getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
+              complete {
+                userService.getSamUserCombinedState(workbenchEmail, samRequestContext, resourceService)
               }
             }
           }
