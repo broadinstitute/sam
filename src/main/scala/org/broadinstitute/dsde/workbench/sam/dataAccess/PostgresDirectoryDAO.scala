@@ -25,6 +25,7 @@ import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -759,7 +760,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       val query = samsql"""select count(distinct g.id) unsynchronizedMembershipCount
                           from sam_group g
                           join sam_group_member_flat gmf on g.id = gmf.group_id
-                          where g.synchronized_date is null
+                          where g.updated_date > g.synchronized_date
+                          and g.name != ${CloudExtensions.allUsersGroupName}
                           and gmf.member_user_id = ${samUser.id}"""
 
       query.map(rs => rs.int(1)).single().apply().getOrElse(0)
