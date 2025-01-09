@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddM
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AdminUpdateUserRequest, SamUser}
-import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, ResourceService}
+import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, ResourceService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
 import spray.json.JsBoolean
@@ -47,6 +47,20 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
 
   def adminUserRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     pathPrefix("user") {
+      // routes requiring resource_type_admin/user actions:
+      path("email" / Segment / "supportSummary") { email =>
+        withResourceType(UserService.userTypeName) { userType =>
+          requireAdminResourceAction(SamResourceActions.adminReadSummaryInformation, userType, samUser, samRequestContext) {
+            val workbenchEmail = WorkbenchEmail(email)
+            getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
+              complete {
+                userService.getSamUserCombinedState(workbenchEmail, samRequestContext, resourceService)
+              }
+            }
+          }
+        }
+      } ~
+      // routes requiring admin:
       asWorkbenchAdmin(samUser) {
         pathPrefix("email" / Segment) { email =>
           val workbenchEmail = WorkbenchEmail(email)
@@ -56,15 +70,6 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                 userService
                   .getUserStatusFromEmail(workbenchEmail, samRequestContext)
                   .map(status => (if (status.isDefined) OK else NotFound) -> status)
-              }
-            }
-          } ~
-          pathPrefix("supportSummary") {
-            pathEndOrSingleSlash {
-              getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
-                complete {
-                  userService.getSamUserCombinedState(workbenchEmail, samRequestContext, resourceService)
-                }
               }
             }
           }

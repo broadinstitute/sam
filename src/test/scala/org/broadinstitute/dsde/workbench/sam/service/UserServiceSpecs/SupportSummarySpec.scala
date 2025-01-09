@@ -86,10 +86,6 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
       .doReturn(IO.pure(42))
       .when(directoryDAO)
       .countIndirectSynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
-    lenient()
-      .doReturn(IO.pure(1234))
-      .when(directoryDAO)
-      .countUnsynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
 
     // TOS
     lenient()
@@ -108,7 +104,7 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         SamUserAllowances(enabled = true, termsOfService = true),
         Option(SamUserAttributes(testUser.id, marketingConsent = true)),
         TermsOfServiceDetails(Option("v1"), Option(nowInstant), permitsSystemUsage = true, isCurrentVersion = true),
-        GroupMembershipCounts(7, 42, 1234),
+        GroupMembershipCounts(7, 42),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )
@@ -128,7 +124,6 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
       response.favoriteResources should be(favoriteResources)
       response.groupMembershipCounts.directSynchronized should be(7)
       response.groupMembershipCounts.totalSynchronized should be(42)
-      response.groupMembershipCounts.unsynchronized should be(1234)
     }
     it("return null attributes if the user has no attributes") {
       // Arrange
@@ -144,7 +139,7 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         SamUserAllowances(enabled = true, termsOfService = true),
         None,
         TermsOfServiceDetails(Option("v1"), Option(nowInstant), permitsSystemUsage = true, isCurrentVersion = true),
-        GroupMembershipCounts(7, 42, 1234),
+        GroupMembershipCounts(7, 42),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )
@@ -164,7 +159,6 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
       response.favoriteResources should be(favoriteResources)
       response.groupMembershipCounts.directSynchronized should be(7)
       response.groupMembershipCounts.totalSynchronized should be(42)
-      response.groupMembershipCounts.unsynchronized should be(1234)
     }
     it("return falsy terms of service if the user has no tos history") {
       // Arrange
@@ -182,7 +176,7 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         SamUserAllowances(enabled = true, termsOfService = false),
         Option(SamUserAttributes(testUser.id, marketingConsent = true)),
         TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false),
-        GroupMembershipCounts(7, 42, 1234),
+        GroupMembershipCounts(7, 42),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )
@@ -202,7 +196,6 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
       response.favoriteResources should be(favoriteResources)
       response.groupMembershipCounts.directSynchronized should be(7)
       response.groupMembershipCounts.totalSynchronized should be(42)
-      response.groupMembershipCounts.unsynchronized should be(1234)
     }
   }
 }

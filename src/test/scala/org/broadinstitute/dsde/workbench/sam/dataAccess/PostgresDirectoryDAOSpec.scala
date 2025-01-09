@@ -752,19 +752,6 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
     }
 
-    "countUnsynchronizedGroupMemberships" - {
-      "calculate the unsynchronized count" in {
-        assume(databaseEnabled, databaseEnabledClue)
-
-        // create but do not synchronize the test groups;
-        // countUnsynchronizedGroupMemberships() only counts unsynchronized groups.
-        createDirectAndIndirectGroups(syncGroups = false)
-
-        val unsyncedCount = dao.countUnsynchronizedGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
-        unsyncedCount shouldBe 2
-      }
-    }
-
     "createPetServiceAccount" - {
       "create pet service accounts" in {
         assume(databaseEnabled, databaseEnabledClue)

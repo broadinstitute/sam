@@ -4311,20 +4311,12 @@ components:
         directSynchronized:
           type: integer
           description: |
-            Number of groups to which the user is a direct member
-            and which have been successfully synchronized to the cloud.
+            Number of groups to which the user is a direct member.
             Does not include groups from public resources.
         totalSynchronized:
           type: integer
           description: |
-            Number of groups to which the user is a direct or indirect member
-            and which have been successfully synchronized to the cloud.
-            Does not include groups from public resources.
-        unsynchronized:
-          type: integer
-          description: |
-            Number of groups to which the user is a direct or indirect member
-            and which have not yet been synchronized to the cloud.
+            Number of groups to which the user is a direct or indirect member.
             Does not include groups from public resources.
     ManagedGroupMembershipEntry:
       required:
