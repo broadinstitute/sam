@@ -22,7 +22,7 @@ import org.broadinstitute.dsde.workbench.sam.model.{
   TermsOfServiceHistoryRecord
 }
 import org.broadinstitute.dsde.workbench.sam.util.AsyncLogging.{FutureWithLogging, IOWithLogging}
-import org.broadinstitute.dsde.workbench.sam.util.{SamRequestContext, SupportsAdmin}
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.io.{FileNotFoundException, IOException}
 import java.time.Instant
@@ -38,8 +38,7 @@ class TosService(
 )(
     implicit val executionContext: ExecutionContext,
     implicit val actorSystem: ActorSystem
-) extends LazyLogging
-    with SupportsAdmin {
+) extends LazyLogging {
 
   val termsOfServiceTextKey = "termsOfService"
   val privacyPolicyTextKey = "privacyPolicy"
@@ -94,20 +93,18 @@ class TosService(
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
   ): IO[Option[TermsOfServiceDetails]] =
-    ensureAdminIfNeeded[Option[TermsOfServiceDetails]](userId, samRequestContext) {
-      for {
-        latestTermsOfServiceAcceptance <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
-        latestTermsOfServiceAction <- directoryDao.getUserTermsOfService(userId, samRequestContext)
-        requestedUser <- loadUser(userId, samRequestContext)
-      } yield latestTermsOfServiceAcceptance.map(tosDetails =>
-        TermsOfServiceDetails(
-          Option(tosDetails.version),
-          Option(tosDetails.createdAt),
-          tosAcceptancePermitsSystemUsage(requestedUser, latestTermsOfServiceAction),
-          latestTermsOfServiceAcceptance.exists(_.version.equals(tosConfig.version))
-        )
+    for {
+      latestTermsOfServiceAcceptance <- directoryDao.getUserTermsOfService(userId, samRequestContext, Option(TosTable.ACCEPT))
+      latestTermsOfServiceAction <- directoryDao.getUserTermsOfService(userId, samRequestContext)
+      requestedUser <- loadUser(userId, samRequestContext)
+    } yield latestTermsOfServiceAcceptance.map(tosDetails =>
+      TermsOfServiceDetails(
+        Option(tosDetails.version),
+        Option(tosDetails.createdAt),
+        tosAcceptancePermitsSystemUsage(requestedUser, latestTermsOfServiceAction),
+        latestTermsOfServiceAcceptance.exists(_.version.equals(tosConfig.version))
       )
-    }
+    )
 
   private def loadUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[SamUser] =
     directoryDao.loadUser(userId, samRequestContext).map {
@@ -116,14 +113,12 @@ class TosService(
     }
 
   def getTermsOfServiceHistoryForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext, limit: Integer): IO[TermsOfServiceHistory] =
-    ensureAdminIfNeeded[TermsOfServiceHistory](userId, samRequestContext) {
-      directoryDao.getUserTermsOfServiceHistory(userId, samRequestContext, limit).map {
-        case samUserTosHistory if samUserTosHistory.isEmpty => TermsOfServiceHistory(List.empty)
-        case samUserTosHistory =>
-          TermsOfServiceHistory(
-            samUserTosHistory.map(historyRecord => TermsOfServiceHistoryRecord(historyRecord.action, historyRecord.version, historyRecord.createdAt))
-          )
-      }
+    directoryDao.getUserTermsOfServiceHistory(userId, samRequestContext, limit).map {
+      case samUserTosHistory if samUserTosHistory.isEmpty => TermsOfServiceHistory(List.empty)
+      case samUserTosHistory =>
+        TermsOfServiceHistory(
+          samUserTosHistory.map(historyRecord => TermsOfServiceHistoryRecord(historyRecord.action, historyRecord.version, historyRecord.createdAt))
+        )
     }
 
   def getTermsOfServiceComplianceStatus(samUser: SamUser, samRequestContext: SamRequestContext): IO[TermsOfServiceComplianceStatus] = for {
