@@ -45,7 +45,7 @@ jobs:
       app-version: ${{ steps.output-version.outputs.app-version }}
     steps:
       - name: Checkout current code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
           token: ${{ secrets.BROADBOT_TOKEN }} # this allows the push to succeed later
