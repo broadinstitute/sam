@@ -21,7 +21,7 @@ object Dependencies {
   val workbenchOauth2V = s"0.8-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.34-SNAPSHOT"
-  val tclVersion = "1.1.27-SNAPSHOT"
+  val tclVersion = "1.1.30-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
