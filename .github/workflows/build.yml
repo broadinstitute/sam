@@ -37,7 +37,8 @@ jobs:
           - 5432:5432
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - uses: sbt/setup-sbt@v1
 
       # coursier cache action caches both coursier and sbt caches
       - name: coursier-cache-action
@@ -86,7 +87,7 @@ jobs:
       SBT_OPTS: -Xmx3g
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       # coursier cache action caches both coursier and sbt caches
       - name: coursier-cache-action

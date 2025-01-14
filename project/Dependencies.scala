@@ -21,7 +21,7 @@ object Dependencies {
   val workbenchOauth2V = s"0.8-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.34-SNAPSHOT"
-  val tclVersion = "1.1.27-SNAPSHOT"
+  val tclVersion = "1.1.30-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -114,7 +114,7 @@ object Dependencies {
       excludeWorkbenchModel
     )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.127.28" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.29" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.30.0"
 
@@ -129,7 +129,7 @@ object Dependencies {
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
-  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.9.1" excludeAll excludeWorkbenchUtil2
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.10.2" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
@@ -187,7 +187,7 @@ object Dependencies {
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.1"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.2"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
