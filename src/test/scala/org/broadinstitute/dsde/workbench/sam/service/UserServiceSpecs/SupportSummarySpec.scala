@@ -86,6 +86,10 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
       .doReturn(IO.pure(42))
       .when(directoryDAO)
       .countIndirectSynchronizedGroupMemberships(any[SamUser], any[SamRequestContext])
+    lenient()
+      .doReturn(IO.pure(101))
+      .when(directoryDAO)
+      .countIndirectPublicGroupMemberships(any[SamUser], any[SamRequestContext])
 
     // TOS
     lenient()
@@ -104,7 +108,7 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         SamUserAllowances(enabled = true, termsOfService = true),
         Option(SamUserAttributes(testUser.id, marketingConsent = true)),
         TermsOfServiceDetails(Option("v1"), Option(nowInstant), permitsSystemUsage = true, isCurrentVersion = true),
-        GroupMembershipCounts(7, 42),
+        GroupMembershipCounts(7, 42, 101),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )
@@ -139,7 +143,7 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         SamUserAllowances(enabled = true, termsOfService = true),
         None,
         TermsOfServiceDetails(Option("v1"), Option(nowInstant), permitsSystemUsage = true, isCurrentVersion = true),
-        GroupMembershipCounts(7, 42),
+        GroupMembershipCounts(7, 42, 101),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )
@@ -176,7 +180,7 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         SamUserAllowances(enabled = true, termsOfService = false),
         Option(SamUserAttributes(testUser.id, marketingConsent = true)),
         TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false),
-        GroupMembershipCounts(7, 42),
+        GroupMembershipCounts(7, 42, 101),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
         favoriteResources
       )

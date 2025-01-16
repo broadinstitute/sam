@@ -516,6 +516,9 @@ class UserService(
   def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
     directoryDAO.countIndirectSynchronizedGroupMemberships(samUser, samRequestContext)
 
+  def countIndirectPublicGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    directoryDAO.countIndirectPublicGroupMemberships(samUser, samRequestContext)
+
   def getSamUserCombinedState(
       workbenchEmail: WorkbenchEmail,
       samRequestContext: SamRequestContext,
@@ -533,6 +536,7 @@ class UserService(
       maybeAttributes <- getUserAttributes(samUser.id, samRequestContext)
       directGroupMemberships <- countDirectSynchronizedGroupMemberships(samUser, samRequestContext)
       indirectGroupMemberships <- countIndirectSynchronizedGroupMemberships(samUser, samRequestContext)
+      indirectPublicMemberships <- countIndirectPublicGroupMemberships(samUser, samRequestContext)
       termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
       enterpriseFeatures <- resourceService
         .listResourcesFlat(
@@ -552,7 +556,8 @@ class UserService(
       termsOfServiceDetails.getOrElse(TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false)),
       GroupMembershipCounts(
         directSynchronized = directGroupMemberships,
-        totalSynchronized = indirectGroupMemberships
+        totalSynchronized = indirectGroupMemberships,
+        indirectPublic = indirectPublicMemberships
       ),
       Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
       favoriteResources

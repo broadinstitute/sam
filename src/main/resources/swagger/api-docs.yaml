@@ -4318,6 +4318,10 @@ components:
           description: |
             Number of groups to which the user is a direct or indirect member.
             Does not include groups from public resources.
+        indirectPublic:
+          type: integer
+          description: |
+            Number of groups, belonging to public resources, to which the user is an indirect member.
     ManagedGroupMembershipEntry:
       required:
         - groupEmail
