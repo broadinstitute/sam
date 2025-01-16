@@ -146,6 +146,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStatus'
+  /api/admin/v1/user/email/{email}/supportSummary:
+    get:
+      tags:
+        - Admin
+      summary: Get information about a user useful for Terra support
+      operationId: getAdminUserSummaryInfo
+      parameters:
+        - name: email
+          in: path
+          description: Email address of user to check
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: user summary information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserCombinedState'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v2/users:
     get:
       tags:
@@ -1975,6 +2001,49 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/FilteredResourcesFlatResponse'
                   - $ref: '#/components/schemas/FilteredResourcesHierarchicalResponse'
+  /api/resources/v2/bulkMembershipUpdate:
+    post:
+      tags:
+        - Resources
+      summary: Bulk update the membership for resources
+      description: |
+        This endpoint is used to add and remove members of multiple policies across multiple resource in one api call.
+        Each policy is updated in order in its own transaction. If a policy does not exist on a resource, 
+        processing stops with an error but all updates up to that point are committed. Missing member ids, emails or policies fail fast. Additions are processed
+        before removals so if a subject is in both the add and remove lists for a policy, the ultimate result is removal.
+        This call is idempotent, if members being added already exist or members being removed do not exist, nothing will happen.
+      operationId: bulkMembershipUpdateV2
+      requestBody:
+        description: The details of the membership updates
+        content:
+          'application/json':
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BulkMembershipUpdateRequestV2'
+        required: true
+      responses:
+        204:
+          description: Successfully updated membership
+          content: { }
+        400:
+          description: members or policies are not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        403:
+          description: Caller does not have permission to update the membership of one or more of the policies or one or more resources do not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/resources/v2/{resourceTypeName}:
     get:
       tags:
@@ -4236,6 +4305,19 @@ components:
           type: string
           description: The id of the resource
       description: type and id of a resource
+    GroupMembershipCounts:
+      type: object
+      properties:
+        directSynchronized:
+          type: integer
+          description: |
+            Number of groups to which the user is a direct member.
+            Does not include groups from public resources.
+        totalSynchronized:
+          type: integer
+          description: |
+            Number of groups to which the user is a direct or indirect member.
+            Does not include groups from public resources.
     ManagedGroupMembershipEntry:
       required:
         - groupEmail
@@ -4354,7 +4436,7 @@ components:
       description: specification of a role for a resource
     ResourceType:
       required:
-        - actions
+        - actionPatterns
         - name
         - ownerRoleName
         - roles
@@ -4363,7 +4445,7 @@ components:
         name:
           type: string
           description: The name of the resource type
-        actions:
+        actionPatterns:
           type: array
           description: List of actions that can be performed on a resource of this
             type
@@ -4378,6 +4460,15 @@ components:
           type: string
           description: The name of the role that can perform administrative functions
             on a resource of this type
+        reuseIds:
+          type: boolean
+          description: Whether resource ids can be reused
+        allowLeaving:
+          type: boolean
+          description: Whether users can leave a resource of this type
+        prerequisiteAction:
+          type: string
+          description: An action that is required but not sufficient to perform any other action on a resource of this type
       description: specification of a type of resource
     RolesAndActions:
       required:
@@ -4895,6 +4986,8 @@ components:
           type: object
           description: >
             additional details about the user, such as enterprise features they have access to example: '{ "enterpriseFeatures": ["feature1", "feature2"] }'
+        groupMemberhipCounts:
+          $ref: '#/components/schemas/GroupMembershipCounts'
     SamUserRegistrationRequest:
       type: object
       properties:
@@ -5053,6 +5146,61 @@ components:
           description: Actions on the role
           items:
             type: string
+    BulkMembershipUpdateRequestV2:
+      type: object
+      required:
+        - resourceTypeName
+        - resourceId
+        - policyUpdates
+      properties:
+        resourceTypeName:
+          type: string
+          description: The type of the resource
+        resourceId:
+          type: string
+          description: The id of the resource
+        policyUpdates:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyMembershipUpdate'
+    PolicyMembershipUpdate:
+      type: object
+      required:
+          - policyName
+      properties:
+        policyName:
+          type: string
+          description: The name of the policy
+        addUserIds:
+          type: array
+          description: Sam user ids to add to the policy
+          items:
+            type: string
+        addEmails:
+          type: array
+          description: Emails to add to the policy
+          items:
+            type: string
+        addPolicies:
+          type: array
+          description: Other policies to add to the specified policy
+          items:
+            $ref: '#/components/schemas/PolicyIdentifiers'
+        removeUserIds:
+          type: array
+          description: Sam user ids to remove from the policy
+          items:
+            type: string
+        removeEmails:
+          type: array
+          description: Emails to remove from the policy
+          items:
+            type: string
+        removePolicies:
+          type: array
+          description: Other policies to remove from the specified policy
+          items:
+              $ref: '#/components/schemas/PolicyIdentifiers'
   securitySchemes:
     oidc:
       type: oauth2

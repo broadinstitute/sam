@@ -135,7 +135,8 @@ object UserStatusDetails {
     roles: Set[ResourceRole],
     ownerRoleName: ResourceRoleName,
     reuseIds: Boolean = false,
-    allowLeaving: Boolean = false
+    allowLeaving: Boolean = false,
+    prerequisiteAction: Option[ResourceAction] = None
 ) {
   // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
   // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though

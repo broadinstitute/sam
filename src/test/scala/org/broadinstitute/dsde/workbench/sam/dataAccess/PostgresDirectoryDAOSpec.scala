@@ -708,6 +708,50 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
     }
 
+    def createDirectAndIndirectGroups(syncGroups: Boolean): (BasicWorkbenchGroup, BasicWorkbenchGroup) = {
+      val subGroupId = WorkbenchGroupName("childWithDirectMembership") // default user is a direct member
+      val subGroup = BasicWorkbenchGroup(subGroupId, Set(defaultUser.id), WorkbenchEmail("childWithDirectMembership@example.com"))
+      val parentGroupId = WorkbenchGroupName("parentWithIndirectMembership") // default user is an indirect member
+      val parentGroup = BasicWorkbenchGroup(parentGroupId, Set(subGroupId), WorkbenchEmail("parentWithIndirectMembership@example.com"))
+
+      dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+      dao.createGroup(subGroup, samRequestContext = samRequestContext).unsafeRunSync()
+      dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+      if (syncGroups) {
+        dao.updateSynchronizedDateAndVersion(subGroup, samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(parentGroup, samRequestContext).unsafeRunSync()
+      }
+
+      (parentGroup, subGroup)
+    }
+
+    "countDirectSynchronizedGroupMemberships" - {
+      "calculate the direct count" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        // create and synchronize the test groups;
+        // countDirectSynchronizedGroupMemberships() only counts synchronized groups.
+        createDirectAndIndirectGroups(syncGroups = true)
+
+        val directCount = dao.countDirectSynchronizedGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
+        directCount shouldBe 1
+      }
+    }
+
+    "countIndirectSynchronizedGroupMemberships" - {
+      "calculate the indirect count" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        // create and synchronize the test groups;
+        // countIndirectSynchronizedGroupMemberships() only counts synchronized groups.
+        createDirectAndIndirectGroups(syncGroups = true)
+
+        val indirectCount = dao.countIndirectSynchronizedGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
+        indirectCount shouldBe 2
+      }
+    }
+
     "createPetServiceAccount" - {
       "create pet service accounts" in {
         assume(databaseEnabled, databaseEnabledClue)
@@ -1707,6 +1751,15 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
         inside(loadedUser.value) { user =>
           user.registeredAt.value should equal(expectedRegisteredAt)
         }
+      }
+    }
+
+    "loadUserByEmail" - {
+      "load a user from their email" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        dao.loadUserByEmail(defaultUser.email, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser)
       }
     }
 

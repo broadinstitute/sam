@@ -87,7 +87,7 @@ class PolicyEvaluatorService(
       isConstrainable = rt.isAuthDomainConstrainable
 
       allPolicyActions <- accessPolicyDAO.listUserResourceActions(resource, userId, samRequestContext)
-      res <-
+      actionsConstrainedByAuthDomain <-
         if (isConstrainable) {
           for {
             authDomainsResult <- accessPolicyDAO.loadResourceAuthDomain(resource, samRequestContext)
@@ -104,7 +104,15 @@ class PolicyEvaluatorService(
             }
           } yield policyActions
         } else allPolicyActions.pure[IO]
-    } yield res
+    } yield rt.prerequisiteAction
+      .map { prerequisiteAction =>
+        if (actionsConstrainedByAuthDomain.contains(prerequisiteAction)) {
+          actionsConstrainedByAuthDomain
+        } else {
+          Set.empty[ResourceAction]
+        }
+      }
+      .getOrElse(actionsConstrainedByAuthDomain)
 
   private def isMemberOfAllAuthDomainGroups(
       authDomains: NonEmptyList[WorkbenchGroupName],

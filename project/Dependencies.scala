@@ -20,8 +20,8 @@ object Dependencies {
   val workbenchNotificationsV = s"0.8-$workbenchLibV"
   val workbenchOauth2V = s"0.8-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.30-SNAPSHOT"
-  val tclVersion = "1.1.12-SNAPSHOT"
+  val crlVersion = "1.2.34-SNAPSHOT"
+  val tclVersion = "1.1.30-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -47,7 +47,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "8.0"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.12"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.16"
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
@@ -64,14 +64,14 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
-  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.114.Final"
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.0"
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.116.Final"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.1"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.68.1"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.69.0"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
-  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20241008-2.0.0" excludeAll excludIoGrpc // force this version
+  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20241206-2.0.0" excludeAll excludIoGrpc // force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %% "monocle-core" % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion
@@ -114,7 +114,7 @@ object Dependencies {
       excludeWorkbenchModel
     )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.127.27" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.29" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.30.0"
 
@@ -129,7 +129,7 @@ object Dependencies {
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
-  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.9.1" excludeAll excludeWorkbenchUtil2
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.10.2" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
@@ -155,7 +155,7 @@ object Dependencies {
       excludeAwsSdk
     )
   val azureManagedApplications: ModuleID =
-    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0-beta.4"
+    "com.azure.resourcemanager" % "azure-resourcemanager-managedapplications" % "1.0.0"
 
   def excludeSpringBoot = ExclusionRule("org.springframework.boot")
   def excludeSpringAop = ExclusionRule("org.springframework.spring-aop")
@@ -187,7 +187,7 @@ object Dependencies {
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.1"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.2"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions

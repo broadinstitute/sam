@@ -5,15 +5,16 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.{pathPrefix, _}
 import org.broadinstitute.dsde.workbench.model.WorkbenchUserId
+import org.broadinstitute.dsde.workbench.sam.model.{TermsOfServiceDetails, TermsOfServiceHistory}
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.TosService
-import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
+import org.broadinstitute.dsde.workbench.sam.util.{SamRequestContext, SupportsAdmin}
 
 import scala.concurrent.ExecutionContext
 import scala.util.matching.Regex
 
-trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirectives {
+trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirectives with SupportsAdmin {
   val tosService: TosService
   implicit val executionContext: ExecutionContext
   private val samUserIdPattern: Regex = "^[a-zA-Z0-9]+$".r
@@ -123,7 +124,9 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
                   getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
                     rejectEmptyResponse {
                       complete {
-                        tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
+                        ensureAdminIfNeeded[Option[TermsOfServiceDetails]](requestUserId, samRequestContext) {
+                          tosService.getTermsOfServiceDetailsForUser(requestUserId, samRequestContext)
+                        }
                       }
                     }
                   }
@@ -132,7 +135,11 @@ trait TermsOfServiceRoutes extends SamUserDirectives with SamRequestContextDirec
                   pathEndOrSingleSlash {
                     getWithTelemetry(samRequestContext, userIdParam(requestUserId)) {
                       parameters("limit".as[Integer].withDefault(100)) { (limit: Int) =>
-                        complete(tosService.getTermsOfServiceHistoryForUser(requestUserId, samRequestContext, limit))
+                        complete {
+                          ensureAdminIfNeeded[TermsOfServiceHistory](requestUserId, samRequestContext) {
+                            tosService.getTermsOfServiceHistoryForUser(requestUserId, samRequestContext, limit)
+                          }
+                        }
                       }
                     }
                   }

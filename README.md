@@ -50,6 +50,15 @@ The “owner” role of a resource generally will include delete action and acti
 
 Resource types define the set of available actions for all resources of that type. It also defines a set of roles and their associated actions. Roles are useful because it can be cumbersome to deal with granular actions and as a point of extensibility (when new actions are added to resource types, they can be added to roles as well, effectively adding the action to all resources with that role). Creating and maintaining resource types is achieved through [configuration](src/main/resources/reference.conf).
 
+#### Resource Type Configuration
+Configuration options for resource types are defined in the `resourceTypes` section of the configuration file. Each resource type has the following fields:
+* `actionPatterns` - a set of regex patterns that are used to document and validate the actions available for resources of this type
+* `roles` - a set of roles that are available for resources of this type. Roles are a collection of actions. Both roles and actions can be assigned to resource policies, but it is highly recommended to use roles because they are easier to change and affect all resources with that role as opposed to updating policies to add new actions.
+* `ownerRoleName` - the name of the role that is considered the "owner" role for all resources of this type. All resources must have a policy with this role or have a parent.
+* `reuseIds` - whether to allow reusing ids when creating resources of this type. This is important to prevent when using auth domains because users should not be able to delete then recreate a resource in Sam omitting the auth domain. Should be false when using UUIDs for Sam resource ids. Default is false.
+* `allowLeaving` - whether to allow users to leave resources of this type, otherwise an owner must remove them. Default is false.
+* `prerequisiteAction` - an optional action that must be granted before a user can perform any other actions on a resource of this type. Useful for resources that require some kind of access to a parent resource before accessing a child.
+
 ### Public Policies
 There are some cases where it is desirable to grant actions or roles to all authenticated users. For example, granting read-only access to public workspaces. In this case a policy can be created that has the appropriate actions or roles and set to public. Resources with public policies show up when listing resources for a user. For this reason it is not always desirable to allow everyone to make public policies. Again, the example is public workspaces. Public workspaces show up for everyone and should be curated.
 
@@ -62,7 +71,7 @@ Group - Create, delete, read, list, add/remove users and groups. Nested groups a
 
 ### Built In Actions
 * read_policies - may read all policies of a resource 
-* alter_policies - may change any policy of a resource
+* alter_policies - may add or change any policy of a resource, use sparingly, prefer share_policy below for more control over policy structure
 * delete - may delete a resource
 * share_policy::{policy name} - may add/remove members to/from specified policy of a resource
 * read_policy::{policy name} - may read specified policy of a resource

@@ -55,7 +55,7 @@ object SamJsonSupport {
 
   implicit val ResourceRoleFormat: RootJsonFormat[ResourceRole] = jsonFormat4(ResourceRole.apply)
 
-  implicit val ResourceTypeFormat: RootJsonFormat[ResourceType] = jsonFormat6(ResourceType.apply)
+  implicit val ResourceTypeFormat: RootJsonFormat[ResourceType] = jsonFormat7(ResourceType.apply)
 
   implicit val SamUserFormat: RootJsonFormat[SamUser] = jsonFormat8(SamUser.apply)
 

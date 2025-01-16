@@ -1165,4 +1165,101 @@ class ResourceRoutesSpec extends RetryableAnyFlatSpec with Matchers with Scalate
       status shouldEqual StatusCodes.NotFound
     }
   }
+
+  "POST /api/resources/v2/bulkMembershipUpdate" should "403 when caller does not have access to a resource" in {
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType), user = defaultTestUser)
+
+    val foo = ResourceId("foo")
+    val bar = ResourceId("bar")
+    val baz = ResourceId("baz")
+    runAndWait(samRoutes.userService.createUser(defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, foo, defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, bar, defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, baz, defaultUserInfo, samRequestContext))
+
+    val accessPolicyName = AccessPolicyName(resourceType.ownerRoleName.value)
+    // grant user access to foo and baz but not bar
+    runAndWait(
+      samRoutes.resourceService.addSubjectToPolicy(
+        FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, foo), accessPolicyName),
+        defaultTestUser.id,
+        samRequestContext
+      )
+    )
+    runAndWait(
+      samRoutes.resourceService.addSubjectToPolicy(
+        FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, baz), accessPolicyName),
+        defaultTestUser.id,
+        samRequestContext
+      )
+    )
+
+    val bulkUpdate = Seq(
+      BulkMembershipUpdate(resourceType.name, foo, Seq(PolicyMembershipUpdate(accessPolicyName, removeUserIds = Set(defaultTestUser.id)))),
+      BulkMembershipUpdate(resourceType.name, bar, Seq(PolicyMembershipUpdate(accessPolicyName, removeUserIds = Set(defaultTestUser.id)))),
+      BulkMembershipUpdate(resourceType.name, baz, Seq(PolicyMembershipUpdate(accessPolicyName, removeUserIds = Set(defaultTestUser.id))))
+    )
+
+    Post("/api/resources/v2/bulkMembershipUpdate", bulkUpdate) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "400 when trying to update admin resources" in {
+    val resourceType = ResourceType(
+      SamResourceTypes.resourceTypeAdminName,
+      Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val accessPolicyName = AccessPolicyName(resourceType.ownerRoleName.value)
+    val foo = ResourceId("foo")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, foo, defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+    val bulkUpdate = Seq(
+      BulkMembershipUpdate(resourceType.name, foo, Seq(PolicyMembershipUpdate(accessPolicyName, removeUserIds = Set(defaultTestUser.id))))
+    )
+
+    Post("/api/resources/v2/bulkMembershipUpdate", bulkUpdate) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+    }
+  }
+
+  it should "204 when caller has access to all resources" in {
+    // happy case
+    val resourceType = ResourceType(
+      ResourceTypeName("rt"),
+      Set(SamResourceActionPatterns.alterPolicies, ResourceActionPattern("can_compute", "", false)),
+      Set(ResourceRole(ResourceRoleName("owner"), Set(SamResourceActions.alterPolicies))),
+      ResourceRoleName("owner")
+    )
+    val samRoutes = TestSamRoutes(Map(resourceType.name -> resourceType))
+    val foo = ResourceId("foo")
+    val bar = ResourceId("bar")
+    val baz = ResourceId("baz")
+    runAndWait(samRoutes.resourceService.createResource(resourceType, foo, defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, bar, defaultUserInfo, samRequestContext))
+    runAndWait(samRoutes.resourceService.createResource(resourceType, baz, defaultUserInfo, samRequestContext))
+
+    runAndWait(samRoutes.userService.createUser(defaultTestUser, samRequestContext))
+
+    val accessPolicyName = AccessPolicyName(resourceType.ownerRoleName.value)
+
+    val bulkUpdate = Seq(
+      BulkMembershipUpdate(resourceType.name, foo, Seq(PolicyMembershipUpdate(accessPolicyName, removeUserIds = Set(defaultTestUser.id)))),
+      BulkMembershipUpdate(resourceType.name, bar, Seq(PolicyMembershipUpdate(accessPolicyName, removeUserIds = Set(defaultTestUser.id)))),
+      BulkMembershipUpdate(resourceType.name, baz, Seq(PolicyMembershipUpdate(accessPolicyName, removeUserIds = Set(defaultTestUser.id))))
+    )
+
+    Post("/api/resources/v2/bulkMembershipUpdate", bulkUpdate) ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+    }
+  }
 }

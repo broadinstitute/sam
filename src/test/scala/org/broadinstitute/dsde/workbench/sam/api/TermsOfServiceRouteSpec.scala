@@ -139,10 +139,23 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       }
     }
 
-    it("should return 404 when USER_ID is does not exist") {
+    it("should return 401 when called as non-admin to inspect another user") {
       val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
       val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
+        .withEnabledUser(defaultUser)
+        .withAllowedUser(defaultUser)
+
+      Get("/api/termsOfService/v1/user/12345abc") ~> Route.seal(mockSamRoutesBuilder.build.route) ~> check {
+        status shouldEqual StatusCodes.Unauthorized
+      }
+    }
+
+    it("should return 404 when called as admin and USER_ID does not exist") {
+      val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
+      val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+      val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
+        .callAsAdminUser()
         .withEnabledUser(defaultUser)
         .withAllowedUser(defaultUser)
 
@@ -181,10 +194,23 @@ class TermsOfServiceRouteSpec extends AnyFunSpec with Matchers with ScalatestRou
       }
     }
 
-    it("should return 200 with empty list when user has no acceptance history") {
+    it("should return 401 when called as non-admin to inspect another user") {
       val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
       val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
       val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
+        .withEnabledUser(defaultUser)
+        .withAllowedUser(defaultUser)
+
+      Get("/api/termsOfService/v1/user/12345abc/history") ~> Route.seal(mockSamRoutesBuilder.build.route) ~> check {
+        status shouldEqual StatusCodes.Unauthorized
+      }
+    }
+
+    it("should return 200 with empty list when called as admin and user has no acceptance history") {
+      val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
+      val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
+      val mockSamRoutesBuilder = new MockSamRoutesBuilder(allUsersGroup)
+        .callAsAdminUser()
         .withEnabledUser(defaultUser)
         .withAllowedUser(defaultUser)
 

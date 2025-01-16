@@ -82,6 +82,8 @@ trait DirectoryDAO {
 
   def setUserAzureB2CId(userId: WorkbenchUserId, b2cId: AzureB2CId, samRequestContext: SamRequestContext): IO[Unit]
 
+  def loadUserByEmail(email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[SamUser]]
+
   def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit]
 
   def deleteUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
@@ -97,6 +99,16 @@ trait DirectoryDAO {
   def listAncestorGroups(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[Set[WorkbenchGroupIdentity]]
 
   def listFlattenedGroupMembers(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Set[WorkbenchUserId]]
+
+  /** @return
+    *   the number of groups to which the user is a direct member, not including public resources.
+    */
+  def countDirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
+
+  /** @return
+    *   the number of groups to which the user is a direct or indirect member, not including public resources.
+    */
+  def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
 
   def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
 
