@@ -110,6 +110,11 @@ trait DirectoryDAO {
     */
   def countIndirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
 
+  /** @return
+    *   the number of groups to which the user is an indirect member via the All_Users group on public resources.
+    */
+  def countIndirectPublicGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int]
+
   def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
 
   def disableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit]
