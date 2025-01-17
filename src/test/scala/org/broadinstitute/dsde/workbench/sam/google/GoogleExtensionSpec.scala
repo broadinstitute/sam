@@ -2137,10 +2137,10 @@ class GoogleExtensionSpec(_system: ActorSystem)
     )
 
     val messages = Set(
-      Notifications.GroupAccessRequestNotification(
+      Notifications.GroupAccessRequestNotificationV2(
         WorkbenchUserId("Bob"),
         WorkbenchGroupName("bobs_buds").value,
-        Set(WorkbenchUserId("reply_to_address")),
+        WorkbenchUserId("requesters_id"),
         WorkbenchUserId("requesters_id")
       )
     )
