@@ -5,13 +5,13 @@ import bio.terra.cloudres.common.ClientConfig
 import bio.terra.cloudres.common.cleanup.CleanupConfig
 import cats.effect.IO
 import com.azure.core.credential.TokenCredential
-import com.azure.core.management.AzureEnvironment
 import com.azure.core.management.profile.AzureProfile
 import com.azure.identity.{ChainedTokenCredentialBuilder, ClientSecretCredentialBuilder, ManagedIdentityCredentialBuilder}
 import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
 import com.google.auth.oauth2.ServiceAccountCredentials
+import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, JanitorConfig}
 
 import java.io.FileInputStream
@@ -22,7 +22,7 @@ import scala.jdk.DurationConverters._
   *
   * Note: this class is Azure-specific for now because Sam uses workbench-libs for Google Cloud calls.
   */
-class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
+class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) extends LazyLogging {
   val clientId = "sam"
   val testResourceTimeToLive = 1 hour
   val clientConfigBase = ClientConfig.Builder.newBuilder().setClient("sam")
@@ -72,6 +72,7 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
     config.managedAppServicePrincipal.foreach { servicePrincipalConfig =>
       credential.addLast(
         new ClientSecretCredentialBuilder()
+          .authorityHost(config.azureEnvironment.getActiveDirectoryEndpoint)
           .clientId(servicePrincipalConfig.clientId)
           .clientSecret(servicePrincipalConfig.clientSecret)
           .tenantId(servicePrincipalConfig.tenantId)
@@ -79,7 +80,7 @@ class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) {
       )
     }
 
-    val profile = new AzureProfile(tenantId.value, subscriptionId.value, AzureEnvironment.AZURE)
+    val profile = new AzureProfile(tenantId.value, subscriptionId.value, config.azureEnvironment)
 
     (credential.build(), profile)
   }
