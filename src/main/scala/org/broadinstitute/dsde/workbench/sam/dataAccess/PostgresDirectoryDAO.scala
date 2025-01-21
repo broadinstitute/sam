@@ -754,6 +754,18 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       query.map(rs => rs.int(1)).single().apply().getOrElse(0)
     }
 
+  override def countIndirectPublicGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
+    readOnlyTransaction("countIndirectPublicGroupMemberships", samRequestContext) { implicit session =>
+      val query =
+        samsql"""select count(p.group_id)
+                from sam_resource_policy p
+                join sam_group g on p.group_id = g.id
+                where g.synchronized_date is not null
+                and p.public"""
+
+      query.map(rs => rs.int(1)).single().apply().getOrElse(0)
+    }
+
   override def enableIdentity(subject: WorkbenchSubject, samRequestContext: SamRequestContext): IO[Unit] =
     subject match {
       case userId: WorkbenchUserId =>

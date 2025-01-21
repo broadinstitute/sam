@@ -752,6 +752,43 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
       }
     }
 
+    "countIndirectPublicGroupMemberships" - {
+      "calculate the indirect count for public resources" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
+
+        // add user to policy to ensure direct membership doesn't affect the public count
+        policyDAO.addAndRemovePolicyMembers(defaultPolicy.id, Set(defaultUser.id), Set(), samRequestContext)
+
+        // resource is not public, so count should be zero
+        val indirectCountBefore = dao.countIndirectPublicGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
+        indirectCountBefore shouldBe 0
+
+        // set the resource's policy to be public
+        policyDAO.setPolicyIsPublic(defaultPolicy.id, isPublic = true, samRequestContext).unsafeRunSync()
+        // and synchronize its group
+        dao.updateSynchronizedDateAndVersion(defaultPolicy, samRequestContext).unsafeRunSync()
+
+        // count should now be 1
+        val indirectCountAfter = dao.countIndirectPublicGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
+        indirectCountAfter shouldBe 1
+      }
+
+      "ignore unsynchronized groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
+
+        // managed groups have an admin-notifier policy&group which is not synchronized
+        createDirectAndIndirectGroups(syncGroups = true)
+
+        // resource is not public, so count should be zero
+        val indirectCount = dao.countIndirectPublicGroupMemberships(defaultUser, samRequestContext).unsafeRunSync()
+        indirectCount shouldBe 0
+      }
+    }
+
     "createPetServiceAccount" - {
       "create pet service accounts" in {
         assume(databaseEnabled, databaseEnabledClue)
