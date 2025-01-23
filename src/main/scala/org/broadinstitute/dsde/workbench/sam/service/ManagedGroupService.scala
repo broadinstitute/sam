@@ -235,7 +235,7 @@ class ManagedGroupService(
           }
         } yield {
           val notifications = adminUserIds.map { recipientUserId =>
-            Notifications.GroupAccessRequestNotification(recipientUserId, WorkbenchGroupName(resourceId.value).value, adminUserIds, requesterSubjectId)
+            Notifications.GroupAccessRequestNotificationV2(recipientUserId, WorkbenchGroupName(resourceId.value).value, requesterSubjectId, requesterSubjectId)
           }
           cloudExtensions.fireAndForgetNotifications(notifications)
         }

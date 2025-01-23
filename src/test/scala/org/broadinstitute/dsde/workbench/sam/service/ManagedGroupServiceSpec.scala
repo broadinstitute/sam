@@ -543,12 +543,14 @@ class ManagedGroupServiceSpec
         .value
     )
 
+    val requesterId = requester.googleSubjectId.map(id => WorkbenchUserId(id.value)).getOrElse(fail("no requester google subject id"))
+
     val expectedNotificationMessages = Set(
-      Notifications.GroupAccessRequestNotification(
+      Notifications.GroupAccessRequestNotificationV2(
         adminGoogleSubjectId,
         WorkbenchGroupName(resourceId.value).value,
-        Set(adminGoogleSubjectId),
-        requester.googleSubjectId.map(id => WorkbenchUserId(id.value)).getOrElse(fail("no requester google subject id"))
+        requesterId,
+        requesterId
       )
     )
 
