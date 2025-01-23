@@ -6,6 +6,7 @@ import akka.http.scaladsl.server.Directives.reject
 import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
 import cats.effect.unsafe.implicits.global
+import com.azure.core.management.AzureEnvironment
 import com.typesafe.config.ConfigFactory
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
@@ -224,7 +225,8 @@ object TestSamRoutes {
       Option(AzureServicePrincipalConfig("mock-managedapp-clientid", "mock-managedapp-clientsecret", "mock-managedapp-tenantid")),
       azureMarketPlace,
       azureServiceCatalog,
-      allowManagedIdentityUserCreation = true
+      allowManagedIdentityUserCreation = true,
+      azureEnvironment = AzureEnvironment.AZURE
     )
 
     val azureService =
