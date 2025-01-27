@@ -8,7 +8,7 @@ object Dependencies {
   val scalaTestV = "3.2.19"
   val scalaCheckV = "1.18.1"
   val scalikejdbcVersion = "3.4.2"
-  val postgresDriverVersion = "42.7.4"
+  val postgresDriverVersion = "42.7.5"
   val sentryVersion = "6.15.0"
 
   val workbenchLibV = "4292239" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
@@ -65,10 +65,10 @@ object Dependencies {
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
   val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.1.117.Final"
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.1"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.2"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.69.0"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.69.1"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20241206-2.0.0" excludeAll excludIoGrpc // force this version
@@ -116,7 +116,7 @@ object Dependencies {
   val googleStorageLocal: ModuleID =
     "com.google.cloud" % "google-cloud-nio" % "0.127.29" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
-  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.30.0"
+  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.31.0"
 
   val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.0"
   val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "2.3"
