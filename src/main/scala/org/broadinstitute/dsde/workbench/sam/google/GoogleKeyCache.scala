@@ -128,7 +128,7 @@ class GoogleKeyCache(
         logger.warn(s"danger: pet ${pet.serviceAccount.displayName.value} has ${keysFromIam.length} keys")
       maybeActiveKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).findLast(x => isKeyActive(x, keysFromIam))
       activeKey <- maybeActiveKey match {
-        case Some(mostRecentKey) if isKeyActive(mostRecentKey, keysFromIam) =>
+        case Some(mostRecentKey) =>
           googleStorageAlg
             .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(mostRecentKey.value))
 
