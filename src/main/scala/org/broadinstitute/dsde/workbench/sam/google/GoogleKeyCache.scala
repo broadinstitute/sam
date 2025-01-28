@@ -203,7 +203,20 @@ class GoogleKeyCache(
     // to delete: all inactive keys and all keys where cache and IAM disagree
     Future
       .traverse(uncachedKeys ++ nonExistentKeys ++ inactiveCachedKeyIds) { keyId =>
-        googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
+        googleIamDAO
+          .removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
+          // Don't let a failure in key deletion prevent creation of new keys, or prevent deletion
+          // of other keys. Google will prevent us creating too many keys anyway.
+          .recover {
+            case gjre: GoogleJsonResponseException =>
+              logger.warn(
+                s"Error while removing service account key: '${gjre.getDetails.getCode}:${gjre.getMessage}' error, project ${pet.id.project}, sa email ${pet.serviceAccount.email}, sa key id $keyId"
+              )
+            case t: Throwable =>
+              logger.warn(
+                s"Error while removing service account key: '${t.getMessage}', project ${pet.id.project}, sa email ${pet.serviceAccount.email}, sa key id $keyId"
+              )
+          }
       }
       .void
   }
