@@ -4,7 +4,6 @@ import java.nio.charset.Charset
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
-import cats.effect.unsafe.IORuntime
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.storage.{BucketInfo, StorageException}
@@ -20,6 +19,8 @@ import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 import fs2.Stream
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{LockDetails, PostgresDistributedLockDAO}
 
+import cats.effect.unsafe.implicits.global
+
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -33,7 +34,7 @@ class GoogleKeyCache(
     val googleKeyCachePubSubDao: GooglePubSubDAO,
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig
-)(implicit val executionContext: ExecutionContext, ioRuntime: IORuntime)
+)(implicit val executionContext: ExecutionContext)
     extends KeyCache
     with LazyLogging {
   val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
