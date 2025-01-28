@@ -111,6 +111,7 @@ class GoogleKeyCache(
       } yield key
 
     val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
+    // TODO CORE-278: withLock() allows multiple simultaneous requests for the same pet, enabling race conditions below
     maybeCreateKey((_, _) => distributedLock.withLock(lockDetails).use(_ => maybeCreateKey(cleanupAndCreateKey)))
   }
 
@@ -155,6 +156,7 @@ class GoogleKeyCache(
   private def furnishNewKey(pet: PetServiceAccount): IO[String] =
     for {
       key <- IO.fromFuture(IO(googleIamDAO.createServiceAccountKey(pet.id.project, pet.serviceAccount.email))) recover {
+        // TODO CORE-278: verify this is still the exception thrown by Google
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue =>
           throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
       }
@@ -179,46 +181,40 @@ class GoogleKeyCache(
   /** Clean up keys for the given pet. This will delete:
     *   - any keys present in IAM but not present in the key cache
     *   - any keys in the key cache but not present in IAM
-    *   - any expired keys
     */
   private def cleanupKeys(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[Unit] = {
+    val cachedKeyIds: Set[ServiceAccountKeyId] = cachedKeyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }.toSet
+    val iamKeyIds: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet
 
-    def keyObjectsToIds(keyObjects: List[GcsObjectName]) =
-      keyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }.toSet
+    // keys in IAM but not in cache
+    val uncachedKeyIds: Set[ServiceAccountKeyId] = iamKeyIds -- cachedKeyIds
 
-    // separate cache objects into active vs. inactive.
-    // The inactive objects will include any keys which are active in cache but not in IAM
-    val (activeCachedKeys, inactiveCachedKeys) = cachedKeyObjects.partition(keyObject => isKeyActive(keyObject, serviceAccountKeys))
+    // keys in cache but not in IAM
+    val orphanedKeyIds: Set[ServiceAccountKeyId] = cachedKeyIds -- iamKeyIds
 
-    // extract the key ids from the cache objects
-    val activeCachedKeyIds: Set[ServiceAccountKeyId] = keyObjectsToIds(activeCachedKeys)
-    val inactiveCachedKeyIds: Set[ServiceAccountKeyId] = keyObjectsToIds(inactiveCachedKeys)
-
-    // keys in IAM but not active in cache
-    val uncachedKeys: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet -- activeCachedKeyIds
-
-    // delete from cache and IAM any keys which are too old or which exist only in cache
-    inactiveCachedKeyIds
+    // delete from cache any keys which exist only in cache
+    orphanedKeyIds
       .parUnorderedTraverse { keyId =>
-        removeKey(pet, keyId)
-          // Don't let a failure in key deletion prevent creation of new keys, or prevent deletion
-          // of other keys. Google will prevent us creating too many keys anyway.
+        googleStorageAlg
+          .removeObject(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNameFull(pet.id.project, pet.serviceAccount.email, keyId))
+          .compile
+          .drain
           .recover {
             case gjre: GoogleJsonResponseException =>
               logger.warn(
-                s"Error while removing service account key: '${gjre.getDetails.getCode}:${gjre.getMessage}' error, project ${pet.id.project}, sa email ${pet.serviceAccount.email}, sa key id $keyId"
+                s"Error while removing key cache entry: '${gjre.getDetails.getCode}:${gjre.getMessage}' error, project ${pet.id.project}, sa email ${pet.serviceAccount.email}, sa key id $keyId"
               )
             case t: Throwable =>
               logger.warn(
-                s"Error while removing service account key: '${t.getMessage}', project ${pet.id.project}, sa email ${pet.serviceAccount.email}, sa key id $keyId"
+                s"Error while removing key cache entry: '${t.getMessage}', project ${pet.id.project}, sa email ${pet.serviceAccount.email}, sa key id $keyId"
               )
           }
       }
       .unsafeRunSync()
 
-    // delete from IAM any keys which are not active in cache
+    // delete from IAM any keys which exist only in IAM
     Future
-      .traverse(uncachedKeys) { keyId =>
+      .traverse(uncachedKeyIds) { keyId =>
         googleIamDAO
           .removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
           // Don't let a failure in key deletion prevent creation of new keys, or prevent deletion

@@ -32,7 +32,7 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
     res.attempt.map(r => r.isRight shouldBe true).unsafeToFuture()
   }
 
-  it should "fail if there's same lock has already been set within 30 seconds" in {
+  it should "fail on acquireLock if there's same lock has already been set within 30 seconds" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     val lockDetails = genLock.sample.get
@@ -41,6 +41,20 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers with TestSupport {
         _ <- lock.acquireLock(lockDetails)
         _ <- IO.sleep(2 seconds)
         failed <- lock.acquireLock(lockDetails).attempt
+      } yield failed.swap.toOption.get.asInstanceOf[FailToObtainLock].getMessage shouldBe s"can't get lock: $lockDetails"
+    }
+    res.unsafeToFuture()
+  }
+
+  it should "fail on withLock if there's same lock has already been set within 30 seconds" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val lockDetails = genLock.sample.get
+    val res = lockResource.use { lock =>
+      for {
+        _ <- lock.withLock(lockDetails).use(_ => IO.pure(()))
+        _ <- IO.sleep(2 seconds)
+        failed <- lock.withLock(lockDetails).use(_ => IO.pure(())).attempt
       } yield failed.swap.toOption.get.asInstanceOf[FailToObtainLock].getMessage shouldBe s"can't get lock: $lockDetails"
     }
     res.unsafeToFuture()
