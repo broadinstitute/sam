@@ -186,10 +186,8 @@ class GoogleKeyCache(
     def keyObjectsToIds(keyObjects: List[GcsObjectName]) =
       keyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }.toSet
 
-    // perform .toSet once so we can reuse it multiple times later
-    val iamKeyIds: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet
-
-    // separate cached keys into active vs. inactive
+    // separate cache objects into active vs. inactive.
+    // The inactive objects will include any keys which are active in cache but not in IAM
     val (activeCachedKeys, inactiveCachedKeys) = cachedKeyObjects.partition(keyObject => isKeyActive(keyObject, serviceAccountKeys))
 
     // extract the key ids from the cache objects
@@ -197,13 +195,10 @@ class GoogleKeyCache(
     val inactiveCachedKeyIds: Set[ServiceAccountKeyId] = keyObjectsToIds(inactiveCachedKeys)
 
     // keys in IAM but not active in cache
-    val uncachedKeys: Set[ServiceAccountKeyId] = iamKeyIds -- activeCachedKeyIds
+    val uncachedKeys: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet -- activeCachedKeyIds
 
-    // keys active in cache but not in IAM
-    val nonExistentKeys: Set[ServiceAccountKeyId] = activeCachedKeyIds -- iamKeyIds
-
-    // delete from cache and IAM any keys which are inactive or which exist only in cache
-    (inactiveCachedKeyIds ++ nonExistentKeys)
+    // delete from cache and IAM any keys which are too old or which exist only in cache
+    inactiveCachedKeyIds
       .parUnorderedTraverse { keyId =>
         removeKey(pet, keyId)
           // Don't let a failure in key deletion prevent creation of new keys, or prevent deletion
