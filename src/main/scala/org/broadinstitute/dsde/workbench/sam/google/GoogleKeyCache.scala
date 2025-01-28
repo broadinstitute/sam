@@ -104,7 +104,7 @@ class GoogleKeyCache(
 
     def cleanupAndCreateKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey]): IO[String] =
       for {
-        _ <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keysFromCache, keysFromIam)))
+        _ <- IO.fromFuture(IO(cleanupKeys(pet, keysFromCache, keysFromIam)))
         key <- furnishNewKey(pet)
       } yield key
 
@@ -123,15 +123,18 @@ class GoogleKeyCache(
   private def retrieveActiveKey(pet: PetServiceAccount): IO[(Option[String], List[GcsObjectName], List[ServiceAccountKey])] =
     for {
       (keysFromCache, keysFromIam) <- fetchKeysFromCacheAndIam(pet)
-      maybeMostRecentKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).lastOption
-      mostRecentKey <- maybeMostRecentKey match {
+      // TODO CORE-278: this could result in log spam
+      _ = if (keysFromIam.length >= 10)
+        logger.warn(s"danger: pet ${pet.serviceAccount.displayName.value} has ${keysFromIam.length} keys")
+      maybeActiveKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).findLast(x => isKeyActive(x, keysFromIam))
+      activeKey <- maybeActiveKey match {
         case Some(mostRecentKey) if isKeyActive(mostRecentKey, keysFromIam) =>
           googleStorageAlg
             .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(mostRecentKey.value))
 
         case _ => IO.pure(None)
       }
-    } yield (mostRecentKey, keysFromCache, keysFromIam)
+    } yield (activeKey, keysFromCache, keysFromIam)
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =
     for {
@@ -171,12 +174,31 @@ class GoogleKeyCache(
     !keyRetired && keyExistsForSA
   }
 
-  private def cleanupUnknownKeys(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[Unit] = {
-    val cachedKeyIds = cachedKeyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }
-    val unknownKeyIds: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet -- cachedKeyIds.toSet
+  /** Clean up keys for the given pet. This will delete:
+    *   - any keys present in IAM but not present in the key cache
+    *   - any keys in the key cache but not present in IAM
+    *   - any expired keys
+    */
+  private def cleanupKeys(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[Unit] = {
+    val cachedKeyIds: Set[ServiceAccountKeyId] = cachedKeyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }.toSet
+    val iamKeyIds: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet
+
+    // keys in IAM but not in cache
+    val uncachedKeys: Set[ServiceAccountKeyId] = iamKeyIds -- cachedKeyIds
+
+    // keys in cache but not in IAM
+    val nonExistentKeys: Set[ServiceAccountKeyId] = cachedKeyIds -- iamKeyIds
+
+    // expired keys
+    val expiredKeys: Set[ServiceAccountKeyId] = cachedKeyObjects
+      .collect {
+        case key: GcsObjectName if !isKeyActive(key, serviceAccountKeys) => key.value
+      }
+      .collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }
+      .toSet
 
     Future
-      .traverse(unknownKeyIds) { keyId =>
+      .traverse(uncachedKeys ++ nonExistentKeys ++ expiredKeys) { keyId =>
         googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
       }
       .void
