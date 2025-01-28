@@ -180,25 +180,29 @@ class GoogleKeyCache(
     *   - any expired keys
     */
   private def cleanupKeys(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[Unit] = {
-    val cachedKeyIds: Set[ServiceAccountKeyId] = cachedKeyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }.toSet
+
+    def keyObjectsToIds(keyObjects: List[GcsObjectName]) =
+      keyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }.toSet
+
+    // perform .toSet once so we can reuse it multiple times later
     val iamKeyIds: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet
 
-    // keys in IAM but not in cache
-    val uncachedKeys: Set[ServiceAccountKeyId] = iamKeyIds -- cachedKeyIds
+    // separate cached keys into active vs. inactive
+    val (activeCachedKeys, inactiveCachedKeys) = cachedKeyObjects.partition(keyObject => isKeyActive(keyObject, serviceAccountKeys))
 
-    // keys in cache but not in IAM
-    val nonExistentKeys: Set[ServiceAccountKeyId] = cachedKeyIds -- iamKeyIds
+    // extract the key ids from the cache objects
+    val activeCachedKeyIds: Set[ServiceAccountKeyId] = keyObjectsToIds(activeCachedKeys)
+    val inactiveCachedKeyIds: Set[ServiceAccountKeyId] = keyObjectsToIds(inactiveCachedKeys)
 
-    // expired keys
-    val expiredKeys: Set[ServiceAccountKeyId] = cachedKeyObjects
-      .collect {
-        case key: GcsObjectName if !isKeyActive(key, serviceAccountKeys) => key.value
-      }
-      .collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }
-      .toSet
+    // keys in IAM but not active in cache
+    val uncachedKeys: Set[ServiceAccountKeyId] = iamKeyIds -- activeCachedKeyIds
 
+    // keys active in cache but not in IAM
+    val nonExistentKeys: Set[ServiceAccountKeyId] = activeCachedKeyIds -- iamKeyIds
+
+    // to delete: all inactive keys and all keys where cache and IAM disagree
     Future
-      .traverse(uncachedKeys ++ nonExistentKeys ++ expiredKeys) { keyId =>
+      .traverse(uncachedKeys ++ nonExistentKeys ++ inactiveCachedKeyIds) { keyId =>
         googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
       }
       .void
