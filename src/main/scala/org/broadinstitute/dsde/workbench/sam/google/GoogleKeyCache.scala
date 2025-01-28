@@ -4,6 +4,7 @@ import java.nio.charset.Charset
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
+import cats.effect.unsafe.IORuntime
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.storage.{BucketInfo, StorageException}
@@ -32,7 +33,7 @@ class GoogleKeyCache(
     val googleKeyCachePubSubDao: GooglePubSubDAO,
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig
-)(implicit val executionContext: ExecutionContext)
+)(implicit val executionContext: ExecutionContext, ioRuntime: IORuntime)
     extends KeyCache
     with LazyLogging {
   val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
@@ -200,9 +201,28 @@ class GoogleKeyCache(
     // keys active in cache but not in IAM
     val nonExistentKeys: Set[ServiceAccountKeyId] = activeCachedKeyIds -- iamKeyIds
 
-    // to delete: all inactive keys and all keys where cache and IAM disagree
+    // delete from cache and IAM any keys which are inactive or which exist only in cache
+    (inactiveCachedKeyIds ++ nonExistentKeys)
+      .parUnorderedTraverse { keyId =>
+        removeKey(pet, keyId)
+          // Don't let a failure in key deletion prevent creation of new keys, or prevent deletion
+          // of other keys. Google will prevent us creating too many keys anyway.
+          .recover {
+            case gjre: GoogleJsonResponseException =>
+              logger.warn(
+                s"Error while removing service account key: '${gjre.getDetails.getCode}:${gjre.getMessage}' error, project ${pet.id.project}, sa email ${pet.serviceAccount.email}, sa key id $keyId"
+              )
+            case t: Throwable =>
+              logger.warn(
+                s"Error while removing service account key: '${t.getMessage}', project ${pet.id.project}, sa email ${pet.serviceAccount.email}, sa key id $keyId"
+              )
+          }
+      }
+      .unsafeRunSync()
+
+    // delete from IAM any keys which are not active in cache
     Future
-      .traverse(uncachedKeys ++ nonExistentKeys ++ inactiveCachedKeyIds) { keyId =>
+      .traverse(uncachedKeys) { keyId =>
         googleIamDAO
           .removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
           // Don't let a failure in key deletion prevent creation of new keys, or prevent deletion
