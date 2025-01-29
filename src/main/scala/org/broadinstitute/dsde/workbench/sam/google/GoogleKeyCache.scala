@@ -156,7 +156,9 @@ class GoogleKeyCache(
   private def furnishNewKey(pet: PetServiceAccount): IO[String] =
     for {
       key <- IO.fromFuture(IO(googleIamDAO.createServiceAccountKey(pet.id.project, pet.serviceAccount.email))) recover {
-        // TODO CORE-278: verify this is still the exception thrown by Google
+        // TODO CORE-278: Google now returns a 400 with "message": "Precondition check failed.",
+        //    "status": "FAILED_PRECONDITION" instead of the 429. Update this exception handling.
+        // TODO CORE-278: on error, check the number of existing keys and purge as necessary
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue =>
           throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
       }
