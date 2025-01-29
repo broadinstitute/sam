@@ -123,15 +123,20 @@ class GoogleKeyCache(
   private def retrieveActiveKey(pet: PetServiceAccount): IO[(Option[String], List[GcsObjectName], List[ServiceAccountKey])] =
     for {
       (keysFromCache, keysFromIam) <- fetchKeysFromCacheAndIam(pet)
-      maybeMostRecentKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).lastOption
-      mostRecentKey <- maybeMostRecentKey match {
-        case Some(mostRecentKey) if isKeyActive(mostRecentKey, keysFromIam) =>
+
+      // TODO CORE-278: this could result in log spam
+      _ = if (keysFromIam.length >= 10)
+        logger.warn(s"danger: pet ${pet.serviceAccount.displayName.value} has ${keysFromIam.length} keys (cache has ${keysFromCache.length})")
+
+      maybeActiveKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).findLast(x => isKeyActive(x, keysFromIam))
+      activeKey <- maybeActiveKey match {
+        case Some(key) =>
           googleStorageAlg
-            .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(mostRecentKey.value))
+            .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(key.value))
 
         case _ => IO.pure(None)
       }
-    } yield (mostRecentKey, keysFromCache, keysFromIam)
+    } yield (activeKey, keysFromCache, keysFromIam)
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =
     for {
@@ -150,8 +155,14 @@ class GoogleKeyCache(
   private def furnishNewKey(pet: PetServiceAccount): IO[String] =
     for {
       key <- IO.fromFuture(IO(googleIamDAO.createServiceAccountKey(pet.id.project, pet.serviceAccount.email))) recover {
+        // TODO CORE-278: on error, check the number of existing keys and purge as necessary
+        // 2025-01-29: TooManyRequests is not returned by Google for this error any more. Leaving this in place
+        //  in case Google switches back to it
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue =>
           throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
+        case e: GoogleJsonResponseException
+            if e.getDetails.getCode == StatusCodes.BadRequest.intValue && e.getDetails.getMessage == "Precondition check failed." =>
+          throw new WorkbenchException("You may have reached the 10 key limit on service accounts.")
       }
       decodedKey <- IO.fromEither(key.privateKeyData.decode.toRight(new WorkbenchException("Failed to decode retrieved key")))
       _ <- (Stream.emits(decodedKey.getBytes(utf8Charset)).covary[IO] through googleStorageAlg.streamUploadBlob(
