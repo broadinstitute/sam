@@ -111,7 +111,6 @@ class GoogleKeyCache(
       } yield key
 
     val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
-    // TODO CORE-278: withLock() allows multiple simultaneous requests for the same pet, enabling race conditions below
     maybeCreateKey((_, _) => distributedLock.withLock(lockDetails).use(_ => maybeCreateKey(cleanupAndCreateKey)))
   }
 
