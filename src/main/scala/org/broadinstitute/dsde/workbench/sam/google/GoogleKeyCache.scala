@@ -102,11 +102,15 @@ class GoogleKeyCache(
         }
       } yield activeKey
 
-    def cleanupAndCreateKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey]): IO[String] =
+    def cleanupAndCreateKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey]): IO[String] = {
+      logger.info(
+        s"cleanupAndCreateKey: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} with ${keysFromCache.length} in cache and ${keysFromIam.length} in IAM"
+      )
       for {
         _ <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keysFromCache, keysFromIam)))
         key <- furnishNewKey(pet)
       } yield key
+    }
 
     val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
     maybeCreateKey((_, _) => distributedLock.withLock(lockDetails).use(_ => maybeCreateKey(cleanupAndCreateKey)))
@@ -156,13 +160,15 @@ class GoogleKeyCache(
     for {
       key <- IO.fromFuture(IO(googleIamDAO.createServiceAccountKey(pet.id.project, pet.serviceAccount.email))) recover {
         // TODO CORE-278: on error, check the number of existing keys and purge as necessary
-        // 2025-01-29: TooManyRequests is not returned by Google for this error any more. Leaving this in place
-        //  in case Google switches back to it
-        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue =>
-          throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
-        case e: GoogleJsonResponseException
-            if e.getDetails.getCode == StatusCodes.BadRequest.intValue && e.getDetails.getMessage == "Precondition check failed." =>
-          throw new WorkbenchException("You may have reached the 10 key limit on service accounts.")
+        case e: GoogleJsonResponseException =>
+          if (e.getDetails.getCode == StatusCodes.TooManyRequests.intValue)
+            // 2025-01-29: TooManyRequests is not returned by Google for this error any more. Leaving this in place
+            //  in case Google switches back to it
+            throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
+          else if (e.getDetails.getCode == StatusCodes.BadRequest.intValue && e.getDetails.getMessage == "Precondition check failed.")
+            throw new WorkbenchException("You may have reached the 10 key limit on service accounts.")
+          else
+            throw new WorkbenchException(s"Error creating key for service account: ${e.getDetails.getCode}: ${e.getDetails.getMessage}")
       }
       decodedKey <- IO.fromEither(key.privateKeyData.decode.toRight(new WorkbenchException("Failed to decode retrieved key")))
       _ <- (Stream.emits(decodedKey.getBytes(utf8Charset)).covary[IO] through googleStorageAlg.streamUploadBlob(
