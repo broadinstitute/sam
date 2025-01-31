@@ -132,14 +132,14 @@ class GoogleKeyCache(
       _ = if (keysFromIam.length >= 10)
         logger.warn(s"danger: pet ${pet.serviceAccount.displayName.value} has ${keysFromIam.length} keys (cache has ${keysFromCache.length})")
 
-      maybeActiveKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).findLast(x => isKeyActive(x, keysFromIam))
-      activeKey <- maybeActiveKey match {
-        case Some(key) =>
+      maybeActiveKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).findLast(isKeyActive(_, keysFromIam))
+      activeKey <- maybeActiveKey
+        .map { key =>
           googleStorageAlg
             .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(key.value))
+        }
+        .getOrElse(IO.pure(None))
 
-        case _ => IO.pure(None)
-      }
     } yield (activeKey, keysFromCache, keysFromIam)
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =
