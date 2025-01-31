@@ -102,11 +102,15 @@ class GoogleKeyCache(
         }
       } yield activeKey
 
-    def cleanupAndCreateKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey]): IO[String] =
+    def cleanupAndCreateKey(keysFromCache: List[GcsObjectName], keysFromIam: List[ServiceAccountKey]): IO[String] = {
+      logger.info(
+        s"cleanupAndCreateKey: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} with ${keysFromCache.length} in cache and ${keysFromIam.length} in IAM"
+      )
       for {
         _ <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keysFromCache, keysFromIam)))
         key <- furnishNewKey(pet)
       } yield key
+    }
 
     val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
     maybeCreateKey((_, _) => distributedLock.withLock(lockDetails).use(_ => maybeCreateKey(cleanupAndCreateKey)))
@@ -123,15 +127,20 @@ class GoogleKeyCache(
   private def retrieveActiveKey(pet: PetServiceAccount): IO[(Option[String], List[GcsObjectName], List[ServiceAccountKey])] =
     for {
       (keysFromCache, keysFromIam) <- fetchKeysFromCacheAndIam(pet)
-      maybeMostRecentKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).lastOption
-      mostRecentKey <- maybeMostRecentKey match {
-        case Some(mostRecentKey) if isKeyActive(mostRecentKey, keysFromIam) =>
-          googleStorageAlg
-            .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(mostRecentKey.value))
 
-        case _ => IO.pure(None)
-      }
-    } yield (mostRecentKey, keysFromCache, keysFromIam)
+      // TODO CORE-278: this could result in log spam
+      _ = if (keysFromIam.length >= 10)
+        logger.warn(s"danger: pet ${pet.serviceAccount.displayName.value} has ${keysFromIam.length} keys (cache has ${keysFromCache.length})")
+
+      maybeActiveKey = keysFromCache.sortBy(_.timeCreated.toEpochMilli).findLast(isKeyActive(_, keysFromIam))
+      activeKey <- maybeActiveKey
+        .map { key =>
+          googleStorageAlg
+            .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(key.value))
+        }
+        .getOrElse(IO.pure(None))
+
+    } yield (activeKey, keysFromCache, keysFromIam)
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =
     for {
@@ -150,8 +159,16 @@ class GoogleKeyCache(
   private def furnishNewKey(pet: PetServiceAccount): IO[String] =
     for {
       key <- IO.fromFuture(IO(googleIamDAO.createServiceAccountKey(pet.id.project, pet.serviceAccount.email))) recover {
-        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.TooManyRequests.intValue =>
-          throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
+        // TODO CORE-278: on error, check the number of existing keys and purge as necessary
+        case e: GoogleJsonResponseException =>
+          if (e.getDetails.getCode == StatusCodes.TooManyRequests.intValue)
+            // 2025-01-29: TooManyRequests is not returned by Google for this error any more. Leaving this in place
+            //  in case Google switches back to it
+            throw new WorkbenchException("You have reached the 10 key limit on service accounts. Please remove one to create another.")
+          else if (e.getDetails.getCode == StatusCodes.BadRequest.intValue && e.getDetails.getMessage == "Precondition check failed.")
+            throw new WorkbenchException("You may have reached the 10 key limit on service accounts.")
+          else
+            throw new WorkbenchException(s"Error creating key for service account: ${e.getDetails.getCode}: ${e.getDetails.getMessage}")
       }
       decodedKey <- IO.fromEither(key.privateKeyData.decode.toRight(new WorkbenchException("Failed to decode retrieved key")))
       _ <- (Stream.emits(decodedKey.getBytes(utf8Charset)).covary[IO] through googleStorageAlg.streamUploadBlob(
