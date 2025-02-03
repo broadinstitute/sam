@@ -11,13 +11,13 @@ object Dependencies {
   val postgresDriverVersion = "42.7.5"
   val sentryVersion = "6.15.0"
 
-  val workbenchLibV = "4292239" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchLibV = "3c43ebb" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
   val workbenchUtil2V = s"0.9-$workbenchLibV"
   val workbenchModelV = s"0.21-$workbenchLibV"
   val workbenchGoogleV = s"0.34-$workbenchLibV"
   val workbenchGoogle2V = s"0.37-$workbenchLibV"
-  val workbenchNotificationsV = s"0.10-$workbenchLibV"
+  val workbenchNotificationsV = s"1.1-$workbenchLibV"
   val workbenchOauth2V = s"0.9-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.34-SNAPSHOT"
