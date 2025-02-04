@@ -112,7 +112,8 @@ class GoogleKeyCache(
       } yield key
     }
 
-    val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
+    // 5 minute lock timeout chosen to match how long key creation polling can take
+    val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 5 minutes)
     maybeCreateKey((_, _) => distributedLock.withLock(lockDetails).use(_ => maybeCreateKey(cleanupAndCreateKey)))
   }
 
