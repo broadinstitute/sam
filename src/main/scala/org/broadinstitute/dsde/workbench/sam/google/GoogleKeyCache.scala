@@ -22,6 +22,8 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{LockDetails, PostgresDi
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
+import cats.effect.unsafe.implicits.global
+
 /** Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
@@ -107,7 +109,7 @@ class GoogleKeyCache(
         s"cleanupAndCreateKey: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} with ${keysFromCache.length} in cache and ${keysFromIam.length} in IAM"
       )
       for {
-        _ <- IO.fromFuture(IO(cleanupUnknownKeys(pet, keysFromCache, keysFromIam)))
+        _ <- IO.fromFuture(IO(cleanupKeys(pet, keysFromCache, keysFromIam)))
         key <- furnishNewKey(pet)
       } yield key
     }
@@ -189,14 +191,29 @@ class GoogleKeyCache(
     !keyRetired && keyExistsForSA
   }
 
-  private def cleanupUnknownKeys(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[Unit] = {
+  private def cleanupKeys(pet: PetServiceAccount, cachedKeyObjects: List[GcsObjectName], serviceAccountKeys: List[ServiceAccountKey]): Future[Unit] = {
     val cachedKeyIds = cachedKeyObjects.map(_.value).collect { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }
     val unknownKeyIds: Set[ServiceAccountKeyId] = serviceAccountKeys.map(_.id).toSet -- cachedKeyIds.toSet
 
-    Future
-      .traverse(unknownKeyIds) { keyId =>
-        googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
-      }
-      .void
+    // cleanupKeys() is always called prior to calling furnishNewKey(). furnishNewKey() will fail if there are
+    //  already 10 keys. If we're already at 10, purge the oldest key.
+    val purgeOldest = if (serviceAccountKeys.size - unknownKeyIds.size >= 10) {
+      // purge oldest key
+      removeKey(
+        pet,
+        cachedKeyObjects.maxBy(_.timeCreated.toEpochMilli).value match {
+          case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId)
+        }
+      ).unsafeToFuture()
+    } else {
+      Future.successful(())
+    }
+
+    purgeOldest map
+      Future
+        .traverse(unknownKeyIds) { keyId =>
+          googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId)
+        }
+        .void
   }
 }
