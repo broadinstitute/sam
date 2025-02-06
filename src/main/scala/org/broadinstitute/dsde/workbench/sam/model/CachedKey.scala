@@ -11,11 +11,11 @@ object CachedKey {
   def apply(gcsObject: GcsObjectName): CachedKey = {
     val timeCreated = gcsObject.timeCreated
     val keyId = gcsObject.value match { case keyPathPattern(_, _, keyId) => ServiceAccountKeyId(keyId) }
-    new CachedKey(timeCreated, keyId)
+    new CachedKey(timeCreated, gcsObject.value, keyId)
   }
 }
 
-case class CachedKey(timeCreated: Instant, keyId: ServiceAccountKeyId) {
+case class CachedKey(timeCreated: Instant, value: String, keyId: ServiceAccountKeyId) {
 
   def isBefore(other: Instant): Boolean = timeCreated.isBefore(other)
 

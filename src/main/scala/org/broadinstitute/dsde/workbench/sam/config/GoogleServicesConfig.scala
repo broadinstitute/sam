@@ -50,6 +50,7 @@ object GoogleServicesConfig {
       GcsBucketName(config.getString("bucketName")),
       config.getInt("activeKeyMaxAge"),
       config.getInt("retiredKeyMaxAge"),
+      config.getInt("nascentKeyMinAgeMinutes"),
       config.as[GooglePubSubConfig]("monitor")
     )
   }

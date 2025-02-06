@@ -18,11 +18,13 @@ import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetSe
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
 import fs2.Stream
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{LockDetails, PostgresDistributedLockDAO}
+import org.broadinstitute.dsde.workbench.sam.model.CachedKey
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
-
 import org.broadinstitute.dsde.workbench.sam.model.CachedKey.keyPathPattern
+
+import java.time.Instant
 
 /** Created by mbemis on 1/10/18.
   */
@@ -118,6 +120,64 @@ class GoogleKeyCache(
     maybeCreateKey((_, _) => distributedLock.withLock(lockDetails).use(_ => maybeCreateKey(cleanupAndCreateKey)))
   }
 
+  private def fetchKeysFromCache(pet: PetServiceAccount): IO[List[CachedKey]] =
+    googleStorageAlg
+      .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
+      .map(gcsObjectList => gcsObjectList.map(CachedKey(_)))
+
+  private def findActiveKey(pet: PetServiceAccount, withinLock: Boolean): IO[Option[String]] =
+    for {
+      keysInCache <- fetchKeysFromCache(pet)
+      maybeActiveKey = searchCachedKeys(keysInCache, withinLock).map(_.value)
+    } yield maybeActiveKey
+
+  protected[google] def searchCachedKeys(keysInCache: List[CachedKey], withinLock: Boolean): Option[CachedKey] = {
+    /* segment cached keys into ideal, retired, and nascent keys
+        ideal: keys between 15 minutes and 12 days old. Use these whenever possible.
+        retired: keys older than 12 days. Avoid if possible, but prefer these over nascent keys.
+        nascent: keys newer than 15 minutes. Only use if nothing else is available; these may cause errors due to Google
+          eventual consistency.
+     */
+
+    def oldestOf(keys: List[CachedKey]): Option[CachedKey] =
+      Option(keys.minBy(_.timeCreated))
+
+    def newestOf(keys: List[CachedKey]): Option[CachedKey] =
+      Option(keys.maxBy(_.timeCreated))
+
+    val now = Instant.now()
+
+    val retirementTime = now.minusSeconds(googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge * (24L * 60 * 60))
+    val nascentInstant = now.minusSeconds(googleServicesConfig.googleKeyCacheConfig.nascentKeyMinAgeMinutes * 60L)
+
+    val (retiredKeys, unretiredKeys) = keysInCache.partition(_.isBefore(retirementTime))
+    val (idealKeys, nascentKeys) = unretiredKeys.partition(_.isBefore(nascentInstant))
+
+    if (idealKeys.nonEmpty) {
+      // if any ideal keys exist, return the newest of those
+      newestOf(idealKeys)
+    } else if (nascentKeys.nonEmpty && retiredKeys.isEmpty) {
+      // if any nascent keys exist but no retired keys exist, return the oldest nascent key
+      oldestOf(nascentKeys)
+    } else if (nascentKeys.nonEmpty && retiredKeys.nonEmpty) {
+      // if both nascent and retired keys exist, return the newest retired key
+      newestOf(retiredKeys)
+    } else if (!withinLock) {
+      // if not within lock, return None. This will signal callers to obtain a lock and re-call this function.
+      None
+    } else if (nascentKeys.isEmpty && retiredKeys.nonEmpty) {
+      // if within lock, retired keys exist, and no nascent keys exist: return newest retired key and trigger key creation
+      // TODO CORE-278: trigger new-key creation; can be async
+      newestOf(retiredKeys)
+    } else {
+      // no keys exist; create one and return it
+      // TODO CORE-278: trigger new-key creation and return its result
+      None
+    }
+
+  }
+
+  @deprecated
   private def fetchKeysFromCacheAndIam(pet: PetServiceAccount): IO[(List[GcsObjectName], List[ServiceAccountKey])] = {
     val fetchKeyFromCache = googleStorageAlg
       .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
@@ -126,6 +186,8 @@ class GoogleKeyCache(
     (fetchKeyFromCache, fetchKeyFromIam).parTupled
   }
 
+  // TODO CORE-278: refactor this
+  @deprecated
   private def retrieveActiveKey(pet: PetServiceAccount): IO[(Option[String], List[GcsObjectName], List[ServiceAccountKey])] =
     for {
       (keysFromCache, keysFromIam) <- fetchKeysFromCacheAndIam(pet)

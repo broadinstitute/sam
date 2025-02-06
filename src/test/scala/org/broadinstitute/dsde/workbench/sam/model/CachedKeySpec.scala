@@ -26,7 +26,7 @@ class CachedKeySpec extends AnyFlatSpecLike with Matchers {
     val middle = earliest.plusSeconds(1)
     val latest = earliest.plusSeconds(2)
 
-    val cachedKey = new CachedKey(middle, ServiceAccountKeyId("id"))
+    val cachedKey = new CachedKey(middle, "some-value", ServiceAccountKeyId("id"))
 
     cachedKey.isBefore(latest) shouldBe true
     cachedKey.isBefore(middle) shouldBe false
@@ -38,7 +38,7 @@ class CachedKeySpec extends AnyFlatSpecLike with Matchers {
     val middle = earliest.plusSeconds(1)
     val latest = earliest.plusSeconds(2)
 
-    val cachedKey = new CachedKey(middle, ServiceAccountKeyId("id"))
+    val cachedKey = new CachedKey(middle, "some-value", ServiceAccountKeyId("id"))
 
     cachedKey.isAfterOrEqual(latest) shouldBe false
     cachedKey.isAfterOrEqual(middle) shouldBe true
