@@ -153,12 +153,6 @@ class GoogleKeyCache(
     def newestOf(keys: List[CachedKey]): IO[Option[String]] =
       readFromCache(keys.maxBy(_.timeCreated))
 
-    keysInCache.foreach { cachedKey =>
-      logger.warn(
-        s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} has cached key ${cachedKey.value}"
-      )
-    }
-
     /* segment cached keys into ideal, retired, and nascent keys
         ideal: keys between 15 minutes and 12 days old. Use these whenever possible.
         retired: keys older than 12 days. Avoid if possible, but prefer these over nascent keys.
@@ -177,11 +171,10 @@ class GoogleKeyCache(
       newestOf(idealKeys)
     } else if (nascentKeys.nonEmpty && retiredKeys.isEmpty) {
       // if any nascent keys exist but no retired keys exist, return the oldest nascent key
-      val key = oldestOf(nascentKeys)
       logger.warn(
         s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a nascent key"
       )
-      key
+      oldestOf(nascentKeys)
     } else if (nascentKeys.nonEmpty && retiredKeys.nonEmpty) {
       // if both nascent and retired keys exist, return the newest retired key
       logger.warn(
@@ -269,9 +262,6 @@ class GoogleKeyCache(
           throw new WorkbenchException(s"Error creating key for service account: ${t.getMessage}")
       }
       decodedKey <- IO.fromEither(key.privateKeyData.decode.toRight(new WorkbenchException("Failed to decode retrieved key")))
-      _ = logger.warn(
-        s"furnishNewKey: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} writing key to cache: $decodedKey"
-      )
       _ <- (Stream.emits(decodedKey.getBytes(utf8Charset)).covary[IO] through googleStorageAlg.streamUploadBlob(
         googleServicesConfig.googleKeyCacheConfig.bucketName,
         keyNameFull(pet.id.project, pet.serviceAccount.email, key.id)
