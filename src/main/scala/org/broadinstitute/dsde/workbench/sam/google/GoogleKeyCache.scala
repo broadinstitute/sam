@@ -26,6 +26,8 @@ import org.broadinstitute.dsde.workbench.sam.model.CachedKey.keyPathPattern
 
 import java.time.Instant
 
+import cats.effect.unsafe.implicits.global
+
 /** Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
@@ -128,30 +130,28 @@ class GoogleKeyCache(
   private def findActiveKey(pet: PetServiceAccount, withinLock: Boolean): IO[Option[String]] =
     for {
       keysInCache <- fetchKeysFromCache(pet)
-      maybeActiveKey = searchCachedKeys(keysInCache, withinLock).map(_.value)
+      maybeActiveKey = searchCachedKeys(pet, keysInCache, withinLock)
     } yield maybeActiveKey
 
-  protected[google] def searchCachedKeys(keysInCache: List[CachedKey], withinLock: Boolean): Option[CachedKey] = {
+  protected[google] def searchCachedKeys(pet: PetServiceAccount, keysInCache: List[CachedKey], withinLock: Boolean): Option[String] = {
+    // helpers
+    def oldestOf(keys: List[CachedKey]): Option[String] =
+      Option(keys.minBy(_.timeCreated).value)
+    def newestOf(keys: List[CachedKey]): Option[String] =
+      Option(keys.maxBy(_.timeCreated).value)
+
     /* segment cached keys into ideal, retired, and nascent keys
         ideal: keys between 15 minutes and 12 days old. Use these whenever possible.
         retired: keys older than 12 days. Avoid if possible, but prefer these over nascent keys.
         nascent: keys newer than 15 minutes. Only use if nothing else is available; these may cause errors due to Google
           eventual consistency.
      */
-
-    def oldestOf(keys: List[CachedKey]): Option[CachedKey] =
-      Option(keys.minBy(_.timeCreated))
-
-    def newestOf(keys: List[CachedKey]): Option[CachedKey] =
-      Option(keys.maxBy(_.timeCreated))
-
     val now = Instant.now()
-
     val retirementTime = now.minusSeconds(googleServicesConfig.googleKeyCacheConfig.activeKeyMaxAge * (24L * 60 * 60))
-    val nascentInstant = now.minusSeconds(googleServicesConfig.googleKeyCacheConfig.nascentKeyMinAgeMinutes * 60L)
+    val nascentTime = now.minusSeconds(googleServicesConfig.googleKeyCacheConfig.nascentKeyMinAgeMinutes * 60L)
 
     val (retiredKeys, unretiredKeys) = keysInCache.partition(_.isBefore(retirementTime))
-    val (idealKeys, nascentKeys) = unretiredKeys.partition(_.isBefore(nascentInstant))
+    val (idealKeys, nascentKeys) = unretiredKeys.partition(_.isBefore(nascentTime))
 
     if (idealKeys.nonEmpty) {
       // if any ideal keys exist, return the newest of those
@@ -171,8 +171,7 @@ class GoogleKeyCache(
       newestOf(retiredKeys)
     } else {
       // no keys exist; create one and return it
-      // TODO CORE-278: trigger new-key creation and return its result
-      None
+      Option(furnishNewKey(pet).unsafeRunSync())
     }
 
   }
