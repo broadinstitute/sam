@@ -1,5 +1,6 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
+import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
 import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
@@ -21,17 +22,33 @@ import java.util.Base64
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.util.Random
+import cats.effect.unsafe.implicits.global
+import fs2.Stream
+import org.broadinstitute.dsde.workbench.google2.GcsBlobName
+import org.broadinstitute.dsde.workbench.google2.Generators.utf8Charset
+import org.scalatest.BeforeAndAfterAll
 
-class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
+class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers with BeforeAndAfterAll {
 
   val pet = genPetServiceAccount.sample.get
+
+  val storageInterp = FakeGoogleStorageInterpreter
+
+  override protected def beforeAll(): Unit =
+    // set up google storage for the test cases below
+    List("nascent-1", "nascent-2", "ideal-1", "ideal-2", "ideal-3", "retired-1", "retired-2") foreach { obj =>
+      (Stream.emits(obj.getBytes(utf8Charset)).covary[IO] through storageInterp.streamUploadBlob(
+        TestSupport.googleServicesConfig.googleKeyCacheConfig.bucketName,
+        GcsBlobName(obj)
+      )).compile.drain.unsafeRunSync()
+    }
 
   def newKeyCache(iamDAO: GoogleIamDAO = new MockGoogleIamDAO): GoogleKeyCache =
     new GoogleKeyCache(
       TestSupport.distributedLock,
       iamDAO,
       new MockGoogleStorageDAO,
-      FakeGoogleStorageInterpreter,
+      storageInterp,
       new MockGooglePubSubDAO,
       TestSupport.googleServicesConfig,
       TestSupport.petServiceAccountConfig
@@ -52,7 +69,7 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
       val retiredKey = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), "retired-1", ServiceAccountKeyId("retired-1"))
 
       val input = List(nascentKey, idealKey, retiredKey)
-      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock)
+      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
       actual should contain("ideal-1")
     }
 
@@ -60,7 +77,7 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
       val idealKey = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 10), "ideal-1", ServiceAccountKeyId("ideal-1"))
 
       val input = List(idealKey)
-      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock)
+      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
       actual should contain("ideal-1")
     }
 
@@ -72,7 +89,7 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
       val retiredKey = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), "retired-1", ServiceAccountKeyId("retired-1"))
 
       val input = List(nascentKey, idealKey3, idealKey2, idealKey1, retiredKey)
-      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock)
+      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
       actual should contain("ideal-1")
     }
 
@@ -83,7 +100,7 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
       val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), "retired-2", ServiceAccountKeyId("retired-2"))
 
       val input = List(retiredKey2, nascentKey2, retiredKey1, nascentKey1)
-      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock)
+      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
       actual should contain("retired-1")
     }
 
@@ -92,7 +109,7 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
       val nascentKey2 = new CachedKey(Instant.now.minusSeconds(20), "nascent-2", ServiceAccountKeyId("nascent-2"))
 
       val input = List(nascentKey2, nascentKey1)
-      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock)
+      val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
       actual should contain("nascent-2")
     }
   }
@@ -105,14 +122,14 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
     val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), "retired-2", ServiceAccountKeyId("retired-2"))
 
     val input = List(retiredKey2, retiredKey1)
-    val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = false)
+    val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = false).unsafeRunSync()
     actual shouldBe None
   }
 
   it should "return None when no keys exist in cache" in {
     // this case triggers creation of a new key, so it returns None when not within a lock
     val input: List[CachedKey] = List()
-    val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = false)
+    val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = false).unsafeRunSync()
     actual shouldBe None
   }
 
@@ -149,7 +166,7 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
     val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), "retired-2", ServiceAccountKeyId("retired-2"))
 
     val input = List(retiredKey2, retiredKey1)
-    val actual = keyCache.searchCachedKeys(pet, input, withinLock = true)
+    val actual = keyCache.searchCachedKeys(pet, input, withinLock = true).unsafeRunSync()
     actual should contain("retired-1")
     Mockito
       .verify(mockIamDao, times(1))
@@ -183,7 +200,7 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
       .createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])
 
     val input: List[CachedKey] = List()
-    val actual = keyCache.searchCachedKeys(pet, input, withinLock = true)
+    val actual = keyCache.searchCachedKeys(pet, input, withinLock = true).unsafeRunSync()
     Mockito
       .verify(mockIamDao, times(1))
       .createServiceAccountKey(pet.id.project, pet.serviceAccount.email)

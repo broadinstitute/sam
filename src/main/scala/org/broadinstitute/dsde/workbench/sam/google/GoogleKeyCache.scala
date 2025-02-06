@@ -25,8 +25,6 @@ import scala.concurrent.ExecutionContext
 
 import java.time.Instant
 
-import cats.effect.unsafe.implicits.global
-
 /** Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
@@ -133,7 +131,7 @@ class GoogleKeyCache(
   private def findActiveKey(pet: PetServiceAccount, withinLock: Boolean): IO[Option[String]] =
     for {
       keysInCache <- fetchKeysFromCache(pet)
-      maybeActiveKey = searchCachedKeys(pet, keysInCache, withinLock)
+      maybeActiveKey <- searchCachedKeys(pet, keysInCache, withinLock)
     } yield maybeActiveKey
 
   /** Given a list of cached keys, return the most appropriate cached key. The priority order of keys is:
@@ -145,12 +143,21 @@ class GoogleKeyCache(
     *
     * When executing inside a lock, based on the withinLock parameter, this function operates in read/write mode. It will create new keys when necessary.
     */
-  protected[google] def searchCachedKeys(pet: PetServiceAccount, keysInCache: List[CachedKey], withinLock: Boolean): Option[String] = {
+  protected[google] def searchCachedKeys(pet: PetServiceAccount, keysInCache: List[CachedKey], withinLock: Boolean): IO[Option[String]] = {
     // helpers
-    def oldestOf(keys: List[CachedKey]): Option[String] =
-      Option(keys.minBy(_.timeCreated).value)
-    def newestOf(keys: List[CachedKey]): Option[String] =
-      Option(keys.maxBy(_.timeCreated).value)
+    def readFromCache(key: CachedKey): IO[Option[String]] =
+      googleStorageAlg
+        .unsafeGetBlobBody(googleServicesConfig.googleKeyCacheConfig.bucketName, GcsBlobName(key.value))
+    def oldestOf(keys: List[CachedKey]): IO[Option[String]] =
+      readFromCache(keys.minBy(_.timeCreated))
+    def newestOf(keys: List[CachedKey]): IO[Option[String]] =
+      readFromCache(keys.maxBy(_.timeCreated))
+
+    keysInCache.foreach { cachedKey =>
+      logger.warn(
+        s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} has cached key ${cachedKey.value}"
+      )
+    }
 
     /* segment cached keys into ideal, retired, and nascent keys
         ideal: keys between 15 minutes and 12 days old. Use these whenever possible.
@@ -170,10 +177,11 @@ class GoogleKeyCache(
       newestOf(idealKeys)
     } else if (nascentKeys.nonEmpty && retiredKeys.isEmpty) {
       // if any nascent keys exist but no retired keys exist, return the oldest nascent key
+      val key = oldestOf(nascentKeys)
       logger.warn(
         s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a nascent key"
       )
-      oldestOf(nascentKeys)
+      key
     } else if (nascentKeys.nonEmpty && retiredKeys.nonEmpty) {
       // if both nascent and retired keys exist, return the newest retired key
       logger.warn(
@@ -182,30 +190,29 @@ class GoogleKeyCache(
       newestOf(retiredKeys)
     } else if (!withinLock) {
       // if not within lock, return None. This will signal callers to obtain a lock and re-call this function.
-      None
+      IO.pure(None)
     } else if (nascentKeys.isEmpty && retiredKeys.nonEmpty) {
       // if within lock, retired keys exist, and no nascent keys exist:
-      // return newest retired key and trigger key creation
-      cleanupAndCreateKey(pet, keysInCache)
-        .map { _ =>
-          logger.warn(
-            s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a retired key; no nascent keys exist"
-          )
-          newestOf(retiredKeys)
-        }
-        .unsafeRunSync()
+      // trigger key creation and then return newest retired key
+      for {
+        _ <- cleanupAndCreateKey(pet, keysInCache)
+        retiredKey <- newestOf(retiredKeys)
+      } yield {
+        logger.warn(
+          s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a retired key; no nascent keys exist"
+        )
+        retiredKey
+      }
     } else {
       // no keys exist; create one and return it
-      Option(
-        cleanupAndCreateKey(pet, keysInCache)
-          .map { createdKey =>
-            logger.warn(
-              s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a just-created key"
-            )
-            createdKey
-          }
-          .unsafeRunSync()
-      )
+      for {
+        newKey <- cleanupAndCreateKey(pet, keysInCache)
+      } yield {
+        logger.warn(
+          s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a just-created key"
+        )
+        Option(newKey)
+      }
     }
 
   }
@@ -262,6 +269,9 @@ class GoogleKeyCache(
           throw new WorkbenchException(s"Error creating key for service account: ${t.getMessage}")
       }
       decodedKey <- IO.fromEither(key.privateKeyData.decode.toRight(new WorkbenchException("Failed to decode retrieved key")))
+      _ = logger.warn(
+        s"furnishNewKey: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} writing key to cache: $decodedKey"
+      )
       _ <- (Stream.emits(decodedKey.getBytes(utf8Charset)).covary[IO] through googleStorageAlg.streamUploadBlob(
         googleServicesConfig.googleKeyCacheConfig.bucketName,
         keyNameFull(pet.id.project, pet.serviceAccount.email, key.id)
