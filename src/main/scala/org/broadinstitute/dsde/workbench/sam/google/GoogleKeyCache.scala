@@ -166,9 +166,9 @@ class GoogleKeyCache(
       // if not within lock, return None. This will signal callers to obtain a lock and re-call this function.
       None
     } else if (nascentKeys.isEmpty && retiredKeys.nonEmpty) {
-      // if within lock, retired keys exist, and no nascent keys exist: return newest retired key and trigger key creation
-      // TODO CORE-278: trigger new-key creation; can be async
-      newestOf(retiredKeys)
+      // if within lock, retired keys exist, and no nascent keys exist:
+      // return newest retired key and trigger key creation
+      furnishNewKey(pet).map(_ => newestOf(retiredKeys)).unsafeRunSync()
     } else {
       // no keys exist; create one and return it
       Option(furnishNewKey(pet).unsafeRunSync())

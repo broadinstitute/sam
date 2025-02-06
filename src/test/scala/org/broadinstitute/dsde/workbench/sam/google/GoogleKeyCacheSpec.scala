@@ -119,11 +119,27 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
   behavior of "GoogleKeyCache.searchCachedKeys(), when within a lock"
 
   it should "return None when only retired keys exist" in {
-    val spiedIamDao = Mockito.spy(new MockGoogleIamDAO)
-    val keyCache = newKeyCache(spiedIamDao)
+    val mockIamDao = mock[GoogleIamDAO]
+    val mockKeyDataString = s"abcdefg:${System.currentTimeMillis}${Random.nextLong()}"
+    val mockKeyData = ServiceAccountPrivateKeyData(
+      Base64.getEncoder
+        .encodeToString(mockKeyDataString.getBytes(StandardCharsets.UTF_8))
+    )
+    when(mockIamDao.createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail]))
+      .thenReturn(
+        Future.successful(
+          ServiceAccountKey(
+            ServiceAccountKeyId("new-id"),
+            mockKeyData,
+            None,
+            None
+          )
+        )
+      )
+    val keyCache = newKeyCache(mockIamDao)
 
     Mockito
-      .verify(spiedIamDao, times(0))
+      .verify(mockIamDao, times(0))
       .createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])
 
     // this case triggers creation of a new key, so it returns None when not within a lock
@@ -131,10 +147,10 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
     val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), "retired-2", ServiceAccountKeyId("retired-2"))
 
     val input = List(retiredKey2, retiredKey1)
-    val actual = keyCache.searchCachedKeys(pet, input, withinLock = false)
-    actual shouldBe defined
+    val actual = keyCache.searchCachedKeys(pet, input, withinLock = true)
+    actual should contain("retired-1")
     Mockito
-      .verify(spiedIamDao, times(1))
+      .verify(mockIamDao, times(1))
       .createServiceAccountKey(pet.id.project, pet.serviceAccount.email)
   }
 
@@ -169,7 +185,6 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
       .createServiceAccountKey(pet.id.project, pet.serviceAccount.email)
     actual shouldBe defined
     actual.get shouldBe mockKeyDataString
-
   }
 
 }
