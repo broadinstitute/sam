@@ -136,6 +136,8 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
           )
         )
       )
+    when(mockIamDao.listUserManagedServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail]))
+      .thenReturn(Future.successful(Seq()))
     val keyCache = newKeyCache(mockIamDao)
 
     Mockito
@@ -172,6 +174,8 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers {
           )
         )
       )
+    when(mockIamDao.listUserManagedServiceAccountKeys(any[GoogleProject], any[WorkbenchEmail]))
+      .thenReturn(Future.successful(Seq()))
     val keyCache = newKeyCache(mockIamDao)
 
     Mockito
