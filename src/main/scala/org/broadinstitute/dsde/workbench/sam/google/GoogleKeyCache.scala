@@ -22,6 +22,8 @@ import org.broadinstitute.dsde.workbench.sam.dataAccess.{LockDetails, PostgresDi
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
+import org.broadinstitute.dsde.workbench.sam.model.CachedKey.keyPathPattern
+
 /** Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
@@ -35,7 +37,6 @@ class GoogleKeyCache(
 )(implicit val executionContext: ExecutionContext)
     extends KeyCache
     with LazyLogging {
-  val keyPathPattern = """([^\/]+)\/([^\/]+)\/([^\/]+)""".r
   val utf8Charset = Charset.forName("UTF-8")
 
   override def onBoot()(implicit system: ActorSystem): IO[Unit] = {
