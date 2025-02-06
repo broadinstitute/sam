@@ -30,13 +30,21 @@ import org.scalatest.BeforeAndAfterAll
 
 class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers with BeforeAndAfterAll {
 
-  val pet = genPetServiceAccount.sample.get
+  private val pet = genPetServiceAccount.sample.get
 
-  val storageInterp = FakeGoogleStorageInterpreter
+  private val storageInterp = FakeGoogleStorageInterpreter
+
+  private val nascent1 = "nascent-1"
+  private val nascent2 = "nascent-2"
+  private val ideal1 = "ideal-1"
+  private val ideal2 = "ideal-2"
+  private val ideal3 = "ideal-3"
+  private val retired1 = "retired-1"
+  private val retired2 = "retired-2"
 
   override protected def beforeAll(): Unit =
     // set up google storage for the test cases below
-    List("nascent-1", "nascent-2", "ideal-1", "ideal-2", "ideal-3", "retired-1", "retired-2") foreach { obj =>
+    List(nascent1, nascent2, ideal1, ideal2, ideal3, retired1, retired2) foreach { obj =>
       (Stream.emits(obj.getBytes(utf8Charset)).covary[IO] through storageInterp.streamUploadBlob(
         TestSupport.googleServicesConfig.googleKeyCacheConfig.bucketName,
         GcsBlobName(obj)
@@ -64,53 +72,53 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers with BeforeAndAft
   // these tests behave the same both within and outside a lock
   List(false, true) foreach { withinLock =>
     it should s"return an ideally-aged key even when others exist (withinLock=$withinLock)" in {
-      val nascentKey = new CachedKey(Instant.now.minusSeconds(10), "value", ServiceAccountKeyId("nascent-1"))
-      val idealKey = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 10), "ideal-1", ServiceAccountKeyId("ideal-1"))
-      val retiredKey = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), "retired-1", ServiceAccountKeyId("retired-1"))
+      val nascentKey = new CachedKey(Instant.now.minusSeconds(10), nascent1, ServiceAccountKeyId(nascent1))
+      val idealKey = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 10), ideal1, ServiceAccountKeyId(ideal1))
+      val retiredKey = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), retired1, ServiceAccountKeyId(retired1))
 
       val input = List(nascentKey, idealKey, retiredKey)
       val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
-      actual should contain("ideal-1")
+      actual should contain(ideal1)
     }
 
     it should s"return an ideally-aged key when it's the only one to exist (withinLock=$withinLock)" in {
-      val idealKey = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 10), "ideal-1", ServiceAccountKeyId("ideal-1"))
+      val idealKey = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 10), ideal1, ServiceAccountKeyId(ideal1))
 
       val input = List(idealKey)
       val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
-      actual should contain("ideal-1")
+      actual should contain(ideal1)
     }
 
     it should s"return the newest of multiple ideal keys (withinLock=$withinLock)" in {
-      val nascentKey = new CachedKey(Instant.now.minusSeconds(10), "value", ServiceAccountKeyId("nascent-1"))
-      val idealKey1 = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 10), "ideal-1", ServiceAccountKeyId("ideal-1"))
-      val idealKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 20), "ideal-2", ServiceAccountKeyId("ideal-2"))
-      val idealKey3 = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 30), "ideal-3", ServiceAccountKeyId("ideal-3"))
-      val retiredKey = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), "retired-1", ServiceAccountKeyId("retired-1"))
+      val nascentKey = new CachedKey(Instant.now.minusSeconds(10), "value", ServiceAccountKeyId(nascent1))
+      val idealKey1 = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 10), ideal1, ServiceAccountKeyId(ideal1))
+      val idealKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 20), ideal2, ServiceAccountKeyId(ideal2))
+      val idealKey3 = new CachedKey(Instant.now.minusSeconds(idealSecondsStart + 30), ideal3, ServiceAccountKeyId(ideal3))
+      val retiredKey = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), retired1, ServiceAccountKeyId(retired1))
 
       val input = List(nascentKey, idealKey3, idealKey2, idealKey1, retiredKey)
       val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
-      actual should contain("ideal-1")
+      actual should contain(ideal1)
     }
 
     it should s"return the newest retired key when only retired and nascent keys exist (withinLock=$withinLock)" in {
-      val nascentKey1 = new CachedKey(Instant.now.minusSeconds(10), "nascent-1", ServiceAccountKeyId("nascent-1"))
-      val nascentKey2 = new CachedKey(Instant.now.minusSeconds(20), "nascent-2", ServiceAccountKeyId("nascent-2"))
-      val retiredKey1 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), "retired-1", ServiceAccountKeyId("retired-1"))
-      val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), "retired-2", ServiceAccountKeyId("retired-2"))
+      val nascentKey1 = new CachedKey(Instant.now.minusSeconds(10), nascent1, ServiceAccountKeyId(nascent1))
+      val nascentKey2 = new CachedKey(Instant.now.minusSeconds(20), nascent2, ServiceAccountKeyId(nascent2))
+      val retiredKey1 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), retired1, ServiceAccountKeyId(retired1))
+      val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), retired2, ServiceAccountKeyId(retired2))
 
       val input = List(retiredKey2, nascentKey2, retiredKey1, nascentKey1)
       val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
-      actual should contain("retired-1")
+      actual should contain(retired1)
     }
 
     it should s"return the oldest nascent key when only nascent keys exist (withinLock=$withinLock)" in {
-      val nascentKey1 = new CachedKey(Instant.now.minusSeconds(10), "nascent-1", ServiceAccountKeyId("nascent-1"))
-      val nascentKey2 = new CachedKey(Instant.now.minusSeconds(20), "nascent-2", ServiceAccountKeyId("nascent-2"))
+      val nascentKey1 = new CachedKey(Instant.now.minusSeconds(10), nascent1, ServiceAccountKeyId(nascent1))
+      val nascentKey2 = new CachedKey(Instant.now.minusSeconds(20), nascent2, ServiceAccountKeyId(nascent2))
 
       val input = List(nascentKey2, nascentKey1)
       val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = withinLock).unsafeRunSync()
-      actual should contain("nascent-2")
+      actual should contain(nascent2)
     }
   }
 
@@ -118,8 +126,8 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers with BeforeAndAft
 
   it should "return None when only retired keys exist" in {
     // this case triggers creation of a new key, so it returns None when not within a lock
-    val retiredKey1 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), "retired-1", ServiceAccountKeyId("retired-1"))
-    val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), "retired-2", ServiceAccountKeyId("retired-2"))
+    val retiredKey1 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), retired1, ServiceAccountKeyId(retired1))
+    val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), retired2, ServiceAccountKeyId(retired2))
 
     val input = List(retiredKey2, retiredKey1)
     val actual = newKeyCache().searchCachedKeys(pet, input, withinLock = false).unsafeRunSync()
@@ -162,12 +170,12 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers with BeforeAndAft
       .createServiceAccountKey(any[GoogleProject], any[WorkbenchEmail])
 
     // this case triggers creation of a new key, so it returns None when not within a lock
-    val retiredKey1 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), "retired-1", ServiceAccountKeyId("retired-1"))
-    val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), "retired-2", ServiceAccountKeyId("retired-2"))
+    val retiredKey1 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 10), retired1, ServiceAccountKeyId(retired1))
+    val retiredKey2 = new CachedKey(Instant.now.minusSeconds(idealSecondsEnd + 20), retired2, ServiceAccountKeyId(retired2))
 
     val input = List(retiredKey2, retiredKey1)
     val actual = keyCache.searchCachedKeys(pet, input, withinLock = true).unsafeRunSync()
-    actual should contain("retired-1")
+    actual should contain(retired1)
     Mockito
       .verify(mockIamDao, times(1))
       .createServiceAccountKey(pet.id.project, pet.serviceAccount.email)
