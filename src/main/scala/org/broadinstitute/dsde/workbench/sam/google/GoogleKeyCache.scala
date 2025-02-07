@@ -278,7 +278,7 @@ class GoogleKeyCache(
       logger.info(
         s"cleanupKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is reaping ${toDelete.size} keys due to quota"
       )
-      toDelete.parTraverse(cachedKey => removeKey(pet, cachedKey.keyId))
+      toDelete.traverse(cachedKey => removeKey(pet, cachedKey.keyId))
     } else {
       IO.unit
     }
@@ -291,7 +291,7 @@ class GoogleKeyCache(
       logger.info(
         s"cleanupKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is reaping ${unknownKeyIds.size} orphaned keys"
       )
-      unknownKeyIds.toList.parTraverse(keyId => IO.fromFuture(IO(googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId))))
+      unknownKeyIds.toList.traverse(keyId => IO.fromFuture(IO(googleIamDAO.removeServiceAccountKey(pet.id.project, pet.serviceAccount.email, keyId))))
     } else {
       IO.unit
     }
