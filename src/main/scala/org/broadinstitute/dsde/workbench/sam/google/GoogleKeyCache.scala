@@ -97,21 +97,28 @@ class GoogleKeyCache(
   /** Retrieve a key for this pet, creating keys as necessary.
     */
   override def getKey(pet: PetServiceAccount): IO[String] = {
-    def maybeCreateKey(withinLock: Boolean, fallback: () => IO[String]): IO[String] =
-      for {
-        maybeActiveKey <- findActiveKey(pet, withinLock)
-        activeKey <- maybeActiveKey match {
-          case Some(existingActiveKey) => IO.pure(existingActiveKey)
-          case None => fallback()
-        }
-      } yield activeKey
-
-    def failed(): IO[String] =
-      throw new WorkbenchException("Could not create or retrieve key")
-
     // 5 minute lock timeout chosen to match how long key creation polling can take
+    // TODO CORE-278: when we remove polling from workbench-libs, turn this lock time back down
     val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 5 minutes)
-    maybeCreateKey(withinLock = false, () => distributedLock.withLock(lockDetails).use(_ => maybeCreateKey(withinLock = true, () => failed())))
+
+    for {
+      // try to find a key using read-only logic by specifying withinLock = false
+      maybeActiveKey <- findActiveKey(pet, withinLock = false)
+      activeKey <- maybeActiveKey match {
+        case Some(key) => IO.pure(key)
+        case None =>
+          // obtain a lock, then try again to find a key, allowing key creation by specifying withinLock = true
+          distributedLock
+            .withLock(lockDetails)
+            .use(_ => findActiveKey(pet, withinLock = true).attempt)
+            .map {
+              case Right(Some(key)) => key
+              case Right(None) => throw new WorkbenchException("Could not create or retrieve key: unexpected problem")
+              case Left(t) =>
+                throw new WorkbenchException(s"Could not create or retrieve key: ${t.getMessage}")
+            }
+      }
+    } yield activeKey
   }
 
   /** List all cached keys from the Google bucket for this pet.
