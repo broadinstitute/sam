@@ -143,7 +143,7 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers with BeforeAndAft
 
   behavior of "GoogleKeyCache.searchCachedKeys(), when within a lock"
 
-  it should "return None when only retired keys exist" in {
+  it should "return a retired key and trigger creation of a new key when only retired keys exist" in {
     val mockIamDao = mock[GoogleIamDAO]
     val mockKeyDataString = s"abcdefg:${System.currentTimeMillis}${Random.nextLong()}"
     val mockKeyData = ServiceAccountPrivateKeyData(
