@@ -178,13 +178,13 @@ class GoogleKeyCache(
       newestOf(idealKeys)
     } else if (nascentKeys.nonEmpty && retiredKeys.isEmpty) {
       // if any nascent keys exist but no retired keys exist, return the oldest nascent key
-      logger.warn(
+      logger.info(
         s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a nascent key"
       )
       oldestOf(nascentKeys)
     } else if (nascentKeys.nonEmpty && retiredKeys.nonEmpty) {
       // if both nascent and retired keys exist, return the newest retired key
-      logger.warn(
+      logger.info(
         s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a retired key; nascent keys exist"
       )
       newestOf(retiredKeys)
@@ -198,7 +198,7 @@ class GoogleKeyCache(
         _ <- cleanupAndCreateKey(pet, keysInCache)
         retiredKey <- newestOf(retiredKeys)
       } yield {
-        logger.warn(
+        logger.info(
           s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a retired key; no nascent keys exist"
         )
         retiredKey
@@ -208,7 +208,7 @@ class GoogleKeyCache(
       for {
         newKey <- cleanupAndCreateKey(pet, keysInCache)
       } yield {
-        logger.warn(
+        logger.info(
           s"searchCachedKeys: ${pet.id.project.value}-${pet.serviceAccount.subjectId.value} is using a just-created key"
         )
         Option(newKey)
