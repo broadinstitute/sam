@@ -732,6 +732,48 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
     }
   }
 
+  override def listGroupsContributingToMostMemberships(
+      samUser: SamUser,
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[Map[WorkbenchGroupIdentity, Int]] = if (limit <= 0) {
+    IO.pure(Map.empty)
+  } else {
+    readOnlyTransaction("listGroupsContributingToMostMemberships", samRequestContext) { implicit session =>
+      val f = GroupMemberFlatTable.syntax("f")
+      val g = GroupTable.syntax("g")
+      val p = PolicyTable.syntax("p")
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      val query = samsql"""with group_counts as (
+                            select ${f.lastGroupMembershipElement} as group_id, count(${f.groupId}) AS membership_count
+                            from ${GroupMemberFlatTable as f}
+                            join ${GroupTable as g} on ${f.groupId} = ${g.id}
+                            where ${g.synchronizedDate} is not null
+                            and ${f.memberUserId} = ${samUser.id}
+                            group by ${f.lastGroupMembershipElement}
+                            order by membership_count desc
+                            limit $limit
+                            )
+                            select gc.membership_count, ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+                            from group_counts gc
+                            join ${GroupTable as g} on gc.group_id = ${g.id}
+                            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+                            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+                            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                            """
+
+      query
+        .map { rs =>
+          resultSetToGroupIdentity(rs, g, p, r, rt) -> rs.int("membership_count")
+        }
+        .list()
+        .apply()
+        .toMap
+    }
+  }
+
   override def countDirectSynchronizedGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
     readOnlyTransaction("countDirectSynchronizedGroupMemberships", samRequestContext) { implicit session =>
       val query = samsql"""select count(distinct g.id) directMembershipCount

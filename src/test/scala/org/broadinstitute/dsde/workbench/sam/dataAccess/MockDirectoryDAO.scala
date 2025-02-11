@@ -520,4 +520,10 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedResourceId]] =
     IO.pure(userFavoriteResources.getOrElse(userId, Set.empty).filter(_.resourceTypeName == resourceTypeName))
+
+  override def listGroupsContributingToMostMemberships(
+      samUser: SamUser,
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[Map[WorkbenchGroupIdentity, Int]] = ???
 }
