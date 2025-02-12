@@ -97,9 +97,7 @@ class GoogleKeyCache(
   /** Retrieve a key for this pet, creating keys as necessary.
     */
   override def getKey(pet: PetServiceAccount): IO[String] = {
-    // 5 minute lock timeout chosen to match how long key creation polling can take
-    // TODO CORE-278: when we remove polling from workbench-libs, turn this lock time back down
-    val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 5 minutes)
+    val lockDetails = LockDetails(s"${pet.id.project.value}-getKey", pet.serviceAccount.subjectId.value, 20 seconds)
 
     for {
       // try to find a key using read-only logic by specifying withinLock = false
