@@ -3427,6 +3427,14 @@ paths:
         - Users
       summary: Gets a combined SamUser, attributes, allowances, terms of service, enterprise features state of the user, used to reduce api calls.
       operationId: getSamUserCombinedState
+      parameters:
+        - name: groupsContributingToMostMembershipsLimit
+          in: query
+          description: The number of groups to return that contribute to the most google group memberships. Default is 0.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
       responses:
         200:
           description: user exists

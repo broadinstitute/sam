@@ -80,8 +80,10 @@ trait UserRoutesV2 extends SamUserDirectives with SamRequestContextDirectives wi
                 val samRequestContext = samRequestContextWithoutUser.copy(samUser = Some(samUser))
                 pathEndOrSingleSlash {
                   get {
-                    complete {
-                      userService.getSamUserCombinedState(samUser, samRequestContext, resourceService)
+                    parameters("groupsContributingToMostMembershipsLimit".as[Int].?) { topGroupsLimit =>
+                      complete {
+                        userService.getSamUserCombinedState(samUser, topGroupsLimit.getOrElse(0), samRequestContext, resourceService)
+                      }
                     }
                   }
                 }

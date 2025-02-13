@@ -53,8 +53,10 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           requireAdminResourceAction(SamResourceActions.adminReadSummaryInformation, userType, samUser, samRequestContext) {
             val workbenchEmail = WorkbenchEmail(email)
             getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
-              complete {
-                userService.getSamUserCombinedState(workbenchEmail, samRequestContext, resourceService)
+              parameters("groupsContributingToMostMembershipsLimit".as[Int].?) { topGroupsLimit =>
+                complete {
+                  userService.getSamUserCombinedState(workbenchEmail, samRequestContext, resourceService, topGroupsLimit.getOrElse(0))
+                }
               }
             }
           }

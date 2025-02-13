@@ -1,6 +1,8 @@
 package org.broadinstitute.dsde.workbench.sam.model.api
 
-import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, TermsOfServiceDetails}
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
+import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedPolicyId, FullyQualifiedResourceId, PolicyIdentifiers, TermsOfServiceDetails}
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 import org.broadinstitute.dsde.workbench.sam.model.api.GroupMembershipCounts.GroupMembershipCountsFormat
@@ -9,8 +11,27 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamUserAttributes.SamUser
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 
 object SamUserCombinedStateResponse {
-  implicit val SamUserResponseFormat: RootJsonFormat[SamUserCombinedStateResponse] = jsonFormat7(SamUserCombinedStateResponse.apply)
+  implicit val GroupMembershipCountFormat: RootJsonFormat[GroupMembershipCount] = jsonFormat3(GroupMembershipCount.apply)
+  implicit val SamUserResponseFormat: RootJsonFormat[SamUserCombinedStateResponse] = jsonFormat8(SamUserCombinedStateResponse.apply)
 }
+
+final case class GroupMembershipCount(
+    group: Option[WorkbenchGroupName],
+    policy: Option[PolicyIdentifiers],
+    attributedMembershipCount: Int
+)
+object GroupMembershipCount {
+  def apply(group: WorkbenchGroupName, attributedMembershipCount: Int): GroupMembershipCount =
+    GroupMembershipCount(Option(group), None, attributedMembershipCount)
+
+  def apply(policy: FullyQualifiedPolicyId, attributedMembershipCount: Int): GroupMembershipCount =
+    GroupMembershipCount(
+      None,
+      Option(PolicyIdentifiers(policy.accessPolicyName, policy.resource.resourceTypeName, policy.resource.resourceId)),
+      attributedMembershipCount
+    )
+}
+
 final case class SamUserCombinedStateResponse(
     samUser: SamUser,
     allowances: SamUserAllowances,
@@ -18,5 +39,6 @@ final case class SamUserCombinedStateResponse(
     termsOfServiceDetails: TermsOfServiceDetails,
     groupMembershipCounts: GroupMembershipCounts,
     additionalDetails: Map[String, JsValue],
-    favoriteResources: Set[FullyQualifiedResourceId]
+    favoriteResources: Set[FullyQualifiedResourceId],
+    groupsContributingToMostMemberships: Option[List[GroupMembershipCount]]
 )
