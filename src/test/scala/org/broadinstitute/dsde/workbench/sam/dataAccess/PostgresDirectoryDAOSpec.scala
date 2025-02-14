@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, GroupMembershipCount, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.Inside.inside
 import org.scalatest.freespec.AnyFreeSpec
@@ -2259,11 +2259,13 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.addGroupMember(testGroups.last._1.id, otherUser.id, samRequestContext).unsafeRunSync()
 
         val result = dao.listGroupsContributingToMostMemberships(defaultUser, limit, samRequestContext).unsafeRunSync()
-        result should be(testGroups.drop(drop).map { case (group, index) => group.id -> (1 + index * multiplier) }.toMap)
+        result.reverse should contain theSameElementsInOrderAs testGroups.drop(drop).map { case (group, index) =>
+          GroupMembershipCount(group.id, 1 + index * multiplier)
+        }
 
         // check that another user gives different results
         val otherResult = dao.listGroupsContributingToMostMemberships(otherUser, limit, samRequestContext).unsafeRunSync()
-        otherResult should be(Map(testGroups.last._1.id -> (1 + (limit + drop) * multiplier)))
+        otherResult should be(List(GroupMembershipCount(testGroups.last._1.id, 1 + (limit + drop) * multiplier)))
       }
 
       "list policies and groups" in {
@@ -2282,7 +2284,7 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.updateSynchronizedDateAndVersion(group, samRequestContext).unsafeRunSync()
 
         val result = dao.listGroupsContributingToMostMemberships(defaultUser, 10, samRequestContext).unsafeRunSync()
-        result should be(Map(policy.id -> 1, group.id -> 1))
+        result should contain theSameElementsAs List(GroupMembershipCount(policy.id, 1), GroupMembershipCount(group.id, 1))
       }
 
       "ignores unsynchronized groups" in {
@@ -2297,10 +2299,10 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         val parentUuid = UUID.randomUUID().toString
         val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName(parentUuid), Set(leafGroup.id), WorkbenchEmail(parentUuid))
         dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
-        // not synchronized
+        // updateSynchronizedDateAndVersion not called
 
         val result = dao.listGroupsContributingToMostMemberships(defaultUser, 10, samRequestContext).unsafeRunSync()
-        result should be(Map(leafGroup.id -> 1))
+        result should be(List(GroupMembershipCount(leafGroup.id, 1)))
       }
     }
   }

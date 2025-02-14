@@ -24,7 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, GroupMembershipCount, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -736,8 +736,8 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       samUser: SamUser,
       limit: Int,
       samRequestContext: SamRequestContext
-  ): IO[Map[WorkbenchGroupIdentity, Int]] = if (limit <= 0) {
-    IO.pure(Map.empty)
+  ): IO[List[GroupMembershipCount]] = if (limit <= 0) {
+    IO.pure(List.empty)
   } else {
     readOnlyTransaction("listGroupsContributingToMostMemberships", samRequestContext) { implicit session =>
       val f = GroupMemberFlatTable.syntax("f")
@@ -762,15 +762,15 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                             left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
                             left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
                             left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                            order by gc.membership_count desc
                             """
 
       query
         .map { rs =>
-          resultSetToGroupIdentity(rs, g, p, r, rt) -> rs.int("membership_count")
+          GroupMembershipCount(resultSetToGroupIdentity(rs, g, p, r, rt), rs.int("membership_count"))
         }
         .list()
         .apply()
-        .toMap
     }
   }
 
