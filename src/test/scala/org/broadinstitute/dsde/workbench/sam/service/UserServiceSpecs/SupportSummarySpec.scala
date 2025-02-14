@@ -97,11 +97,11 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
       .when(directoryDAO)
       .countIndirectPublicGroupMemberships(any[SamUser], any[SamRequestContext])
     lenient()
-      .doReturn(IO.pure(Map(testGroupName -> 1, testPolicyId -> 2)))
+      .doReturn(IO.pure(List(GroupMembershipCount(testGroupName, 1), GroupMembershipCount(testPolicyId, 2))))
       .when(directoryDAO)
       .listGroupsContributingToMostMemberships(any[SamUser], any[Int], any[SamRequestContext])
     lenient()
-      .doReturn(IO.pure(Map.empty))
+      .doReturn(IO.pure(List.empty))
       .when(directoryDAO)
       .listGroupsContributingToMostMemberships(any[SamUser], ArgumentMatchers.eq(0), any[SamRequestContext])
 
