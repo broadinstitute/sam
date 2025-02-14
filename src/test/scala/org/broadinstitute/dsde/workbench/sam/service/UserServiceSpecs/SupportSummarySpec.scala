@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs
 
 import cats.effect.IO
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroupName, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.Generator
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, MockDirectoryDaoBuilder}
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
@@ -51,6 +51,12 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
     .withAcceptedStateForUser(testUser, isAccepted = true)
     .build
 
+  val testPolicyId: FullyQualifiedPolicyId = FullyQualifiedPolicyId(
+    FullyQualifiedResourceId(ResourceTypeName("rt"), ResourceId("rid")),
+    AccessPolicyName("policyName")
+  )
+  val testGroupName: WorkbenchGroupName = WorkbenchGroupName("group1")
+
   // configure mocks
   def setupMocks(): Unit = {
     // attributes
@@ -90,6 +96,14 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
       .doReturn(IO.pure(101))
       .when(directoryDAO)
       .countIndirectPublicGroupMemberships(any[SamUser], any[SamRequestContext])
+    lenient()
+      .doReturn(IO.pure(Map(testGroupName -> 1, testPolicyId -> 2)))
+      .when(directoryDAO)
+      .listGroupsContributingToMostMemberships(any[SamUser], any[Int], any[SamRequestContext])
+    lenient()
+      .doReturn(IO.pure(Map.empty))
+      .when(directoryDAO)
+      .listGroupsContributingToMostMemberships(any[SamUser], ArgumentMatchers.eq(0), any[SamRequestContext])
 
     // TOS
     lenient()
@@ -110,24 +124,20 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         TermsOfServiceDetails(Option("v1"), Option(nowInstant), permitsSystemUsage = true, isCurrentVersion = true),
         GroupMembershipCounts(7, 42, 101),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
-        favoriteResources
+        favoriteResources,
+        Option(
+          List(
+            GroupMembershipCount(testGroupName, 1),
+            GroupMembershipCount(testPolicyId, 2)
+          )
+        )
       )
 
       // Act
-      val response = runAndWait(userService.getSamUserCombinedState(testUser, samRequestContext, mockResourceService))
+      val response = runAndWait(userService.getSamUserCombinedState(testUser, 1, samRequestContext, mockResourceService))
 
       // Assert
-      response.samUser should be(testUser)
-      response.allowances should be(expected.allowances)
-      response.attributes should be(expected.attributes)
-      response.termsOfServiceDetails.acceptedOn.get should be(expected.termsOfServiceDetails.acceptedOn.get)
-      response.termsOfServiceDetails.isCurrentVersion should be(expected.termsOfServiceDetails.isCurrentVersion)
-      response.termsOfServiceDetails.permitsSystemUsage should be(expected.termsOfServiceDetails.permitsSystemUsage)
-      response.termsOfServiceDetails.latestAcceptedVersion should be(expected.termsOfServiceDetails.latestAcceptedVersion)
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
-      response.favoriteResources should be(favoriteResources)
-      response.groupMembershipCounts.directSynchronized should be(7)
-      response.groupMembershipCounts.totalSynchronized should be(42)
+      response should be(expected)
     }
     it("return null attributes if the user has no attributes") {
       // Arrange
@@ -145,24 +155,15 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         TermsOfServiceDetails(Option("v1"), Option(nowInstant), permitsSystemUsage = true, isCurrentVersion = true),
         GroupMembershipCounts(7, 42, 101),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
-        favoriteResources
+        favoriteResources,
+        None
       )
 
       // Act
-      val response = runAndWait(userService.getSamUserCombinedState(testUser, samRequestContext, mockResourceService))
+      val response = runAndWait(userService.getSamUserCombinedState(testUser, 0, samRequestContext, mockResourceService))
 
       // Assert
-      response.samUser should be(testUser)
-      response.allowances should be(expected.allowances)
-      response.attributes should be(None)
-      response.termsOfServiceDetails.acceptedOn.get should be(expected.termsOfServiceDetails.acceptedOn.get)
-      response.termsOfServiceDetails.isCurrentVersion should be(expected.termsOfServiceDetails.isCurrentVersion)
-      response.termsOfServiceDetails.permitsSystemUsage should be(expected.termsOfServiceDetails.permitsSystemUsage)
-      response.termsOfServiceDetails.latestAcceptedVersion should be(expected.termsOfServiceDetails.latestAcceptedVersion)
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
-      response.favoriteResources should be(favoriteResources)
-      response.groupMembershipCounts.directSynchronized should be(7)
-      response.groupMembershipCounts.totalSynchronized should be(42)
+      response should be(expected)
     }
     it("return falsy terms of service if the user has no tos history") {
       // Arrange
@@ -182,24 +183,15 @@ class SupportSummarySpec extends UserServiceTestTraits with TimeMatchers {
         TermsOfServiceDetails(None, None, permitsSystemUsage = false, isCurrentVersion = false),
         GroupMembershipCounts(7, 42, 101),
         Map("enterpriseFeatures" -> FilteredResourcesFlat(Set(enterpriseFeature)).toJson),
-        favoriteResources
+        favoriteResources,
+        None
       )
 
       // Act
-      val response = runAndWait(userService.getSamUserCombinedState(testUser, samRequestContext, mockResourceService))
+      val response = runAndWait(userService.getSamUserCombinedState(testUser, 0, samRequestContext, mockResourceService))
 
       // Assert
-      response.samUser should be(testUser)
-      response.allowances should be(expected.allowances)
-      response.attributes should be(expected.attributes)
-      response.termsOfServiceDetails.acceptedOn should be(None)
-      response.termsOfServiceDetails.isCurrentVersion should be(expected.termsOfServiceDetails.isCurrentVersion)
-      response.termsOfServiceDetails.permitsSystemUsage should be(expected.termsOfServiceDetails.permitsSystemUsage)
-      response.termsOfServiceDetails.latestAcceptedVersion should be(expected.termsOfServiceDetails.latestAcceptedVersion)
-      response.additionalDetails should be(Map("enterpriseFeatures" -> filteredResourcesFlat.toJson))
-      response.favoriteResources should be(favoriteResources)
-      response.groupMembershipCounts.directSynchronized should be(7)
-      response.groupMembershipCounts.totalSynchronized should be(42)
+      response should be(expected)
     }
   }
 }
