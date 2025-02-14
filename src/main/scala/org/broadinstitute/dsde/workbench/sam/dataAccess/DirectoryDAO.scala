@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   PetManagedIdentity,
   PetManagedIdentityId
 }
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, GroupMembershipCount, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, ResourceTypeName, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -217,5 +217,5 @@ trait DirectoryDAO {
     * @return
     *   a map of group to membership count
     */
-  def listGroupsContributingToMostMemberships(samUser: SamUser, limit: Int, samRequestContext: SamRequestContext): IO[Map[WorkbenchGroupIdentity, Int]]
+  def listGroupsContributingToMostMemberships(samUser: SamUser, limit: Int, samRequestContext: SamRequestContext): IO[List[GroupMembershipCount]]
 }

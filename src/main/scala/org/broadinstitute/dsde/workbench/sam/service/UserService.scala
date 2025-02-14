@@ -520,7 +520,7 @@ class UserService(
   def countIndirectPublicGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
     directoryDAO.countIndirectPublicGroupMemberships(samUser, samRequestContext)
 
-  def listGroupsContributingToMostMemberships(samUser: SamUser, limit: Int, samRequestContext: SamRequestContext): IO[Map[WorkbenchGroupIdentity, Int]] =
+  def listGroupsContributingToMostMemberships(samUser: SamUser, limit: Int, samRequestContext: SamRequestContext): IO[List[GroupMembershipCount]] =
     directoryDAO.listGroupsContributingToMostMemberships(samUser, limit, samRequestContext)
 
   def getSamUserCombinedState(
@@ -573,7 +573,8 @@ class UserService(
       ),
       Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
       favoriteResources,
-      topGroups.map { case (group, count) => GroupMembershipCount(group, count) }.toList match {
+      topGroups match {
+        // we want to omit the topGroups field if it's empty so that it does not seem like there are no groups
         case Nil => None
         case list => Option(list)
       }
