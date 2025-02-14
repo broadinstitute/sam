@@ -1,7 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.model.api
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
-import org.broadinstitute.dsde.workbench.model.WorkbenchGroupName
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroupIdentity, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedPolicyId, FullyQualifiedResourceId, PolicyIdentifiers, TermsOfServiceDetails}
 import spray.json.DefaultJsonProtocol._
 import spray.json._
@@ -21,15 +21,16 @@ final case class GroupMembershipCount(
     attributedMembershipCount: Int
 )
 object GroupMembershipCount {
-  def apply(group: WorkbenchGroupName, attributedMembershipCount: Int): GroupMembershipCount =
-    GroupMembershipCount(Option(group), None, attributedMembershipCount)
-
-  def apply(policy: FullyQualifiedPolicyId, attributedMembershipCount: Int): GroupMembershipCount =
-    GroupMembershipCount(
-      None,
-      Option(PolicyIdentifiers(policy.accessPolicyName, policy.resource.resourceTypeName, policy.resource.resourceId)),
-      attributedMembershipCount
-    )
+  def apply(group: WorkbenchGroupIdentity, attributedMembershipCount: Int): GroupMembershipCount =
+    group match {
+      case groupName: WorkbenchGroupName => GroupMembershipCount(Option(groupName), None, attributedMembershipCount)
+      case policyId: FullyQualifiedPolicyId =>
+        GroupMembershipCount(
+          None,
+          Option(PolicyIdentifiers(policyId.accessPolicyName, policyId.resource.resourceTypeName, policyId.resource.resourceId)),
+          attributedMembershipCount
+        )
+    }
 }
 
 final case class SamUserCombinedStateResponse(

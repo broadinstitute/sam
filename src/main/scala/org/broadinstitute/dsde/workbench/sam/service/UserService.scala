@@ -525,9 +525,9 @@ class UserService(
 
   def getSamUserCombinedState(
       workbenchEmail: WorkbenchEmail,
+      topGroupsLimit: Int,
       samRequestContext: SamRequestContext,
-      resourceService: ResourceService,
-      topGroupsLimit: Int
+      resourceService: ResourceService
   ): IO[SamUserCombinedStateResponse] =
     for {
       samUser <- OptionT(getUserFromEmail(workbenchEmail, samRequestContext))
@@ -573,10 +573,7 @@ class UserService(
       ),
       Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
       favoriteResources,
-      topGroups.map {
-        case (group: WorkbenchGroupName, count) => GroupMembershipCount(group, count)
-        case (policy: FullyQualifiedPolicyId, count) => GroupMembershipCount(policy, count)
-      }.toList match {
+      topGroups.map { case (group, count) => GroupMembershipCount(group, count) }.toList match {
         case Nil => None
         case list => Option(list)
       }

@@ -55,7 +55,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
             getWithTelemetry(samRequestContext, emailParam(workbenchEmail)) {
               parameters("groupsContributingToMostMembershipsLimit".as[Int].?) { topGroupsLimit =>
                 complete {
-                  userService.getSamUserCombinedState(workbenchEmail, samRequestContext, resourceService, topGroupsLimit.getOrElse(0))
+                  userService.getSamUserCombinedState(workbenchEmail, topGroupsLimit.getOrElse(0), samRequestContext, resourceService)
                 }
               }
             }
