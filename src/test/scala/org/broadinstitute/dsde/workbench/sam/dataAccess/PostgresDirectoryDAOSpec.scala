@@ -12,9 +12,10 @@ import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
-import org.broadinstitute.dsde.workbench.sam.{Generator, RetryableAnyFreeSpec, TestSupport}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, GroupMembershipCount, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.Inside.inside
+import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterEach, OptionValues}
 
@@ -23,7 +24,7 @@ import java.time.temporal.ChronoUnit
 import java.util.{Date, UUID}
 import scala.concurrent.duration._
 
-class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
+class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TimeMatchers with OptionValues {
   val dao = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   val policyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
   val azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
@@ -2220,6 +2221,88 @@ class PostgresDirectoryDAOSpec extends RetryableAnyFreeSpec with Matchers with B
 
         val loadedFavoriteResources = dao.getUserFavoriteResourcesOfType(user.id, otherResourceTypeName, samRequestContext).unsafeRunSync()
         loadedFavoriteResources should contain theSameElementsAs Set(otherResource.fullyQualifiedId)
+      }
+    }
+
+    "listGroupsContributingToMostMemberships" - {
+      "list groups contributing to most memberships" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val otherUser = Generator.genWorkbenchUserBoth.sample.get
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+        dao.createUser(otherUser, samRequestContext).unsafeRunSync()
+
+        /*
+        create `drop` + `limit` groups each containing defaultUser, these are leaf groups
+        for each leaf group, create `multiplier` * `index` parent groups, these are parent groups
+        the result of the list call using `limit` should exclude the lowest `drop` indexed groups
+        the counts for the remaining groups should be 1 (for the leaf group) + `index` * `multiplier` (for the parent groups)
+         */
+        val multiplier = 5
+        val limit = 3
+        val drop = 3
+        val testGroups = for {
+          index <- 1 to limit + drop
+        } yield {
+          val leafUuid = UUID.randomUUID().toString
+          val leafGroup = BasicWorkbenchGroup(WorkbenchGroupName(leafUuid), Set(defaultUser.id), WorkbenchEmail(leafUuid))
+          dao.createGroup(leafGroup, samRequestContext = samRequestContext).unsafeRunSync()
+          dao.updateSynchronizedDateAndVersion(leafGroup, samRequestContext).unsafeRunSync()
+          for (_ <- 1 to multiplier * index) {
+            val parentUuid = UUID.randomUUID().toString
+            val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName(parentUuid), Set(leafGroup.id), WorkbenchEmail(parentUuid))
+            dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+            dao.updateSynchronizedDateAndVersion(parentGroup, samRequestContext).unsafeRunSync()
+          }
+          (leafGroup, index)
+        }
+
+        dao.addGroupMember(testGroups.last._1.id, otherUser.id, samRequestContext).unsafeRunSync()
+
+        val result = dao.listGroupsContributingToMostMemberships(defaultUser, limit, samRequestContext).unsafeRunSync()
+        result.reverse should contain theSameElementsInOrderAs testGroups.drop(drop).map { case (group, index) =>
+          GroupMembershipCount(group.id, 1 + index * multiplier)
+        }
+
+        // check that another user gives different results
+        val otherResult = dao.listGroupsContributingToMostMemberships(otherUser, limit, samRequestContext).unsafeRunSync()
+        otherResult should be(List(GroupMembershipCount(testGroups.last._1.id, 1 + (limit + drop) * multiplier)))
+      }
+
+      "list policies and groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        val policy = defaultPolicy.copy(members = Set(defaultUser.id))
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+        policyDAO.createPolicy(policy, samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(policy, samRequestContext).unsafeRunSync()
+
+        val groupUuid = UUID.randomUUID().toString
+        val group = BasicWorkbenchGroup(WorkbenchGroupName(groupUuid), Set(defaultUser.id), WorkbenchEmail(groupUuid))
+        dao.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(group, samRequestContext).unsafeRunSync()
+
+        val result = dao.listGroupsContributingToMostMemberships(defaultUser, 10, samRequestContext).unsafeRunSync()
+        result should contain theSameElementsAs List(GroupMembershipCount(policy.id, 1), GroupMembershipCount(group.id, 1))
+      }
+
+      "ignores unsynchronized groups" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        dao.createUser(defaultUser, samRequestContext).unsafeRunSync()
+
+        val leafUuid = UUID.randomUUID().toString
+        val leafGroup = BasicWorkbenchGroup(WorkbenchGroupName(leafUuid), Set(defaultUser.id), WorkbenchEmail(leafUuid))
+        dao.createGroup(leafGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        dao.updateSynchronizedDateAndVersion(leafGroup, samRequestContext).unsafeRunSync()
+
+        val parentUuid = UUID.randomUUID().toString
+        val parentGroup = BasicWorkbenchGroup(WorkbenchGroupName(parentUuid), Set(leafGroup.id), WorkbenchEmail(parentUuid))
+        dao.createGroup(parentGroup, samRequestContext = samRequestContext).unsafeRunSync()
+        // updateSynchronizedDateAndVersion not called
+
+        val result = dao.listGroupsContributingToMostMemberships(defaultUser, 10, samRequestContext).unsafeRunSync()
+        result should be(List(GroupMembershipCount(leafGroup.id, 1)))
       }
     }
   }

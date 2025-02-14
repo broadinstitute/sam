@@ -15,7 +15,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   PetManagedIdentityId
 }
 import org.broadinstitute.dsde.workbench.sam.db.tables.TosTable
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, GroupMembershipCount, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.model.{AccessPolicy, BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, ResourceTypeName, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -520,4 +520,10 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedResourceId]] =
     IO.pure(userFavoriteResources.getOrElse(userId, Set.empty).filter(_.resourceTypeName == resourceTypeName))
+
+  override def listGroupsContributingToMostMemberships(
+      samUser: SamUser,
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[List[GroupMembershipCount]] = ???
 }

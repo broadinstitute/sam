@@ -24,7 +24,7 @@ import org.broadinstitute.dsde.workbench.sam.db.SamTypeBinders._
 import org.broadinstitute.dsde.workbench.sam.db._
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, GroupMembershipCount, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -729,6 +729,48 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         and ${f.memberUserId} is not null"""
 
       query.map(_.get[WorkbenchUserId](f.resultName.memberUserId)).list().apply().toSet
+    }
+  }
+
+  override def listGroupsContributingToMostMemberships(
+      samUser: SamUser,
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[List[GroupMembershipCount]] = if (limit <= 0) {
+    IO.pure(List.empty)
+  } else {
+    readOnlyTransaction("listGroupsContributingToMostMemberships", samRequestContext) { implicit session =>
+      val f = GroupMemberFlatTable.syntax("f")
+      val g = GroupTable.syntax("g")
+      val p = PolicyTable.syntax("p")
+      val r = ResourceTable.syntax("r")
+      val rt = ResourceTypeTable.syntax("rt")
+
+      val query = samsql"""with group_counts as (
+                            select ${f.lastGroupMembershipElement} as group_id, count(${f.groupId}) AS membership_count
+                            from ${GroupMemberFlatTable as f}
+                            join ${GroupTable as g} on ${f.groupId} = ${g.id}
+                            where ${g.synchronizedDate} is not null
+                            and ${f.memberUserId} = ${samUser.id}
+                            group by ${f.lastGroupMembershipElement}
+                            order by membership_count desc
+                            limit $limit
+                            )
+                            select gc.membership_count, ${g.result.name}, ${p.result.name}, ${r.result.name}, ${rt.result.name}
+                            from group_counts gc
+                            join ${GroupTable as g} on gc.group_id = ${g.id}
+                            left join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+                            left join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+                            left join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                            order by gc.membership_count desc
+                            """
+
+      query
+        .map { rs =>
+          GroupMembershipCount(resultSetToGroupIdentity(rs, g, p, r, rt), rs.int("membership_count"))
+        }
+        .list()
+        .apply()
     }
   }
 

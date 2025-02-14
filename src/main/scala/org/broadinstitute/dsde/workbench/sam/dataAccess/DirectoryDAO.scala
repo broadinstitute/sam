@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.sam.azure.{
   PetManagedIdentity,
   PetManagedIdentityId
 }
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, GroupMembershipCount, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, ResourceTypeName, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
@@ -207,4 +207,15 @@ trait DirectoryDAO {
       resourceTypeName: ResourceTypeName,
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedResourceId]]
+
+  /** List the top groups contributing to the most memberships for a user.
+    * @param samUser
+    *   the user to list groups for
+    * @param limit
+    *   the maximum number of groups to return
+    * @param samRequestContext
+    * @return
+    *   a map of group to membership count
+    */
+  def listGroupsContributingToMostMemberships(samUser: SamUser, limit: Int, samRequestContext: SamRequestContext): IO[List[GroupMembershipCount]]
 }

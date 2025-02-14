@@ -2,6 +2,7 @@ package org.broadinstitute.dsde.workbench.sam
 package service
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.OptionT
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.binary.Hex
@@ -519,24 +520,35 @@ class UserService(
   def countIndirectPublicGroupMemberships(samUser: SamUser, samRequestContext: SamRequestContext): IO[Int] =
     directoryDAO.countIndirectPublicGroupMemberships(samUser, samRequestContext)
 
+  def listGroupsContributingToMostMemberships(samUser: SamUser, limit: Int, samRequestContext: SamRequestContext): IO[List[GroupMembershipCount]] =
+    directoryDAO.listGroupsContributingToMostMemberships(samUser, limit, samRequestContext)
+
   def getSamUserCombinedState(
       workbenchEmail: WorkbenchEmail,
+      topGroupsLimit: Int,
       samRequestContext: SamRequestContext,
       resourceService: ResourceService
   ): IO[SamUserCombinedStateResponse] =
     for {
-      samUserOption <- getUserFromEmail(workbenchEmail, samRequestContext)
-      samUser = samUserOption.getOrElse(throw new WorkbenchException("user not found"))
-      combinedState <- getSamUserCombinedState(samUser, samRequestContext, resourceService)
+      samUser <- OptionT(getUserFromEmail(workbenchEmail, samRequestContext))
+        .orElseF(directoryDAO.loadUser(WorkbenchUserId(workbenchEmail.value), samRequestContext))
+        .getOrRaise(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, "user not found")))
+      combinedState <- getSamUserCombinedState(samUser, topGroupsLimit, samRequestContext, resourceService)
     } yield combinedState
 
-  def getSamUserCombinedState(samUser: SamUser, samRequestContext: SamRequestContext, resourceService: ResourceService): IO[SamUserCombinedStateResponse] =
+  def getSamUserCombinedState(
+      samUser: SamUser,
+      topGroupsLimit: Int,
+      samRequestContext: SamRequestContext,
+      resourceService: ResourceService
+  ): IO[SamUserCombinedStateResponse] =
     for {
       allowances <- getUserAllowances(samUser, samRequestContext)
       maybeAttributes <- getUserAttributes(samUser.id, samRequestContext)
       directGroupMemberships <- countDirectSynchronizedGroupMemberships(samUser, samRequestContext)
       indirectGroupMemberships <- countIndirectSynchronizedGroupMemberships(samUser, samRequestContext)
       indirectPublicMemberships <- countIndirectPublicGroupMemberships(samUser, samRequestContext)
+      topGroups <- listGroupsContributingToMostMemberships(samUser, topGroupsLimit, samRequestContext)
       termsOfServiceDetails <- tosService.getTermsOfServiceDetailsForUser(samUser.id, samRequestContext)
       enterpriseFeatures <- resourceService
         .listResourcesFlat(
@@ -560,7 +572,12 @@ class UserService(
         indirectPublic = indirectPublicMemberships
       ),
       Map("enterpriseFeatures" -> enterpriseFeatures.toJson),
-      favoriteResources
+      favoriteResources,
+      topGroups match {
+        // we want to omit the topGroups field if it's empty so that it does not seem like there are no groups
+        case Nil => None
+        case list => Option(list)
+      }
     )
 
 }
