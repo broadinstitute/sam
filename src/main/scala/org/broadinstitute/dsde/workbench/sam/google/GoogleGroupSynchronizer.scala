@@ -237,9 +237,17 @@ class GoogleGroupSynchronizer(
           case LoadResourceAuthDomainResult.Constrained(groups) =>
             // auth domain exists, need to calculate intersection
             val groupsIdentity: Set[WorkbenchGroupIdentity] = groups.toList.toSet
-            directoryDAO
-              .listIntersectionGroupUsers(groupsIdentity + policy.id, samRequestContext)
-              .map(_.map(_.asInstanceOf[WorkbenchSubject])) // Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
+            if (groupsIdentity.size == 1 && policy.members.contains(groupsIdentity.head)) {
+              // if there is only 1 group in the auth domain and the policy contains that group, then the intersection is just the group
+              // this is a short cut for large auth domains where the policy is also shared with the auth domain group
+              // which leads to synchronizing policy groups with thousands of members
+              IO.pure(groupsIdentity.asInstanceOf[Set[WorkbenchSubject]])
+            } else {
+              // otherwise calculate the intersection
+              directoryDAO
+                .listIntersectionGroupUsers(groupsIdentity + policy.id, samRequestContext)
+                .map(_.map(_.asInstanceOf[WorkbenchSubject])) // Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
+            }
           case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
             // auth domain does not exist, return policy members as is
             IO.pure(policy.members)
