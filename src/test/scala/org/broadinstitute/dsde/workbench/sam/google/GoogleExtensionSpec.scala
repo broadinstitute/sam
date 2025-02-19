@@ -1752,6 +1752,62 @@ class GoogleExtensionSpec(_system: ActorSystem)
     intersectionGroup shouldEqual Set.empty
   }
 
+  it should "return the group if the auth domain contains only the group and the policy also contains the group" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val (
+      dirDAO: DirectoryDAO,
+      ge: GoogleExtensions,
+      constrainableService: ResourceService,
+      managedGroupService: ManagedGroupService,
+      constrainableResourceType: ResourceType,
+      constrainableRole: ResourceRole,
+      synchronizer
+    ) = initPrivateTest
+
+    val inAuthDomainUser = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(inAuthDomainUser, samRequestContext).unsafeRunSync()
+
+    val managedGroupId = "fooGroup"
+    val groupName = WorkbenchGroupName(managedGroupId)
+    val groupResourceId = ResourceId(managedGroupId)
+    runAndWait(managedGroupService.createManagedGroup(groupResourceId, inAuthDomainUser, samRequestContext = samRequestContext))
+    val groupEmail = runAndWait(managedGroupService.loadManagedGroup(groupResourceId, samRequestContext)).get
+
+    val accessPolicyMap = Map(
+      AccessPolicyName(constrainableRole.roleName.value) -> AccessPolicyMembershipRequest(
+        Set(inAuthDomainUser.email),
+        constrainableRole.actions,
+        Set(constrainableRole.roleName),
+        None
+      )
+    )
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId("rid"),
+        accessPolicyMap,
+        Set(groupName),
+        None,
+        inAuthDomainUser.id,
+        samRequestContext
+      )
+    )
+
+    val accessPolicy = runAndWait(
+      constrainableService.overwritePolicy(
+        constrainableResourceType,
+        AccessPolicyName("ap"),
+        resource.fullyQualifiedId,
+        AccessPolicyMembershipRequest(Set(groupEmail, inAuthDomainUser.email), Set.empty, Set.empty, None),
+        samRequestContext
+      )
+    )
+
+    val intersectionGroup = synchronizer.calculateIntersectionGroup(resource.fullyQualifiedId, accessPolicy, samRequestContext).unsafeRunSync()
+    intersectionGroup shouldEqual Set(groupName)
+  }
+
   "isConstrainable" should "return true when the policy has constrainable actions and roles" in {
     assume(databaseEnabled, databaseEnabledClue)
 

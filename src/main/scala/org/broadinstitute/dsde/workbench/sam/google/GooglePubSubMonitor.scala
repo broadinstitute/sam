@@ -29,6 +29,7 @@ class GooglePubSubMonitor(
       FixedCredentialsProvider.create(ServiceAccountCredentials.fromStream(new FileInputStream(pathToSACreds.defaultServiceAccountJsonPath.asString)))
     )
     .setExecutorProvider(InstantiatingExecutorProvider.newBuilder.setExecutorThreadCount(config.workerCount).build)
+    .setMaxAckExtensionPeriodDuration(config.maxAckExtensionPeriod)
     .build()
 
   def startAndRegisterTermination()(implicit system: ActorSystem): IO[Unit] =

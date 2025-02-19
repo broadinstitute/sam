@@ -42,7 +42,8 @@ object GoogleServicesConfig {
       config.getString("pubSubProject"),
       config.getString("pubSubTopic"),
       config.getString("pubSubSubscription"),
-      config.getInt("workerCount")
+      config.getInt("workerCount"),
+      config.getDuration("maxAckExtensionPeriod")
     )
   }
   implicit val googleKeyCacheConfigReader: ValueReader[GoogleKeyCacheConfig] = ValueReader.relative { config =>
