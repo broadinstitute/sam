@@ -71,7 +71,7 @@ object Dependencies {
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.69.1"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
-  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20241206-2.0.0" excludeAll excludIoGrpc // force this version
+  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250224-2.0.0" excludeAll excludIoGrpc // force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %% "monocle-core" % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion
