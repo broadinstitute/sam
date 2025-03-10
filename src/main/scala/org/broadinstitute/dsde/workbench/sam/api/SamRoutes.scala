@@ -118,10 +118,10 @@ object SamRoutes {
     ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport =>
         Sentry.captureException(withErrorReport)
-        complete((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
+        complete((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport.copy(stackTrace = Seq())))
       case e: Throwable =>
         Sentry.captureException(e)
-        complete((StatusCodes.InternalServerError, ErrorReport(e)))
+        complete((StatusCodes.InternalServerError, ErrorReport(e).copy(stackTrace = Seq())))
     }
   }
 }
