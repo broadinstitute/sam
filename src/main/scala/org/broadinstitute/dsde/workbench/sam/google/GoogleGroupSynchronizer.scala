@@ -212,10 +212,7 @@ class GoogleGroupSynchronizer(
           actionPattern.authDomainConstrainable &&
           (accessPolicy.actions.exists(actionPattern.matches) ||
             accessPolicy.roles.exists { accessPolicyRole =>
-              resourceType.roles.exists {
-                case resourceTypeRole @ ResourceRole(`accessPolicyRole`, _, _, _) => resourceTypeRole.actions.exists(actionPattern.matches)
-                case _ => false
-              }
+              resourceType.getRoleActions(accessPolicyRole).exists(actionPattern.matches)
             })
         }
       case None =>

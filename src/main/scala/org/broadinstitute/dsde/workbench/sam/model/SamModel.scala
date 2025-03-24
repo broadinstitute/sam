@@ -141,6 +141,29 @@ object UserStatusDetails {
   // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
   // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
   def isAuthDomainConstrainable: Boolean = actionPatterns.exists(_.authDomainConstrainable)
+
+  /** Recursively get all actions for a role, including actions from included roles
+    * @param roleName
+    *   role to get actions for
+    * @param visitedRoles
+    *   set of roles that have already been visited to prevent infinite recursion
+    * @return
+    *   set of all actions for the role
+    */
+  def getRoleActions(roleName: ResourceRoleName, visitedRoles: Set[ResourceRoleName] = Set.empty): Set[ResourceAction] =
+    if (visitedRoles.contains(roleName)) {
+      // prevent infinite recursion
+      Set.empty
+    } else {
+      roles
+        .find(_.roleName == roleName)
+        .map(role =>
+          role.includedRoles.foldLeft(role.actions)((accumulatedActions, includedRole) =>
+            accumulatedActions ++ getRoleActions(includedRole, visitedRoles + roleName)
+          )
+        )
+        .getOrElse(Set.empty)
+    }
 }
 
 @Lenses final case class ResourceId(value: String) extends ValueObject
