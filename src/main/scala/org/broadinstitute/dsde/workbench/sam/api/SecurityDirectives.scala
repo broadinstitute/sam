@@ -78,7 +78,7 @@ trait SecurityDirectives {
       case Some(parent) =>
         // parents are allowed for a resource type if the owner role contains the SamResourceActions.setParent or SamResourceActions.createWithParent action
         val parentAllowedActions = Set(SamResourceActions.setParent, SamResourceActions.createWithParent)
-        val parentAllowed = parentAllowedActions.diff(resourceType.getRoleActions(resourceType.ownerRoleName)).nonEmpty
+        val parentAllowed = parentAllowedActions.intersect(resourceType.getRoleActions(resourceType.ownerRoleName)).nonEmpty
         if (!parentAllowed) {
           Directives.failWith(
             new WorkbenchExceptionWithErrorReport(
