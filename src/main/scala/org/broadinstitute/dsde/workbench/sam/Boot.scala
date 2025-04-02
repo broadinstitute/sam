@@ -24,8 +24,6 @@ import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{
   GoogleDirectoryDAO,
-  GoogleKmsInterpreter,
-  GoogleKmsService,
   HttpGoogleDirectoryDAO,
   HttpGoogleIamDAO,
   HttpGoogleProjectDAO,
@@ -187,14 +185,12 @@ object Boot extends IOApp with LazyLogging {
           googleStorage <- GoogleStorageInterpreter.storage[IO](
             config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString
           )
-          googleKmsClient <- GoogleKmsInterpreter.client[IO](config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
         } yield {
           implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
           // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
           // Use resourceNamePrefix to avoid collision between different fiab environments
           val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockerBound = None)
-          val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient)
           val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
           val cloudExtension = createGoogleCloudExt(
             foregroundAccessPolicyDAO,
@@ -204,7 +200,6 @@ object Boot extends IOApp with LazyLogging {
             resourceTypeMap,
             postgresDistributedLockDAO,
             newGoogleStorage,
-            googleKmsInterpreter,
             appConfig.adminConfig
           )
           val googleGroupSynchronizer =
@@ -240,7 +235,6 @@ object Boot extends IOApp with LazyLogging {
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
       distributedLock: PostgresDistributedLockDAO[IO],
       googleStorageNew: GoogleStorageService[IO],
-      googleKms: GoogleKmsService[IO],
       adminConfig: AdminConfig
   )(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
@@ -311,7 +305,6 @@ object Boot extends IOApp with LazyLogging {
       googleProjectDAO,
       googleKeyCache,
       notificationDAO,
-      googleKms,
       googleStorageNew,
       config.googleServicesConfig,
       config.petServiceAccountConfig,
