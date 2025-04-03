@@ -6,16 +6,14 @@ import cats.effect.{Clock, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpResponseException
-import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.storage.BlobId
-import com.google.protobuf.{Duration, Timestamp}
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.MessageRequest
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
@@ -64,7 +62,6 @@ class GoogleExtensions(
     val googleProjectDAO: GoogleProjectDAO,
     val googleKeyCache: GoogleKeyCache,
     val notificationDAO: NotificationDAO,
-    val googleKms: GoogleKmsService[IO],
     val googleStorageService: GoogleStorageService[IO],
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
@@ -149,30 +146,6 @@ class GoogleExtensions(
               samApplication.userService.createUser(newUser, samRequestContext).map(_ => newUser)
           }
       }
-
-      _ <- googleKms.createKeyRing(
-        googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId
-      ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
-
-      _ <- googleKms.createKey(
-        googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId,
-        googleServicesConfig.googleKms.keyId,
-        Option(Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 + googleServicesConfig.googleKms.rotationPeriod.toSeconds).build()),
-        Option(Duration.newBuilder().setSeconds(googleServicesConfig.googleKms.rotationPeriod.toSeconds).build())
-      ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
-
-      _ <- googleKms.addMemberToKeyPolicy(
-        googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId,
-        googleServicesConfig.googleKms.keyId,
-        s"group:$allUsersGroupEmail",
-        "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-      )
 
       _ <- samApplication.resourceService.createResourceType(extensionResourceType, samRequestContext)
 
