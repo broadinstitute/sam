@@ -701,7 +701,7 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
 
       r <- constrainableService.policyEvaluatorService.hasPermissionOneOf(
         resource.fullyQualifiedId,
-        Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(AccessPolicyName("READER"))),
+        Set(SamResourceActions.sharePolicy(AccessPolicyName("READER"))),
         user.id,
         samRequestContext
       )
