@@ -184,30 +184,6 @@ jobs:
           echo "PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USERNAME }}" >> $GITHUB_ENV
           echo "PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }}" >> $GITHUB_ENV
 
-      # Caching Coursier
-      # Recent sbt versions use Coursier instead of Ivy for dependency management.
-      # The .coursier cache in the sbtscala docker container is located under its .cache directory, which is mounted to the host $PWD/.cache dir.
-      # The hashFiles function calculates the hash based on the file contents from
-      #   .sbt, .scala, build.properties
-      # under the project root directory.
-      #
-      # Any changes to these files will result in a different cache key, triggering a cache update.
-      - name: Coursier cache
-        id: coursier-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache
-          key: sam-${{ runner.os }}-coursier-cache-${{ hashFiles('**/*.sbt', '**/project/*.scala', '**/project/build.properties') }}
-
-      - name: Check coursier-cache hit
-        run: |
-          if [ "${{ steps.coursier-cache.outputs.cache-hit }}" == 'true' ]; then
-            echo "Coursier cache ${{ env.COURSIER_CACHE }} restored!"
-          else
-            echo "Coursier cache ${{ env.COURSIER_CACHE }} needs update!"
-          fi
-
       # Caching .sbt directory
       # The hashFiles function calculates the hash based on the file contents from all
       #  .sbt, .scala
