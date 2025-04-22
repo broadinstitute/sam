@@ -49,10 +49,8 @@ class PolicyEvaluatorService(
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
   ): IO[Boolean] = traceIOWithContext("hasPermissionOneOf", samRequestContext) { samRequestContext =>
-    val requiredActions = actions.map(action => action.value.toLowerCase()).toSet
-    listUserResourceActions(resource, userId, samRequestContext).map { userResourceActions =>
-      val userActions = userResourceActions.map(userAction => userAction.value.toLowerCase())
-      requiredActions.intersect(userActions).nonEmpty
+    listUserResourceActions(resource, userId, samRequestContext).map { userActions =>
+      actions.toSet.intersect(userActions).nonEmpty
     }
   }
 

@@ -97,7 +97,15 @@ object UserStatusDetails {
 @Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }
-@Lenses final case class ResourceAction(value: String) extends ValueObject
+@Lenses final case class ResourceAction(value: String) extends ValueObject {
+  override def equals(other: Any): Boolean = other match {
+    case that: ResourceAction => value.equalsIgnoreCase(that.value)
+    case _ => false
+  }
+
+  override def hashCode(): Int = value.toLowerCase.hashCode
+}
+
 @Lenses case class ResourceRoleName(value: String) extends ValueObject
 @Lenses final case class ResourceRole(
     roleName: ResourceRoleName,
