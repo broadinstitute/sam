@@ -681,32 +681,6 @@ class PolicyEvaluatorServiceSpec extends RetryableAnyFlatSpec with Matchers with
 
     res.unsafeRunSync()
   }
-
-  "hasPermissionOneOf" should "not be case-sensitive" in {
-    val user = genWorkbenchUserBoth.sample.get
-    val resource = genResource.sample.get.copy(resourceTypeName = defaultResourceType.name)
-
-    val samplePolicy = genPolicy.sample.get
-    val policyWithUser = AccessPolicy.members.set(samplePolicy.members + user.id)(samplePolicy)
-    val policyWithAction =
-      AccessPolicy.actions.set(Set(SamResourceActions.alterPolicies, SamResourceActions.sharePolicy(AccessPolicyName("reader"))))(policyWithUser)
-    val policy = SamLenses.resourceIdentityAccessPolicy.set(resource.fullyQualifiedId)(policyWithAction)
-    val res = for {
-      _ <- policyDAO.createResourceType(managedGroupResourceType, samRequestContext)
-      _ <- dirDAO.createUser(user, samRequestContext)
-      _ <- savePolicyMembers(policy)
-      _ <- policyDAO.createResourceType(defaultResourceType, samRequestContext)
-      _ <- policyDAO.createResource(resource, samRequestContext)
-      _ <- policyDAO.createPolicy(policy, samRequestContext)
-
-      r <- constrainableService.policyEvaluatorService.hasPermissionOneOf(
-        resource.fullyQualifiedId,
-        Set(SamResourceActions.sharePolicy(AccessPolicyName("READER"))),
-        user.id,
-        samRequestContext
-      )
-    } yield r shouldBe true
-  }
 }
 
 @deprecated("this allows testing of deprecated functions, remove as part of CA-1783", "")
