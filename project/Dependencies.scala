@@ -47,7 +47,8 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "8.1"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.16"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.18"
+
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
   val ficus: ModuleID = "com.iheart" %% "ficus" % "1.5.2"
@@ -116,7 +117,7 @@ object Dependencies {
   val googleStorageLocal: ModuleID =
     "com.google.cloud" % "google-cloud-nio" % "0.127.29" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
-  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.31.0"
+  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.31.1"
 
   val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.0"
   val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "2.4"
@@ -187,7 +188,7 @@ object Dependencies {
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.17.2"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.18.0"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
