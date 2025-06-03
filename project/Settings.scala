@@ -8,7 +8,7 @@ import sbt.{Compile, Test, _}
 import sbtassembly.AssemblyPlugin.autoImport._
 
 object Settings {
-  lazy val artifactory = "https://broadinstitute.jfrog.io/artifactory/"
+  lazy val artifactory = "https://us-central1-maven.pkg.dev/dsp-artifact-registry/"
 
   val proxyResolvers = List(
     "internal-maven-proxy" at artifactory + "maven-central"
