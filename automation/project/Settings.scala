@@ -5,7 +5,7 @@ import sbt._
 object Settings {
 
   // for org.broadinstitute.dsde.workbench modules
-  val artifactory = "https://broadinstitute.jfrog.io/broadinstitute/"
+  val artifactory = "https://us-central1-maven.pkg.dev/dsp-artifact-registry/"
   val commonResolvers = List(
     "artifactory-releases" at artifactory + "libs-release",
     "artifactory-snapshots" at artifactory + "libs-snapshot"
