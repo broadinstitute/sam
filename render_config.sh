@@ -1,4 +1,3 @@
-ENV=${1:-dev}
 SERVICE_OUTPUT_LOCATION="$(dirname "$0")/src/main/resources/rendered"
 SECRET_ENV_VARS_LOCATION="${SERVICE_OUTPUT_LOCATION}/secrets.env"
 
@@ -25,11 +24,11 @@ if [ -f "${SECRET_ENV_VARS_LOCATION}" ]; then
 fi
 
 {
-echo export AZURE_MANAGED_APP_CLIENT_ID="$(vault read -field=client-id secret/dsde/terra/azure/dev/sam/managed-app-publisher)";
-echo export AZURE_MANAGED_APP_CLIENT_SECRET="$(vault read -field=client-secret secret/dsde/terra/azure/dev/sam/managed-app-publisher)";
-echo export AZURE_MANAGED_APP_TENANT_ID="$(vault read -field=tenant-id secret/dsde/terra/azure/dev/sam/managed-app-publisher)";
-echo export LEGACY_GOOGLE_CLIENT_ID="$(vault read -format=json -field=data secret/dsde/firecloud/dev/common/refresh-token-oauth-credential.json | jq -r '.web.client_id')";
-echo export OIDC_CLIENT_ID="$(vault read -field=value secret/dsde/terra/azure/dev/b2c/application_id)";
+echo export AZURE_MANAGED_APP_CLIENT_ID="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="sam-managed-app-publisher-creds" | jq -r '."client-id"')";
+echo export AZURE_MANAGED_APP_CLIENT_SECRET="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="sam-managed-app-publisher-creds" | jq -r '."client-secret"')";
+echo export AZURE_MANAGED_APP_TENANT_ID="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="sam-managed-app-publisher-creds" | jq -r '."tenant-id"')";
+echo export LEGACY_GOOGLE_CLIENT_ID="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="refresh-token-oauth-credential" | jq -r '.web.client_id')";
+echo export OIDC_CLIENT_ID="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="b2c-application-id" | jq -r '.value')";
 
 echo export SERVICE_ACCOUNT_CLIENT_EMAIL="$(cat ${SERVICE_OUTPUT_LOCATION}/sam-account.json | jq .client_email)";
 echo export SERVICE_ACCOUNT_CLIENT_ID="$(cat ${SERVICE_OUTPUT_LOCATION}/sam-account.json | jq .client_id)";
