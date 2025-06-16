@@ -43,6 +43,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       Some(AccessPolicyName(UUID.randomUUID().toString)),
       Some(readerRoleName),
       Some(readAction),
+      None,
       true,
       None,
       false,
@@ -52,6 +53,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
       Some(AccessPolicyName(UUID.randomUUID().toString)),
+      None,
       None,
       None,
       true,
@@ -65,6 +67,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       Some(AccessPolicyName(UUID.randomUUID().toString)),
       Some(readerRoleName),
       Some(readAction),
+      None,
       false,
       None,
       false,
@@ -74,6 +77,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       ResourceId(UUID.randomUUID().toString),
       resourceTypeName,
       Some(AccessPolicyName(UUID.randomUUID().toString)),
+      None,
       None,
       None,
       false,
@@ -82,13 +86,14 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       false
     ),
     // Testable DB Results
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), Some(readerRoleName), Some(readAction), None, false, None, false, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
       Some(testPolicy1),
       Some(readerRoleName),
       Some(readAction),
+      None,
       false,
       None,
       false,
@@ -100,20 +105,22 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       Some(testPolicy1),
       Some(readerRoleName),
       Some(readAction),
+      None,
       false,
       None,
       false,
       false
     ), // testing duplicate row results
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, true, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, false, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), false, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), false, None, false, false),
-    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), None, Some(readAction), true, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy2), Some(nothingRoleName), None, None, true, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy3), None, None, None, false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(readAction), None, false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy4), Some(ownerRoleName), Some(writeAction), None, false, None, false, false),
+    FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy5), None, None, Some(readAction), true, None, false, false),
     FilterResourcesResult(
       testResourceId,
       resourceTypeName,
       Some(testPolicy5),
+      None,
       None,
       Some(readAction),
       true,
@@ -128,6 +135,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       Some(testPolicy6),
       Some(readerRoleName),
       Some(readAction),
+      None,
       false,
       Some(authDomainGroup1),
       true,
@@ -139,6 +147,7 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       Some(testPolicy6),
       Some(readerRoleName),
       Some(readAction),
+      None,
       false,
       Some(authDomainGroup2),
       false,
@@ -256,9 +265,9 @@ class ResourceServiceUnitSpec extends AnyFlatSpec with Matchers with ScalaFuture
       .thenReturn(
         IO.pure(
           Seq(
-            FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), None, Some(prerequisiteAction), false, None, false, false),
-            FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), None, Some(writeAction), false, None, false, false),
-            FilterResourcesResult(testResourceId2, resourceTypeName, Some(testPolicy1), None, Some(writeAction), false, None, false, false)
+            FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), None, None, Some(prerequisiteAction), false, None, false, false),
+            FilterResourcesResult(testResourceId, resourceTypeName, Some(testPolicy1), None, None, Some(writeAction), false, None, false, false),
+            FilterResourcesResult(testResourceId2, resourceTypeName, Some(testPolicy1), None, None, Some(writeAction), false, None, false, false)
           )
         )
       )

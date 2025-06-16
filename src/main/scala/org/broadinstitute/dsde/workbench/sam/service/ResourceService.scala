@@ -1071,7 +1071,7 @@ class ResourceService(
           acc.copy(
             policies = acc.policies ++ r.policy.map(p => FilteredResourceFlatPolicy(p, r.isPublic, r.inherited)),
             roles = acc.roles ++ r.role,
-            actions = acc.actions ++ r.action,
+            actions = acc.actions ++ r.roleAction ++ r.directAction,
             authDomainGroups = acc.authDomainGroups ++ r.authDomain.map(_ -> r.inAuthDomain)
           )
         )
@@ -1099,13 +1099,13 @@ class ResourceService(
           .groupBy(_.policy.get)
           .map { policyTuple =>
             val (policyName, policyRows) = policyTuple
-            val actionsWithoutRoles = policyRows.filter(_.role.isEmpty).flatMap(_.action).toSet
-            val actionsWithRoles = policyRows.filter(_.role.nonEmpty)
+            val actionsWithoutRoles = policyRows.flatMap(_.directAction).toSet
+            val actionsWithRoles = policyRows.filter(_.roleAction.nonEmpty)
             val roles = actionsWithRoles
               .groupBy(_.role.get)
               .map { roleTuple =>
                 val (roleName, roleRows) = roleTuple
-                FilteredResourceHierarchicalRole(roleName, roleRows.flatMap(_.action).toSet)
+                FilteredResourceHierarchicalRole(roleName, roleRows.flatMap(_.roleAction).toSet)
               }
               .toSet
             FilteredResourceHierarchicalPolicy(policyName, roles, actionsWithoutRoles, policyRows.head.isPublic, policyRows.head.inherited)

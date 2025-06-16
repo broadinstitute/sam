@@ -3284,8 +3284,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
           policyActions: Set[ResourceAction]
       ) = {
         val testRoles: Set[ResourceRoleName] = dbResultRows.flatMap(_.role).toSet
-        val testRoleActions: Set[ResourceAction] = dbResultRows.filter(_.role.isDefined).flatMap(_.action).toSet
-        val testPolicyActions: Set[ResourceAction] = dbResultRows.filter(_.role.isEmpty).flatMap(_.action).toSet
+        val testRoleActions: Set[ResourceAction] = dbResultRows.flatMap(_.roleAction).toSet
+        val testPolicyActions: Set[ResourceAction] = dbResultRows.flatMap(_.directAction).toSet
 
         testRoles should be(roles)
         testRoleActions should be(roleActions)
@@ -3350,7 +3350,8 @@ class PostgresAccessPolicyDAOSpec extends AnyFreeSpec with Matchers with BeforeA
         val writeActions =
           dao.filterResources(user.id, Set(resourceType.name), Set.empty, Set.empty, Set(writeAction), false, samRequestContext).unsafeRunSync()
         writeActions.length should be(5)
-        writeActions.map(_.action).forall(a => a.exists(_.equals(writeAction))) should be(true)
+        writeActions.flatMap(_.roleAction).forall(_.equals(writeAction)) should be(true)
+        writeActions.flatMap(_.directAction).forall(_.equals(writeAction)) should be(true)
         writeActions.map(_.isPublic).forall(ip => !ip) should be(true)
 
         val writerViaOwner = writeActions.filter(r => r.role.exists(_.equals(ownerRole.roleName)))
