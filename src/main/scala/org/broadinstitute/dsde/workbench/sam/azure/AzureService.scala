@@ -6,6 +6,7 @@ import bio.terra.cloudres.azure.resourcemanager.msi.data.CreateUserAssignedManag
 import cats.effect.IO
 import cats.implicits.toTraverseOps
 import com.azure.core.management.Region
+import com.azure.core.management.exception.ManagementException
 import com.azure.core.util.Context
 import com.azure.resourcemanager.managedapplications.models.Application
 import com.azure.resourcemanager.resources.ResourceManager
@@ -201,7 +202,11 @@ class AzureService(
         .map { ami =>
           for {
             msiManager <- crlService.buildMsiManager(ami.managedResourceGroupCoordinates.tenantId, ami.managedResourceGroupCoordinates.subscriptionId)
-            _ <- IO(msiManager.identities().deleteById(ami.objectId.value))
+            _ <- IO(msiManager.identities().deleteById(ami.objectId.value)).recover {
+              case notFound: ManagementException if notFound.getResponse.getStatusCode == StatusCodes.NotFound.intValue =>
+                // if the identity does not exist, we can ignore this error
+                ()
+            }
             _ <- directoryDAO.deleteActionManagedIdentity(ami.id, samRequestContext)
           } yield {}
         }
