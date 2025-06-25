@@ -93,38 +93,11 @@ object MockTestSupport extends MockTestSupport {
     val googleGroupSyncPubSubDAO = new MockGooglePubSubDAO()
     val googleDisableUsersPubSubDAO = new MockGooglePubSubDAO()
     val googleKeyCachePubSubDAO = new MockGooglePubSubDAO()
-    val googleStorageDAO = new MockGoogleStorageDAO()
     val googleProjectDAO = new MockGoogleProjectDAO()
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
-    val cloudKeyCache = new GoogleKeyCache(
-      distributedLock,
-      googleIamDAO,
-      googleStorageDAO,
-      FakeGoogleStorageInterpreter,
-      googleKeyCachePubSubDAO,
-      googleServicesConfig,
-      petServiceAccountConfig
-    )
+    val cloudKeyCache = new GoogleKeyCache(distributedLock, googleIamDAO, FakeGoogleStorageInterpreter, googleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(
-      new GoogleExtensions(
-        distributedLock,
-        directoryDAO,
-        policyDAO,
-        googleDirectoryDAO,
-        notificationPubSubDAO,
-        googleGroupSyncPubSubDAO,
-        googleDisableUsersPubSubDAO,
-        googleIamDAO,
-        googleStorageDAO,
-        googleProjectDAO,
-        cloudKeyCache,
-        notificationDAO,
-        FakeGoogleStorageInterpreter,
-        googleServicesConfig,
-        petServiceAccountConfig,
-        resourceTypes,
-        adminConfig.superAdminsGroup
-      )
+      new GoogleExtensions(distributedLock, directoryDAO, policyDAO, googleDirectoryDAO, notificationPubSubDAO, googleGroupSyncPubSubDAO, googleDisableUsersPubSubDAO, googleIamDAO, googleProjectDAO, cloudKeyCache, notificationDAO, FakeGoogleStorageInterpreter, googleServicesConfig, petServiceAccountConfig, resourceTypes, adminConfig.superAdminsGroup)
     )
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
     val mockResourceService = resourceServiceOpt.getOrElse(

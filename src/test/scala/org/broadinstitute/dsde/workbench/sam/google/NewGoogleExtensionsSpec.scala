@@ -10,7 +10,7 @@ import com.google.auth.oauth2.ServiceAccountCredentials
 import fs2.Stream
 import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, TraceId, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -85,7 +85,6 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         mock[GooglePubSubDAO](RETURNS_SMART_NULLS),
         mock[GooglePubSubDAO](RETURNS_SMART_NULLS),
         mock[GoogleIamDAO](RETURNS_SMART_NULLS),
-        mock[GoogleStorageDAO](RETURNS_SMART_NULLS),
         mock[GoogleProjectDAO](RETURNS_SMART_NULLS),
         mockGoogleKeyCache,
         mock[NotificationDAO](RETURNS_SMART_NULLS),
@@ -238,7 +237,6 @@ class NewGoogleExtensionsSpec(_system: ActorSystem)
         mock[GooglePubSubDAO](RETURNS_SMART_NULLS),
         mock[GooglePubSubDAO](RETURNS_SMART_NULLS),
         mock[GoogleIamDAO](RETURNS_SMART_NULLS),
-        mock[GoogleStorageDAO](RETURNS_SMART_NULLS),
         mockGoogleProjectDAO,
         mockGoogleKeyCache,
         mock[NotificationDAO](RETURNS_SMART_NULLS),

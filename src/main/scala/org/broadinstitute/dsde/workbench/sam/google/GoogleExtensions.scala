@@ -13,7 +13,7 @@ import com.typesafe.scalalogging.LazyLogging
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.MessageRequest
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
@@ -58,7 +58,6 @@ class GoogleExtensions(
     val googleGroupSyncPubSubDAO: GooglePubSubDAO,
     val googleDisableUsersPubSubDAO: GooglePubSubDAO,
     val googleIamDAO: GoogleIamDAO,
-    val googleStorageDAO: GoogleStorageDAO,
     val googleProjectDAO: GoogleProjectDAO,
     val googleKeyCache: GoogleKeyCache,
     val notificationDAO: NotificationDAO,

@@ -104,7 +104,6 @@ object TestSupport extends TestSupport {
     val cloudKeyCache = new GoogleKeyCache(
       distributedLock,
       googleIamDAO,
-      googleStorageDAO,
       FakeGoogleStorageInterpreter,
       googleKeyCachePubSubDAO,
       googleServicesConfig,
@@ -123,7 +122,6 @@ object TestSupport extends TestSupport {
         googleGroupSyncPubSubDAO,
         googleDisableUsersPubSubDAO,
         googleIamDAO,
-        googleStorageDAO,
         googleProjectDAO,
         cloudKeyCache,
         notificationDAO,

@@ -127,7 +127,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
         null,
         null,
         null,
-        null,
         googleServicesConfig,
         petServiceAccountConfig,
         configResourceTypes,
@@ -287,7 +286,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
-      null,
       googleServicesConfig,
       petServiceAccountConfig,
       constrainableResourceTypes,
@@ -362,7 +360,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockGoogleGroupSyncPubSubDAO,
       mockGoogleDisableUsersPubSubDAO,
       mockGoogleIamDAO,
-      null,
       null,
       null,
       null,
@@ -457,7 +454,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       mockGoogleIamDAO,
-      null,
       mockGoogleProjectDAO,
       null,
       null,
@@ -563,7 +559,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
-      null,
       googleServicesConfig,
       petServiceAccountConfig,
       configResourceTypes,
@@ -586,7 +581,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val ge = new GoogleExtensions(
       TestSupport.distributedLock,
       dirDAO,
-      null,
       null,
       null,
       null,
@@ -628,7 +622,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
-      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -653,7 +646,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       dirDAO,
       null,
       new MockGoogleDirectoryDAO(),
-      null,
       null,
       null,
       null,
@@ -698,7 +690,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
-      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -720,7 +711,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val ge = new GoogleExtensions(
       TestSupport.distributedLock,
       dirDAO,
-      null,
       null,
       null,
       null,
@@ -753,7 +743,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val ge = new GoogleExtensions(
       TestSupport.distributedLock,
       dirDAO,
-      null,
       null,
       null,
       null,
@@ -797,7 +786,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
-      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -824,13 +812,11 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val mockGoogleNotificationPubSubDAO = new MockGooglePubSubDAO
     val mockGoogleGroupSyncPubSubDAO = new MockGooglePubSubDAO
     val mockGoogleDisableUsersPubSubDAO = new MockGooglePubSubDAO
-    val mockGoogleStorageDAO = new MockGoogleStorageDAO
     val mockGoogleIamDAO = new MockGoogleIamDAO
     val notificationDAO = new PubSubNotificationDAO(mockGoogleNotificationPubSubDAO, "foo")
     val googleKeyCache = new GoogleKeyCache(
       TestSupport.distributedLock,
       mockGoogleIamDAO,
-      mockGoogleStorageDAO,
       FakeGoogleStorageInterpreter,
       mockGoogleKeyCachePubSubDAO,
       googleServicesConfig,
@@ -849,7 +835,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockGoogleGroupSyncPubSubDAO,
       mockGoogleDisableUsersPubSubDAO,
       mockGoogleIamDAO,
-      mockGoogleStorageDAO,
       null,
       googleKeyCache,
       notificationDAO,
@@ -908,7 +893,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
-      null,
       config,
       null,
       configResourceTypes,
@@ -924,7 +908,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val config = googleServicesConfig.copy(appsDomain = "test.cloudfire.org")
     val googleExtensions = new GoogleExtensions(
       TestSupport.distributedLock,
-      null,
       null,
       null,
       null,
@@ -959,7 +942,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       mockDirectoryDAO,
       null,
       mockGoogleDirectoryDAO,
-      null,
       null,
       null,
       null,
@@ -1008,7 +990,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
-      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -1035,7 +1016,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       mockGoogleGroupSyncPubSubDAO,
-      null,
       null,
       null,
       null,
@@ -1091,7 +1071,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       mockGoogleGroupSyncPubSubDAO,
-      null,
       null,
       null,
       null,
@@ -1156,7 +1135,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       null,
-      null,
       googleServicesConfig,
       null,
       configResourceTypes,
@@ -1213,13 +1191,11 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
     val mockGoogleKeyCachePubSubDAO = new MockGooglePubSubDAO
     val mockGoogleNotificationPubSubDAO = new MockGooglePubSubDAO
-    val mockGoogleStorageDAO = new MockGoogleStorageDAO
     val mockGoogleProjectDAO = new MockGoogleProjectDAO
     val notificationDAO = new PubSubNotificationDAO(mockGoogleNotificationPubSubDAO, "foo")
     val googleKeyCache = new GoogleKeyCache(
       TestSupport.distributedLock,
       mockGoogleIamDAO,
-      mockGoogleStorageDAO,
       FakeGoogleStorageInterpreter,
       mockGoogleKeyCachePubSubDAO,
       googleServicesConfig,
@@ -1235,7 +1211,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       mockGoogleIamDAO,
-      mockGoogleStorageDAO,
       mockGoogleProjectDAO,
       googleKeyCache,
       notificationDAO,
@@ -1400,7 +1375,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       TestSupport.distributedLock,
       dirDAO,
       policyDAO,
-      null,
       null,
       null,
       null,
@@ -2035,7 +2009,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       mockGoogleIamDAO,
-      null,
       mockGoogleProjectDAO,
       null,
       null,
@@ -2078,7 +2051,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       mockGoogleIamDAO,
-      null,
       mockGoogleProjectDAO,
       null,
       null,
@@ -2121,7 +2093,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       mockGoogleIamDAO,
-      null,
       mockGoogleProjectDAO,
       null,
       null,
@@ -2152,7 +2123,6 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       mockGoogleNotificationPubSubDAO,
-      null,
       null,
       null,
       null,
