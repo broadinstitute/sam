@@ -22,14 +22,7 @@ import io.opentelemetry.sdk.trace.samplers.Sampler
 import io.opentelemetry.semconv.ResourceAttributes
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google.{
-  GoogleDirectoryDAO,
-  HttpGoogleDirectoryDAO,
-  HttpGoogleIamDAO,
-  HttpGoogleProjectDAO,
-  HttpGooglePubSubDAO,
-  HttpGoogleStorageDAO
-}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
 import org.broadinstitute.dsde.workbench.oauth2.{ClientId, OpenIDConnectConfiguration}
@@ -270,11 +263,6 @@ object Boot extends IOApp with LazyLogging {
       workspaceMetricBaseName,
       config.googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.project
     )
-    val googleStorageDAO = new HttpGoogleStorageDAO(
-      config.googleServicesConfig.appName,
-      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
-      workspaceMetricBaseName
-    )
     val googleProjectDAO = new HttpGoogleProjectDAO(
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
@@ -284,7 +272,6 @@ object Boot extends IOApp with LazyLogging {
       new GoogleKeyCache(
         distributedLock,
         googleIamDAO,
-        googleStorageDAO,
         googleStorageNew,
         googleKeyCachePubSubDAO,
         config.googleServicesConfig,
@@ -301,7 +288,6 @@ object Boot extends IOApp with LazyLogging {
       googleGroupSyncPubSubDAO,
       googleDisableUsersPubSubDAO,
       googleIamDAO,
-      googleStorageDAO,
       googleProjectDAO,
       googleKeyCache,
       notificationDAO,

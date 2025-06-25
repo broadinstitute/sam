@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
-import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleIamDAO, MockGooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId, ServiceAccountPrivateKeyData}
@@ -55,7 +55,6 @@ class GoogleKeyCacheSpec extends AnyFlatSpecLike with Matchers with BeforeAndAft
     new GoogleKeyCache(
       TestSupport.distributedLock,
       iamDAO,
-      new MockGoogleStorageDAO,
       storageInterp,
       new MockGooglePubSubDAO,
       TestSupport.googleServicesConfig,

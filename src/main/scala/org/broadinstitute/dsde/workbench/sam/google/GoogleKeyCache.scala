@@ -6,11 +6,12 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.cloud.storage.{BucketInfo, StorageException}
+import com.google.cloud.storage.{BucketInfo, NotificationInfo, StorageException}
 import com.google.cloud.storage.BucketInfo.LifecycleRule
+import com.google.cloud.storage.NotificationInfo.{EventType, PayloadFormat}
 import com.google.pubsub.v1.ProjectTopicName
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
@@ -22,7 +23,6 @@ import org.broadinstitute.dsde.workbench.sam.model.CachedKey
 
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
-
 import java.time.Instant
 
 /** Created by mbemis on 1/10/18.
@@ -30,7 +30,6 @@ import java.time.Instant
 class GoogleKeyCache(
     val distributedLock: PostgresDistributedLockDAO[IO],
     val googleIamDAO: GoogleIamDAO,
-    val googleStorageDAO: GoogleStorageDAO, // this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
     val googleStorageAlg: GoogleStorageService[IO],
     val googleKeyCachePubSubDao: GooglePubSubDAO,
     val googleServicesConfig: GoogleServicesConfig,
@@ -80,15 +79,17 @@ class GoogleKeyCache(
               )
             )
           )
-          _ <- IO.fromFuture(
-            IO(
-              googleStorageDAO.setObjectChangePubSubTrigger(
-                googleServicesConfig.googleKeyCacheConfig.bucketName,
-                projectTopicName.toString,
-                List("OBJECT_DELETE")
-              )
+          _ <- googleStorageAlg
+            .createNotificationIfNotExists(
+              googleServicesConfig.googleKeyCacheConfig.bucketName,
+              NotificationInfo
+                .newBuilder(projectTopicName.toString)
+                .setEventTypes(EventType.OBJECT_DELETE)
+                .setPayloadFormat(PayloadFormat.JSON_API_V1)
+                .build()
             )
-          )
+            .compile
+            .drain
         } yield ()
       }.startAndRegisterTermination()
     } yield ()
