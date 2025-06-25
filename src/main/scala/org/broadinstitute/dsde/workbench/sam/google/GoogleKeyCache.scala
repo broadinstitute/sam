@@ -83,7 +83,13 @@ class GoogleKeyCache(
             .createNotificationIfNotExists(
               googleServicesConfig.googleKeyCacheConfig.bucketName,
               NotificationInfo
-                .newBuilder(projectTopicName.toString)
+                // the java doc for this method says that the topic must be in the format "projects/{project}/topics/{topic}"
+                // but the api docs https://cloud.google.com/storage/docs/json_api/v1/notifications say it must be in the format
+                // "//pubsub.googleapis.com/projects/{project}/topics/{topicName}"
+                // both are actually accepted by the create API, however the latter is what is returned by the list APIf,
+                // and we need to compare the returned value to the one we pass in to avoid duplicates
+                // so we use the latter format here
+                .newBuilder("//pubsub.googleapis.com/" + projectTopicName.toString)
                 .setEventTypes(EventType.OBJECT_DELETE)
                 .setPayloadFormat(PayloadFormat.JSON_API_V1)
                 .build()
