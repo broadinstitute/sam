@@ -119,7 +119,7 @@ object Dependencies {
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.32.0"
 
-  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.0"
+  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.1"
   val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "2.4"
 
   val scalikeCore = "org.scalikejdbc" %% "scalikejdbc" % scalikejdbcVersion
