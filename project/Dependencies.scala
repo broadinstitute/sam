@@ -8,7 +8,7 @@ object Dependencies {
   val scalaTestV = "3.2.19"
   val scalaCheckV = "1.18.1"
   val scalikejdbcVersion = "3.4.2"
-  val postgresDriverVersion = "42.7.6"
+  val postgresDriverVersion = "42.7.7"
   val sentryVersion = "6.15.0"
 
   val workbenchLibV = "0c796e4" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
@@ -20,7 +20,7 @@ object Dependencies {
   val workbenchNotificationsV = s"1.1-$workbenchLibV"
   val workbenchOauth2V = s"0.9-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.35-SNAPSHOT"
+  val crlVersion = "1.2.37-SNAPSHOT"
   val tclVersion = "1.1.42-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
@@ -66,7 +66,7 @@ object Dependencies {
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
   val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.2.Final"
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.6"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.7"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.73.0"
@@ -115,11 +115,11 @@ object Dependencies {
       excludeWorkbenchModel
     )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.127.36" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.127.38" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.32.0"
 
-  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.0"
+  val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.1"
   val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "2.4"
 
   val scalikeCore = "org.scalikejdbc" %% "scalikejdbc" % scalikejdbcVersion
@@ -130,7 +130,7 @@ object Dependencies {
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
-  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.12.0" excludeAll excludeWorkbenchUtil2
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.14.0" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
