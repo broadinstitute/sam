@@ -72,14 +72,14 @@ object Dependencies {
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.73.0"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
-  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250420-2.0.0" excludeAll excludIoGrpc // force this version
+  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250605-2.0.0" excludeAll excludIoGrpc // force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %% "monocle-core" % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion
 
   val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
   val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-18" % s"${scalaTestV}.0" % Test
-  val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "1.17.45" % Test
+  val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "2.0.0" % Test
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
