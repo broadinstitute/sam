@@ -18,8 +18,6 @@ jobs:
         -Xmx3g
         -Denv.type=test
         -Dpostgres.host=localhost -Dpostgres.port=5432
-      ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
-      ARTIFACTORY_PASSWORD: ${{secrets.ARTIFACTORY_PASSWORD}}
 
     services:
       postgres:
@@ -82,8 +80,6 @@ jobs:
       id-token: 'write'
 
     env:
-      ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
-      ARTIFACTORY_PASSWORD: ${{secrets.ARTIFACTORY_PASSWORD}}
       SBT_OPTS: -Xmx3g
 
     steps:
