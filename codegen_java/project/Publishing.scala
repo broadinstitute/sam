@@ -1,9 +1,5 @@
 import sbt.Keys._
 import sbt._
-import Artifactory._
-
-/** NOTE: This was lifted wholesale from Cromwell.
-  */
 
 object Publishing {
 
