@@ -77,10 +77,9 @@ jobs:
   generateAndPublishClient:
     runs-on: ubuntu-latest
     needs: [ tag, run-unit-tests ]
-    publish-job:
-      permissions:
-        contents: 'read'
-        id-token: 'write'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
     env:
       ARTIFACTORY_USERNAME: ${{secrets.ARTIFACTORY_USERNAME}}
