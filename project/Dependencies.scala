@@ -65,14 +65,14 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
-  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.2.Final"
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.3.Final"
   val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.7"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.73.0"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
-  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250605-2.0.0" excludeAll excludIoGrpc // force this version
+  val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250718-2.0.0" excludeAll excludIoGrpc // force this version
 
   val monocle: ModuleID = "com.github.julien-truffaut" %% "monocle-core" % monocleVersion
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion
