@@ -246,6 +246,6 @@ object Dependencies {
 
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
-    "org.apache.commons" % "commons-compress" % "1.27.1"
+    "org.apache.commons" % "commons-compress" % "1.28.0"
   )
 }
