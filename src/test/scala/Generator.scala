@@ -10,6 +10,7 @@ import org.broadinstitute.dsde.workbench.sam.azure._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LockDetails
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService
 import org.scalacheck._
 
@@ -61,7 +62,7 @@ object Generator {
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId
     userId <- genWorkbenchUserId
-  } yield SamUser(userId, Some(googleSubjectId), email, None, false, None)
+  } yield SamUser(userId, Some(googleSubjectId), email, None, false)
 
   val genFirecloudUser = for {
     email <- genFirecloudEmail
@@ -77,20 +78,30 @@ object Generator {
     email <- genServiceAccountEmail
     googleSubjectId <- genGoogleSubjectId
     userId <- genWorkbenchUserId
-  } yield SamUser(userId, Option(googleSubjectId), email, None, false, None)
+  } yield SamUser(userId, Option(googleSubjectId), email, None, false)
 
   val genWorkbenchUserAzure = for {
     email <- genNonPetEmail
     azureB2CId <- genAzureB2CId
     userId <- genWorkbenchUserId
-  } yield SamUser(userId, None, email, Option(azureB2CId), false, None)
+  } yield SamUser(userId, None, email, Option(azureB2CId), false)
+
+  val genNewWorkbenchUserAzureUami = for {
+    azureB2CId <- genAzureB2CId
+    userId <- genWorkbenchUserId
+  } yield SamUser(userId, None, WorkbenchEmail(""), Option(azureB2CId), false)
+
+  val genWorkbenchUserAzureUami = for {
+    azureB2CId <- genAzureB2CId
+    userId <- genWorkbenchUserId
+  } yield SamUser(userId, None, WorkbenchEmail(s"${azureB2CId.value}@uami.terra.bio"), Option(azureB2CId), false)
 
   val genWorkbenchUserBoth = for {
     email <- genNonPetEmail
     googleSubjectId <- genGoogleSubjectId
     azureB2CId <- genAzureB2CId
     userId <- genWorkbenchUserId
-  } yield SamUser(userId, Option(googleSubjectId), email, Option(azureB2CId), false, None)
+  } yield SamUser(userId, Option(googleSubjectId), email, Option(azureB2CId), false)
 
   val genPetServiceAccountId = for {
     userId <- genWorkbenchUserId

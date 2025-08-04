@@ -2,86 +2,13 @@ package org.broadinstitute.dsde.workbench.sam.model
 
 import monocle.macros.Lenses
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.GoogleModelJsonSupport.InstantFormat
-import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService.MangedGroupRoleName
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AccessPolicyMembershipResponse, SamUser}
 import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
 
 import java.time.Instant
 
 /** Created by dvoet on 5/26/17.
   */
-object SamJsonSupport {
-  import DefaultJsonProtocol._
-  import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-
-  implicit val ResourceActionPatternFormat = jsonFormat3(ResourceActionPattern.apply)
-
-  implicit val ResourceActionFormat = ValueObjectFormat(ResourceAction.apply)
-
-  implicit val ResourceRoleNameFormat = ValueObjectFormat(ResourceRoleName.apply)
-
-  implicit val ResourceTypeNameFormat = ValueObjectFormat(ResourceTypeName.apply)
-
-  implicit val ResourceRoleFormat = jsonFormat4(ResourceRole.apply)
-
-  implicit val ResourceTypeFormat = jsonFormat6(ResourceType.apply)
-
-  implicit val SamUserFormat = jsonFormat9(SamUser.apply)
-
-  implicit val UserStatusDetailsFormat = jsonFormat2(UserStatusDetails.apply)
-
-  implicit val UserStatusFormat = jsonFormat2(UserStatus.apply)
-
-  implicit val UserStatusInfoFormat = jsonFormat4(UserStatusInfo.apply)
-
-  implicit val UserIdInfoFormat = jsonFormat3(UserIdInfo.apply)
-
-  implicit val TermsOfServiceAcceptanceFormat = ValueObjectFormat(TermsOfServiceAcceptance.apply)
-
-  implicit val termsOfServiceDetailsFormat = jsonFormat4(TermsOfServiceDetails.apply)
-
-  implicit val termsOfAcceptanceStatusFormat = jsonFormat3(TermsOfServiceComplianceStatus.apply)
-
-  implicit val UserStatusDiagnosticsFormat = jsonFormat5(UserStatusDiagnostics.apply)
-
-  implicit val AccessPolicyNameFormat = ValueObjectFormat(AccessPolicyName.apply)
-
-  implicit val ResourceIdFormat = ValueObjectFormat(ResourceId.apply)
-
-  implicit val FullyQualifiedResourceIdFormat = jsonFormat2(FullyQualifiedResourceId.apply)
-
-  implicit val AccessPolicyDescendantPermissionsFormat = jsonFormat3(AccessPolicyDescendantPermissions.apply)
-
-  implicit val PolicyIdentifiersFormat = jsonFormat4(PolicyIdentifiers.apply)
-
-  implicit val AccessPolicyMembershipFormat = jsonFormat5(AccessPolicyMembership.apply)
-
-  implicit val AccessPolicyResponseEntryFormat = jsonFormat3(AccessPolicyResponseEntry.apply)
-
-  implicit val UserPolicyResponseFormat = jsonFormat5(UserPolicyResponse.apply)
-
-  implicit val UserUpdateRequestFormat = jsonFormat5(AdminUpdateUserRequest.apply)
-
-  implicit val RolesAndActionsFormat = jsonFormat2(RolesAndActions.apply)
-
-  implicit val UserResourcesResponseFormat = jsonFormat6(UserResourcesResponse.apply)
-
-  implicit val FullyQualifiedPolicyIdFormat = jsonFormat2(FullyQualifiedPolicyId.apply)
-
-  implicit val ManagedGroupMembershipEntryFormat = jsonFormat3(ManagedGroupMembershipEntry.apply)
-
-  implicit val ManagedGroupAccessInstructionsFormat = ValueObjectFormat(ManagedGroupAccessInstructions.apply)
-
-  implicit val GroupSyncResponseFormat = jsonFormat2(GroupSyncResponse.apply)
-
-  implicit val CreateResourceRequestFormat = jsonFormat5(CreateResourceRequest.apply)
-
-  implicit val CreateResourcePolicyResponseFormat = jsonFormat2(CreateResourcePolicyResponse.apply)
-
-  implicit val CreateResourceResponseFormat = jsonFormat4(CreateResourceResponse.apply)
-
-  implicit val SignedUrlRequestFormat = jsonFormat4(SignedUrlRequest.apply)
-}
 
 object RootPrimitiveJsonSupport {
   implicit val rootBooleanJsonFormat: RootJsonFormat[Boolean] = new RootJsonFormat[Boolean] {
@@ -100,9 +27,11 @@ object SamResourceActions {
   val setAccessInstructions = ResourceAction("set_access_instructions")
   val setPublic = ResourceAction("set_public")
   val readAuthDomain = ResourceAction("read_auth_domain")
+  val updateAuthDomain = ResourceAction("update_auth_domain")
   val testAnyActionAccess = ResourceAction("test_any_action_access")
   val getParent = ResourceAction("get_parent")
   val setParent = ResourceAction("set_parent")
+  val createWithParent = ResourceAction("create_with_parent")
   val addChild = ResourceAction("add_child")
   val removeChild = ResourceAction("remove_child")
   val listChildren = ResourceAction("list_children")
@@ -112,6 +41,7 @@ object SamResourceActions {
   val adminRemoveMember = ResourceAction("admin_remove_member")
   val link = ResourceAction("link")
   val setManagedResourceGroup = ResourceAction("set_managed_resource_group")
+  val adminReadSummaryInformation = ResourceAction("admin_read_summary_information")
 
   def sharePolicy(policy: AccessPolicyName) = ResourceAction(s"share_policy::${policy.value}")
   def readPolicy(policy: AccessPolicyName) = ResourceAction(s"read_policy::${policy.value}")
@@ -148,11 +78,34 @@ object UserStatusDetails {
 @Lenses final case class TermsOfServiceComplianceStatus(userId: WorkbenchUserId, userHasAcceptedLatestTos: Boolean, permitsSystemUsage: Boolean)
 
 @Deprecated
-@Lenses final case class TermsOfServiceDetails(isEnabled: Boolean, isGracePeriodEnabled: Boolean, currentVersion: String, userAcceptedVersion: Option[String])
+@Lenses final case class OldTermsOfServiceDetails(
+    isEnabled: Boolean,
+    isGracePeriodEnabled: Boolean,
+    currentVersion: String,
+    userAcceptedVersion: Option[String]
+)
+
+@Lenses final case class TermsOfServiceDetails(
+    latestAcceptedVersion: Option[String],
+    acceptedOn: Option[Instant],
+    permitsSystemUsage: Boolean,
+    isCurrentVersion: Boolean
+)
+@Lenses final case class TermsOfServiceHistory(history: List[TermsOfServiceHistoryRecord])
+@Lenses final case class TermsOfServiceHistoryRecord(action: String, version: String, timestamp: Instant)
+
 @Lenses final case class ResourceActionPattern(value: String, description: String, authDomainConstrainable: Boolean) {
   def matches(other: ResourceAction) = value.r.pattern.matcher(other.value).matches()
 }
-@Lenses final case class ResourceAction(value: String) extends ValueObject
+@Lenses final case class ResourceAction(value: String) extends ValueObject {
+  override def equals(other: Any): Boolean = other match {
+    case that: ResourceAction => value.equalsIgnoreCase(that.value)
+    case _ => false
+  }
+
+  override def hashCode(): Int = value.toLowerCase.hashCode
+}
+
 @Lenses case class ResourceRoleName(value: String) extends ValueObject
 @Lenses final case class ResourceRole(
     roleName: ResourceRoleName,
@@ -161,7 +114,9 @@ object UserStatusDetails {
     descendantRoles: Map[ResourceTypeName, Set[ResourceRoleName]] = Map.empty
 )
 
-@Lenses final case class ResourceTypeName(value: String) extends ValueObject
+@Lenses final case class ResourceTypeName(value: String) extends ValueObject {
+  def isResourceTypeAdmin: Boolean = value == SamResourceTypes.resourceTypeAdminName.value
+}
 
 @Lenses final case class FullyQualifiedResourceId(resourceTypeName: ResourceTypeName, resourceId: ResourceId) {
   override def toString: String = s"$resourceTypeName/$resourceId"
@@ -188,11 +143,35 @@ object UserStatusDetails {
     roles: Set[ResourceRole],
     ownerRoleName: ResourceRoleName,
     reuseIds: Boolean = false,
-    allowLeaving: Boolean = false
+    allowLeaving: Boolean = false,
+    prerequisiteAction: Option[ResourceAction] = None
 ) {
   // Ideally we'd just store this boolean in a lazy val, but this will upset the spray/akka json serializers
   // I can't imagine a scenario where we have enough action patterns that would make this def discernibly slow though
   def isAuthDomainConstrainable: Boolean = actionPatterns.exists(_.authDomainConstrainable)
+
+  /** Recursively get all actions for a role, including actions from included roles
+    * @param roleName
+    *   role to get actions for
+    * @param visitedRoles
+    *   set of roles that have already been visited to prevent infinite recursion
+    * @return
+    *   set of all actions for the role
+    */
+  def getRoleActions(roleName: ResourceRoleName, visitedRoles: Set[ResourceRoleName] = Set.empty): Set[ResourceAction] =
+    if (visitedRoles.contains(roleName)) {
+      // prevent infinite recursion
+      Set.empty
+    } else {
+      roles
+        .find(_.roleName == roleName)
+        .map(role =>
+          role.includedRoles.foldLeft(role.actions)((accumulatedActions, includedRole) =>
+            accumulatedActions ++ getRoleActions(includedRole, visitedRoles + roleName)
+          )
+        )
+        .getOrElse(Set.empty)
+    }
 }
 
 @Lenses final case class ResourceId(value: String) extends ValueObject
@@ -220,7 +199,7 @@ object RolesAndActions {
   def fromRoles(roles: Set[ResourceRoleName]) = RolesAndActions(roles, Set.empty)
   def fromActions(actions: Set[ResourceAction]) = RolesAndActions(Set.empty, actions)
   def fromPolicy(accessPolicy: AccessPolicy) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
-  def fromPolicyMembership(accessPolicy: AccessPolicyMembership) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
+  def fromPolicyMembership(accessPolicy: AccessPolicyMembershipResponse) = RolesAndActions(accessPolicy.roles, accessPolicy.actions)
 }
 @Lenses final case class UserPolicyResponse(
     resourceId: ResourceId,
@@ -240,16 +219,19 @@ object RolesAndActions {
 @Lenses final case class FullyQualifiedPolicyId(resource: FullyQualifiedResourceId, accessPolicyName: AccessPolicyName) extends WorkbenchGroupIdentity {
   override def toString: String = s"${accessPolicyName.value}.${resource.resourceId.value}.${resource.resourceTypeName.value}"
 }
-@Lenses final case class PolicyIdentifiers(
+
+@Lenses case class PolicyIdentifiers(
     policyName: AccessPolicyName,
-    policyEmail: WorkbenchEmail,
     resourceTypeName: ResourceTypeName,
     resourceId: ResourceId
-)
+) {
+  def toFullyQualifiedPolicyId: FullyQualifiedPolicyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceTypeName, resourceId), policyName)
+}
+
 @Lenses case class AccessPolicyName(value: String) extends ValueObject
 @Lenses final case class CreateResourceRequest(
     resourceId: ResourceId,
-    policies: Map[AccessPolicyName, AccessPolicyMembership],
+    policies: Map[AccessPolicyName, AccessPolicyMembershipRequest],
     authDomain: Set[WorkbenchGroupName],
     returnResource: Option[Boolean] = Some(false),
     parent: Option[FullyQualifiedResourceId] = None
@@ -267,25 +249,17 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
     descendantPermissions: Set[AccessPolicyDescendantPermissions],
-    public: Boolean
+    public: Boolean,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
 ) extends WorkbenchGroup
 
 @Lenses final case class AccessPolicyDescendantPermissions(resourceType: ResourceTypeName, actions: Set[ResourceAction], roles: Set[ResourceRoleName])
-// AccessPolicyMembership.memberPolicies is logically read-only; at some point in the future it could be lazy-loaded
-// (via extra queries) based on the contents of memberEmails.
-@Lenses final case class AccessPolicyMembership(
-    memberEmails: Set[WorkbenchEmail],
-    actions: Set[ResourceAction],
-    roles: Set[ResourceRoleName],
-    descendantPermissions: Option[Set[AccessPolicyDescendantPermissions]] = Option(Set.empty),
-    memberPolicies: Option[Set[PolicyIdentifiers]] = Option(Set.empty)
-) {
-  def getDescendantPermissions: Set[AccessPolicyDescendantPermissions] = descendantPermissions.getOrElse(Set.empty)
-}
+
 // AccessPolicyWithMembership is practically the same as AccessPolicyResponseEntry but the latter is used in api responses
 // and the former is used at the DAO level so it seems better to keep them separate
-@Lenses final case class AccessPolicyWithMembership(policyName: AccessPolicyName, membership: AccessPolicyMembership, email: WorkbenchEmail)
-@Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembership, email: WorkbenchEmail)
+@Lenses final case class AccessPolicyWithMembership(policyName: AccessPolicyName, membership: AccessPolicyMembershipResponse, email: WorkbenchEmail)
+@Lenses final case class AccessPolicyResponseEntry(policyName: AccessPolicyName, policy: AccessPolicyMembershipResponse, email: WorkbenchEmail)
 
 // Access Policy with no membership info to improve efficiency for calls that care about only the roles and actions of a policy, not the membership
 @Lenses final case class AccessPolicyWithoutMembers(
@@ -293,10 +267,18 @@ consistent "has a" relationship is tracked by this ticket: https://broadworkbenc
     email: WorkbenchEmail,
     roles: Set[ResourceRoleName],
     actions: Set[ResourceAction],
-    public: Boolean
+    public: Boolean,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
 )
 
-@Lenses final case class BasicWorkbenchGroup(id: WorkbenchGroupName, members: Set[WorkbenchSubject], email: WorkbenchEmail) extends WorkbenchGroup
+@Lenses final case class BasicWorkbenchGroup(
+    id: WorkbenchGroupName,
+    members: Set[WorkbenchSubject],
+    email: WorkbenchEmail,
+    version: Int = 1,
+    lastSynchronizedVersion: Option[Int] = None
+) extends WorkbenchGroup
 object BasicWorkbenchGroup {
   def apply(workbenchGroup: WorkbenchGroup): BasicWorkbenchGroup =
     workbenchGroup.id match {
@@ -305,59 +287,25 @@ object BasicWorkbenchGroup {
     }
 }
 
-@Lenses final case class ManagedGroupAndRole(groupName: WorkbenchGroupName, role: MangedGroupRoleName)
-@Lenses final case class ManagedGroupMembershipEntry(groupName: ResourceId, role: ResourceRoleName, groupEmail: WorkbenchEmail)
-@Lenses final case class ManagedGroupAccessInstructions(value: String) extends ValueObject
-
 @Lenses final case class GroupSyncResponse(lastSyncDate: String, email: WorkbenchEmail)
 
 @Lenses final case class SignedUrlRequest(bucketName: String, blobName: String, duration: Option[Long] = None, requesterPays: Option[Boolean] = Option(true))
-
-@Lenses final case class AdminUpdateUserRequest(
-    googleSubjectId: Option[GoogleSubjectId],
-    email: Option[WorkbenchEmail],
-    azureB2CId: Option[AzureB2CId],
-    enabled: Option[Boolean],
-    acceptedTosVersion: Option[String]
+@Lenses final case class RequesterPaysSignedUrlRequest(
+    gsPath: String,
+    duration: Option[Long] = None,
+    requesterPaysProject: Option[String] = None
 )
 
-object SamUser {
-  def apply(
-      id: WorkbenchUserId,
-      googleSubjectId: Option[GoogleSubjectId],
-      email: WorkbenchEmail,
-      azureB2CId: Option[AzureB2CId],
-      enabled: Boolean,
-      acceptedTosVersion: Option[String]
-  ): SamUser =
-    SamUser(id, googleSubjectId, email, azureB2CId, enabled, acceptedTosVersion, Instant.EPOCH, None, Instant.EPOCH)
-}
-
-final case class SamUser(
-    id: WorkbenchUserId,
-    googleSubjectId: Option[GoogleSubjectId],
-    email: WorkbenchEmail,
-    azureB2CId: Option[AzureB2CId],
-    enabled: Boolean,
-    acceptedTosVersion: Option[String],
-    createdAt: Instant,
-    registeredAt: Option[Instant],
-    updatedAt: Instant
-) {
-  def toUserIdInfo = UserIdInfo(id, email, googleSubjectId)
-
+final case class SamUserTos(id: WorkbenchUserId, version: String, action: String, createdAt: Instant) {
   override def equals(other: Any): Boolean = other match {
-    case user: SamUser =>
-      this.id == user.id &&
-      this.googleSubjectId == user.googleSubjectId &&
-      this.email == user.email &&
-      this.azureB2CId == user.azureB2CId &&
-      this.enabled == user.enabled &&
-      this.acceptedTosVersion == user.acceptedTosVersion
+    case userTos: SamUserTos =>
+      this.id == userTos.id &&
+      this.version == userTos.version &&
+      this.action == userTos.action
     case _ => false
   }
+  def toHistoryRecord: TermsOfServiceHistoryRecord = TermsOfServiceHistoryRecord(action, version, createdAt)
 }
-
 object SamLenses {
   val resourceIdentityAccessPolicy = AccessPolicy.id composeLens FullyQualifiedPolicyId.resource
   val resourceTypeNameInAccessPolicy = resourceIdentityAccessPolicy composeLens FullyQualifiedResourceId.resourceTypeName

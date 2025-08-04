@@ -1,7 +1,5 @@
 package org.broadinstitute.dsde.workbench.sam.service
 
-import cats.effect.IO
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.mockito.scalatest.MockitoSugar
@@ -15,7 +13,7 @@ case class TestResourceServiceBuilder(
     accessPolicyDAO: AccessPolicyDAO,
     directoryDAO: DirectoryDAO,
     cloudExtensions: CloudExtensions
-)(implicit val executionContext: ExecutionContext, val openTelemetry: OpenTelemetryMetrics[IO])
+)(implicit val executionContext: ExecutionContext)
     extends MockitoSugar {
   private val emailDomain = "example.com"
   private val resourceTypes: mutable.Map[ResourceTypeName, ResourceType] = new TrieMap()

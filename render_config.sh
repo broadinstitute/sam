@@ -1,8 +1,3 @@
-ENV=${1:-dev}
-VAULT_TOKEN=${2:-$(cat "$HOME"/.vault-token)}
-
-VAULT_ADDR="https://clotho.broadinstitute.org:8200"
-SAM_VAULT_PATH="secret/dsde/firecloud/$ENV/sam"
 SERVICE_OUTPUT_LOCATION="$(dirname "$0")/src/main/resources/rendered"
 SECRET_ENV_VARS_LOCATION="${SERVICE_OUTPUT_LOCATION}/secrets.env"
 
@@ -11,11 +6,11 @@ gcloud container clusters get-credentials --zone us-central1-a --project broad-d
 kubectl -n terra-dev get secret sam-sa-secret -o 'go-template={{index .data "sam-account.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/sam-account.json
 kubectl -n terra-dev get secret sam-sa-secret -o 'go-template={{index .data "sam-account.pem"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/sam-account.pem
 
-kubectl -n terra-dev get secret admin-sa-secret -o 'go-template={{index .data "admin-service-account-0.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-0.json
 kubectl -n terra-dev get secret admin-one-sa-secret -o 'go-template={{index .data "admin-service-account-1.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-1.json
 kubectl -n terra-dev get secret admin-two-sa-secret -o 'go-template={{index .data "admin-service-account-2.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-2.json
 kubectl -n terra-dev get secret admin-three-sa-secret -o 'go-template={{index .data "admin-service-account-3.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-3.json
 kubectl -n terra-dev get secret admin-four-sa-secret -o 'go-template={{index .data "admin-service-account-4.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-4.json
+kubectl -n terra-dev get secret admin-five-sa-secret -o 'go-template={{index .data "admin-service-account-5.json"}}' | base64 --decode > ${SERVICE_OUTPUT_LOCATION}/admin-service-account-5.json
 
 kubectl -n terra-dev get configmap sam-oauth2-configmap -o 'go-template={{index .data "oauth2-config"}}' > ${SERVICE_OUTPUT_LOCATION}/oauth2.conf
 # Local dev uses a macOS-specific docker replacement hostname for locahost, so replace all instances in the proxy config.
@@ -29,11 +24,11 @@ if [ -f "${SECRET_ENV_VARS_LOCATION}" ]; then
 fi
 
 {
-echo export AZURE_MANAGED_APP_CLIENT_ID="$(vault read -field=client-id secret/dsde/terra/azure/dev/sam/managed-app-publisher)";
-echo export AZURE_MANAGED_APP_CLIENT_SECRET="$(vault read -field=client-secret secret/dsde/terra/azure/dev/sam/managed-app-publisher)";
-echo export AZURE_MANAGED_APP_TENANT_ID="$(vault read -field=tenant-id secret/dsde/terra/azure/dev/sam/managed-app-publisher)";
-echo export LEGACY_GOOGLE_CLIENT_ID="$(vault read -format=json -field=data secret/dsde/firecloud/dev/common/refresh-token-oauth-credential.json | jq -r '.web.client_id')";
-echo export OIDC_CLIENT_ID="$(vault read -field=value secret/dsde/terra/azure/dev/b2c/application_id)";
+echo export AZURE_MANAGED_APP_CLIENT_ID="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="sam-managed-app-publisher-creds" | jq -r '."client-id"')";
+echo export AZURE_MANAGED_APP_CLIENT_SECRET="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="sam-managed-app-publisher-creds" | jq -r '."client-secret"')";
+echo export AZURE_MANAGED_APP_TENANT_ID="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="sam-managed-app-publisher-creds" | jq -r '."tenant-id"')";
+echo export LEGACY_GOOGLE_CLIENT_ID="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="refresh-token-oauth-credential" | jq -r '.web.client_id')";
+echo export OIDC_CLIENT_ID="$(gcloud secrets versions access latest --project="broad-dsde-dev" --secret="b2c-application-id" | jq -r '.value')";
 
 echo export SERVICE_ACCOUNT_CLIENT_EMAIL="$(cat ${SERVICE_OUTPUT_LOCATION}/sam-account.json | jq .client_email)";
 echo export SERVICE_ACCOUNT_CLIENT_ID="$(cat ${SERVICE_OUTPUT_LOCATION}/sam-account.json | jq .client_id)";

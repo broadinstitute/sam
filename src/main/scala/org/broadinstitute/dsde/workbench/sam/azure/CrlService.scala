@@ -2,23 +2,46 @@ package org.broadinstitute.dsde.workbench.sam.azure
 
 import bio.terra.cloudres.azure.resourcemanager.common.Defaults
 import bio.terra.cloudres.common.ClientConfig
+import bio.terra.cloudres.common.cleanup.CleanupConfig
 import cats.effect.IO
-import com.azure.core.management.AzureEnvironment
+import com.azure.core.credential.TokenCredential
 import com.azure.core.management.profile.AzureProfile
-import com.azure.identity.{ClientSecretCredential, ClientSecretCredentialBuilder}
+import com.azure.identity.{ChainedTokenCredentialBuilder, ClientSecretCredentialBuilder, ManagedIdentityCredentialBuilder}
 import com.azure.resourcemanager.managedapplications.ApplicationManager
 import com.azure.resourcemanager.msi.MsiManager
 import com.azure.resourcemanager.resources.ResourceManager
-import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, ManagedAppPlan}
+import com.google.auth.oauth2.ServiceAccountCredentials
+import com.typesafe.scalalogging.LazyLogging
+import org.broadinstitute.dsde.workbench.sam.config.{AzureServicesConfig, JanitorConfig}
+
+import java.io.FileInputStream
+import scala.concurrent.duration._
+import scala.jdk.DurationConverters._
 
 /** Service class for interacting with Terra Cloud Resource Library (CRL). See: https://github.com/DataBiosphere/terra-cloud-resource-lib
   *
   * Note: this class is Azure-specific for now because Sam uses workbench-libs for Google Cloud calls.
   */
-class CrlService(config: AzureServicesConfig) {
-  // TODO: Update Sam tests to talk to Janitor service:
-  // https://broadworkbench.atlassian.net/browse/ID-96
-  val clientConfig = ClientConfig.Builder.newBuilder().setClient("sam").build()
+class CrlService(config: AzureServicesConfig, janitorConfig: JanitorConfig) extends LazyLogging {
+  val clientId = "sam"
+  val testResourceTimeToLive = 1 hour
+  val clientConfigBase = ClientConfig.Builder.newBuilder().setClient("sam")
+  val clientConfig = if (janitorConfig.enabled) {
+    clientConfigBase
+      .setCleanupConfig(
+        CleanupConfig
+          .builder()
+          .setCleanupId(s"$clientId-test")
+          .setTimeToLive(testResourceTimeToLive.toJava)
+          .setJanitorProjectId(janitorConfig.trackResourceProjectId.value)
+          .setJanitorTopicName(janitorConfig.trackResourceTopicName)
+          .setCredentials(ServiceAccountCredentials.fromStream(new FileInputStream(janitorConfig.clientCredential.defaultServiceAccountJsonPath.asString)))
+          .build()
+      )
+      .build()
+  } else {
+    clientConfigBase.build()
+  }
 
   def buildMsiManager(tenantId: TenantId, subscriptionId: SubscriptionId): IO[MsiManager] = {
     val (credential, profile) = getCredentialAndProfile(tenantId, subscriptionId)
@@ -35,17 +58,30 @@ class CrlService(config: AzureServicesConfig) {
     IO(ApplicationManager.authenticate(credential, profile))
   }
 
-  def getManagedAppPlans: Seq[ManagedAppPlan] = config.managedAppPlans
+  private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (TokenCredential, AzureProfile) = {
 
-  private def getCredentialAndProfile(tenantId: TenantId, subscriptionId: SubscriptionId): (ClientSecretCredential, AzureProfile) = {
-    val credential = new ClientSecretCredentialBuilder()
-      .clientId(config.managedAppClientId)
-      .clientSecret(config.managedAppClientSecret)
-      .tenantId(config.managedAppTenantId)
-      .build
+    // When an access token is requested, the chain will try each
+    // credential in order, stopping when one provides a token
+    //
+    // For Managed Identity auth, SAM must be deployed to an Azure service
+    // other platforms will fall through to Service Principal auth
+    val credential = new ChainedTokenCredentialBuilder()
+    config.managedAppWorkloadClientId.foreach { workloadClientId =>
+      credential.addLast(new ManagedIdentityCredentialBuilder().clientId(workloadClientId).build)
+    }
+    config.managedAppServicePrincipal.foreach { servicePrincipalConfig =>
+      credential.addLast(
+        new ClientSecretCredentialBuilder()
+          .authorityHost(config.azureEnvironment.getActiveDirectoryEndpoint)
+          .clientId(servicePrincipalConfig.clientId)
+          .clientSecret(servicePrincipalConfig.clientSecret)
+          .tenantId(servicePrincipalConfig.tenantId)
+          .build
+      )
+    }
 
-    val profile = new AzureProfile(tenantId.value, subscriptionId.value, AzureEnvironment.AZURE)
+    val profile = new AzureProfile(tenantId.value, subscriptionId.value, config.azureEnvironment)
 
-    (credential, profile)
+    (credential.build(), profile)
   }
 }

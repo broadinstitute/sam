@@ -7,8 +7,9 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, genSamRoutes}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.MockDirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -16,7 +17,7 @@ import org.mockito.scalatest.MockitoSugar
 
 /** Created by dvoet on 6/7/17.
   */
-class UserRoutesSpec extends UserRoutesSpecHelper {
+class OldUserRoutesSpec extends OldUserRoutesSpecHelper {
   "POST /register/user" should "create user" in withDefaultRoutes { samRoutes =>
     Post("/register/user") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
@@ -41,7 +42,7 @@ class UserRoutesSpec extends UserRoutesSpecHelper {
   }
 }
 
-trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
+trait OldUserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRouteTest with MockitoSugar with TestSupport {
   val defaultUser = Generator.genWorkbenchUserGoogle.sample.get
   val defaultUserId = defaultUser.id
   val defaultUserEmail = defaultUser.email
@@ -85,7 +86,7 @@ trait UserRoutesSpecHelper extends AnyFlatSpec with Matchers with ScalatestRoute
   def withDefaultRoutes[T](testCode: TestSamRoutes => T): T = {
     val directoryDAO = new MockDirectoryDAO()
 
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val tosService = new TosService(NoExtensions, directoryDAO, TestSupport.tosConfig)
     val samRoutes = new TestSamRoutes(
       null,
       null,

@@ -21,8 +21,7 @@ case object ResourceParentUpdated extends ResourceEventType
 case object ResourceParentRemoved extends ResourceEventType
 case object ResourceDeleted extends ResourceEventType
 
-final case class ResourceEvent(eventType: ResourceEventType, resource: FullyQualifiedResourceId, changeDetails: Option[ResourceChange] = None)
-    extends AuditEvent
+final case class ResourceEvent(eventType: ResourceEventType, resource: FullyQualifiedResourceId, changeDetails: Set[ResourceChange] = Set()) extends AuditEvent
 
 case class AccessChange(
     member: WorkbenchSubject,
@@ -41,7 +40,7 @@ final case class AccessChangeEvent(eventType: AccessChangeEventType, resource: F
 object SamAuditModelJsonSupport {
   import DefaultJsonProtocol._
   import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
-  import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+  import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 
   implicit object InetAddressFormat extends RootJsonFormat[InetAddress] {
     def write(ip: InetAddress) = JsString(ip.getHostAddress)
@@ -52,10 +51,10 @@ object SamAuditModelJsonSupport {
     }
   }
 
-  implicit val AuditInfoFormat = jsonFormat2(AuditInfo)
+  implicit val AuditInfoFormat: RootJsonFormat[AuditInfo] = jsonFormat2(AuditInfo)
 
-  implicit val ResourceChangeFormat = jsonFormat1(ResourceChange)
-  implicit val ResourceEventTypeFormat = new RootJsonFormat[ResourceEventType] {
+  implicit val ResourceChangeFormat: RootJsonFormat[ResourceChange] = jsonFormat1(ResourceChange)
+  implicit val ResourceEventTypeFormat: RootJsonFormat[ResourceEventType] = new RootJsonFormat[ResourceEventType] {
     def read(obj: JsValue): ResourceEventType = obj match {
       case JsString("ResourceCreated") => ResourceCreated
       case JsString("ResourceParentUpdated") => ResourceParentUpdated
@@ -67,9 +66,9 @@ object SamAuditModelJsonSupport {
     def write(obj: ResourceEventType): JsValue = JsString(obj.toString)
   }
 
-  implicit val ResourceEventFormat = jsonFormat3(ResourceEvent)
+  implicit val ResourceEventFormat: RootJsonFormat[ResourceEvent] = jsonFormat3(ResourceEvent)
 
-  implicit val WorkbenchSubjectFormat = new RootJsonFormat[WorkbenchSubject] {
+  implicit val WorkbenchSubjectFormat: RootJsonFormat[WorkbenchSubject] = new RootJsonFormat[WorkbenchSubject] {
     val MEMBER_TYPE_FIELD = "memberType"
     val USER_TYPE = "user"
     val GROUP_TYPE = "group"
@@ -106,8 +105,8 @@ object SamAuditModelJsonSupport {
       }
   }
 
-  implicit val AccessChangeFormat = jsonFormat5(AccessChange)
-  implicit val AccessChangeEventTypeFormat = new RootJsonFormat[AccessChangeEventType] {
+  implicit val AccessChangeFormat: RootJsonFormat[AccessChange] = jsonFormat5(AccessChange)
+  implicit val AccessChangeEventTypeFormat: RootJsonFormat[AccessChangeEventType] = new RootJsonFormat[AccessChangeEventType] {
     def read(obj: JsValue): AccessChangeEventType = obj match {
       case JsString("AccessAdded") => AccessAdded
       case JsString("AccessRemoved") => AccessRemoved
@@ -117,5 +116,5 @@ object SamAuditModelJsonSupport {
     def write(obj: AccessChangeEventType): JsValue = JsString(obj.toString)
   }
 
-  implicit val PolicyEventFormat = jsonFormat3(AccessChangeEvent)
+  implicit val PolicyEventFormat: RootJsonFormat[AccessChangeEvent] = jsonFormat3(AccessChangeEvent)
 }

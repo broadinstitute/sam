@@ -2,12 +2,14 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server
-import akka.http.scaladsl.server.Directives.onSuccess
-import akka.http.scaladsl.server.{Directive0, Directives}
+import akka.http.scaladsl.server.Directives.{complete, handleExceptions, onSuccess}
+import akka.http.scaladsl.server.{Directive0, Directives, ExceptionHandler}
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.ImplicitConversions.ioOnSuccessMagnet
 import org.broadinstitute.dsde.workbench.sam._
+import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
+import org.broadinstitute.dsde.workbench.sam.model.api.BulkMembershipUpdate
 import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceType, SamResourceActions, SamResourceTypes}
 import org.broadinstitute.dsde.workbench.sam.service.{PolicyEvaluatorService, ResourceService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -74,8 +76,9 @@ trait SecurityDirectives {
     maybeParent match {
       case None => Directives.pass // no parent specified, proceed
       case Some(parent) =>
-        // parents are allowed for a resource type if the owner role contains the SamResourceActions.setParent action
-        val parentAllowed = resourceType.roles.find(_.roleName == resourceType.ownerRoleName).exists(_.actions.contains(SamResourceActions.setParent))
+        // parents are allowed for a resource type if the owner role contains the SamResourceActions.setParent or SamResourceActions.createWithParent action
+        val parentAllowedActions = Set(SamResourceActions.setParent, SamResourceActions.createWithParent)
+        val parentAllowed = parentAllowedActions.intersect(resourceType.getRoleActions(resourceType.ownerRoleName)).nonEmpty
         if (!parentAllowed) {
           Directives.failWith(
             new WorkbenchExceptionWithErrorReport(
@@ -143,6 +146,25 @@ trait SecurityDirectives {
     }
   }
 
+  def requireAnyAction(
+      resource: FullyQualifiedResourceId,
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): Directive0 =
+    Directives.mapInnerRoute { innerRoute =>
+      onSuccess(policyEvaluatorService.listUserResourceActions(resource, userId, samRequestContext)) { actions =>
+        if (actions.nonEmpty) {
+          innerRoute
+        } else {
+          Directives.failWith(
+            new WorkbenchExceptionWithErrorReport(
+              ErrorReport(StatusCodes.Forbidden, s"You do not have access to ${resource.resourceTypeName.value}/${resource.resourceId.value}")
+            )
+          )
+        }
+      }
+    }
+
   /** in the case where we don't have the required action, we need to figure out if we should return a Not Found (you have no access) vs a Forbidden (you have
     * access, just not the right kind)
     */
@@ -189,5 +211,47 @@ trait SecurityDirectives {
         // there is no parent so permission is granted
         IO.pure(true)
     }
+  }
+
+  def verifyBulkMembershipUpdateAccess(
+      membershipUpdates: Seq[BulkMembershipUpdate],
+      userId: WorkbenchUserId,
+      samRequestContext: SamRequestContext
+  ): Directive0 = {
+    val requireDirectives = membershipUpdates.flatMap { membershipUpdate =>
+      if (membershipUpdate.resourceTypeName == resourceTypeAdminName) {
+        Seq(
+          Directives.mapInnerRoute { innerRoute =>
+            Directives.failWith(
+              new WorkbenchExceptionWithErrorReport(
+                ErrorReport(StatusCodes.BadRequest, "Please use the admin resourceTypes routes to view and make changes to admin resource policies.")
+              )
+            )
+          }
+        )
+      } else {
+        val resource = FullyQualifiedResourceId(membershipUpdate.resourceTypeName, membershipUpdate.resourceId)
+        membershipUpdate.policyUpdates.map { policyUpdate =>
+          requireOneOfAction(
+            resource,
+            Set(SamResourceActions.sharePolicy(policyUpdate.policyName), SamResourceActions.alterPolicies),
+            userId,
+            samRequestContext
+          )
+        }
+      }
+    }
+    // requireOneOfAction may return Not Found but we want to return Forbidden instead in this case
+    changeNotFoundToForbidden & requireDirectives.foldLeft(Directives.pass)(_ & _)
+  }
+
+  private val changeNotFoundToForbidden: Directive0 = {
+    import org.broadinstitute.dsde.workbench.model.ErrorReportJsonSupport._
+    import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+
+    handleExceptions(ExceptionHandler {
+      case withErrorReport: WorkbenchExceptionWithErrorReport if withErrorReport.errorReport.statusCode.contains(StatusCodes.NotFound) =>
+        complete((StatusCodes.Forbidden, withErrorReport.errorReport.copy(statusCode = Option(StatusCodes.Forbidden))))
+    })
   }
 }

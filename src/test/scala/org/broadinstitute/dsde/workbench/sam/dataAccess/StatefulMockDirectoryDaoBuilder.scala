@@ -3,9 +3,11 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.BasicWorkbenchGroup
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
+import org.mockito.IdiomaticMockito.StubbingOps
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
@@ -25,6 +27,11 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     .doReturn(IO(None))
     .when(mockedDirectoryDAO)
     .loadUser(any[WorkbenchUserId], any[SamRequestContext])
+
+  lenient()
+    .doReturn(IO(Set.empty))
+    .when(mockedDirectoryDAO)
+    .loadUsersByQuery(any[Option[WorkbenchUserId]], any[Option[GoogleSubjectId]], any[Option[AzureB2CId]], any[Int], any[SamRequestContext])
 
   lenient()
     .doReturn(IO(None))
@@ -122,9 +129,42 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
     .when(mockedDirectoryDAO)
     .deleteUser(any[WorkbenchUserId], any[SamRequestContext])
 
+  lenient()
+    .doReturn(IO.unit)
+    .when(mockedDirectoryDAO)
+    .setUserAttributes(any[SamUserAttributes], any[SamRequestContext])
+
   def withExistingUser(samUser: SamUser): StatefulMockDirectoryDaoBuilder = withExistingUsers(Set(samUser))
   def withExistingUsers(samUsers: Iterable[SamUser]): StatefulMockDirectoryDaoBuilder = {
     samUsers.toSet.foreach(makeUserExist)
+    mockedDirectoryDAO.loadUsersByQuery(
+      any[Option[WorkbenchUserId]],
+      any[Option[GoogleSubjectId]],
+      any[Option[AzureB2CId]],
+      any[Int],
+      any[SamRequestContext]
+    ) answers ((maybeUserId: Option[WorkbenchUserId], maybeGoogleSubjectId: Option[GoogleSubjectId], maybeAzureB2CId: Option[AzureB2CId], limit: Int) =>
+      IO(
+        samUsers
+          .filter(user =>
+            (maybeUserId.isEmpty && maybeGoogleSubjectId.isEmpty && maybeAzureB2CId.isEmpty) ||
+              maybeUserId.contains(user.id) ||
+              ((maybeGoogleSubjectId, user.googleSubjectId) match {
+                case (Some(googleSubjectId), Some(userGoogleSubjectId)) if googleSubjectId == userGoogleSubjectId => true
+                case _ => false
+              }) ||
+              ((maybeAzureB2CId, user.azureB2CId) match {
+                case (Some(azureB2CId), Some(userAzureB2CId)) if azureB2CId == userAzureB2CId => true
+                case _ => false
+              })
+          )
+          .take(limit)
+          .toSet
+      )
+    )
+    mockedDirectoryDAO.batchLoadUsers(any[Set[WorkbenchUserId]], any[SamRequestContext]) answers ((samUserIds: Set[WorkbenchUserId], _: SamRequestContext) =>
+      IO(samUsers.filter(user => samUserIds.contains(user.id)).toSeq)
+    )
     this
   }
 
@@ -192,6 +232,12 @@ case class StatefulMockDirectoryDaoBuilder() extends MockitoSugar {
       .doReturn(IO(Option(samUser.id)))
       .when(mockedDirectoryDAO)
       .loadSubjectFromEmail(ArgumentMatchers.eq(samUser.email), any[SamRequestContext])
+
+    lenient()
+      .doReturn(IO(Option(samUser)))
+      .when(mockedDirectoryDAO)
+      .updateUser(ArgumentMatchers.eq(samUser), any[AdminUpdateUserRequest], any[SamRequestContext])
+
   }
 
   private def makeUserEnabled(samUser: SamUser): Unit = {

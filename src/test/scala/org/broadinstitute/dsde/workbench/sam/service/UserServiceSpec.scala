@@ -1,16 +1,20 @@
 package org.broadinstitute.dsde.workbench.sam
 package service
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
+import akka.testkit.TestKit
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.Generator.{arbNonPetEmail => _, _}
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue, googleServicesConfig, truncateAll}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
+import org.broadinstitute.dsde.workbench.sam.matchers.BeSameUserMatcher.beSameUserAs
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito
@@ -20,7 +24,7 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.Inside.inside
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 import org.scalatest._
 
@@ -31,15 +35,30 @@ import scala.concurrent.duration._
 
 // TODO: continue breaking down old UserServiceSpec tests into nested suites
 // See: https://www.scalatest.org/scaladoc/3.2.3/org/scalatest/Suite.html
-class UserServiceSpec extends Suite {
+class UserServiceSpec(_system: ActorSystem) extends TestKit(_system) with Suite with BeforeAndAfterAll with BeforeAndAfterEach {
   override def nestedSuites: IndexedSeq[Suite] =
     IndexedSeq(
       new CreateUserSpec,
       new InviteUserSpec,
       new GetUserStatusSpec,
-      new OldUserServiceSpec,
-      new OldUserServiceMockSpec
+      new OldUserServiceSpec(_system),
+      new OldUserServiceMockSpec(_system)
     )
+
+  def this() = this(ActorSystem("UserServiceSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
+
+  override def beforeEach(): Unit = {
+    truncateAll
+    super.beforeEach()
+  }
 }
 
 // This test suite is deprecated.  It is still used and still has valid tests in it, but it should be broken out
@@ -47,8 +66,9 @@ class UserServiceSpec extends Suite {
 // This class does not connect to a real database (hence "mock" in the name (naming is hard, don't judge me)), but its
 // tests should still be broken out to individual Spec files and rewritten
 @DoNotDiscover
-class OldUserServiceMockSpec
-    extends AnyFlatSpec
+class OldUserServiceMockSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
     with Matchers
     with TestSupport
     with MockitoSugar
@@ -57,6 +77,16 @@ class OldUserServiceMockSpec
     with BeforeAndAfterAll
     with ScalaFutures
     with OptionValues {
+
+  def this() = this(ActorSystem("OldUserServiceMockSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -98,6 +128,7 @@ class OldUserServiceMockSpec
     when(dirDAO.listUserDirectMemberships(defaultUser.id, samRequestContext)).thenReturn(IO(LazyList(allUsersGroup.id)))
     when(dirDAO.setGoogleSubjectId(defaultUser.id, defaultUser.googleSubjectId.get, samRequestContext)).thenReturn(IO(()))
     when(dirDAO.setUserAzureB2CId(defaultUser.id, defaultUser.azureB2CId.get, samRequestContext)).thenReturn(IO(()))
+    when(dirDAO.setUserAttributes(any[SamUserAttributes], any[SamRequestContext])).thenReturn(IO(()))
 
     googleExtensions = mock[GoogleExtensions](RETURNS_SMART_NULLS)
     when(googleExtensions.getOrCreateAllUsersGroup(any[DirectoryDAO], any[SamRequestContext])(any[ExecutionContext]))
@@ -108,10 +139,10 @@ class OldUserServiceMockSpec
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext])).thenReturn(IO.unit)
 
     mockTosService = mock[TosService](RETURNS_SMART_NULLS)
-    when(mockTosService.getTosComplianceStatus(any[SamUser]))
+    when(mockTosService.getTermsOfServiceComplianceStatus(any[SamUser], any[SamRequestContext]))
       .thenAnswer((i: InvocationOnMock) => IO.pure(TermsOfServiceComplianceStatus(i.getArgument[SamUser](0).id, true, true)))
 
     service = Mockito.spy(new UserService(dirDAO, googleExtensions, Seq(blockedDomain), mockTosService))
@@ -142,7 +173,8 @@ class OldUserServiceMockSpec
   }
 
   it should "return UserStatusDiagnostics.tosAccepted as false if user's TOS status is false" in {
-    when(mockTosService.getTosComplianceStatus(enabledUser)).thenReturn(IO.pure(TermsOfServiceComplianceStatus(enabledUser.id, false, false)))
+    when(mockTosService.getTermsOfServiceComplianceStatus(enabledUser, samRequestContext))
+      .thenReturn(IO.pure(TermsOfServiceComplianceStatus(enabledUser.id, false, false)))
     val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).unsafeRunSync()
     status.value.tosAccepted shouldBe false
   }
@@ -231,8 +263,9 @@ object GenEmail {
 // This class DOES connect to a real database and its tests should be broken out to individual Spec files
 // and rewritten
 @DoNotDiscover
-class OldUserServiceSpec
-    extends AnyFlatSpec
+class OldUserServiceSpec(_system: ActorSystem)
+    extends TestKit(_system)
+    with AnyFlatSpecLike
     with Matchers
     with TestSupport
     with MockitoSugar
@@ -242,6 +275,16 @@ class OldUserServiceSpec
     with ScalaFutures
     with OptionValues
     with TimeMatchers {
+
+  def this() = this(ActorSystem("OldUserServiceSpec"))
+
+  override def beforeAll(): Unit =
+    super.beforeAll()
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+    super.afterAll()
+  }
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(5.seconds))
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -281,11 +324,11 @@ class OldUserServiceSpec
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO.pure(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
-    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext])).thenReturn(IO.unit)
 
-    tos = new TosService(dirDAO, TestSupport.tosConfig)
+    tos = new TosService(googleExtensions, dirDAO, TestSupport.tosConfig)
     service = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tos)
-    tosServiceEnabled = new TosService(dirDAO, TestSupport.tosConfig)
+    tosServiceEnabled = new TosService(googleExtensions, dirDAO, TestSupport.tosConfig)
     serviceTosEnabled = new UserService(dirDAO, googleExtensions, Seq(blockedDomain), tosServiceEnabled)
   }
 
@@ -356,24 +399,43 @@ class OldUserServiceSpec
     }
   }
 
+  it should "record the date that the user registered if they were previously invited" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val user = genWorkbenchUserGoogle.sample.get
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Act
+    service.inviteUser(user.email, samRequestContext).unsafeRunSync()
+
+    val registeredAt = Instant.now()
+    val userStatus = service.createUser(user, samRequestContext).unsafeRunSync()
+
+    // Assert
+    val maybeUser = dirDAO.loadUser(userStatus.userInfo.userSubjectId, samRequestContext).unsafeRunSync()
+    inside(maybeUser.value) { persistedUser =>
+      persistedUser.registeredAt.value should beAround(registeredAt)
+    }
+  }
+
   /** GoogleSubjectId Email no no ---> We've never seen this user before, create a new user
     */
   "UserService registerUser" should "create new user when there's no existing subject for a given googleSubjectId and email" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserGoogle.sample.get
-    service.registerUser(user, samRequestContext).unsafeRunSync()
+    service.createUser(user, samRequestContext).unsafeRunSync()
     val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    res shouldBe Some(user)
+    res.get should beSameUserAs(user)
   }
 
   it should "create new user when there's no existing subject for a given azureB2CId and email" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserAzure.sample.get
-    service.registerUser(user, samRequestContext).unsafeRunSync()
+    service.createUser(user, samRequestContext).unsafeRunSync()
     val res = dirDAO.loadUser(user.id, samRequestContext).unsafeRunSync()
-    res shouldBe Some(user)
+    res.get should beSameUserAs(user)
   }
 
   /** GoogleSubjectId Email no yes ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId
@@ -384,10 +446,10 @@ class OldUserServiceSpec
 
     val user = genWorkbenchUserGoogle.sample.get
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
-    service.registerUser(user, samRequestContext).unsafeRunSync()
+    service.createUser(user, samRequestContext).unsafeRunSync()
     val userId = dirDAO.loadSubjectFromEmail(user.email, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
     val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
-    res shouldBe Some(user.copy(id = userId))
+    res.get should beSameUserAs(user.copy(id = userId))
   }
 
   it should "update azureB2CId when there's no existing subject for a given googleSubjectId and but there is one for email" in {
@@ -395,10 +457,10 @@ class OldUserServiceSpec
 
     val user = genWorkbenchUserAzure.sample.get
     service.inviteUser(user.email, samRequestContext).unsafeRunSync()
-    service.registerUser(user, samRequestContext).unsafeRunSync()
+    service.createUser(user, samRequestContext).unsafeRunSync()
     val userId = dirDAO.loadSubjectFromEmail(user.email, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
     val res = dirDAO.loadUser(userId, samRequestContext).unsafeRunSync()
-    res shouldBe Some(user.copy(id = userId))
+    res.get should beSameUserAs(user.copy(id = userId))
   }
 
   /** GoogleSubjectId Email no yes ---> Someone invited this user previous and we have a record for this user already. We just need to update GoogleSubjetId
@@ -411,7 +473,7 @@ class OldUserServiceSpec
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
     dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
-      service.registerUser(user, samRequestContext).unsafeRunSync()
+      service.createUser(user, samRequestContext).unsafeRunSync()
     }
     res.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
@@ -423,7 +485,7 @@ class OldUserServiceSpec
     val group = genBasicWorkbenchGroup.sample.get.copy(email = user.email, members = Set.empty)
     dirDAO.createGroup(group, samRequestContext = samRequestContext).unsafeRunSync()
     val res = intercept[WorkbenchExceptionWithErrorReport] {
-      service.registerUser(user, samRequestContext).unsafeRunSync()
+      service.createUser(user, samRequestContext).unsafeRunSync()
     }
     res.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
@@ -435,9 +497,9 @@ class OldUserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserGoogle.sample.get
-    service.registerUser(user, samRequestContext).unsafeRunSync()
+    service.createUser(user, samRequestContext).unsafeRunSync()
     assertThrows[WorkbenchException] {
-      service.registerUser(user.copy(googleSubjectId = Option(genGoogleSubjectId.sample.get)), samRequestContext).unsafeRunSync()
+      service.createUser(user.copy(googleSubjectId = Option(genGoogleSubjectId.sample.get)), samRequestContext).unsafeRunSync()
     }
   }
 
@@ -445,9 +507,9 @@ class OldUserServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     val user = genWorkbenchUserAzure.sample.get
-    service.registerUser(user, samRequestContext).unsafeRunSync()
+    service.createUser(user, samRequestContext).unsafeRunSync()
     assertThrows[WorkbenchException] {
-      service.registerUser(user.copy(azureB2CId = Option(genAzureB2CId.sample.get)), samRequestContext).unsafeRunSync()
+      service.createUser(user.copy(azureB2CId = Option(genAzureB2CId.sample.get)), samRequestContext).unsafeRunSync()
     }
   }
 
@@ -459,9 +521,9 @@ class OldUserServiceSpec
     val user = genWorkbenchUserGoogle.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      service.registerUser(user, samRequestContext).unsafeRunSync()
+      service.createUser(user, samRequestContext).unsafeRunSync()
     }
-    exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
+    exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")
   }
 
   it should "return conflict when there's an existing subject for a given azureB2CId" in {
@@ -470,9 +532,9 @@ class OldUserServiceSpec
     val user = genWorkbenchUserAzure.sample.get
     dirDAO.createUser(user, samRequestContext).unsafeRunSync()
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      service.registerUser(user, samRequestContext).unsafeRunSync()
+      service.createUser(user, samRequestContext).unsafeRunSync()
     }
-    exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} already exists")
+    exception.errorReport shouldEqual ErrorReport(StatusCodes.Conflict, s"user ${user.email} is already registered")
   }
 
   // Test arose out of: https://broadworkbench.atlassian.net/browse/PROD-677
@@ -486,7 +548,7 @@ class OldUserServiceSpec
     // Lookup the invited user and their ID
     val invitedUserId = dirDAO.loadSubjectFromEmail(emailToInvite, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
     val invitedUser = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync().getOrElse(fail("Failed to load invited user after inviting them"))
-    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false, None)
+    invitedUser shouldBe SamUser(invitedUserId, None, emailToInvite, None, false)
 
     // Give them a fake GoogleSubjectId and a new WorkbenchUserId and use that to register them.
     // The real code in org/broadinstitute/dsde/workbench/sam/api/UserRoutes.scala calls
@@ -494,9 +556,9 @@ class OldUserServiceSpec
     // WorkbenchUserId for the SamUser on the request.
     val googleSubjectId = Option(GoogleSubjectId("123456789"))
     val newRegisteringUserId = WorkbenchUserId("11111111111111111")
-    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false, None)
-    val registeredUser = service.registerUser(registeringUser, samRequestContext).unsafeRunSync()
-    registeredUser.id should {
+    val registeringUser = SamUser(newRegisteringUserId, googleSubjectId, emailToInvite, None, false)
+    val registeredUser = service.createUser(registeringUser, samRequestContext).unsafeRunSync()
+    registeredUser.userInfo.userSubjectId should {
       equal(invitedUser.id) and
         not equal newRegisteringUserId
     }
@@ -528,14 +590,14 @@ class OldUserServiceSpec
 
     val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
     userInPostgres.value should {
-      equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None))
+      equal(SamUser(invitedUserId, None, inviteeEmail, None, false))
     }
 
     val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true, None)
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true)
   }
 
   it should "update azureB2CId for this user" in {
@@ -546,13 +608,13 @@ class OldUserServiceSpec
     val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
 
     val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    userInPostgres.value should equal(SamUser(invitedUserId, None, inviteeEmail, None, false, None))
+    userInPostgres.value should equal(SamUser(invitedUserId, None, inviteeEmail, None, false))
 
     val registeringUser = genWorkbenchUserAzure.sample.get.copy(email = inviteeEmail)
     runAndWait(service.createUser(registeringUser, samRequestContext))
 
     val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
-    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, None, inviteeEmail, registeringUser.azureB2CId, true, None)
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, None, inviteeEmail, registeringUser.azureB2CId, true)
   }
 
   "UserService getUserIdInfoFromEmail" should "return the email along with the userSubjectId and googleSubjectId" in {
@@ -584,7 +646,7 @@ class OldUserServiceSpec
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isRight)
+      assert(service.validateEmailAddress(email, Seq.empty, Seq.empty).attempt.unsafeRunSync().isRight)
     }
   }
 
@@ -605,7 +667,7 @@ class OldUserServiceSpec
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
@@ -626,7 +688,7 @@ class OldUserServiceSpec
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
@@ -640,12 +702,62 @@ class OldUserServiceSpec
     implicit val arbEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genEmail)
 
     forAll { email: WorkbenchEmail =>
-      assert(service.validateEmailAddress(email, Seq.empty).attempt.unsafeRunSync().isLeft)
+      assert(service.validateEmailAddress(email, Seq.empty, Seq.empty).attempt.unsafeRunSync().isLeft)
     }
   }
 
   it should "reject blocked email domain" in {
-    assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
-    assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq("bar.com"), Seq.empty).attempt.unsafeRunSync().isLeft)
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq("bar.com"), Seq.empty).attempt.unsafeRunSync().isLeft)
+  }
+
+  it should "reject an un-invitable email domain" in {
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@splat.bar.com"), Seq.empty, Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+    assert(service.validateEmailAddress(WorkbenchEmail("foo@bar.com"), Seq.empty, Seq("bar.com")).attempt.unsafeRunSync().isLeft)
+  }
+
+  "UserService repairCloudAccess" should "create a proxy group for a user and add it to any groups they are a member of" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Create user
+    val inviteeEmail = genNonPetEmail.sample.get
+    service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
+    val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+
+    val userInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    userInPostgres.value should {
+      equal(SamUser(invitedUserId, None, inviteeEmail, None, false))
+    }
+
+    val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
+    runAndWait(service.createUser(registeringUser, samRequestContext))
+
+    verify(googleExtensions).onUserCreate(SamUser(invitedUserId, None, inviteeEmail, None, false), samRequestContext)
+
+    verify(googleExtensions).onGroupUpdate(Seq.empty, Set(invitedUserId), samRequestContext)
+
+    val updatedUserInPostgres = dirDAO.loadUser(invitedUserId, samRequestContext).unsafeRunSync()
+    updatedUserInPostgres.value shouldBe SamUser(invitedUserId, registeringUser.googleSubjectId, inviteeEmail, None, true)
+
+    // add user to group
+    val group = BasicWorkbenchGroup(WorkbenchGroupName("testGroup"), Set.empty, WorkbenchEmail("fake@group.com"))
+    runAndWait(dirDAO.createGroup(group, None, samRequestContext))
+    runAndWait(dirDAO.addGroupMember(group.id, invitedUserId, samRequestContext))
+
+    val proxyGroup =
+      WorkbenchGroupName(s"${googleServicesConfig.resourceNamePrefix.getOrElse("")}PROXY_${invitedUserId.value}@${googleServicesConfig.appsDomain}")
+    // delete proxy group
+    runAndWait(dirDAO.deleteGroup(proxyGroup, samRequestContext))
+
+    // Run test
+    service.repairCloudAccess(invitedUserId, samRequestContext).unsafeRunSync()
+
+    verify(googleExtensions).onUserCreate(updatedUserInPostgres.get, samRequestContext)
+    verify(googleExtensions).onUserEnable(updatedUserInPostgres.get, samRequestContext)
+    verify(googleExtensions).onGroupUpdate(Seq(allUsersGroup.id, group.id), Set(invitedUserId), samRequestContext)
+
+    // get group from db
+    val groupWithUpdatedVersion = runAndWait(dirDAO.loadGroup(group.id, samRequestContext))
+    groupWithUpdatedVersion.get.version shouldBe group.version + 1
   }
 }

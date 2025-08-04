@@ -12,15 +12,14 @@ import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, Logg
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
-import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import io.sentry.Sentry
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes.myExceptionHandler
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
 import org.broadinstitute.dsde.workbench.sam.service._
 
@@ -38,44 +37,52 @@ abstract class SamRoutes(
     val tosService: TosService,
     val liquibaseConfig: LiquibaseConfig,
     val oidcConfig: OpenIDConnectConfiguration,
+    val adminConfig: AdminConfig,
     val azureService: Option[AzureService]
 )(implicit
     val system: ActorSystem,
     val materializer: Materializer,
-    val executionContext: ExecutionContext,
-    val openTelemetry: OpenTelemetryMetrics[IO]
+    val executionContext: ExecutionContext
 ) extends LazyLogging
     with ResourceRoutes
-    with UserRoutes
+    with OldUserRoutes
     with StatusRoutes
     with TermsOfServiceRoutes
     with ExtensionRoutes
     with ManagedGroupRoutes
     with AdminRoutes
-    with AzureRoutes {
+    with AzureRoutes
+    with ServiceAdminRoutes
+    with UserRoutesV1
+    with UserRoutesV2 {
 
   def route: server.Route = (logRequestResult & handleExceptions(myExceptionHandler)) {
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
-      oidcConfig.oauth2Routes ~
-      statusRoutes ~
-      termsOfServiceRoutes ~
-      withExecutionContext(ExecutionContext.global) {
-        withSamRequestContext { samRequestContext =>
-          pathPrefix("register")(userRoutes(samRequestContext)) ~
-            pathPrefix("api") {
-              // IMPORTANT - all routes under /api must have an active user
-              withActiveUser(samRequestContext) { samUser =>
-                val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
-                resourceRoutes(samUser, samRequestContextWithUser) ~
-                  adminRoutes(samUser, samRequestContextWithUser) ~
-                  extensionRoutes(samUser, samRequestContextWithUser) ~
-                  groupRoutes(samUser, samRequestContextWithUser) ~
-                  apiUserRoutes(samUser, samRequestContextWithUser) ~
-                  azureRoutes(samUser, samRequestContextWithUser)
-              }
-            }
+    oidcConfig.oauth2Routes ~
+    statusRoutes ~
+    oldTermsOfServiceRoutes ~
+    publicTermsOfServiceRoutes ~
+    withExecutionContext(ExecutionContext.global) {
+      withSamRequestContext { samRequestContext =>
+        pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
+        pathPrefix("api") {
+          // these routes are for machine to machine authorized requests
+          // the whitelisted service admin account email is in the header of the request
+          serviceAdminRoutes(samRequestContext) ~
+          userRoutesV2(samRequestContext) ~
+          userTermsOfServiceRoutes(samRequestContext) ~
+          withActiveUser(samRequestContext) { samUser =>
+            val samRequestContextWithUser = samRequestContext.copy(samUser = Option(samUser))
+            resourceRoutes(samUser, samRequestContextWithUser) ~
+            adminRoutes(samUser, samRequestContextWithUser) ~
+            extensionRoutes(samUser, samRequestContextWithUser) ~
+            groupRoutes(samUser, samRequestContextWithUser) ~
+            azureRoutes(samUser, samRequestContextWithUser) ~
+            userRoutesV1(samUser, samRequestContextWithUser)
+          }
         }
       }
+    }
   }
 
   // basis for logRequestResult lifted from http://stackoverflow.com/questions/32475471/how-does-one-log-akka-http-client-requests
@@ -102,9 +109,6 @@ abstract class SamRoutes(
 
     DebuggingDirectives.logRequestResult(LoggingMagnet(log => myLoggingFunction(log)))
   }
-
-  def statusCodeCreated[T](response: T): (StatusCode, T) = (StatusCodes.Created, response)
-
 }
 
 object SamRoutes {
@@ -114,10 +118,10 @@ object SamRoutes {
     ExceptionHandler {
       case withErrorReport: WorkbenchExceptionWithErrorReport =>
         Sentry.captureException(withErrorReport)
-        complete((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport))
+        complete((withErrorReport.errorReport.statusCode.getOrElse(StatusCodes.InternalServerError), withErrorReport.errorReport.copy(stackTrace = Seq())))
       case e: Throwable =>
         Sentry.captureException(e)
-        complete((StatusCodes.InternalServerError, ErrorReport(e)))
+        complete((StatusCodes.InternalServerError, ErrorReport(e).copy(stackTrace = Seq())))
     }
   }
 }

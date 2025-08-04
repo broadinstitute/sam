@@ -9,7 +9,7 @@ import com.google.pubsub.v1.PubsubMessage
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport, WorkbenchGroupName}
 import org.broadinstitute.dsde.workbench.sam._
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.FullyQualifiedPolicyIdFormat
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport.FullyQualifiedPolicyIdFormat
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
@@ -50,7 +50,11 @@ class GoogleGroupSyncMessageReceiverSpec extends AnyFlatSpecLike with Matchers w
 
   it should "nack on completion with errors" in {
     when(synchronizer.synchronizeGroupMembers(ArgumentMatchers.eq(testGroup), ArgumentMatchers.eq(Set.empty), any[SamRequestContext]))
-      .thenReturn(IO.pure(Map(WorkbenchEmail(s"${testGroup.value}@foo.com") -> Seq(SyncReportItem("added", "member email", Option(ErrorReport("failure")))))))
+      .thenReturn(
+        IO.pure(
+          Map(WorkbenchEmail(s"${testGroup.value}@foo.com") -> Seq(SyncReportItem("added", "member email", testGroup.value, Option(ErrorReport("failure")))))
+        )
+      )
     receiver.receiveMessage(PubsubMessage.newBuilder().setData(ByteString.copyFromUtf8(testGroup.toJson.compactPrint)).build(), consumer)
     verify(consumer).nack()
 

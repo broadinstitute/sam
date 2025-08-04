@@ -11,10 +11,12 @@ object Version {
     val lastCommit = sys.env.getOrElse("GIT_HASH", getLastCommitFromGit).trim()
     val version = baseVersion + "-" + lastCommit
 
+    val semVer = sys.props.get("project.semVer").getOrElse(version)
+
     // The project isSnapshot string passed in via command line settings, if desired.
     val isSnapshot = sys.props.getOrElse("project.isSnapshot", "true").toBoolean
 
     // For now, obfuscate SNAPSHOTs from sbt's developers: https://github.com/sbt/sbt/issues/2687#issuecomment-236586241
-    if (isSnapshot) s"$version-SNAP" else version
+    if (isSnapshot) s"$semVer-SNAP" else semVer
   }
 }

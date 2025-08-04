@@ -5,23 +5,27 @@ import akka.http.scaladsl.Http
 import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
+import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.cloud.opentelemetry.trace.{TraceConfiguration, TraceExporter}
+import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
+import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.baggage.propagation.W3CBaggagePropagator
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
+import io.opentelemetry.context.propagation.{ContextPropagators, TextMapPropagator}
+import io.opentelemetry.exporter.prometheus.PrometheusHttpServer
+import io.opentelemetry.sdk.metrics.SdkMeterProvider
+import io.opentelemetry.sdk.{OpenTelemetrySdk, resources}
+import io.opentelemetry.sdk.trace.SdkTracerProvider
+import io.opentelemetry.sdk.trace.`export`.BatchSpanProcessor
+import io.opentelemetry.sdk.trace.samplers.Sampler
+import io.opentelemetry.semconv.ResourceAttributes
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
-import org.broadinstitute.dsde.workbench.google.{
-  GoogleDirectoryDAO,
-  GoogleKmsInterpreter,
-  GoogleKmsService,
-  HttpGoogleDirectoryDAO,
-  HttpGoogleIamDAO,
-  HttpGoogleProjectDAO,
-  HttpGooglePubSubDAO,
-  HttpGoogleStorageDAO
-}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.google2.{GoogleStorageInterpreter, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.oauth2.{ClientId, ClientSecret, OpenIDConnectConfiguration}
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchException}
+import org.broadinstitute.dsde.workbench.oauth2.{ClientId, OpenIDConnectConfiguration}
 import org.broadinstitute.dsde.workbench.sam.api.{LivenessRoutes, SamRoutes, StandardSamUserDirectives}
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
@@ -31,42 +35,59 @@ import org.broadinstitute.dsde.workbench.sam.db.DbReference
 import org.broadinstitute.dsde.workbench.sam.google._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service._
+import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.util.Sentry.initSentry
 import org.broadinstitute.dsde.workbench.util.DelegatePool
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-import java.io.File
+import java.io.{File, FileInputStream}
 import java.nio.file.{Files, Paths}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
 
 object Boot extends IOApp with LazyLogging {
-  def run(args: List[String]): IO[ExitCode] =
-    (startup() *> ExitCode.Success.pure[IO]).recoverWith { case NonFatal(t) =>
-      logger.error("sam failed to start, trying again in 5s", t)
-      IO.sleep(5 seconds) *> run(args)
-    }
 
-  private def startup(): IO[Unit] = {
+  def run(args: List[String]): IO[ExitCode] = {
+    // Init sentry always should be the first thing we do
     initSentry()
-    // we need an ActorSystem to host our application in
-    implicit val system = ActorSystem("sam")
-    livenessServerStartup()
+    val akkaConfig = ConfigFactory.parseResourcesAnySyntax("sam").withOnlyPath("akka").resolve()
+    implicit val system = ActorSystem("sam", akkaConfig)
 
+    startup() *> ExitCode.Success.pure[IO]
+  }
+
+  private def startup()(implicit system: ActorSystem): IO[Unit] = {
     val appConfig = AppConfig.load
-
+    instantiateOpenTelemetry(appConfig)
     val appDependencies = createAppDependencies(appConfig)
 
     appDependencies.use { dependencies => // this is where the resource is used
+      livenessServerStartup(dependencies.directoryDAO)
       for {
         _ <- dependencies.samApplication.resourceService.initResourceTypes().onError { case t: Throwable =>
           IO(logger.error("FATAL - failure starting http server", t)) *> IO.raiseError(t)
         }
 
         _ <- dependencies.policyEvaluatorService.initPolicy()
+
+        // make sure all users referenced by resourceAccessPolicies exist
+        _ <- appConfig.resourceAccessPolicies.flatMap { case (_, policy) => policy.memberEmails }.toList.traverse { email =>
+          dependencies.samApplication.userService.inviteUser(email, SamRequestContext()).attempt
+        }
+
+        // create resourceAccessPolicies
+        policyTrials <- dependencies.samApplication.resourceService.upsertResourceAccessPolicies(appConfig.resourceAccessPolicies)
+        _ = policyTrials.map {
+          case (policyId, Left(t)) =>
+            logger.error(s"FATAL - failure creating configured policy [$policyId] on startup", t)
+          case (policyId, Right(_)) =>
+            logger.info(s"Upserted configured policy [$policyId] at startup")
+        }
+        _ <- IO.raiseWhen(policyTrials.values.exists(_.isLeft))(
+          new WorkbenchException("FATAL - failure creating configured policy on startup, see above errors")
+        )
 
         _ <- dependencies.cloudExtensionsInitializer.onBoot(dependencies.samApplication)
 
@@ -79,10 +100,9 @@ object Boot extends IOApp with LazyLogging {
     }
   }
 
-  private def livenessServerStartup()(implicit actorSystem: ActorSystem): Unit = {
+  private def livenessServerStartup(directoryDAO: DirectoryDAO)(implicit actorSystem: ActorSystem): Unit = {
     val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
-
-    val livenessRoutes = new LivenessRoutes
+    val livenessRoutes = new LivenessRoutes(directoryDAO)
 
     loggerIO
       .info("Liveness server has been created, starting...")
@@ -93,9 +113,8 @@ object Boot extends IOApp with LazyLogging {
         loggerIO
           .error(t)("FATAL - failure starting liveness http server")
           .unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
-      }
-
-    loggerIO.info("Liveness server has been started").unsafeRunSync()(cats.effect.unsafe.IORuntime.global)
+      } >>
+      loggerIO.info("Liveness server has been started").unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
   }
 
   private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
@@ -103,7 +122,8 @@ object Boot extends IOApp with LazyLogging {
       (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO, azureManagedResourceGroupDAO, lastQuotaErrorDAO) <- createDAOs(
         appConfig,
         appConfig.samDatabaseConfig.samWrite,
-        appConfig.samDatabaseConfig.samRead
+        appConfig.samDatabaseConfig.samRead,
+        appConfig.samDatabaseConfig.samReadReplica
       )
 
       // This special set of objects are for operations that happen in the background, i.e. not in the immediate service
@@ -111,13 +131,9 @@ object Boot extends IOApp with LazyLogging {
       (backgroundDirectoryDAO, backgroundAccessPolicyDAO, _, _, _) <- createDAOs(
         appConfig,
         appConfig.samDatabaseConfig.samBackground,
+        appConfig.samDatabaseConfig.samBackground,
         appConfig.samDatabaseConfig.samBackground
       )
-
-      // This is for sending custom metrics to stackdriver. all custom metrics starts with `OpenCensus/sam/`.
-      // Typing in `sam` in metrics explorer will show all sam custom metrics.
-      // As best practice, we should have all related metrics under same prefix separated by `/`
-      implicit0(openTelemetry: OpenTelemetryMetrics[IO]) <- OpenTelemetryMetrics.resource[IO]("sam", appConfig.prometheusConfig.endpointPort)
 
       cloudExtensionsInitializer <- cloudExtensionsInitializerResource(
         appConfig,
@@ -133,8 +149,6 @@ object Boot extends IOApp with LazyLogging {
         OpenIDConnectConfiguration[IO](
           appConfig.oidcConfig.authorityEndpoint,
           ClientId(appConfig.oidcConfig.clientId),
-          oidcClientSecret = appConfig.oidcConfig.clientSecret.map(ClientSecret),
-          extraGoogleClientId = appConfig.oidcConfig.legacyGoogleClientId.map(ClientId),
           extraAuthParams = Some("prompt=login")
         )
       )
@@ -146,8 +160,7 @@ object Boot extends IOApp with LazyLogging {
       azureManagedResourceGroupDAO,
       oauth2Config
     )(
-      actorSystem,
-      openTelemetry
+      actorSystem
     )
 
   private def cloudExtensionsInitializerResource(
@@ -165,14 +178,12 @@ object Boot extends IOApp with LazyLogging {
           googleStorage <- GoogleStorageInterpreter.storage[IO](
             config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString
           )
-          googleKmsClient <- GoogleKmsInterpreter.client[IO](config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
         } yield {
           implicit val loggerIO: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
           // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
           // Use resourceNamePrefix to avoid collision between different fiab environments
           val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockerBound = None)
-          val googleKmsInterpreter = GoogleKmsInterpreter[IO](googleKmsClient)
           val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
           val cloudExtension = createGoogleCloudExt(
             foregroundAccessPolicyDAO,
@@ -182,7 +193,6 @@ object Boot extends IOApp with LazyLogging {
             resourceTypeMap,
             postgresDistributedLockDAO,
             newGoogleStorage,
-            googleKmsInterpreter,
             appConfig.adminConfig
           )
           val googleGroupSynchronizer =
@@ -195,14 +205,16 @@ object Boot extends IOApp with LazyLogging {
   private def createDAOs(
       appConfig: AppConfig,
       writeDbConfig: DatabaseConfig,
-      readDbConfig: DatabaseConfig
+      readDbConfig: DatabaseConfig,
+      readReplicaDbConfig: DatabaseConfig
   ): cats.effect.Resource[IO, (PostgresDirectoryDAO, AccessPolicyDAO, PostgresDistributedLockDAO[IO], AzureManagedResourceGroupDAO, LastQuotaErrorDAO)] =
     for {
       writeDbRef <- DbReference.resource(appConfig.liquibaseConfig, writeDbConfig)
-      readDbRef <- DbReference.resource(appConfig.liquibaseConfig, readDbConfig)
+      readDbRef <- DbReference.resource(appConfig.liquibaseConfig.copy(initWithLiquibase = false), readDbConfig)
+      readReplicaDbRef <- DbReference.resource(appConfig.liquibaseConfig.copy(initWithLiquibase = false), readReplicaDbConfig)
 
       directoryDAO = new PostgresDirectoryDAO(writeDbRef, readDbRef)
-      accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef)
+      accessPolicyDAO = new PostgresAccessPolicyDAO(writeDbRef, readDbRef, Some(readReplicaDbRef))
       postgresDistributedLockDAO = new PostgresDistributedLockDAO[IO](writeDbRef, readDbRef, appConfig.distributedLockConfig)
       azureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(writeDbRef, readDbRef)
       lastQuotaErrorDAO = new PostgresLastQuotaErrorDAO(writeDbRef, readDbRef)
@@ -216,10 +228,10 @@ object Boot extends IOApp with LazyLogging {
       resourceTypeMap: Map[ResourceTypeName, ResourceType],
       distributedLock: PostgresDistributedLockDAO[IO],
       googleStorageNew: GoogleStorageService[IO],
-      googleKms: GoogleKmsService[IO],
       adminConfig: AdminConfig
   )(implicit actorSystem: ActorSystem): GoogleExtensions = {
     val workspaceMetricBaseName = "google"
+
     val googleDirDaos = createGoogleDirDaos(config, workspaceMetricBaseName, lastQuotaErrorDAO)
     val googleDirectoryDAO = DelegatePool[GoogleDirectoryDAO](googleDirDaos)
     val googleIamDAO = new HttpGoogleIamDAO(
@@ -251,11 +263,6 @@ object Boot extends IOApp with LazyLogging {
       workspaceMetricBaseName,
       config.googleServicesConfig.googleKeyCacheConfig.monitorPubSubConfig.project
     )
-    val googleStorageDAO = new HttpGoogleStorageDAO(
-      config.googleServicesConfig.appName,
-      Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
-      workspaceMetricBaseName
-    )
     val googleProjectDAO = new HttpGoogleProjectDAO(
       config.googleServicesConfig.appName,
       Pem(WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId), new File(config.googleServicesConfig.pemFile)),
@@ -265,7 +272,6 @@ object Boot extends IOApp with LazyLogging {
       new GoogleKeyCache(
         distributedLock,
         googleIamDAO,
-        googleStorageDAO,
         googleStorageNew,
         googleKeyCachePubSubDAO,
         config.googleServicesConfig,
@@ -282,11 +288,9 @@ object Boot extends IOApp with LazyLogging {
       googleGroupSyncPubSubDAO,
       googleDisableUsersPubSubDAO,
       googleIamDAO,
-      googleStorageDAO,
       googleProjectDAO,
       googleKeyCache,
       notificationDAO,
-      googleKms,
       googleStorageNew,
       config.googleServicesConfig,
       config.petServiceAccountConfig,
@@ -299,23 +303,20 @@ object Boot extends IOApp with LazyLogging {
       actorSystem: ActorSystem
   ): NonEmptyList[HttpGoogleDirectoryDAO] = {
     val serviceAccountJsons = config.googleServicesConfig.adminSdkServiceAccountPaths.map(_.map(path => Files.readAllLines(Paths.get(path)).asScala.mkString))
-
-    def makePem = (directoryApiAccount: WorkbenchEmail) =>
-      Pem(
-        WorkbenchEmail(config.googleServicesConfig.serviceAccountClientId),
-        new File(config.googleServicesConfig.pemFile),
-        Option(directoryApiAccount)
-      )
+    val samSaJson =
+      Files.readAllLines(Paths.get(config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)).asScala.mkString
 
     val googleCredentials = serviceAccountJsons match {
       case None =>
         config.googleServicesConfig.directoryApiAccounts match {
           case Some(directoryApiAccounts) =>
-            logger.info(s"Using $directoryApiAccounts to talk to Google Directory API")
-            directoryApiAccounts.map(makePem)
+            logger.info(s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate $directoryApiAccounts to talk to Google Directory API")
+            directoryApiAccounts.map(directoryApiAccount => Json(samSaJson, Some(directoryApiAccount)))
           case None =>
-            logger.info(s"Using ${config.googleServicesConfig.subEmail} to talk to Google Directory API without impersonation")
-            NonEmptyList.one(makePem(config.googleServicesConfig.subEmail))
+            logger.info(
+              s"Using ${config.googleServicesConfig.serviceAccountClientEmail} to impersonate ${config.googleServicesConfig.subEmail} to talk to Google Directory API"
+            )
+            NonEmptyList.one(Json(samSaJson, Some(config.googleServicesConfig.subEmail)))
         }
       case Some(accounts) =>
         config.googleServicesConfig.directoryApiAccounts match {
@@ -343,6 +344,55 @@ object Boot extends IOApp with LazyLogging {
     )
   }
 
+  private def instantiateOpenTelemetry(appConfig: AppConfig)(implicit system: ActorSystem): OpenTelemetry = {
+    val maybeVersion = Option(getClass.getPackage.getImplementationVersion)
+    val resourceBuilder =
+      resources.Resource.getDefault.toBuilder
+        .put(ResourceAttributes.SERVICE_NAME, "sam")
+    maybeVersion.foreach(version => resourceBuilder.put(ResourceAttributes.SERVICE_VERSION, version))
+    val resource = resourceBuilder.build
+
+    val maybeTracerProvider = appConfig.googleConfig.flatMap { googleConfig =>
+      if (googleConfig.googleServicesConfig.traceExporter.enabled) {
+        val traceProviderBuilder = SdkTracerProvider.builder
+        val googleTraceExporter = TraceExporter.createWithConfiguration(
+          TraceConfiguration
+            .builder()
+            .setProjectId(googleConfig.googleServicesConfig.traceExporter.projectId)
+            .setCredentials(
+              ServiceAccountCredentials.fromStream(
+                new FileInputStream(googleConfig.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
+              )
+            )
+            .build()
+        )
+        traceProviderBuilder.addSpanProcessor(BatchSpanProcessor.builder(googleTraceExporter).build())
+        val probabilitySampler = Sampler.traceIdRatioBased(googleConfig.googleServicesConfig.traceExporter.samplingProbability)
+        val sdkTracerProvider = traceProviderBuilder
+          .setResource(resource)
+          .setSampler(Sampler.parentBased(probabilitySampler))
+          .build
+        Option(sdkTracerProvider)
+      } else {
+        None
+      }
+    }
+
+    val prometheusHttpServer = PrometheusHttpServer.builder().setPort(appConfig.prometheusConfig.endpointPort).build()
+    system.registerOnTermination(prometheusHttpServer.shutdown())
+    val sdkMeterProvider =
+      SdkMeterProvider.builder
+        .registerMetricReader(prometheusHttpServer)
+        .setResource(resource)
+        .build
+
+    val otelBuilder = OpenTelemetrySdk.builder
+    maybeTracerProvider.foreach(otelBuilder.setTracerProvider)
+    otelBuilder.setMeterProvider(sdkMeterProvider)
+    otelBuilder.setPropagators(ContextPropagators.create(TextMapPropagator.composite(W3CTraceContextPropagator.getInstance, W3CBaggagePropagator.getInstance)))
+    otelBuilder.buildAndRegisterGlobal
+  }
+
   private[sam] def createAppDependenciesWithSamRoutes(
       config: AppConfig,
       cloudExtensionsInitializer: CloudExtensionsInitializer,
@@ -350,9 +400,12 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO: PostgresDirectoryDAO,
       azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO,
       oauth2Config: OpenIDConnectConfiguration
-  )(implicit actorSystem: ActorSystem, openTelemetry: OpenTelemetryMetrics[IO]): AppDependencies = {
+  )(implicit actorSystem: ActorSystem): AppDependencies = {
     val resourceTypeMap = config.resourceTypes.map(rt => rt.name -> rt).toMap
     val policyEvaluatorService = PolicyEvaluatorService(config.emailDomain, resourceTypeMap, accessPolicyDAO, directoryDAO)
+    val azureService = config.azureServicesConfig.map { azureConfig =>
+      new AzureService(azureConfig, new CrlService(azureConfig, config.janitorConfig), directoryDAO, azureManagedResourceGroupDAO)
+    }
     val resourceService = new ResourceService(
       resourceTypeMap,
       policyEvaluatorService,
@@ -360,10 +413,19 @@ object Boot extends IOApp with LazyLogging {
       directoryDAO,
       cloudExtensionsInitializer.cloudExtensions,
       config.emailDomain,
-      config.adminConfig.allowedEmailDomains
+      config.adminConfig.allowedEmailDomains,
+      azureService
     )
-    val tosService = new TosService(directoryDAO, config.termsOfServiceConfig)
-    val userService = new UserService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, config.blockedEmailDomains, tosService)
+    val tosService = new TosService(cloudExtensionsInitializer.cloudExtensions, directoryDAO, config.termsOfServiceConfig)
+    val userService =
+      new UserService(
+        directoryDAO,
+        cloudExtensionsInitializer.cloudExtensions,
+        config.blockedEmailDomains,
+        tosService,
+        config.azureServicesConfig,
+        Seq(config.emailDomain)
+      )
     val statusService =
       new StatusService(directoryDAO, cloudExtensionsInitializer.cloudExtensions, 10 seconds, 1 minute)
     val managedGroupService =
@@ -377,9 +439,7 @@ object Boot extends IOApp with LazyLogging {
         config.emailDomain
       )
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
-    val azureService = config.azureServicesConfig.map { config =>
-      new AzureService(new CrlService(config), directoryDAO, azureManagedResourceGroupDAO)
-    }
+
     cloudExtensionsInitializer match {
       case GoogleExtensionsInitializer(googleExt, synchronizer) =>
         val routes = new SamRoutes(
@@ -392,6 +452,7 @@ object Boot extends IOApp with LazyLogging {
           tosService,
           config.liquibaseConfig,
           oauth2Config,
+          config.adminConfig,
           azureService
         ) with StandardSamUserDirectives with GoogleExtensionRoutes {
           val googleExtensions = googleExt
@@ -410,6 +471,7 @@ object Boot extends IOApp with LazyLogging {
           tosService,
           config.liquibaseConfig,
           oauth2Config,
+          config.adminConfig,
           azureService
         ) with StandardSamUserDirectives with NoExtensionRoutes
         AppDependencies(routes, samApplication, NoExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)

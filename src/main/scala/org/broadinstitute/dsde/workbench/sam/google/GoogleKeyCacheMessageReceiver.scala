@@ -10,7 +10,7 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountKeyId}
-import org.broadinstitute.dsde.workbench.sam.util.{OpenCensusIOUtils, SamRequestContext}
+import org.broadinstitute.dsde.workbench.sam.util.{OpenTelemetryIOUtils, SamRequestContext}
 import spray.json._
 
 /** Created by mbemis on 1/19/18.
@@ -18,7 +18,7 @@ import spray.json._
 class GoogleKeyCacheMessageReceiver(googleIamDAO: GoogleIamDAO)(implicit ioRuntime: IORuntime) extends MessageReceiver with LazyLogging {
 
   override def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit =
-    OpenCensusIOUtils
+    OpenTelemetryIOUtils
       .traceIO("GoogleKeyCacheMonitor--PubSubMessage", SamRequestContext()) { samRequestContext =>
         logger.info(s"received key deletion message: ${message.getData.toStringUtf8}")
         val (project, serviceAccountEmail, keyId) = parseMessage(message)

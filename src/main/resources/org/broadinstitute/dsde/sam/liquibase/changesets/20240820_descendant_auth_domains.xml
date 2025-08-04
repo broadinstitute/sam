@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <changeSet logicalFilePath="dummy" author="dvoet" id="populate_descendant_auth_domains" runInTransaction="true">
+        <sql stripComments="true">
+            with recursive
+                ancestor_resource(resource_id, group_id) as (
+                    select ad.resource_id, ad.group_id
+                    from sam_resource_auth_domain ad
+                union
+                    select childResource.id, ancestorResource.group_id
+                    from SAM_RESOURCE childResource
+                    join ancestor_resource ancestorResource on ancestorResource.resource_id = childResource.resource_parent_id
+                )
+
+            insert into sam_resource_auth_domain(resource_id, group_id)
+            select ar.resource_id, ar.group_id
+            from ancestor_resource ar
+            on conflict do nothing
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

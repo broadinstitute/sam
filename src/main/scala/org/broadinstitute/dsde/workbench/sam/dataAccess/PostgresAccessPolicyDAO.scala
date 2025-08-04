@@ -14,6 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.db.{DbReference, PSQLStateExtensions}
 import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.{DatabaseSupport, SamRequestContext, groupByFirstInPair}
 import org.postgresql.util.PSQLException
 import scalikejdbc._
@@ -21,8 +22,16 @@ import scalikejdbc._
 import scala.collection.concurrent.TrieMap
 import scala.util.{Failure, Try}
 import cats.effect.Temporal
+import org.apache.commons.collections4.map.PassiveExpiringMap
 
-class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit timer: Temporal[IO])
+import java.util.Collections
+import java.util.concurrent.TimeUnit
+
+class PostgresAccessPolicyDAO(
+    protected val writeDbRef: DbReference,
+    protected val readDbRef: DbReference,
+    protected override val readReplicaDbRef: Option[DbReference] = None
+)(implicit timer: Temporal[IO])
     extends AccessPolicyDAO
     with DatabaseSupport
     with PostgresGroupDAO
@@ -35,6 +44,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     * serializable transactions would read all rows of the resource type table and thus always collide with each other).
     */
   private val resourceTypePKsByName: scala.collection.concurrent.Map[ResourceTypeName, ResourceTypePK] = new TrieMap()
+  private val resourceTypeNamesByPK: scala.collection.concurrent.Map[ResourceTypePK, ResourceTypeName] = new TrieMap()
 
   /** Creates or updates all given resource types.
     *
@@ -89,6 +99,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       resourceTypePKsByName
         .addAll(results)
         .filterInPlace((k, v) => results.exists(loaded => (k, v) == loaded))
+      resourceTypeNamesByPK
+        .addAll(results.map(_.swap))
+        .filterInPlace((k, v) => results.map(_.swap).exists(loaded => (k, v) == loaded))
     }
 
   override def loadResourceTypes(resourceTypeNames: Set[ResourceTypeName], samRequestContext: SamRequestContext): IO[Set[ResourceType]] =
@@ -175,7 +188,8 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         resourceTypeToRoles.getOrElse(resourceTypeRecord.id, Set.empty),
         resourceTypeRecord.ownerRoleName,
         resourceTypeRecord.reuseIds,
-        resourceTypeRecord.allowLeaving
+        resourceTypeRecord.allowLeaving,
+        resourceTypeRecord.prerequisiteAction
       )
     }
 
@@ -421,14 +435,16 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
   private def upsertResourceTypes(resourceTypes: Iterable[ResourceType])(implicit session: DBSession): Int = {
     val resourceTypeTableColumn = ResourceTypeTable.column
-    val resourceTypeValues = resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds}, ${rt.allowLeaving})""")
-    samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}, ${resourceTypeTableColumn.ownerRoleName}, ${resourceTypeTableColumn.reuseIds}, ${resourceTypeTableColumn.allowLeaving})
+    val resourceTypeValues =
+      resourceTypes.map(rt => samsqls"""(${rt.name}, ${rt.ownerRoleName}, ${rt.reuseIds}, ${rt.allowLeaving}, ${rt.prerequisiteAction})""")
+    samsql"""insert into ${ResourceTypeTable.table} (${resourceTypeTableColumn.name}, ${resourceTypeTableColumn.ownerRoleName}, ${resourceTypeTableColumn.reuseIds}, ${resourceTypeTableColumn.allowLeaving}, ${resourceTypeTableColumn.prerequisiteAction})
                values $resourceTypeValues
              on conflict (${ResourceTypeTable.column.name})
                do update
                  set ${resourceTypeTableColumn.ownerRoleName} = EXCLUDED.${resourceTypeTableColumn.ownerRoleName},
                  ${resourceTypeTableColumn.reuseIds} = EXCLUDED.${resourceTypeTableColumn.reuseIds},
-                 ${resourceTypeTableColumn.allowLeaving} = EXCLUDED.${resourceTypeTableColumn.allowLeaving}""".update().apply()
+                 ${resourceTypeTableColumn.allowLeaving} = EXCLUDED.${resourceTypeTableColumn.allowLeaving},
+                 ${resourceTypeTableColumn.prerequisiteAction} = EXCLUDED.${resourceTypeTableColumn.prerequisiteAction}""".update().apply()
   }
 
   /** @param resource
@@ -465,6 +481,19 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
         if (resource.parent.isDefined) {
           populateInheritedEffectivePolicies(resourcePK)
+        }
+
+        if (
+          !resource.fullyQualifiedId.resourceTypeName.isResourceTypeAdmin
+          // check that the resource type admin resource type exists
+          // many tests don't create it but it should be there irl, but if it isn't there, can't be any policies to inherit
+          && resourceTypePKsByName.contains(SamResourceTypes.resourceTypeAdminName)
+        ) {
+          populateResourceTypeAdminEffectivePolicies(
+            resourcePK,
+            resourceTypePKsByName(SamResourceTypes.resourceTypeAdminName),
+            ResourceId(resource.resourceTypeName.value)
+          )
         }
 
         resource.accessPolicies.foreach { policy =>
@@ -515,7 +544,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
     val authDomainColumn = AuthDomainTable.column
     val insertAuthDomainQuery =
-      samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues}"
+      samsql"insert into ${AuthDomainTable.table} (${authDomainColumn.resourceId}, ${authDomainColumn.groupId}) values ${authDomainValues} on conflict do nothing"
 
     insertAuthDomainQuery.update().apply()
   }
@@ -541,14 +570,25 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       )
   }
 
-  override def deleteResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] =
+  override def deleteResource(resource: FullyQualifiedResourceId, leaveTombStone: Boolean, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteResource", samRequestContext) { implicit session =>
+      deleteAllResourcePolicies(resource, samRequestContext)
       deleteEffectivePolicies(resource, resourceTypePKsByName)
+      removeAuthDomainFromResource(resource, samRequestContext)
 
       val r = ResourceTable.syntax("r")
-      samsql"""delete from ${ResourceTable as r}
+      if (leaveTombStone) {
+        // if leaving a tombstone, we need to orphan the resource
+        val resourceTableColumn = ResourceTable.column
+        samsql"""update ${ResourceTable as r}
+          set ${resourceTableColumn.resourceParentId} = null
               where ${r.name} = ${resource.resourceId}
               and ${r.resourceTypeId} = ${resourceTypePKsByName(resource.resourceTypeName)}""".update().apply()
+      } else {
+        samsql"""delete from ${ResourceTable as r}
+              where ${r.name} = ${resource.resourceId}
+              and ${r.resourceTypeId} = ${resourceTypePKsByName(resource.resourceTypeName)}""".update().apply()
+      }
     }
 
   override def loadResourceAuthDomain(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LoadResourceAuthDomainResult] =
@@ -589,8 +629,22 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       }
     }
 
+  override def addResourceAuthDomain(
+      resource: FullyQualifiedResourceId,
+      authDomains: Set[WorkbenchGroupName],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    serializableWriteTransaction("addResourceAuthDomain", samRequestContext) { implicit session =>
+      val resourcePK = loadResourcePK(resource)
+      val authDomainPks = queryForGroupPKs(authDomains.map(identity))
+      if (authDomainPks.nonEmpty) {
+        insertAuthDomainsForResource(resourcePK, authDomainPks)
+      }
+    }
+
   override def listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(
       groupId: WorkbenchGroupIdentity,
+      relevantMembers: Set[WorkbenchSubject],
       samRequestContext: SamRequestContext
   ): IO[Set[FullyQualifiedPolicyId]] =
     readOnlyTransaction("listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup", samRequestContext) { implicit session =>
@@ -617,14 +671,40 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
            and ${policy.resource.resourceTypeName} = ${rt.name}"""
       }
 
+      // if relevantMembers is empty, assume all members are relevant and don't join on GroupMemberFlatTable
+      // otherwise, only include policies where the member is in the relevantMembers set
+      // need to account for both member groups and users
+      val pu = GroupMemberFlatTable.syntax("pu")
+      val (relevantMembersJoin, relevantMembersCondition) = if (relevantMembers.isEmpty) {
+        (samsqls"", samsqls"")
+      } else {
+        val groupPKs = queryForGroupPKs(relevantMembers)
+        val groupCondition = if (groupPKs.isEmpty) {
+          samsqls"false"
+        } else {
+          samsqls"${pu.memberGroupId} in (${groupPKs})"
+        }
+
+        val userIds = collectUserIds(relevantMembers)
+        val userCondition = if (userIds.isEmpty) {
+          samsqls"false"
+        } else {
+          samsqls"${pu.memberUserId} in (${userIds})"
+        }
+
+        (samsqls"""join ${GroupMemberFlatTable as pu} on ${pu.groupId} = ${p.groupId}""", samsqls"""and (${userCondition} or ${groupCondition})""")
+      }
+
       samsql"""
           select ${rt.result.name}, ${r.result.name}, ${p.result.name}
            from ${ResourceTable as r}
            join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
            join ${PolicyTable as p} on ${r.id} = ${p.resourceId}
            join ${GroupTable as g} on ${p.groupId} = ${g.id}
+           ${relevantMembersJoin}
            where ${r.id} in (${constrainedResourcesPKs})
-           and ${g.synchronizedDate} is not null"""
+           and ${g.synchronizedDate} is not null
+           ${relevantMembersCondition}"""
         .map(rs =>
           FullyQualifiedPolicyId(
             FullyQualifiedResourceId(rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name)),
@@ -636,20 +716,20 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
         .toSet
     }
 
-  override def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+  private def removeAuthDomainFromResource(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext)(implicit
+      session: DBSession
+  ): Int = {
     val r = ResourceTable.syntax("r")
     val ad = AuthDomainTable.syntax("ad")
     val rt = ResourceTypeTable.syntax("rt")
 
-    serializableWriteTransaction("removeAuthDomainFromResource", samRequestContext) { implicit session =>
-      samsql"""delete from ${AuthDomainTable as ad}
-              where ${ad.resourceId} =
-              (select ${r.id} from ${ResourceTable as r}
-              join ${ResourceTypeTable as rt}
-              on ${r.resourceTypeId} = ${rt.id}
-              where ${r.name} = ${resource.resourceId}
-              and ${rt.name} = ${resource.resourceTypeName})""".update().apply()
-    }
+    samsql"""delete from ${AuthDomainTable as ad}
+            where ${ad.resourceId} =
+            (select ${r.id} from ${ResourceTable as r}
+            join ${ResourceTypeTable as rt}
+            on ${r.resourceTypeId} = ${rt.id}
+            where ${r.name} = ${resource.resourceId}
+            and ${rt.name} = ${resource.resourceTypeName})""".update().apply()
   }
 
   override def createPolicy(policy: AccessPolicy, samRequestContext: SamRequestContext): IO[AccessPolicy] =
@@ -669,21 +749,23 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       session: DBSession
   ) = {
     insertGroupMemberPKs(groupPK, memberGroupPKs, collectUserIds(policy.members))
-    insertPolicyRoles(FullyQualifiedResourceRole.fullyQualify(policy.roles, policy.id.resource.resourceTypeName), policyPK, false)
+    insertPolicyRoles(FullyQualifiedResourceRole.fullyQualify(policy.roles, policy.id.resource.resourceTypeName), policyPK, false, policy)
     insertPolicyRoles(
       policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRole.fullyQualify(permissions.roles, permissions.resourceType)),
       policyPK,
-      true
+      true,
+      policy
     )
-    insertPolicyActions(FullyQualifiedResourceAction.fullyQualify(policy.actions, policy.id.resource.resourceTypeName), policyPK, false)
+    insertPolicyActions(FullyQualifiedResourceAction.fullyQualify(policy.actions, policy.id.resource.resourceTypeName), policyPK, false, policy)
     insertPolicyActions(
       policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType)),
       policyPK,
-      true
+      true,
+      policy
     )
   }
 
-  private def insertPolicyActions(actions: Set[FullyQualifiedResourceAction], policyId: PolicyPK, descendantsOnly: Boolean)(implicit
+  private def insertPolicyActions(actions: Set[FullyQualifiedResourceAction], policyId: PolicyPK, descendantsOnly: Boolean, policy: AccessPolicy)(implicit
       session: DBSession
   ): Int = {
     val ra = ResourceActionTable.syntax("ra")
@@ -720,14 +802,20 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       } else {
         inserted
       }
-      insertEffectivePolicyActions(policyId)
+      if (policy.id.resource.resourceTypeName.isResourceTypeAdmin) {
+        insertResourceTypeAdminEffectivePolicyActions(policyId, resourceTypePKsByName(ResourceTypeName(policy.id.resource.resourceId.value)))
+      } else {
+        insertEffectivePolicyActions(policyId)
+      }
       fullInsertCount
     } else {
       0
     }
   }
 
-  private def insertPolicyRoles(roles: Set[FullyQualifiedResourceRole], policyId: PolicyPK, descendantsOnly: Boolean)(implicit session: DBSession): Int = {
+  private def insertPolicyRoles(roles: Set[FullyQualifiedResourceRole], policyId: PolicyPK, descendantsOnly: Boolean, policy: AccessPolicy)(implicit
+      session: DBSession
+  ): Int = {
     val rr = ResourceRoleTable.syntax("rr")
     val prCol = PolicyRoleTable.column
     if (roles.nonEmpty) {
@@ -744,7 +832,11 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       if (insertedRolesCount != roles.size) {
         throw new WorkbenchException("Some roles have been deprecated or were not found.")
       }
-      insertEffectivePolicyRoles(policyId)
+      if (policy.id.resource.resourceTypeName.isResourceTypeAdmin) {
+        insertResourceTypeAdminEffectivePolicyRoles(policyId, resourceTypePKsByName(ResourceTypeName(policy.id.resource.resourceId.value)))
+      } else {
+        insertEffectivePolicyRoles(policyId)
+      }
       insertedRolesCount
     } else {
       0
@@ -762,7 +854,11 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val policyPK = PolicyPK(samsql"""insert into ${PolicyTable.table} (${pCol.resourceId}, ${pCol.groupId}, ${pCol.public}, ${pCol.name})
               values (${resourcePKFragment}, ${groupPK}, ${policy.public}, ${policy.id.accessPolicyName})""".updateAndReturnGeneratedKey().apply())
 
-    insertEffectivePolicies(policy, policyPK)
+    if (policy.id.resource.resourceTypeName.isResourceTypeAdmin) {
+      insertResourceTypeAdminEffectivePolicies(policy, policyPK, resourceTypePKsByName)
+    } else {
+      insertEffectivePolicies(policy, policyPK)
+    }
 
     policyPK
   }
@@ -830,7 +926,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       .map(rs =>
         (
           rs.get[AccessPolicyName](p.resultName.name),
-          PolicyIdentifiers(
+          PolicyInfoResponseBody(
             rs.get[AccessPolicyName](mp.resultName.name),
             rs.get[WorkbenchEmail](mpg.resultName.email),
             rs.get[ResourceTypeName](mprt.resultName.name),
@@ -858,7 +954,53 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     }
   }
 
-  override def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Unit] = {
+  // Return value: [(policyToUpdate, policyToRemove)]
+  override def findPolicyGroupsInUse(
+      resourceId: FullyQualifiedResourceId,
+      samRequestContext: SamRequestContext
+  ): IO[List[(FullyQualifiedPolicyId, FullyQualifiedPolicyId)]] =
+    readOnlyTransaction("findAffectedPolicyGroups", samRequestContext) { implicit session =>
+      val groupMemberTable = GroupMemberTable.syntax("group_member_table")
+      val policyTable = PolicyTable.syntax("policy_table")
+      val parentPolicyTable = PolicyTable.syntax("parent_policy_table")
+      val resourceType = ResourceTypeTable.syntax("resource_type")
+      val resourceTable = ResourceTable.syntax("resource_table")
+
+      val query = samsql"""
+      WITH resourcePolicies as (
+        SELECT ${policyTable.groupId} as childGroupId, ${policyTable.name} as policyName
+      FROM ${PolicyTable as policyTable}
+        WHERE ${policyTable.resourceId} = (${loadResourcePKSubQuery(resourceId)})
+      )
+      SELECT resourcePolicies.policyName as childPolicyName, ${parentPolicyTable.name} as parentPolicyName, ${resourceTable.name} as parentPolicyResourceName, ${resourceType.name} as parentPolicyResourceType
+from ${GroupMemberTable as groupMemberTable}
+        JOIN resourcePolicies ON ${groupMemberTable.memberGroupId} = resourcePolicies.childGroupId
+      JOIN ${PolicyTable as parentPolicyTable} ON ${parentPolicyTable.groupId} = ${groupMemberTable.groupId}
+      JOIN ${ResourceTable as resourceTable} ON ${resourceTable.id} = ${parentPolicyTable.resourceId}
+      JOIN ${ResourceTypeTable as resourceType} ON ${resourceType.id} = ${resourceTable.resourceTypeId}
+"""
+      query
+        .map { rs =>
+          val parentPolicyResourceType = rs.get[ResourceTypeName]("parentPolicyResourceType")
+          val parentPolicyResourceId = rs.get[ResourceId]("parentPolicyResourceName")
+          val parentPolciyAccessName = rs.get[AccessPolicyName]("parentPolicyName")
+          val memberPolicyAccessName = rs.get[AccessPolicyName]("childPolicyName")
+
+          val parentPolicyFullResourceId =
+            FullyQualifiedResourceId(parentPolicyResourceType, parentPolicyResourceId)
+          val parentPolicyFullId = FullyQualifiedPolicyId(parentPolicyFullResourceId, parentPolciyAccessName)
+          val memberPolicyFullId = FullyQualifiedPolicyId(resourceId, memberPolicyAccessName)
+
+          (parentPolicyFullId, memberPolicyFullId)
+        }
+        .list()
+        .apply()
+
+    }
+
+  private def deleteAllResourcePolicies(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext)(implicit
+      session: DBSession
+  ): Unit = {
     val p = PolicyTable.syntax("p")
     val g = GroupTable.syntax("g")
 
@@ -866,77 +1008,17 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val groupPKsToDeleteQuery: SQL[GroupPK, HasExtractor] =
       samsql"""select ${p.result.groupId} $fromAndWhereFragment""".map(_.get[GroupPK](p.resultName.groupId))
 
-    for {
-      writeResult <- serializableWriteTransaction("deletePolicy", samRequestContext) { implicit session =>
-        // first get all the group PKs associated to all the resource policies
-        // then delete all the resource policies
-        // then delete all the groups from the first query
+    // first get all the group PKs associated to all the resource policies
+    // then delete all the resource policies
+    // then delete all the groups from the first query
 
-        val groupPKsToDelete = groupPKsToDeleteQuery.list().apply()
+    val groupPKsToDelete = groupPKsToDeleteQuery.list().apply()
 
-        samsql"""delete $fromAndWhereFragment""".update().apply()
+    samsql"""delete $fromAndWhereFragment""".update().apply()
 
-        if (groupPKsToDelete.nonEmpty) {
-          samsql"""delete from ${GroupTable as g}
-                 where ${g.id} in ($groupPKsToDelete)""".update().apply()
-        }
-      }.attempt
-      _ <- handleResult(samRequestContext, writeResult, groupPKsToDeleteQuery)
-    } yield ()
-  }
-
-  private def handleResult(
-      samRequestContext: SamRequestContext,
-      writeResult: Either[Throwable, AnyVal],
-      groupPKsToDeleteQuery: SQL[GroupPK, HasExtractor]
-  ): IO[Unit] =
-    writeResult match {
-      case Left(fkViolation: PSQLException) if fkViolation.getSQLState == PSQLStateExtensions.FOREIGN_KEY_VIOLATION =>
-        handleForeignKeyViolation(samRequestContext, groupPKsToDeleteQuery)
-      case Left(e) => IO.raiseError(e)
-      case Right(_) => IO.unit
-    }
-
-  private def handleForeignKeyViolation(samRequestContext: SamRequestContext, groupPKsToDeleteQuery: SQL[GroupPK, HasExtractor]): IO[Unit] =
-    for {
-      problematicGroups <- getGroupsCausingForeignKeyViolation(samRequestContext, groupPKsToDeleteQuery)
-      _ <- IO.raiseError[Unit](
-        new WorkbenchExceptionWithErrorReport( // throws a 500 since that's the current behavior
-          ErrorReport(StatusCodes.InternalServerError, s"Foreign Key Violation(s) while deleting group(s): ${problematicGroups}")
-        )
-      )
-    } yield ()
-
-  private def getGroupsCausingForeignKeyViolation(
-      samRequestContext: SamRequestContext,
-      groupPKsToDeleteQuery: SQL[GroupPK, HasExtractor]
-  ): IO[List[Map[String, String]]] = {
-    val g = GroupTable.syntax("g")
-    val pg = GroupTable.syntax("pg") // problematic group
-    val gm = GroupMemberTable.syntax("gm")
-
-    readOnlyTransaction("getGroupsCausingForeignKeyViolation", samRequestContext) { implicit session =>
-      val groupPKsToDelete = groupPKsToDeleteQuery.list().apply()
-      val problematicGroupsQuery =
-        samsql"""select ${g.result.id}, ${g.result.name}, array_agg(${pg.name}) as ${pg.resultName.name}
-                     from ${GroupTable as g}
-                     join ${GroupMemberTable as gm} on ${g.id} = ${gm.memberGroupId}
-                     join ${GroupTable as pg} on ${gm.groupId} = ${pg.id}
-                     where ${g.id} in
-                         (select distinct ${gm.result.memberGroupId}
-                          from ${GroupMemberTable as gm}
-                          where ${gm.memberGroupId} in ($groupPKsToDelete))
-                     group by ${g.id}, ${g.name}"""
-      problematicGroupsQuery
-        .map(rs =>
-          Map(
-            "groupId" -> rs.get[GroupPK](g.resultName.id).value.toString,
-            "groupName" -> rs.get[String](g.resultName.name),
-            "still used in group(s):" -> rs.get[String](pg.resultName.name)
-          )
-        )
-        .list()
-        .apply()
+    if (groupPKsToDelete.nonEmpty) {
+      samsql"""delete from ${GroupTable as g}
+               where ${g.id} in ($groupPKsToDelete)""".update().apply()
     }
   }
 
@@ -946,6 +1028,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   override def overwritePolicyMembers(id: FullyQualifiedPolicyId, memberList: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("overwritePolicyMembers", samRequestContext) { implicit session =>
       overwritePolicyMembersInternal(id, memberList)
+      updateGroupUpdatedDateAndVersion(id)
     }
 
   // Steps: Delete every member from the underlying group and then add all of the new members. Do this in a *single*
@@ -965,40 +1048,44 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       overwritePolicyRolesInternal(
         policyPK,
         FullyQualifiedResourceRole.fullyQualify(newPolicy.roles, newPolicy.id.resource.resourceTypeName),
-        newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRole.fullyQualify(permissions.roles, permissions.resourceType))
+        newPolicy
       )
       overwritePolicyActionsInternal(
         policyPK,
         FullyQualifiedResourceAction.fullyQualify(newPolicy.actions, newPolicy.id.resource.resourceTypeName),
-        newPolicy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType))
+        newPolicy
       )
       setPolicyIsPublicInternal(policyPK, newPolicy.public)
-
+      updateGroupUpdatedDateAndVersion(newPolicy.id)
       newPolicy
     }
 
-  private def overwritePolicyRolesInternal(policyPK: PolicyPK, roles: Set[FullyQualifiedResourceRole], descendantRoles: Set[FullyQualifiedResourceRole])(
-      implicit session: DBSession
+  private def overwritePolicyRolesInternal(policyPK: PolicyPK, roles: Set[FullyQualifiedResourceRole], policy: AccessPolicy)(implicit
+      session: DBSession
   ): Int = {
     val pr = PolicyRoleTable.syntax("pr")
     samsql"delete from ${PolicyRoleTable as pr} where ${pr.resourcePolicyId} = $policyPK".update().apply()
     deleteEffectivePolicyRoles(policyPK)
 
-    insertPolicyRoles(roles, policyPK, false)
-    insertPolicyRoles(descendantRoles, policyPK, true)
+    val descendantRoles =
+      policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceRole.fullyQualify(permissions.roles, permissions.resourceType))
+    insertPolicyRoles(roles, policyPK, false, policy)
+    insertPolicyRoles(descendantRoles, policyPK, true, policy)
   }
 
   private def overwritePolicyActionsInternal(
       policyPK: PolicyPK,
       actions: Set[FullyQualifiedResourceAction],
-      descendantActions: Set[FullyQualifiedResourceAction]
+      policy: AccessPolicy
   )(implicit session: DBSession): Int = {
     val pa = PolicyActionTable.syntax("pa")
     samsql"delete from ${PolicyActionTable as pa} where ${pa.resourcePolicyId} = $policyPK".update().apply()
     deleteEffectivePolicyActions(policyPK)
 
-    insertPolicyActions(actions, policyPK, false)
-    insertPolicyActions(descendantActions, policyPK, true)
+    val descendantActions =
+      policy.descendantPermissions.flatMap(permissions => FullyQualifiedResourceAction.fullyQualify(permissions.actions, permissions.resourceType))
+    insertPolicyActions(actions, policyPK, false, policy)
+    insertPolicyActions(descendantActions, policyPK, true, policy)
   }
 
   private def loadPolicyPK(id: FullyQualifiedPolicyId)(implicit session: DBSession): PolicyPK = {
@@ -1041,7 +1128,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val ra = ResourceActionTable.syntax("ra")
 
     val listPoliciesQuery =
-      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
+      samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${g.result.version}, ${g.result.lastSynchronizedVersion}, ${rr.result.role}, ${ra.result.action}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
@@ -1063,7 +1150,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
               rs.get[ResourceId](r.resultName.name),
               rs.get[ResourceTypeName](rt.resultName.name),
               rs.get[WorkbenchEmail](g.resultName.email),
-              rs.boolean(p.resultName.public)
+              rs.boolean(p.resultName.public),
+              rs.get[Int](g.resultName.version),
+              rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
             ),
             (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)))
           )
@@ -1104,7 +1193,12 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           val memberGroups = memberGroupsByPolicy(policyInfo.name).map(_.name).toSet[WorkbenchSubject]
           val memberUsers = memberUsersByPolicy(policyInfo.name).map(_.id).toSet[WorkbenchSubject]
           val memberPolicies = memberPoliciesByPolicy(policyInfo.name)
-            .map(p => FullyQualifiedPolicyId(FullyQualifiedResourceId(p.resourceTypeName, p.resourceId), p.policyName))
+            .map(p =>
+              FullyQualifiedPolicyId(
+                FullyQualifiedResourceId(p.policyIdentifiers.resourceTypeName, p.policyIdentifiers.resourceId),
+                p.policyIdentifiers.policyName
+              )
+            )
             .toSet[WorkbenchSubject]
 
           val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(policyInfo.resourceTypeName, policyInfo.resourceId), policyInfo.name)
@@ -1115,7 +1209,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
             policyRoles,
             policyActions,
             policyDescendantPermissions,
-            policyInfo.public
+            policyInfo.public,
+            policyInfo.version,
+            policyInfo.lastSynchronizedVersion
           )
         }
         .to(LazyList)
@@ -1140,7 +1236,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           Map[PolicyInfo, Iterable[(RoleResult, ActionResult)]],
           Map[AccessPolicyName, Iterable[GroupRecord]],
           Map[AccessPolicyName, Iterable[UserRecord]],
-          Map[AccessPolicyName, Iterable[PolicyIdentifiers]]
+          Map[AccessPolicyName, Iterable[PolicyInfoResponseBody]]
       ) => LazyList[T]
   ): IO[LazyList[T]] =
     readOnlyTransaction("listPoliciesWithMembers", samRequestContext) { implicit session =>
@@ -1167,7 +1263,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     val part = ResourceTypeTable.syntax("part") // policy action resource type
 
     val listPoliciesQuery =
-      samsql"""select ${p.result.name}, ${g.result.email}, ${p.result.public}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descendantsOnly}, ${part.result.name}, ${ra.result.action}, ${pa.result.descendantsOnly}
+      samsql"""select ${p.result.name}, ${g.result.email}, ${p.result.public}, ${g.result.version}, ${g.result.lastSynchronizedVersion}, ${prrt.result.name}, ${rr.result.role}, ${pr.result.descendantsOnly}, ${part.result.name}, ${ra.result.action}, ${pa.result.descendantsOnly}
           from ${GroupTable as g}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
           left join ${PolicyRoleTable as pr} on ${p.id} = ${pr.resourcePolicyId}
@@ -1186,7 +1282,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           resource.resourceId,
           resource.resourceTypeName,
           rs.get[WorkbenchEmail](g.resultName.email),
-          rs.boolean(p.resultName.public)
+          rs.boolean(p.resultName.public),
+          rs.get[Int](g.resultName.version),
+          rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
         ),
         (
           RoleResult(
@@ -1204,7 +1302,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     )
   }
 
-  override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembership]] =
+  override def loadPolicyMembership(policyId: FullyQualifiedPolicyId, samRequestContext: SamRequestContext): IO[Option[AccessPolicyMembershipResponse]] =
     listPoliciesMemberships(policyId.resource, Option(policyId.accessPolicyName), samRequestContext).map(_.headOption.map(_.membership))
 
   override def listAccessPolicyMemberships(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[LazyList[AccessPolicyWithMembership]] =
@@ -1228,7 +1326,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
 
           AccessPolicyWithMembership(
             policyInfo.name,
-            AccessPolicyMembership(
+            AccessPolicyMembershipResponse(
               memberPolicies.map(_.policyEmail) ++ memberUsers ++ memberGroups,
               policyActions,
               policyRoles,
@@ -1301,8 +1399,30 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       }
     } else IO.pure(Set.empty)
 
-  override def listResourceWithAuthdomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] =
+  override def listResourceWithAuthDomains(resourceId: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[Resource]] =
     listResourcesWithAuthdomains(resourceId.resourceTypeName, Set(resourceId.resourceId), samRequestContext).map(_.headOption)
+
+  override def listResourcesUsingAuthDomain(
+      authDomainGroupName: WorkbenchGroupName,
+      samRequestContext: SamRequestContext
+  ): IO[Set[FullyQualifiedResourceId]] =
+    readOnlyTransaction("listResourcesUsingAuthDomain", samRequestContext) { implicit session =>
+      val r = ResourceTable.syntax("r")
+      val ad = AuthDomainTable.syntax("ad")
+      val rt = ResourceTypeTable.syntax("rt")
+      val g = GroupTable.syntax("g")
+
+      samsql"""select ${r.result.name}, ${rt.result.name}
+               from ${GroupTable as g}
+               join ${AuthDomainTable as ad} on ${g.id} = ${ad.groupId}
+               join ${ResourceTable as r} on ${r.id} = ${ad.resourceId}
+               join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+               where ${g.name} = ${authDomainGroupName}"""
+        .map(rs => FullyQualifiedResourceId(rs.get[ResourceTypeName](rt.resultName.name), rs.get[ResourceId](r.resultName.name)))
+        .list()
+        .apply()
+        .toSet
+    }
 
   override def listAccessPolicies(
       resourceTypeName: ResourceTypeName,
@@ -1334,7 +1454,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       userId: WorkbenchUserId,
       samRequestContext: SamRequestContext
   ): IO[Iterable[ResourceIdWithRolesAndActions]] =
-    readOnlyTransaction("listUserResourcesWithRolesAndActions", samRequestContext) { implicit session =>
+    readOnlyTransactionReadReplica("listUserResourcesWithRolesAndActions", samRequestContext) { implicit session =>
       class ListUserResourcesQuery extends UserResourcesQuery(resourceTypeName, None, userId) {
         val policyRole = EffectivePolicyRoleTable.syntax("policyRole")
         val resourceRole = ResourceRoleTable.syntax("resourceRole")
@@ -1399,7 +1519,7 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
       val ra = ResourceActionTable.syntax("ra")
 
       val listPoliciesQuery =
-        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${rr.result.role}, ${ra.result.action}
+        samsql"""select ${p.result.name}, ${r.result.name}, ${rt.result.name}, ${g.result.email}, ${p.result.public}, ${g.result.version}, ${g.result.lastSynchronizedVersion}, ${rr.result.role}, ${ra.result.action}
           from ${GroupTable as g}
           join ${GroupMemberFlatTable as f} on ${f.groupId} = ${g.id}
           join ${PolicyTable as p} on ${g.id} = ${p.groupId}
@@ -1420,7 +1540,9 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
               rs.get[ResourceId](r.resultName.name),
               rs.get[ResourceTypeName](rt.resultName.name),
               rs.get[WorkbenchEmail](g.resultName.email),
-              rs.boolean(p.resultName.public)
+              rs.boolean(p.resultName.public),
+              rs.get[Int](g.resultName.version),
+              rs.get[Option[Int]](g.resultName.lastSynchronizedVersion)
             ),
             (rs.stringOpt(rr.resultName.role).map(ResourceRoleName(_)), rs.stringOpt(ra.resultName.action).map(ResourceAction(_)))
           )
@@ -1539,7 +1661,11 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   override def setPolicyIsPublic(policyId: FullyQualifiedPolicyId, isPublic: Boolean, samRequestContext: SamRequestContext): IO[Boolean] =
     serializableWriteTransaction("setPolicyIsPublic", samRequestContext) { implicit session =>
       val policyPK = loadPolicyPK(policyId)
-      setPolicyIsPublicInternal(policyPK, isPublic) > 0
+      val changed = setPolicyIsPublicInternal(policyPK, isPublic) > 0
+      if (changed) {
+        updateGroupUpdatedDateAndVersion(policyId)
+      }
+      changed
     }
 
   override def getResourceParent(resource: FullyQualifiedResourceId, samRequestContext: SamRequestContext): IO[Option[FullyQualifiedResourceId]] = {
@@ -1660,6 +1786,200 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
     }
   }
 
+  private val publicResourcesCache: java.util.Map[ResourceTypeName, Seq[FilterResourcesResult]] =
+    Collections.synchronizedMap(new PassiveExpiringMap(1, TimeUnit.HOURS))
+
+  private def getPublicResourcesOfType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Seq[FilterResourcesResult]] = {
+    val resourcePolicy = PolicyTable.syntax("resourcePolicy")
+    val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
+    val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
+    val effectivePolicyAction = EffectivePolicyActionTable.syntax("effectivePolicyAction")
+    val resourceRole = ResourceRoleTable.syntax("resourceRole")
+    val roleAction = RoleActionTable.syntax("roleAction")
+    val resourceAction = ResourceActionTable.syntax("resourceAction")
+    val resource = ResourceTable.syntax("resource")
+
+    val resourceTypeConstraint =
+      samsqls"and ${resource.resourceTypeId} = ${resourceTypePKsByName.get(resourceTypeName)}"
+    val notNullConstraintRoleAction =
+      samsqls"and not (${resourceRole.role} is null and ${resourceAction.action} is null)"
+    val notNullConstraintPolicyAction = samsqls"and not (${resourceAction.action} is null)"
+
+    val publicRoleActionQuery =
+      samsqls"""
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, null as directAction, ${resourcePolicy.result.public}, ${resourcePolicy.resourceId} != ${resource.id} as inherited
+        from ${PolicyTable as resourcePolicy}
+          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
+          left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
+          left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
+          left join ${RoleActionTable as roleAction} on ${effectivePolicyRole.resourceRoleId} = ${roleAction.resourceRoleId}
+          left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id}
+          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
+        where ${resourcePolicy.public}
+          $resourceTypeConstraint
+          $notNullConstraintRoleAction
+          """
+
+    val publicPolicyActionQuery =
+      samsqls"""
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, null as ${resourceRole.resultName.role}, null as ${resourceAction.resultName.action}, ${resourceAction.action} as directAction, ${resourcePolicy.result.public}, ${resourcePolicy.resourceId} != ${resource.id} as inherited
+        from ${PolicyTable as resourcePolicy}
+          left join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId} and ${resourcePolicy.public}
+          left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
+          left join ${ResourceActionTable as resourceAction} on ${effectivePolicyAction.resourceActionId} = ${resourceAction.id}
+          left join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id} $resourceTypeConstraint
+        where ${resourcePolicy.public}
+          $resourceTypeConstraint
+          $notNullConstraintPolicyAction
+                """
+
+    val includePublicPolicyActionQuery = samsqls"union all $publicPolicyActionQuery"
+    val publicResourcesQuery = samsql"$publicRoleActionQuery $includePublicPolicyActionQuery"
+
+    readOnlyTransaction("filterResourcesPublic", samRequestContext) { implicit session =>
+      publicResourcesCache.computeIfAbsent(
+        resourceTypeName,
+        resourceTypeName =>
+          publicResourcesQuery
+            .map(rs =>
+              FilterResourcesResult(
+                rs.get[ResourceId](resource.resultName.name),
+                resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
+                rs.stringOpt(resourcePolicy.resultName.name).map(AccessPolicyName(_)),
+                rs.stringOpt(resourceRole.resultName.role).map(ResourceRoleName(_)),
+                rs.stringOpt(resourceAction.resultName.action).map(ResourceAction(_)),
+                rs.stringOpt("directAction").map(ResourceAction(_)),
+                rs.get[Boolean](resourcePolicy.resultName.public),
+                None,
+                false,
+                rs.booleanOpt("inherited").getOrElse(false)
+              )
+            )
+            .list()
+            .apply()
+      )
+    }
+  }
+  private def filterPrivateResources(
+      samUserId: WorkbenchUserId,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
+      samRequestContext: SamRequestContext
+  ): IO[Seq[FilterResourcesResult]] = {
+    val groupMemberFlat = GroupMemberFlatTable.syntax("groupMemberFlat")
+    val resourcePolicy = PolicyTable.syntax("resourcePolicy")
+    val effectiveResourcePolicy = EffectiveResourcePolicyTable.syntax("effectiveResourcePolicy")
+    val effectivePolicyRole = EffectivePolicyRoleTable.syntax("effectivePolicyRole")
+    val effectivePolicyAction = EffectivePolicyActionTable.syntax("effectivePolicyAction")
+    val resourceRole = ResourceRoleTable.syntax("resourceRole")
+    val roleAction = RoleActionTable.syntax("roleAction")
+    val resourceAction = ResourceActionTable.syntax("resourceAction")
+    val directAction = ResourceActionTable.syntax("directAction")
+    val resource = ResourceTable.syntax("resource")
+    val authDomain = AuthDomainTable.syntax("authDomain")
+    val authDomainGroup = GroupTable.syntax("authDomainGroup")
+    val authDomainGroupMemberFlat = GroupMemberFlatTable.syntax("authDomainGroupMemberFlat")
+
+    val resourceTypeConstraint =
+      if (resourceTypeNames.nonEmpty) samsqls"and ${resource.resourceTypeId} in (${resourceTypeNames.flatMap(resourceTypePKsByName.get)})"
+      else samsqls"and ${resource.resourceTypeId} in (${resourceTypeNamesByPK.keys.map(_.value)})"
+    val policyConstraint = if (policies.nonEmpty) samsqls"and ${resourcePolicy.name} in (${policies})" else samsqls""
+    val roleConstraint = if (roles.nonEmpty) samsqls"and ${resourceRole.role} in (${roles})" else samsqls""
+    val roleOrDirectAction = samsqls"COALESCE(${resourceAction.action}, ${directAction.action})"
+    val actionConstraint = if (actions.nonEmpty) samsqls"and $roleOrDirectAction in (${actions})" else samsqls""
+
+    val query =
+      samsql"""
+        select ${resource.result.name}, ${resource.result.resourceTypeId}, ${resourcePolicy.result.name}, ${resourceRole.result.role}, ${resourceAction.result.action}, ${directAction.result.action}, ${resourcePolicy.result.public}, ${authDomainGroup.result.name}, ${authDomainGroupMemberFlat.memberUserId} is not null as in_auth_domain, ${resourcePolicy.resourceId} != ${resource.id} as inherited
+          from ${GroupMemberFlatTable as groupMemberFlat}
+            join ${PolicyTable as resourcePolicy} on ${groupMemberFlat.groupId} = ${resourcePolicy.groupId}
+            join ${EffectiveResourcePolicyTable as effectiveResourcePolicy} on ${resourcePolicy.id} = ${effectiveResourcePolicy.sourcePolicyId}
+            join ${ResourceTable as resource} on ${effectiveResourcePolicy.resourceId} = ${resource.id}
+            left join ${EffectivePolicyRoleTable as effectivePolicyRole} on ${effectiveResourcePolicy.id} = ${effectivePolicyRole.effectiveResourcePolicyId}
+            left join ${ResourceRoleTable as resourceRole} on ${effectivePolicyRole.resourceRoleId} = ${resourceRole.id}
+            left join ${RoleActionTable as roleAction} on ${effectivePolicyRole.resourceRoleId} = ${roleAction.resourceRoleId}
+            left join ${ResourceActionTable as resourceAction} on ${roleAction.resourceActionId} = ${resourceAction.id}
+            left join ${EffectivePolicyActionTable as effectivePolicyAction} on ${effectiveResourcePolicy.id} = ${effectivePolicyAction.effectiveResourcePolicyId}
+            left join ${ResourceActionTable as directAction} on ${effectivePolicyAction.resourceActionId} = ${directAction.id}
+            left join ${AuthDomainTable as authDomain} on ${authDomain.resourceId} = ${resource.id}
+            left join ${GroupTable as authDomainGroup} on ${authDomainGroup.id} = ${authDomain.groupId}
+            left join ${GroupMemberFlatTable as authDomainGroupMemberFlat} on ${authDomainGroup.id} = ${authDomainGroupMemberFlat.groupId} and ${authDomainGroupMemberFlat.memberUserId} = ${samUserId}
+          where ${groupMemberFlat.memberUserId} = ${samUserId}
+            $resourceTypeConstraint
+            $policyConstraint
+            $roleConstraint
+            $actionConstraint
+            and $roleOrDirectAction is not null
+            """
+
+    readOnlyTransaction("filterResources", samRequestContext) { implicit session =>
+      query
+        .map(rs =>
+          FilterResourcesResult(
+            rs.get[ResourceId](resource.resultName.name),
+            resourceTypeNamesByPK(rs.get[ResourceTypePK](resource.resultName.resourceTypeId)),
+            rs.stringOpt(resourcePolicy.resultName.name).map(AccessPolicyName(_)),
+            rs.stringOpt(resourceRole.resultName.role).map(ResourceRoleName(_)),
+            rs.stringOpt(resourceAction.resultName.action).map(ResourceAction(_)),
+            rs.stringOpt(directAction.resultName.action).map(ResourceAction(_)),
+            rs.get[Boolean](resourcePolicy.resultName.public),
+            rs.stringOpt(authDomainGroup.resultName.name).map(WorkbenchGroupName(_)),
+            rs.booleanOpt("in_auth_domain").getOrElse(false),
+            rs.booleanOpt("inherited").getOrElse(false)
+          )
+        )
+        .list()
+        .apply()
+    }
+  }
+
+  override def filterResources(
+      samUserId: WorkbenchUserId,
+      resourceTypeNames: Set[ResourceTypeName],
+      policies: Set[AccessPolicyName],
+      roles: Set[ResourceRoleName],
+      actions: Set[ResourceAction],
+      includePublic: Boolean,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[FilterResourcesResult]] =
+    for {
+      publicResources <-
+        if (includePublic) {
+          (if (resourceTypeNames.isEmpty) resourceTypePKsByName.keys.toList else resourceTypeNames.toList)
+            .map(resourceTypeName => getPublicResourcesOfType(resourceTypeName, samRequestContext))
+            .sequence
+            .map(_.flatten)
+        } else IO.pure(List.empty)
+      privateResources <- filterPrivateResources(samUserId, resourceTypeNames, policies, roles, actions, samRequestContext)
+    } yield publicResources
+      .filter(r => policies.isEmpty || r.policy.exists(p => policies.contains(p)))
+      .filter(r => roles.isEmpty || r.role.exists(role => roles.contains(role)))
+      .filter(r => actions.isEmpty || r.roleAction.exists(actions.contains) || r.directAction.exists(actions.contains)) ++ privateResources
+
+  override def addAndRemovePolicyMembers(
+      policyId: FullyQualifiedPolicyId,
+      addSubjects: Set[WorkbenchSubject],
+      removeSubjects: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[Int] =
+    serializableWriteTransaction("addAndRemovePolicyMembers", samRequestContext) { implicit session =>
+      val groupId = samsql"${workbenchGroupIdentityToGroupPK(policyId)}".map(rs => rs.get[GroupPK](1)).single().apply().getOrElse {
+        throw new WorkbenchException(s"Group for policy [$policyId] not found")
+      }
+      val insertedCount = insertGroupMembers(groupId, addSubjects)
+      // there is no bulk removeGroupMembers because figuring out which records to remove from the flat structure
+      // can't be done with an in clause because it needs to use array functions
+      val removedCount = removeSubjects
+        .map { subject =>
+          removeGroupMember(policyId, subject)
+        }
+        .count(identity) // counts all that were true
+      updateGroupUpdatedDateAndVersion(policyId)
+      insertedCount + removedCount
+    }
+
   private def recreateEffectivePolicyRolesTableEntry(resourceTypeNames: Set[ResourceTypeName])(implicit session: DBSession): Int = {
     val resource = ResourceTable.syntax("resource")
     val policyResource = ResourceTable.syntax("policyResource")
@@ -1762,6 +2082,14 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
           from ${ResourceTable as resource}
           join ${ResourceTypeTable as resourceType} on ${resource.resourceTypeId} = ${resourceType.id}
           join ${EffectiveResourcePolicyTable as effPol} on ${resource.id} = ${effPol.resourceId}
+          -- https://broadworkbench.atlassian.net/browse/ID-891
+          -- We had to optimize this query, the following join condition shouldn't make a difference on the results
+          -- but it forces the postgres query planner to do an index scan instead of a full table scan of EffectiveResourcePolicyTable
+            and ${effPol.resourceId} in (
+              select ${resource.id} from ${ResourceTable as resource}
+              join ${ResourceTypeTable as resourceType} on ${resourceType.id} = ${resource.resourceTypeId}
+              where ${resourceType.name} = ${resourceTypeName}
+            )
           join ${PolicyTable as policy} on ${effPol.sourcePolicyId} = ${policy.id}
           $additionalJoins
           where ${resourceType.name} = ${resourceTypeName}
@@ -1786,7 +2114,15 @@ class PostgresAccessPolicyDAO(protected val writeDbRef: DbReference, protected v
   }
 }
 
-private final case class PolicyInfo(name: AccessPolicyName, resourceId: ResourceId, resourceTypeName: ResourceTypeName, email: WorkbenchEmail, public: Boolean)
+private final case class PolicyInfo(
+    name: AccessPolicyName,
+    resourceId: ResourceId,
+    resourceTypeName: ResourceTypeName,
+    email: WorkbenchEmail,
+    public: Boolean,
+    version: Int,
+    lastSynchronizedVersion: Option[Int]
+)
 private final case class RoleResult(resourceTypeName: Option[ResourceTypeName], role: Option[ResourceRoleName], descendantsOnly: Option[Boolean])
 private final case class ActionResult(resourceTypeName: Option[ResourceTypeName], action: Option[ResourceAction], descendantsOnly: Option[Boolean])
 

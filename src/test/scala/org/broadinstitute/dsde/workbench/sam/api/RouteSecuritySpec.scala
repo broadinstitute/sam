@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.api
 
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.broadinstitute.dsde.workbench.sam.TestSupport
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers.any
 import org.mockito.internal.verification.AtLeast
@@ -63,7 +63,7 @@ class RouteSecuritySpec extends AnyFlatSpec with Matchers with ScalatestRouteTes
       }
     }
 
-  for (PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/v1/resourceTypes"))
+  for (PathAndMethod(path, method) <- routesFromApiYml if path.startsWith("/api/admin/v1/resourceTypes") && !path.contains("/action/"))
     s"$method $path" should "call asSamSuperAdmin" in {
       val samRoutes = Mockito.spy(TestSamRoutes(Map.empty))
 

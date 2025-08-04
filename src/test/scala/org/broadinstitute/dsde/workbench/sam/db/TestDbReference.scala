@@ -4,7 +4,7 @@ import cats.effect.{IO, Resource}
 import com.google.common.base.Throwables
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
-import io.opencensus.trace.AttributeValue
+import io.opentelemetry.api.common.Attributes
 import liquibase.database.jvm.JdbcConnection
 import liquibase.resource.{ClassLoaderResourceAccessor, ResourceAccessor}
 import liquibase.{Contexts, Liquibase}
@@ -89,7 +89,7 @@ class TestDbReference(dbName: Symbol, dbExecutionContext: ExecutionContext) exte
       dbQueryName: String,
       samRequestContext: SamRequestContext,
       databaseIO: IO[A],
-      spanAttributes: Map[String, AttributeValue] = Map.empty
+      spanAttributes: Attributes = Attributes.empty
   ): IO[A] =
     if (databaseEnabled) {
       super.runDatabaseIO(dbQueryName, samRequestContext, databaseIO, spanAttributes)

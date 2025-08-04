@@ -2,20 +2,18 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
-import cats.effect.unsafe.implicits.global
 import cats.effect.{Clock, IO}
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.HttpResponseException
-import com.google.api.gax.rpc.AlreadyExistsException
 import com.google.auth.oauth2.ServiceAccountCredentials
-import com.google.protobuf.{Duration, Timestamp}
+import com.google.cloud.storage.BlobId
 import com.google.rpc.Code
 import com.typesafe.scalalogging.LazyLogging
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.dataaccess.NotificationDAO
 import org.broadinstitute.dsde.workbench.google.GooglePubSubDAO.MessageRequest
-import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleKmsService, GoogleProjectDAO, GooglePubSubDAO, GoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, GoogleIamDAO, GoogleProjectDAO, GooglePubSubDAO}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.Notifications.Notification
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat
@@ -24,8 +22,9 @@ import org.broadinstitute.dsde.workbench.model.google._
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LockDetails, PostgresDistributedLockDAO}
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, CloudExtensionsInitializer, ManagedGroupService, SamApplication}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -44,6 +43,10 @@ import scala.jdk.CollectionConverters._
 object GoogleExtensions {
   val resourceId = ResourceId("google")
   val getPetPrivateKeyAction = ResourceAction("get_pet_private_key")
+
+  def getShellGoogleProjectName(user: SamUser, googleServicesConfig: GoogleServicesConfig) =
+    // max 30 characters. subject ID is 21
+    GoogleProject(s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}")
 }
 
 class GoogleExtensions(
@@ -55,11 +58,9 @@ class GoogleExtensions(
     val googleGroupSyncPubSubDAO: GooglePubSubDAO,
     val googleDisableUsersPubSubDAO: GooglePubSubDAO,
     val googleIamDAO: GoogleIamDAO,
-    val googleStorageDAO: GoogleStorageDAO,
     val googleProjectDAO: GoogleProjectDAO,
     val googleKeyCache: GoogleKeyCache,
     val notificationDAO: NotificationDAO,
-    val googleKms: GoogleKmsService[IO],
     val googleStorageService: GoogleStorageService[IO],
     val googleServicesConfig: GoogleServicesConfig,
     val petServiceAccountConfig: PetServiceAccountConfig,
@@ -84,6 +85,7 @@ class GoogleExtensions(
 
   private val userProjectQueryParam = "userProject"
   private val requestedByQueryParam = "requestedBy"
+  private val defaultSignedUrlDuration = 60L
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
@@ -138,36 +140,11 @@ class GoogleExtensions(
                 Option(googleSubjectId),
                 googleServicesConfig.serviceAccountClientEmail,
                 None,
-                false,
-                None
+                false
               )
               samApplication.userService.createUser(newUser, samRequestContext).map(_ => newUser)
           }
       }
-
-      _ <- googleKms.createKeyRing(
-        googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId
-      ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
-
-      _ <- googleKms.createKey(
-        googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId,
-        googleServicesConfig.googleKms.keyId,
-        Option(Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 + googleServicesConfig.googleKms.rotationPeriod.toSeconds).build()),
-        Option(Duration.newBuilder().setSeconds(googleServicesConfig.googleKms.rotationPeriod.toSeconds).build())
-      ) handleErrorWith { case _: AlreadyExistsException => IO.unit }
-
-      _ <- googleKms.addMemberToKeyPolicy(
-        googleServicesConfig.googleKms.project,
-        googleServicesConfig.googleKms.location,
-        googleServicesConfig.googleKms.keyRingId,
-        googleServicesConfig.googleKms.keyId,
-        s"group:$allUsersGroupEmail",
-        "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-      )
 
       _ <- samApplication.resourceService.createResourceType(extensionResourceType, samRequestContext)
 
@@ -186,7 +163,7 @@ class GoogleExtensions(
 
   /*
     - managed groups and access policies are both "groups"
-    - You can have a bunch of resources constrained an auth domain (a collection of managed groups).
+    - You can have a bunch of resources constrained by an auth domain (a collection of managed groups).
     - A user must be a member of the auth domain in order to access some actions on the resources in that auth domain.
     - The user must be a member of all groups in an auth domain in order to access a resource
     - An access policy is specific to a single resource
@@ -205,7 +182,11 @@ class GoogleExtensions(
 
      see GoogleGroupSynchronizer for the background process that does the group synchronization
    */
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit] =
+  override def onGroupUpdate(
+      groupIdentities: Seq[WorkbenchGroupIdentity],
+      relevantMembers: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
     for {
       start <- clock.monotonic
       // only sync groups that have been synchronized in the past
@@ -217,14 +198,14 @@ class GoogleExtensions(
       messages <- previouslySyncedIds.traverse {
         // it is a group that isn't an access policy, could be a managed group
         case groupName: WorkbenchGroupName =>
-          makeConstrainedResourceAccessPolicyMessages(groupName, samRequestContext).map(_ :+ groupName.toJson.compactPrint)
+          makeConstrainedResourceAccessPolicyMessages(groupName, relevantMembers, samRequestContext).map(_ :+ groupName.toJson.compactPrint)
 
         // it is the admin or member access policy of a managed group
         case accessPolicyId @ FullyQualifiedPolicyId(
               FullyQualifiedResourceId(ManagedGroupService.managedGroupTypeName, id),
               ManagedGroupService.adminPolicyName | ManagedGroupService.memberPolicyName
             ) =>
-          makeConstrainedResourceAccessPolicyMessages(accessPolicyId, samRequestContext).map(_ :+ accessPolicyId.toJson.compactPrint)
+          makeConstrainedResourceAccessPolicyMessages(accessPolicyId, relevantMembers, samRequestContext).map(_ :+ accessPolicyId.toJson.compactPrint)
 
         // it is an access policy on a resource that's not a managed group
         case accessPolicyId: FullyQualifiedPolicyId => IO.pure(List(accessPolicyId.toJson.compactPrint))
@@ -243,7 +224,11 @@ class GoogleExtensions(
       )
     }
 
-  private def makeConstrainedResourceAccessPolicyMessages(groupIdentity: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[List[String]] =
+  private def makeConstrainedResourceAccessPolicyMessages(
+      groupIdentity: WorkbenchGroupIdentity,
+      relevantMembers: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[List[String]] =
     // start with a group
     for {
       // get all the ancestors of that group
@@ -260,8 +245,11 @@ class GoogleExtensions(
 
       // get all access policies on any resource that is constrained by the groups
       constrainedResourceAccessPolicyIds <- managedGroupIds.toList.traverse(
-        accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, samRequestContext)
+        accessPolicyDAO.listSyncedAccessPolicyIdsOnResourcesConstrainedByGroup(_, relevantMembers, samRequestContext)
       )
+
+      // Update group versions for all the groups that are ancestors of the managed group so that they can be synced
+      _ <- constrainedResourceAccessPolicyIds.flatten.traverse(p => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(p, samRequestContext))
 
       // return messages for all the affected access policies and the original group we started with
     } yield constrainedResourceAccessPolicyIds.flatten.map(accessPolicyId => accessPolicyId.toJson.compactPrint)
@@ -344,6 +332,7 @@ class GoogleExtensions(
         case None =>
           for {
             _ <- assertProjectInTerraOrg(project)
+            _ <- assertProjectIsActive(project)
             sa <- IO.fromFuture(IO(googleIamDAO.createServiceAccount(project, petSaName, petSaDisplayName)))
             _ <- withProxyEmail(user.id) { proxyEmail =>
               // Add group member by uniqueId instead of email to avoid race condition
@@ -406,6 +395,14 @@ class GoogleExtensions(
     }
   }
 
+  private def assertProjectIsActive(project: GoogleProject): IO[Unit] =
+    for {
+      projectIsActive <- IO.fromFuture(IO(googleProjectDAO.isProjectActive(project.value)))
+      _ <- IO.raiseUnless(projectIsActive)(
+        new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.BadRequest, s"Project ${project.value} is inactive"))
+      )
+    } yield ()
+
   private def retrievePetAndSA(
       userId: WorkbenchUserId,
       petServiceAccountName: ServiceAccountName,
@@ -422,7 +419,7 @@ class GoogleExtensions(
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) =>
-          getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), project, samRequestContext).map(Option(_))
+          getPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), project, samRequestContext).map(Option(_))
         case _ => IO.pure(None)
       }
     } yield key
@@ -433,45 +430,84 @@ class GoogleExtensions(
       key <- googleKeyCache.getKey(pet)
     } yield key
 
-  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
-    getPetServiceAccountKey(user, project, samRequestContext).unsafeToFuture().flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
+  def getPetServiceAccountToken(user: SamUser, project: GoogleProject, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
+    getPetServiceAccountKey(user, project, samRequestContext).flatMap { key =>
+      IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     }
+
+  def getPetServiceAccountToken(
+      userEmail: WorkbenchEmail,
+      project: GoogleProject,
+      scopes: Set[String],
+      samRequestContext: SamRequestContext
+  ): IO[Option[String]] =
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
+      token <- subject match {
+        case Some(userId: WorkbenchUserId) =>
+          getPetServiceAccountToken(SamUser(userId, None, userEmail, None, false), project, scopes, samRequestContext).map(Option(_))
+        case _ => IO.pure(None)
+      }
+    } yield token
 
   def getArbitraryPetServiceAccountKey(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[String]] =
     for {
       subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
       key <- subject match {
         case Some(userId: WorkbenchUserId) =>
-          IO.fromFuture(IO(getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false, None), samRequestContext))).map(Option(_))
+          getArbitraryPetServiceAccountKey(SamUser(userId, None, userEmail, None, false), samRequestContext).map(Option(_))
         case _ => IO.none
       }
     } yield key
 
-  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): Future[String] =
-    getDefaultServiceAccountForShellProject(user, samRequestContext)
+  def getArbitraryPetServiceAccountToken(userEmail: WorkbenchEmail, scopes: Set[String], samRequestContext: SamRequestContext): IO[Option[String]] =
+    for {
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail, samRequestContext)
+      token <- subject match {
+        case Some(userId: WorkbenchUserId) =>
+          getArbitraryPetServiceAccountToken(SamUser(userId, None, userEmail, None, false), scopes, samRequestContext).map(Option(_))
+        case _ => IO.none
+      }
+    } yield token
 
-  def getArbitraryPetServiceAccountToken(user: SamUser, scopes: Set[String], samRequestContext: SamRequestContext): Future[String] =
+  def getArbitraryPetServiceAccountToken(user: SamUser, scopes: Set[String], samRequestContext: SamRequestContext): IO[String] =
     getArbitraryPetServiceAccountKey(user, samRequestContext).flatMap { key =>
-      getAccessTokenUsingJson(key, scopes)
+      IO.fromFuture(IO(getAccessTokenUsingJson(key, scopes)))
     }
 
-  private def getDefaultServiceAccountForShellProject(user: SamUser, samRequestContext: SamRequestContext): Future[String] = {
-    val projectName =
-      s"fc-${googleServicesConfig.environment.substring(0, Math.min(googleServicesConfig.environment.length(), 5))}-${user.id.value}" // max 30 characters. subject ID is 21
-    for {
-      creationOperationId <- googleProjectDAO
-        .createProject(projectName, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
-        .map(opId => Option(opId)) recover {
-        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
-      }
-      _ <- creationOperationId match {
-        case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
-        case None => Future.successful(())
-      }
-      key <- getPetServiceAccountKey(user, GoogleProject(projectName), samRequestContext).unsafeToFuture()
-    } yield key
+  def getArbitraryPetServiceAccountKey(user: SamUser, samRequestContext: SamRequestContext): IO[String] = {
+    val googleProject: GoogleProject = GoogleExtensions.getShellGoogleProjectName(user, googleServicesConfig)
+
+    // try to get the key, if it fails with a 400, create the project and try again
+    getPetServiceAccountKey(user, googleProject, samRequestContext).recoverWith {
+      case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode.contains(StatusCodes.BadRequest) =>
+        for {
+          _ <- createShellProject(googleProject, samRequestContext)
+          key <- getPetServiceAccountKey(user, googleProject, samRequestContext)
+        } yield key
+    }
   }
+
+  private[google] def createShellProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Unit] =
+    distributedLock.withLock(LockDetails(s"${project.value}-createProject", "createProject", 30 seconds)).use { _ =>
+      IO.fromFuture(IO(for {
+        createProject <- googleProjectDAO.getProjectName(project.value).map(_.isEmpty)
+        creationOperationId <-
+          if (createProject) {
+            googleProjectDAO
+              .createProject(project.value, googleServicesConfig.terraGoogleOrgNumber, GoogleResourceTypes.Organization)
+              .map(opId => Option(opId)) recover {
+              case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == StatusCodes.Conflict.intValue => None
+            }
+          } else {
+            Future.successful(None)
+          }
+        _ <- creationOperationId match {
+          case Some(opId) => pollShellProjectCreation(opId) // poll until it's created
+          case None => Future.successful(())
+        }
+      } yield ()))
+    }
 
   private def pollShellProjectCreation(operationId: String): Future[Boolean] = {
     def whenCreating(throwable: Throwable): Boolean =
@@ -645,6 +681,35 @@ class GoogleExtensions(
     )
   }
 
+  private def fromGsPath(gsPath: String) = {
+    val pattern = "gs://.*/.*".r
+    if (!pattern.matches(gsPath)) {
+      throw new IllegalArgumentException(s"$gsPath is not a valid gsutil URI (i.e. \"gs://bucket/blob\")")
+    }
+    val blobNameStartIndex = gsPath.indexOf('/', 5)
+    val bucketName = gsPath.substring(5, blobNameStartIndex)
+    val blobName = gsPath.substring(blobNameStartIndex + 1)
+    BlobId.of(bucketName, blobName)
+  }
+
+  def getRequesterPaysSignedUrl(
+      samUser: SamUser,
+      gsPath: String,
+      duration: Option[Long],
+      requesterPaysProject: Option[GoogleProject],
+      samRequestContext: SamRequestContext
+  ): IO[URL] = {
+    val urlParamsMap: Map[String, String] = requesterPaysProject.map(p => Map(userProjectQueryParam -> p.value)).getOrElse(Map.empty)
+    val blobId = fromGsPath(gsPath)
+    val bucket = GcsBucketName(blobId.getBucket)
+    val objectName = GcsBlobName(blobId.getName)
+    for {
+      petKey <- getArbitraryPetServiceAccountKey(samUser, samRequestContext)
+      serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
+      url <- getSignedUrl(samUser, bucket, objectName, duration, urlParamsMap, serviceAccountCredentials)
+    } yield url
+  }
+
   def getSignedUrl(
       samUser: SamUser,
       project: GoogleProject,
@@ -659,23 +724,35 @@ class GoogleExtensions(
       petServiceAccount <- createUserPetServiceAccount(samUser, project, samRequestContext)
       petKey <- googleKeyCache.getKey(petServiceAccount)
       serviceAccountCredentials = ServiceAccountCredentials.fromStream(new ByteArrayInputStream(petKey.getBytes()))
-      timeInMinutes = duration.getOrElse(60L)
-      queryParams = urlParamsMap + (requestedByQueryParam -> samUser.email.value)
-      url <- googleStorageService
-        .getSignedBlobUrl(
-          bucket,
-          name,
-          serviceAccountCredentials,
-          expirationTime = timeInMinutes,
-          expirationTimeUnit = TimeUnit.MINUTES,
-          queryParams = queryParams
-        )
-        .compile
-        .lastOrError
+      url <- getSignedUrl(samUser, bucket, name, duration, urlParamsMap, serviceAccountCredentials)
     } yield url
   }
 
+  private def getSignedUrl(
+      samUser: SamUser,
+      bucket: GcsBucketName,
+      name: GcsBlobName,
+      duration: Option[Long],
+      urlParams: Map[String, String],
+      credentials: ServiceAccountCredentials
+  ): IO[URL] = {
+    val timeInMinutes = duration.getOrElse(defaultSignedUrlDuration)
+    val queryParams = urlParams + (requestedByQueryParam -> samUser.email.value)
+    googleStorageService
+      .getSignedBlobUrl(
+        bucket,
+        name,
+        credentials,
+        expirationTime = timeInMinutes,
+        expirationTimeUnit = TimeUnit.MINUTES,
+        queryParams = queryParams
+      )
+      .compile
+      .lastOrError
+  }
+
   override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
+
 }
 
 case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {

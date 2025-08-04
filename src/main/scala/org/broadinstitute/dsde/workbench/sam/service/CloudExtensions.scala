@@ -10,7 +10,8 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.api.ExtensionRoutes
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, ResourceTypeName}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
@@ -30,7 +31,13 @@ trait CloudExtensions {
 
   def publishGroup(id: WorkbenchGroupName): Future[Unit]
 
-  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit]
+  /** This method is called when a group is updated.
+    * @param groupIdentities
+    *   the identities of the groups that were updated
+    * @param relevantMembers
+    *   the members of the groups that were added or removed or empty if the members are not known
+    */
+  def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], relevantMembers: Set[WorkbenchSubject], samRequestContext: SamRequestContext): IO[Unit]
 
   def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit]
 
@@ -67,13 +74,17 @@ trait CloudExtensionsInitializer {
 }
 
 trait NoExtensions extends CloudExtensions {
-  override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
+  override def isWorkbenchAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(false)
 
-  override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(true)
+  override def isSamSuperAdmin(memberEmail: WorkbenchEmail): Future[Boolean] = Future.successful(false)
 
   override def publishGroup(id: WorkbenchGroupName): Future[Unit] = Future.successful(())
 
-  override def onGroupUpdate(groupIdentities: Seq[WorkbenchGroupIdentity], samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+  override def onGroupUpdate(
+      groupIdentities: Seq[WorkbenchGroupIdentity],
+      relevantMembers: Set[WorkbenchSubject],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] = IO.unit
 
   override def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit] = IO.unit
 

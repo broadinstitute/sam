@@ -10,7 +10,7 @@ import org.broadinstitute.dsde.workbench.google.HttpGoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.dataAccess.LastQuotaErrorDAO
 
 import java.util.Collections
-import scala.concurrent.duration.{Duration, DurationInt}
+import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
 
 class CoordinatedBackoffHttpGoogleDirectoryDAO(
@@ -19,7 +19,8 @@ class CoordinatedBackoffHttpGoogleDirectoryDAO(
     workbenchMetricBaseName: String,
     lastQuotaErrorDAO: LastQuotaErrorDAO,
     maxPageSize: Int = 200,
-    val backoffDuration: Option[Duration] = None
+    val backoffDuration: Option[Duration] = None,
+    val retryStartingMillis: Int = 1000
 )(implicit system: ActorSystem, executionContext: ExecutionContext)
     extends HttpGoogleDirectoryDAO(appName, googleCredentialMode, workbenchMetricBaseName, maxPageSize) {
 
@@ -35,6 +36,8 @@ class CoordinatedBackoffHttpGoogleDirectoryDAO(
           }
       }
     }
+
+  override def exponentialBackOffIntervals: Seq[FiniteDuration] = createExponentialBackOffIntervals(retryStartingMillis, 2, 7)
 
   private[google] def usageLimitedException = {
     val errorInfo = new GoogleJsonError.ErrorInfo()

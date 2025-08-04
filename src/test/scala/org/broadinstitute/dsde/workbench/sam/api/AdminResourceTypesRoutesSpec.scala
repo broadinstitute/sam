@@ -8,9 +8,10 @@ import cats.implicits.catsSyntaxOptionId
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{MockAccessPolicyDAO, MockDirectoryDAO}
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
@@ -21,12 +22,13 @@ import org.scalatest.AppendedClues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
+import spray.json.{JsBoolean, JsValue}
 
 import scala.concurrent.Future
 
 class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSupport with ScalatestRouteTest with AppendedClues with MockitoSugar {
 
-  implicit val errorReportSource = ErrorReportSource("sam")
+  implicit val errorReportSource: ErrorReportSource = ErrorReportSource("sam")
 
   val firecloudAdmin = Generator.genFirecloudUser.sample.get
   val broadUser = Generator.genBroadInstituteUser.sample.get
@@ -41,7 +43,8 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
     ResourceRoleName("owner")
   )
 
-  val defaultAccessPolicyMembership = AccessPolicyMembership(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
+  val defaultAccessPolicyMembership = AccessPolicyMembershipResponse(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
+  val defaultAccessPolicyMembershipRequest = AccessPolicyMembershipRequest(Set(WorkbenchEmail("testUser@example.com")), Set.empty, Set.empty, None)
   val defaultAdminPolicyName = AccessPolicyName("admin")
   val defaultAdminResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(defaultResourceType.name.value))
   val defaultAccessPolicyResponseEntry =
@@ -67,14 +70,14 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
 
     val cloudExtensions = SamSuperAdminExtensions(isSamSuperAdmin)
 
-    val tosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val tosService = new TosService(cloudExtensions, directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, cloudExtensions, Seq.empty, tosService)
     val mockStatusService = new StatusService(directoryDAO, cloudExtensions)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, accessPolicyDAO, directoryDAO, cloudExtensions, emailDomain)
 
     runAndWait(mockUserService.createUser(user, samRequestContext))
-    runAndWait(tosService.acceptTosStatus(user.id, samRequestContext))
+    runAndWait(tosService.acceptCurrentTermsOfService(user.id, samRequestContext))
 
     new TestSamRoutes(
       mockResourceService,
@@ -129,7 +132,7 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
         mockitoEq(resourceTypeAdmin),
         mockitoEq(defaultAdminPolicyName),
         mockitoEq(defaultAdminResourceId),
-        mockitoEq(defaultAccessPolicyMembership),
+        mockitoEq(defaultAccessPolicyMembershipRequest),
         any[SamRequestContext]
       )
     ).thenReturn(IO(null))
@@ -243,6 +246,38 @@ class AdminResourceTypesRoutesSpec extends AnyFlatSpec with Matchers with TestSu
 
     Delete(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/policies/$fakePolicyName") ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  "GET /api/admin/v1/resourceTypes/{resourceType}/action/{action}" should "return true with access" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = false)
+    val testAction = ResourceAction("testAction")
+
+    when(
+      samRoutes.policyEvaluatorService
+        .hasPermission(mockitoEq(defaultAdminResourceId), mockitoEq(testAction), mockitoEq(firecloudAdmin.id), any[SamRequestContext])
+    )
+      .thenReturn(IO(true))
+
+    Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/action/${testAction.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(true)
+    }
+  }
+
+  it should "return false without access" in {
+    val samRoutes = createSamRoutes(isSamSuperAdmin = false)
+    val testAction = ResourceAction("testAction")
+
+    when(
+      samRoutes.policyEvaluatorService
+        .hasPermission(mockitoEq(defaultAdminResourceId), mockitoEq(testAction), mockitoEq(firecloudAdmin.id), any[SamRequestContext])
+    )
+      .thenReturn(IO(false))
+
+    Get(s"/api/admin/v1/resourceTypes/${defaultResourceType.name}/action/${testAction.value}") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[JsValue] shouldEqual JsBoolean(false)
     }
   }
 

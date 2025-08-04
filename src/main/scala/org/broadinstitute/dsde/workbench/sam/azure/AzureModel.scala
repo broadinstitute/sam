@@ -2,27 +2,37 @@ package org.broadinstitute.dsde.workbench.sam.azure
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.model.{ResourceAction, ResourceId}
+import org.broadinstitute.dsde.workbench.sam.model.{FullyQualifiedResourceId, ResourceAction, ResourceId}
 import spray.json.DefaultJsonProtocol._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
+import spray.json.RootJsonFormat
 
 object AzureJsonSupport {
-  implicit val tenantIdFormat = ValueObjectFormat(TenantId.apply)
+  implicit val tenantIdFormat: ValueObjectFormat[TenantId] = ValueObjectFormat(TenantId.apply)
 
-  implicit val subscriptionIdFormat = ValueObjectFormat(SubscriptionId.apply)
+  implicit val subscriptionIdFormat: ValueObjectFormat[SubscriptionId] = ValueObjectFormat(SubscriptionId.apply)
 
-  implicit val managedResourceGroupNameFormat = ValueObjectFormat(ManagedResourceGroupName.apply)
+  implicit val managedResourceGroupNameFormat: ValueObjectFormat[ManagedResourceGroupName] = ValueObjectFormat(ManagedResourceGroupName.apply)
 
-  implicit val getPetManagedIdentityRequestFormat = jsonFormat3(GetOrCreatePetManagedIdentityRequest.apply)
+  implicit val getPetManagedIdentityRequestFormat: RootJsonFormat[GetOrCreatePetManagedIdentityRequest] = jsonFormat3(
+    GetOrCreatePetManagedIdentityRequest.apply
+  )
 
-  implicit val managedIdentityObjectIdFormat = ValueObjectFormat(ManagedIdentityObjectId.apply)
+  implicit val managedIdentityObjectIdFormat: ValueObjectFormat[ManagedIdentityObjectId] = ValueObjectFormat(ManagedIdentityObjectId.apply)
 
-  implicit val managedIdentityDisplayNameFormat = ValueObjectFormat(ManagedIdentityDisplayName.apply)
+  implicit val managedIdentityDisplayNameFormat: ValueObjectFormat[ManagedIdentityDisplayName] = ValueObjectFormat(ManagedIdentityDisplayName.apply)
 
-  implicit val petManagedIdentityIdFormat = jsonFormat4(PetManagedIdentityId.apply)
+  implicit val petManagedIdentityIdFormat: RootJsonFormat[PetManagedIdentityId] = jsonFormat4(PetManagedIdentityId.apply)
 
-  implicit val petManagedIdentityFormat = jsonFormat3(PetManagedIdentity.apply)
+  implicit val petManagedIdentityFormat: RootJsonFormat[PetManagedIdentity] = jsonFormat3(PetManagedIdentity.apply)
 
-  implicit val managedResourceGroupCoordinatesFormat = jsonFormat3(ManagedResourceGroupCoordinates.apply)
+  implicit val managedResourceGroupCoordinatesFormat: RootJsonFormat[ManagedResourceGroupCoordinates] = jsonFormat3(ManagedResourceGroupCoordinates.apply)
+
+  implicit val billingProfileIdFormat: ValueObjectFormat[BillingProfileId] = ValueObjectFormat(BillingProfileId.apply)
+
+  implicit val actionManagedIdentityIdFormat: RootJsonFormat[ActionManagedIdentityId] = jsonFormat3(ActionManagedIdentityId.apply)
+
+  implicit val actionManagedIdentityFormat: RootJsonFormat[ActionManagedIdentity] = jsonFormat4(ActionManagedIdentity.apply)
 }
 
 final case class TenantId(value: String) extends ValueObject
@@ -56,6 +66,14 @@ final case class PetManagedIdentityId(
 
 final case class PetManagedIdentity(id: PetManagedIdentityId, objectId: ManagedIdentityObjectId, displayName: ManagedIdentityDisplayName)
 
+final case class ActionManagedIdentityId(resourceId: FullyQualifiedResourceId, action: ResourceAction, billingProfileId: BillingProfileId)
+
+final case class ActionManagedIdentity(
+    id: ActionManagedIdentityId,
+    objectId: ManagedIdentityObjectId,
+    displayName: ManagedIdentityDisplayName,
+    managedResourceGroupCoordinates: ManagedResourceGroupCoordinates
+)
 object AzureExtensions {
   val resourceId = ResourceId("azure")
   val getPetManagedIdentityAction = ResourceAction("get_pet_managed_identity")

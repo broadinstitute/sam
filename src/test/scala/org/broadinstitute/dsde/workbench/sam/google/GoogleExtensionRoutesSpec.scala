@@ -6,7 +6,9 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.broadinstitute.dsde.workbench.google.GoogleIamDAO
+import com.google.api.services.cloudresourcemanager.model.Operation
+import org.broadinstitute.dsde.workbench.google.mock.MockGoogleProjectDAO
+import org.broadinstitute.dsde.workbench.google.{GoogleIamDAO, GoogleProjectDAO}
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google._
@@ -15,8 +17,9 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{genSamDependencies, ge
 import org.broadinstitute.dsde.workbench.sam.api.SamRoutes
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig
 import org.broadinstitute.dsde.workbench.sam.mock.RealKeyMockGoogleIamDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers.{eq => mockitoEq}
@@ -33,7 +36,7 @@ import scala.concurrent.duration._
 /** Unit tests of GoogleExtensionRoutes. Can use real Google services. Must mock everything else.
   */
 class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with ScalaFutures {
-  implicit val timeout = RouteTestTimeout(
+  implicit val timeout: RouteTestTimeout = RouteTestTimeout(
     5 seconds
   ) // after using com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper, tests seems to run a bit longer
   val workspaceResourceId = "workspace"
@@ -236,7 +239,13 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     import SamGoogleModelJsonSupport._
     Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
-      assertResult(Map(createdPolicy.email -> Seq(SyncReportItem("added", TestSupport.proxyEmail(user.id).value.toLowerCase, None)))) {
+      assertResult(
+        Map(
+          createdPolicy.email -> Seq(
+            SyncReportItem("added", TestSupport.proxyEmail(user.id).value.toLowerCase, s"${createdPolicy.policyName.value}.foo.${resourceType.name}", None)
+          )
+        )
+      ) {
         responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
       }
     }
@@ -274,6 +283,36 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
     Get(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
       status shouldEqual StatusCodes.OK
       responseAs[String] should not be empty
+    }
+  }
+
+  "GET /api/google/policy/{resourceTypeName}/{resourceId}/{accessPolicyName}/sync" should "200 with empty response when deduping sync requests" in {
+    val resourceTypes = Map(resourceType.name -> resourceType)
+    val (user, samDep, routes) = createTestUser(resourceTypes)
+
+    Post(s"/api/resource/${resourceType.name}/foo") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.NoContent
+      assertResult("") {
+        responseAs[String]
+      }
+    }
+
+    import spray.json.DefaultJsonProtocol._
+    import SamGoogleModelJsonSupport._
+    Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]] should not be empty
+    }
+
+    // A duplicate call should return OK and the email with no sync report items
+    Post(s"/api/google/resource/${resourceType.name}/foo/${resourceType.ownerRoleName.value}/sync") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      val response = responseAs[Map[WorkbenchEmail, Seq[SyncReportItem]]]
+      response.keys should have size 1
+      val email = response.keys.head.value
+      email should startWith("policy-")
+      email should endWith("example.com")
+      response.values.flatten shouldBe empty
     }
   }
 
@@ -317,7 +356,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
 
     val (defaultUserInfo, samRoutes, expectedJson) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
@@ -333,7 +372,7 @@ class GoogleExtensionRoutesSpec extends GoogleExtensionRoutesSpecHelper with Sca
   it should "404 when user does not exist" in {
     val (defaultUserInfo, samRoutes, _) = setupPetSATest()
 
-    val members = AccessPolicyMembership(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
+    val members = AccessPolicyMembershipResponse(Set(defaultUserInfo.email), Set(GoogleExtensions.getPetPrivateKeyAction), Set.empty, None)
     Put(s"/api/resource/${CloudExtensions.resourceTypeName.value}/${GoogleExtensions.resourceId.value}/policies/foo", members) ~> samRoutes.route ~> check {
       status shouldEqual StatusCodes.Created
     }
@@ -367,14 +406,16 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
       googleServicesConfig: GoogleServicesConfig = TestSupport.googleServicesConfig,
       policyEvaluatorServiceOpt: Option[PolicyEvaluatorService] = None,
       resourceServiceOpt: Option[ResourceService] = None,
-      user: SamUser = Generator.genWorkbenchUserBoth.sample.get
+      user: SamUser = Generator.genWorkbenchUserBoth.sample.get,
+      googleProjectDAO: Option[GoogleProjectDAO] = None
   ): (SamUser, SamDependencies, SamRoutes) = {
     lazy val samDependencies = genSamDependencies(
       resourceTypes,
       googIamDAO,
       googleServicesConfig,
       policyEvaluatorServiceOpt = policyEvaluatorServiceOpt,
-      resourceServiceOpt = resourceServiceOpt
+      resourceServiceOpt = resourceServiceOpt,
+      googProjectDAO = googleProjectDAO
     )
     lazy val createRoutes = genSamRoutes(samDependencies, user)
 
@@ -440,13 +481,20 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
 
   def setupSignedUrlTest(): (SamUser, SamRoutes, String) = {
     val googleIamDAO = new RealKeyMockGoogleIamDAO
+    val googleProjectDAO = new MockGoogleProjectDAO() {
+      override def pollOperation(operationId: String): Future[Operation] = {
+        val operation = new com.google.api.services.cloudresourcemanager.model.Operation
+        operation.setDone(true)
+        Future.successful(operation)
+      }
+    }
     val samUser = Generator.genWorkbenchUserGoogle.sample.get
-
     val (user, samDeps, routes) = createTestUser(
       configResourceTypes,
       Some(googleIamDAO),
       TestSupport.googleServicesConfig.copy(serviceAccountClientEmail = samUser.email, serviceAccountClientId = samUser.googleSubjectId.get.value),
-      user = samUser
+      user = samUser,
+      googleProjectDAO = Some(googleProjectDAO)
     )
     val resourceType = ResourceType(
       SamResourceTypes.googleProjectName,
@@ -458,7 +506,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
     val projectName = "my-project"
     val createResourceRequest = CreateResourceRequest(
       ResourceId(projectName),
-      Map(AccessPolicyName("goober") -> AccessPolicyMembership(Set(samUser.email), Set(SamResourceActions.createPet), Set(resourceType.ownerRoleName))),
+      Map(AccessPolicyName("goober") -> AccessPolicyMembershipRequest(Set(samUser.email), Set(SamResourceActions.createPet), Set(resourceType.ownerRoleName))),
       Set.empty
     )
     Post(s"/api/resources/v2/${resourceType.name}", createResourceRequest) ~> routes.route ~> check {
@@ -472,7 +520,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
           samDeps.userService,
           samDeps.resourceService,
           samDeps.statusService,
-          new TosService(samDeps.directoryDAO, TestSupport.tosConfig)
+          new TosService(samDeps.cloudExtensions, samDeps.directoryDAO, TestSupport.tosConfig)
         )
       )
       .unsafeRunSync()
@@ -496,7 +544,7 @@ trait GoogleExtensionRoutesSpecHelper extends AnyFlatSpec with Matchers with Sca
           samDeps.userService,
           samDeps.resourceService,
           samDeps.statusService,
-          new TosService(samDeps.directoryDAO, TestSupport.tosConfig)
+          new TosService(samDeps.cloudExtensions, samDeps.directoryDAO, TestSupport.tosConfig)
         )
       )
       .unsafeRunSync()

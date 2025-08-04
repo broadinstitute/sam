@@ -3,12 +3,11 @@ package org.broadinstitute.dsde.workbench.sam.config
 import cats.data.NonEmptyList
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ValueReader
-import org.broadinstitute.dsde.workbench.google.{KeyId, KeyRingId, Location}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.{GcsBucketName, GoogleProject}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.nonEmptyListReader
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration.Duration
 
 /** Created by mbemis on 8/17/17.
   */
@@ -31,8 +30,8 @@ final case class GoogleServicesConfig(
     googleKeyCacheConfig: GoogleKeyCacheConfig,
     resourceNamePrefix: Option[String],
     adminSdkServiceAccountPaths: Option[NonEmptyList[String]],
-    googleKms: GoogleKmsConfig,
-    terraGoogleOrgNumber: String
+    terraGoogleOrgNumber: String,
+    traceExporter: TraceExporterConfig
 )
 
 object GoogleServicesConfig {
@@ -41,7 +40,8 @@ object GoogleServicesConfig {
       config.getString("pubSubProject"),
       config.getString("pubSubTopic"),
       config.getString("pubSubSubscription"),
-      config.getInt("workerCount")
+      config.getInt("workerCount"),
+      config.getDuration("maxAckExtensionPeriod")
     )
   }
   implicit val googleKeyCacheConfigReader: ValueReader[GoogleKeyCacheConfig] = ValueReader.relative { config =>
@@ -49,17 +49,16 @@ object GoogleServicesConfig {
       GcsBucketName(config.getString("bucketName")),
       config.getInt("activeKeyMaxAge"),
       config.getInt("retiredKeyMaxAge"),
+      config.getInt("nascentKeyMinAgeMinutes"),
       config.as[GooglePubSubConfig]("monitor")
     )
   }
 
-  implicit val googleKmsConfigReader: ValueReader[GoogleKmsConfig] = ValueReader.relative { config =>
-    GoogleKmsConfig(
-      GoogleProject(config.getString("project")),
-      Location(config.getString("location")),
-      KeyRingId(config.getString("keyRingId")),
-      KeyId(config.getString("keyId")),
-      config.as[FiniteDuration]("rotationPeriod")
+  implicit val traceExporterConfigReader: ValueReader[TraceExporterConfig] = ValueReader.relative { config =>
+    TraceExporterConfig(
+      config.getBoolean("enabled"),
+      config.getString("projectId"),
+      config.getDouble("samplingProbability")
     )
   }
 
@@ -87,8 +86,8 @@ object GoogleServicesConfig {
       config.as[GoogleKeyCacheConfig]("googleKeyCache"),
       config.as[Option[String]]("resourceNamePrefix"),
       config.as[Option[NonEmptyList[String]]]("adminSdkServiceAccountPaths"),
-      config.as[GoogleKmsConfig]("kms"),
-      config.getString("terraGoogleOrgNumber")
+      config.getString("terraGoogleOrgNumber"),
+      config.as[TraceExporterConfig]("traceExporter")
     )
   }
 }

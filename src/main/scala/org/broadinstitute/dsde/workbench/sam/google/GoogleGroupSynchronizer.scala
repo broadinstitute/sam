@@ -11,9 +11,12 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, LoadResourceAuthDomainResult}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
+import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.FutureSupport
+
+class GroupAlreadySynchronized(errorReport: ErrorReport = ErrorReport(StatusCodes.Conflict, "Group has already been synchronized"))
+    extends WorkbenchExceptionWithErrorReport(errorReport)
 
 /** This class makes sure that our google groups have the right members.
   *
@@ -50,31 +53,41 @@ class GoogleGroupSynchronizer(
     if (visitedGroups.contains(groupId)) {
       IO.pure(Map.empty)
     } else {
-      for {
-        group <- loadSamGroup(groupId, samRequestContext)
-        members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
-        subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
-        googleMemberEmails <- loadGoogleGroupMemberEmailsMaybeCreateGroup(group, samRequestContext)
-        samMemberEmails <- loadSamMemberEmails(members, samRequestContext)
+      loadSamGroupForSynchronization(groupId, samRequestContext).flatMap {
+        case Left(group) =>
+          logger.info(s"Group ${group.id}:${group.email} does not need synchronization, skipping.")
+          IO.pure(Map(group.email -> Seq.empty))
+        case Right(group) =>
+          for {
+            members <- calculateAuthDomainIntersectionIfRequired(group, samRequestContext)
+            subGroupSyncs <- syncSubGroupsIfRequired(group, visitedGroups, samRequestContext)
+            googleMemberEmails <- loadGoogleGroupMemberEmailsMaybeCreateGroup(group, samRequestContext)
+            samMemberEmails <- loadSamMemberEmails(members, samRequestContext)
 
-        toAdd = samMemberEmails -- googleMemberEmails
-        toRemove = googleMemberEmails -- samMemberEmails
+            toAdd = samMemberEmails -- googleMemberEmails
+            toRemove = googleMemberEmails -- samMemberEmails
 
-        addedUserSyncReports <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
-        removedUserSyncReports <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
+            addedUserSyncReports <- toAdd.toList.traverse(addMemberToGoogleGroup(group, samRequestContext))
+            removedUserSyncReports <- toRemove.toList.traverse(removeMemberFromGoogleGroup(group, samRequestContext))
 
-        _ <- directoryDAO.updateSynchronizedDate(groupId, samRequestContext)
-      } yield Map(group.email -> Seq(addedUserSyncReports, removedUserSyncReports).flatten) ++ subGroupSyncs.flatten
+            _ <- directoryDAO.updateSynchronizedDateAndVersion(group, samRequestContext)
+          } yield Map(group.email -> Seq(addedUserSyncReports, removedUserSyncReports).flatten) ++ subGroupSyncs.flatten
+      }
     }
 
   private def removeMemberFromGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(removeEmail: String) =
     traceIOWithContext("removeMemberFromGoogleGroup", samRequestContext) { _ =>
-      SyncReportItem.fromIO("removed", removeEmail, IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail)))))
+      SyncReportItem.fromIO(
+        "removed",
+        removeEmail,
+        group.id.toString,
+        IO.fromFuture(IO(googleDirectoryDAO.removeMemberFromGroup(group.email, WorkbenchEmail(removeEmail))))
+      )
     }
 
   private def addMemberToGoogleGroup(group: WorkbenchGroup, samRequestContext: SamRequestContext)(addEmail: String) =
     traceIOWithContext("addMemberToGoogleGroup", samRequestContext) { _ =>
-      SyncReportItem.fromIO("added", addEmail, IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)))))
+      SyncReportItem.fromIO("added", addEmail, group.id.toString, IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(group.email, WorkbenchEmail(addEmail)))))
     }
 
   /** convert each subject to an email address
@@ -149,12 +162,16 @@ class GoogleGroupSynchronizer(
       case group: BasicWorkbenchGroup => IO.pure(group.members)
     }
 
-  /** Loads the group whether a policy or basic group. If it is a public policy add the all users group to members.
+  /** Loads the group whether a policy or basic group. If it is a public policy add the all users group to members. If the response is a `Right`, the group
+    * needs synchronization. If it is a `Left`, then the group does not need synchronization.
     * @param groupId
     * @param samRequestContext
     * @return
     */
-  private def loadSamGroup(groupId: WorkbenchGroupIdentity, samRequestContext: SamRequestContext): IO[WorkbenchGroup] =
+  private def loadSamGroupForSynchronization(
+      groupId: WorkbenchGroupIdentity,
+      samRequestContext: SamRequestContext
+  ): IO[Either[WorkbenchGroup, WorkbenchGroup]] =
     for {
       groupOption <- groupId match {
         case basicGroupName: WorkbenchGroupName => directoryDAO.loadGroup(basicGroupName, samRequestContext)
@@ -172,7 +189,14 @@ class GoogleGroupSynchronizer(
       }
 
       group <- OptionT.fromOption[IO](groupOption).getOrRaise(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
-    } yield group
+    } yield
+    // If group.version > group.lastSynchronizedVersion, then the group needs to be synchronized
+    // Else Noop
+    if (group.version > group.lastSynchronizedVersion.getOrElse(0)) {
+      Either.right(group)
+    } else {
+      Either.left(group)
+    }
 
   /** An access policy is constrainable if it contains an action or a role that contains an action that is configured as constrainable in the resource type
     * definition.
@@ -188,10 +212,7 @@ class GoogleGroupSynchronizer(
           actionPattern.authDomainConstrainable &&
           (accessPolicy.actions.exists(actionPattern.matches) ||
             accessPolicy.roles.exists { accessPolicyRole =>
-              resourceType.roles.exists {
-                case resourceTypeRole @ ResourceRole(`accessPolicyRole`, _, _, _) => resourceTypeRole.actions.exists(actionPattern.matches)
-                case _ => false
-              }
+              resourceType.getRoleActions(accessPolicyRole).exists(actionPattern.matches)
             })
         }
       case None =>
@@ -213,9 +234,17 @@ class GoogleGroupSynchronizer(
           case LoadResourceAuthDomainResult.Constrained(groups) =>
             // auth domain exists, need to calculate intersection
             val groupsIdentity: Set[WorkbenchGroupIdentity] = groups.toList.toSet
-            directoryDAO
-              .listIntersectionGroupUsers(groupsIdentity + policy.id, samRequestContext)
-              .map(_.map(_.asInstanceOf[WorkbenchSubject])) // Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
+            if (groupsIdentity.size == 1 && policy.members.contains(groupsIdentity.head)) {
+              // if there is only 1 group in the auth domain and the policy contains that group, then the intersection is just the group
+              // this is a short cut for large auth domains where the policy is also shared with the auth domain group
+              // which leads to synchronizing policy groups with thousands of members
+              IO.pure(groupsIdentity.asInstanceOf[Set[WorkbenchSubject]])
+            } else {
+              // otherwise calculate the intersection
+              directoryDAO
+                .listIntersectionGroupUsers(groupsIdentity + policy.id, samRequestContext)
+                .map(_.map(_.asInstanceOf[WorkbenchSubject])) // Doesn't seem like I can avoid the asInstanceOf, would be interested to know if there's a way
+            }
           case LoadResourceAuthDomainResult.NotConstrained | LoadResourceAuthDomainResult.ResourceNotFound =>
             // auth domain does not exist, return policy members as is
             IO.pure(policy.members)

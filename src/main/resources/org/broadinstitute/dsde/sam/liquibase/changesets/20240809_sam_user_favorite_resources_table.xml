@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog logicalFilePath="dummy"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+  <changeSet logicalFilePath="dummy" author="tlangs" id="add_sam_user_favorite_resources_table">
+    <createTable tableName="SAM_USER_FAVORITE_RESOURCES">
+      <column name="sam_user_id" type="VARCHAR">
+        <constraints primaryKey="true" foreignKeyName="FK_SUFR_USER_ID" referencedTableName="SAM_USER" referencedColumnNames="id" deleteCascade="true"/>
+      </column>
+      <column name="resource_id" type="BIGINT">
+        <constraints nullable="false" primaryKey="true" foreignKeyName="FK_SUFR_RESOURCE" referencedTableName="SAM_RESOURCE" referencedColumnNames="id" deleteCascade="true"/>
+      </column>
+      <column name="created_at" type="timestamptz" defaultValueComputed="now()"/>
+    </createTable>
+
+  </changeSet>
+</databaseChangeLog>

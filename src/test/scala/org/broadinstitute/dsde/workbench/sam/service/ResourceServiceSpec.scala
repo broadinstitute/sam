@@ -4,18 +4,41 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.{global => globalEc}
+import cats.implicits.toTraverseOps
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
 import net.ceedubs.ficus.Ficus._
+import org.broadinstitute.dsde.workbench.sam.errorReportSource
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam
 import org.broadinstitute.dsde.workbench.sam.Generator._
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 import org.broadinstitute.dsde.workbench.sam.audit._
+import org.broadinstitute.dsde.workbench.sam.azure.{
+  ActionManagedIdentity,
+  ActionManagedIdentityId,
+  AzureService,
+  BillingProfileId,
+  ManagedIdentityDisplayName,
+  ManagedIdentityObjectId,
+  ManagedResourceGroup,
+  ManagedResourceGroupCoordinates,
+  ManagedResourceGroupName,
+  SubscriptionId,
+  TenantId
+}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig.resourceTypeReader
-import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{
+  AccessPolicyDAO,
+  AzureManagedResourceGroupDAO,
+  DirectoryDAO,
+  PostgresAccessPolicyDAO,
+  PostgresAzureManagedResourceGroupDAO,
+  PostgresDirectoryDAO
+}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, PropertyBasedTesting, TestSupport}
 import org.mockito.Mockito._
@@ -30,8 +53,8 @@ import org.slf4j.LoggerFactory
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
+import scala.util.Random
 
 /** Created by dvoet on 6/27/17.
   */
@@ -50,10 +73,18 @@ class ResourceServiceSpec
 
   lazy val dirDAO: DirectoryDAO = new PostgresDirectoryDAO(TestSupport.dbRef, TestSupport.dbRef)
   lazy val policyDAO: AccessPolicyDAO = new PostgresAccessPolicyDAO(TestSupport.dbRef, TestSupport.dbRef)
+  lazy val azureManagedResourceGroupDAO: AzureManagedResourceGroupDAO = new PostgresAzureManagedResourceGroupDAO(TestSupport.dbRef, TestSupport.dbRef)
 
   private val ownerRoleName = ResourceRoleName("owner")
 
   private val dummyUser = Generator.genWorkbenchUserBoth.sample.get
+
+  private val resourceTypeAdmin = ResourceType(
+    SamResourceTypes.resourceTypeAdminName,
+    Set.empty,
+    Set(ResourceRole(ownerRoleName, Set.empty)),
+    ownerRoleName
+  )
 
   private val defaultResourceTypeActions =
     Set(ResourceAction("alter_policies"), ResourceAction("delete"), ResourceAction("read_policies"), ResourceAction("view"), ResourceAction("non_owner_action"))
@@ -102,6 +133,14 @@ class ResourceServiceSpec
   private val parentResourceType =
     ResourceType(ResourceTypeName("parent-resource-type"), defaultResourceTypeActionPatterns, parentResourceTypeRoles, ownerRoleName)
   val otherParentResourceType: ResourceType = parentResourceType.copy(name = ResourceTypeName("parent-resource-type-2"))
+  private val prerequisiteAction = ResourceAction("prerequisite_action")
+  private val prereqActionResourceType = ResourceType(
+    genResourceTypeNameExcludeManagedGroup.sample.get,
+    Set.empty,
+    Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+    ownerRoleName,
+    prerequisiteAction = Option(prerequisiteAction)
+  )
 
   private val constrainableActionPatterns = Set(ResourceActionPattern("constrainable_view", "Can be constrained by an auth domain", true))
   private val constrainableViewAction = ResourceAction("constrainable_view")
@@ -113,19 +152,22 @@ class ResourceServiceSpec
     Set(ResourceRole(constrainableReaderRoleName, constrainableResourceTypeActions)),
     constrainableReaderRoleName
   )
-  private val constrainablePolicyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
+  private val constrainablePolicyMembership =
+    AccessPolicyMembershipRequest(Set(dummyUser.email), Set(constrainableViewAction), Set(constrainableReaderRoleName), None)
 
   private val managedGroupResourceType =
     realResourceTypeMap.getOrElse(ResourceTypeName("managed-group"), throw new Error("Failed to load managed-group resource type from reference.conf"))
 
   private val emailDomain = "example.com"
   private val resourceTypes = Map(
+    resourceTypeAdmin.name -> resourceTypeAdmin,
     defaultResourceType.name -> defaultResourceType,
     otherResourceType.name -> otherResourceType,
     parentResourceType.name -> parentResourceType,
     childResourceType.name -> childResourceType,
     managedGroupResourceType.name -> managedGroupResourceType,
-    otherParentResourceType.name -> otherParentResourceType
+    otherParentResourceType.name -> otherParentResourceType,
+    prereqActionResourceType.name -> prereqActionResourceType
   )
   private val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypes, policyDAO, dirDAO)
   private val service = new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set("test.firecloud.org"))
@@ -134,6 +176,10 @@ class ResourceServiceSpec
   private val constrainablePolicyEvaluatorService = PolicyEvaluatorService(emailDomain, constrainableResourceTypes, policyDAO, dirDAO)
   private val constrainableService =
     new ResourceService(constrainableResourceTypes, constrainablePolicyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set.empty)
+
+  val mockAzureService = mock[AzureService]
+  private val serviceWithAzure =
+    new ResourceService(resourceTypes, policyEvaluatorService, policyDAO, dirDAO, NoExtensions, emailDomain, Set("test.firecloud.org"), Some(mockAzureService))
 
   val managedGroupService =
     new ManagedGroupService(constrainableService, constrainablePolicyEvaluatorService, constrainableResourceTypes, policyDAO, dirDAO, NoExtensions, emailDomain)
@@ -250,6 +296,8 @@ class ResourceServiceSpec
     service.setPublic(policyToUpdate, false, samRequestContext).unsafeRunSync()
     service.isPublic(policyToUpdate, samRequestContext).unsafeRunSync() should equal(false)
 
+    service.loadPolicy(policyToUpdate, samRequestContext).unsafeRunSync().get.version shouldEqual 3
+
     // cleanup
     runAndWait(service.deleteResource(resource, samRequestContext))
   }
@@ -269,7 +317,7 @@ class ResourceServiceSpec
     val managedGroupResource = managedGroupService.createManagedGroup(ResourceId("ad"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
 
     val ownerRoleName = constrainableReaderRoleName
-    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(constrainableViewAction), Set(ownerRoleName), None)
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(constrainableViewAction), Set(ownerRoleName), None)
     val policyName = AccessPolicyName("foo")
 
     val testResource = runAndWait(
@@ -367,7 +415,7 @@ class ResourceServiceSpec
         defaultResourceType,
         AccessPolicyName("new_policy"),
         resource.fullyQualifiedId,
-        AccessPolicyMembership(Set(group.email), Set(nonOwnerAction), Set.empty, None),
+        AccessPolicyMembershipRequest(Set(group.email), Set(nonOwnerAction), Set.empty, None),
         samRequestContext
       )
     )
@@ -423,6 +471,52 @@ class ResourceServiceSpec
     )
   }
 
+  it should "return empty when caller does not have prerequisite action" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName1 = ResourceId("resource1")
+    val resourceName2 = ResourceId("resource2")
+
+    service.initResourceTypes(samRequestContext).unsafeRunSync()
+    val resource1 = service.createResource(prereqActionResourceType, resourceName1, dummyUser, samRequestContext).unsafeRunSync()
+    val resource2 = service.createResource(prereqActionResourceType, resourceName2, dummyUser, samRequestContext).unsafeRunSync()
+    val resource3 = service.createResource(defaultResourceType, resourceName2, dummyUser, samRequestContext).unsafeRunSync()
+
+    policyDAO
+      .createPolicy(
+        AccessPolicy(
+          FullyQualifiedPolicyId(resource2.fullyQualifiedId, AccessPolicyName("prereq")),
+          Set(dummyUser.id),
+          WorkbenchEmail("a@b.c"),
+          Set.empty,
+          Set(prerequisiteAction),
+          Set.empty,
+          public = false
+        ),
+        samRequestContext
+      )
+      .unsafeRunSync()
+
+    // missing prerequisite action so should not have any actions
+    assertResult(Set.empty) {
+      service.policyEvaluatorService
+        .listUserResourceActions(resource1.fullyQualifiedId, dummyUser.id, samRequestContext = samRequestContext)
+        .unsafeRunSync()
+    }
+    // has prerequisite action so should have actions from owner role
+    assertResult(prereqActionResourceType.roles.find(_.roleName.equals(ownerRoleName)).get.actions + prerequisiteAction) {
+      service.policyEvaluatorService
+        .listUserResourceActions(resource2.fullyQualifiedId, dummyUser.id, samRequestContext = samRequestContext)
+        .unsafeRunSync()
+    }
+    // no prerequisite action required so should have actions from owner role
+    assertResult(defaultResourceType.roles.find(_.roleName.equals(ownerRoleName)).get.actions) {
+      service.policyEvaluatorService
+        .listUserResourceActions(resource3.fullyQualifiedId, dummyUser.id, samRequestContext = samRequestContext)
+        .unsafeRunSync()
+    }
+  }
+
   "createResource" should "detect conflict on create" in {
     assume(databaseEnabled, databaseEnabledClue)
 
@@ -459,15 +553,209 @@ class ResourceServiceSpec
 
     service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
 
-    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyMembershipRequest = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyMembership = AccessPolicyMembershipResponse(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
     val policyName = AccessPolicyName("foo")
 
-    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
+    runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembershipRequest), Set.empty, None, dummyUser.id, samRequestContext))
 
     val policies = service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
     assertResult(LazyList(AccessPolicyResponseEntry(policyName, policyMembership, WorkbenchEmail("")))) {
       policies.map(_.copy(email = WorkbenchEmail("")))
     }
+  }
+
+  it should "create resource with custom policies, with member emails, with policy identifiers, and without policy emails" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(
+      ResourceTypeName(UUID.randomUUID().toString),
+      Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)),
+      Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+      ownerRoleName
+    )
+
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy identifiers
+    val resourceName1 = ResourceId("resource1")
+    val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName1 = AccessPolicyName("foo1")
+    val resource1 =
+      runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies1: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
+
+    // creating resource for a policy with users member emails, and policy emails
+    val resourceName2 = ResourceId("resource2")
+    val policyIdentifiers: Set[PolicyIdentifiers] =
+      policies1.map(p => PolicyIdentifiers(p.policyName, resourceType.name, resource1.resourceId)).toSet
+    val policyMembership2 =
+      AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+    val policyName2 = AccessPolicyName("foo2")
+    // Act
+    val resource2 =
+      runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+
+    // Assert
+    val resource3Members = resource2.accessPolicies.head.members
+    resource3Members.size shouldEqual 2
+    val resource2PolicyIds = resource2.accessPolicies.head.members.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId])
+    val resource1PolicyId = resource2PolicyIds.filter(_.resource.resourceId == resource1.resourceId).head
+    resource1PolicyId.accessPolicyName shouldEqual policyName1
+    val resource2UserId = resource2.accessPolicies.head.members.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
+    resource2UserId shouldEqual dummyUser.id
+  }
+
+  it should "create resource with custom policies, with member emails, without policy identifiers and with policy emails" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(
+      ResourceTypeName(UUID.randomUUID().toString),
+      Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)),
+      Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+      ownerRoleName
+    )
+
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy email
+    val resourceName1 = ResourceId("resource1")
+    val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName1 = AccessPolicyName("foo1")
+    val resource1 =
+      runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies1: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
+
+    // creating resource for a policy with users member emails, and policy emails
+    val resourceName2 = ResourceId("resource2")
+    val policyEmails = policies1.map(p => p.email).toSet
+    val policyMembership2 =
+      AccessPolicyMembershipRequest(Set(dummyUser.email) ++ policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    // Act
+    val resource2 =
+      runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+
+    // Assert
+    val resource3Members = resource2.accessPolicies.head.members
+    resource3Members.size shouldEqual 2
+    val resource2PolicyIds = resource2.accessPolicies.head.members.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId])
+    val resource1PolicyId = resource2PolicyIds.filter(_.resource.resourceId == resource1.resourceId).head
+    resource1PolicyId.accessPolicyName shouldEqual policyName1
+    val resource2UserId = resource2.accessPolicies.head.members.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
+    resource2UserId shouldEqual dummyUser.id
+  }
+
+  it should "create resource with custom policies, with no member emails, with policy identifiers, and with policy emails" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(
+      ResourceTypeName(UUID.randomUUID().toString),
+      Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)),
+      Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+      ownerRoleName
+    )
+    val resourceName = ResourceId("resource")
+
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+    // creating policy and to refer to by policy identifiers
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyName = AccessPolicyName("foo")
+    val resource =
+      runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy email
+    val resourceName2 = ResourceId("resource2")
+    val policyMembership2 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 =
+      runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies2: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName2), samRequestContext).unsafeRunSync()
+
+    // creating resource for a policy with users policy emails and policy identifiers
+    val resourceName3 = ResourceId("resource3")
+    val policyIdentifiers: Set[PolicyIdentifiers] =
+      policies.map(p => PolicyIdentifiers(p.policyName, resourceType.name, resource.resourceId)).toSet
+    val policyEmails = policies2.map(p => p.email).toSet
+    val policyMembership3 =
+      AccessPolicyMembershipRequest(policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+    val policyName3 = AccessPolicyName("foo3")
+    // Act
+    val resource3 =
+      runAndWait(service.createResource(resourceType, resourceName3, Map(policyName3 -> policyMembership3), Set.empty, None, dummyUser.id, samRequestContext))
+
+    // Assert
+    val resource3Members = resource3.accessPolicies.head.members
+    resource3Members.size shouldEqual 2
+    val resource3PolicyIds = resource3.accessPolicies.head.members.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId])
+    val resource1PolicyId = resource3PolicyIds.filter(_.resource.resourceId == resource.resourceId).head
+    resource1PolicyId.accessPolicyName shouldEqual policyName
+    val resource2PolicyId = resource3PolicyIds.filter(_.resource.resourceId == resource2.resourceId).head
+    resource2PolicyId.accessPolicyName shouldEqual policyName2
+  }
+
+  it should "create resource with custom policies, with member emails, with policy identifiers, and policy emails" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // Arrange
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(
+      ResourceTypeName(UUID.randomUUID().toString),
+      Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)),
+      Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+      ownerRoleName
+    )
+    val resourceName = ResourceId("resource")
+
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+
+    // creating policy and to refer to by policy identifiers
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyName = AccessPolicyName("foo")
+    val resource =
+      runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy email
+    val resourceName2 = ResourceId("resource2")
+    val policyMembership2 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 =
+      runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies2: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName2), samRequestContext).unsafeRunSync()
+
+    // creating resource for a policy with users member emails, policy emails, and policy identifiers
+    val resourceName3 = ResourceId("resource3")
+    val policyIdentifiers: Set[PolicyIdentifiers] =
+      policies.map(p => PolicyIdentifiers(p.policyName, resourceType.name, resource.resourceId)).toSet
+    val policyEmails = policies2.map(p => p.email).toSet
+    val policyMembership3 =
+      AccessPolicyMembershipRequest(Set(dummyUser.email) ++ policyEmails, Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+    val policyName3 = AccessPolicyName("foo3")
+    // Act
+    val resource3 =
+      runAndWait(service.createResource(resourceType, resourceName3, Map(policyName3 -> policyMembership3), Set.empty, None, dummyUser.id, samRequestContext))
+
+    // Assert
+    val resource3Members = resource3.accessPolicies.head.members
+    resource3Members.size shouldEqual 3
+    val resource3PolicyIds = resource3.accessPolicies.head.members.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId])
+    val resource1PolicyId = resource3PolicyIds.filter(_.resource.resourceId == resource.resourceId).head
+    resource1PolicyId.accessPolicyName shouldEqual policyName
+    val resource2PolicyId = resource3PolicyIds.filter(_.resource.resourceId == resource2.resourceId).head
+    resource2PolicyId.accessPolicyName shouldEqual policyName2
+    val resource3UserId = resource3.accessPolicies.head.members.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
+    resource3UserId shouldEqual dummyUser.id
   }
 
   it should "support valid resource ids" in {
@@ -529,7 +817,7 @@ class ResourceServiceSpec
         service.createResource(
           resourceType,
           resourceName,
-          Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set.empty, Set.empty, Set(ownerRoleName), None)),
+          Map(AccessPolicyName("foo") -> AccessPolicyMembershipRequest(Set.empty, Set.empty, Set(ownerRoleName), None)),
           Set.empty,
           None,
           dummyUser.id,
@@ -545,7 +833,7 @@ class ResourceServiceSpec
         service.createResource(
           resourceType,
           resourceName,
-          Map(AccessPolicyName("foo") -> AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set.empty, None)),
+          Map(AccessPolicyName("foo") -> AccessPolicyMembershipRequest(Set(dummyUser.email), Set.empty, Set.empty, None)),
           Set.empty,
           None,
           dummyUser.id,
@@ -649,7 +937,7 @@ class ResourceServiceSpec
     }
   }
 
-  it should "fail when user does not have access to at least 1 of the auth domain groups" in {
+  it should "fail when user does not have access all of the auth domain groups" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     constrainableResourceType.isAuthDomainConstrainable shouldEqual true
@@ -681,6 +969,171 @@ class ResourceServiceSpec
     }
   }
 
+  it should "say auth domain is satisfied when a user is in all auth domain groups, and not satified when a user isn't" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+
+    val bender = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(bender, samRequestContext).unsafeRunSync()
+
+    val fry = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(fry, samRequestContext).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+    val managedGroupName1 = "firstGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName1), dummyUser, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName1), ManagedGroupService.adminPolicyName, bender.id, samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName1), ManagedGroupService.adminPolicyName, fry.id, samRequestContext))
+    val managedGroupName2 = "benderIsGreat"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName2), bender, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName2), ManagedGroupService.adminPolicyName, bender.id, samRequestContext))
+
+    val authDomain = Set(WorkbenchGroupName(managedGroupName1), WorkbenchGroupName(managedGroupName2))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        authDomain,
+        None,
+        bender.id,
+        samRequestContext
+      )
+    )
+
+    val benderAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, bender, samRequestContext).unsafeRunSync()
+    val fryAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, fry, samRequestContext).unsafeRunSync()
+
+    benderAccess shouldEqual true
+    fryAccess shouldEqual false
+  }
+
+  it should "inherit parent auth domains" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+
+    val parentAuthDomain = Set(WorkbenchGroupName("parentGroup"))
+    managedGroupService.createManagedGroup(ResourceId("parentGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+
+    val parentResource = service
+      .createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map.newBuilder
+          .addOne(AccessPolicyName("policy") -> AccessPolicyMembershipRequest(Set(dummyUser.email), Set.empty, Set(constrainableReaderRoleName)))
+          .result(),
+        parentAuthDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      .unsafeRunSync()
+    val childResource =
+      service
+        .createResource(
+          constrainableResourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map.empty,
+          Set.empty,
+          Option(parentResource.fullyQualifiedId),
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
+
+    constrainableService
+      .loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext)
+      .unsafeRunSync() should contain theSameElementsAs parentAuthDomain
+  }
+
+  it should "pass if auth domains includes parent's" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+
+    val parentAuthDomain = Set(WorkbenchGroupName("parentGroup"))
+    managedGroupService.createManagedGroup(ResourceId("parentGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+    val childAuthDomain = parentAuthDomain + WorkbenchGroupName("childGroup")
+    managedGroupService.createManagedGroup(ResourceId("childGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+
+    val parentResource = service
+      .createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(AccessPolicyName("policy") -> constrainablePolicyMembership),
+        parentAuthDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      .unsafeRunSync()
+    val childResource =
+      service
+        .createResource(
+          constrainableResourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map.empty,
+          childAuthDomain,
+          Option(parentResource.fullyQualifiedId),
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
+
+    constrainableService
+      .loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext)
+      .unsafeRunSync() should contain theSameElementsAs childAuthDomain
+  }
+
+  it should "fail if auth domains conflict with parent" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+
+    val parentAuthDomain = Set(WorkbenchGroupName("parentGroup"))
+    managedGroupService.createManagedGroup(ResourceId("parentGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+    val childAuthDomain = Set(WorkbenchGroupName("childGroup"))
+    managedGroupService.createManagedGroup(ResourceId("childGroup"), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+
+    val parentResource = service
+      .createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map.newBuilder
+          .addOne(AccessPolicyName("policy") -> AccessPolicyMembershipRequest(Set(dummyUser.email), Set.empty, Set(constrainableReaderRoleName)))
+          .result(),
+        parentAuthDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      .unsafeRunSync()
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      service
+        .createResource(
+          constrainableResourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map.empty,
+          childAuthDomain,
+          Option(parentResource.fullyQualifiedId),
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
+    }
+    error.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+  }
+
   "Loading an auth domain" should "fail when the resource does not exist" in {
     assume(databaseEnabled, databaseEnabledClue)
 
@@ -690,6 +1143,82 @@ class ResourceServiceSpec
         .unsafeRunSync()
     }
     e.getMessage should include("not found")
+  }
+
+  "Checking auth domain satisfaction" should "say auth domain is satisfied when a user is in all auth domain groups, and not satisfied when a user isn't" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+
+    val bender = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(bender, samRequestContext).unsafeRunSync()
+
+    val fry = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(fry, samRequestContext).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+    val managedGroupName1 = "firstGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName1), dummyUser, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName1), ManagedGroupService.adminPolicyName, bender.id, samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName1), ManagedGroupService.adminPolicyName, fry.id, samRequestContext))
+    val managedGroupName2 = "benderIsGreat"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName2), bender, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.addSubjectToPolicy(ResourceId(managedGroupName2), ManagedGroupService.adminPolicyName, bender.id, samRequestContext))
+
+    val authDomain = Set(WorkbenchGroupName(managedGroupName1), WorkbenchGroupName(managedGroupName2))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        authDomain,
+        None,
+        bender.id,
+        samRequestContext
+      )
+    )
+
+    val benderAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, bender, samRequestContext).unsafeRunSync()
+    val fryAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, fry, samRequestContext).unsafeRunSync()
+
+    benderAccess shouldEqual true
+    fryAccess shouldEqual false
+  }
+
+  it should "say the auth domain is satisfied if there are no auth domain constraints" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+
+    val bender = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(bender, samRequestContext).unsafeRunSync()
+
+    val fry = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(fry, samRequestContext).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        Set.empty,
+        None,
+        bender.id,
+        samRequestContext
+      )
+    )
+
+    val benderAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, bender, samRequestContext).unsafeRunSync()
+    val fryAccess = constrainableService.satisfiesAuthDomainConstrains(resource.fullyQualifiedId, fry, samRequestContext).unsafeRunSync()
+
+    benderAccess shouldEqual true
+    fryAccess shouldEqual true
   }
 
   "Creating a resource that has 0 constrainable action patterns" should "fail when an auth domain is provided" in {
@@ -702,7 +1231,7 @@ class ResourceServiceSpec
     val managedGroupName = "fooGroup"
     runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUser, samRequestContext = samRequestContext))
 
-    val policyMembership = AccessPolicyMembership(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None)
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None)
     val policyName = AccessPolicyName("foo")
 
     val authDomain = Set(WorkbenchGroupName(managedGroupName))
@@ -719,6 +1248,187 @@ class ResourceServiceSpec
         )
       )
     }
+  }
+
+  "addResourceAuthDomain" should "increment the group version of policy groups associated with the resource" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    constrainableResourceType.isAuthDomainConstrainable shouldEqual true
+    constrainableService.createResourceType(constrainableResourceType, samRequestContext).unsafeRunSync()
+
+    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+    val managedGroupName = "fooGroup"
+    val secondMGroupName = "barGroup"
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(managedGroupName), dummyUser, samRequestContext = samRequestContext))
+    runAndWait(managedGroupService.createManagedGroup(ResourceId(secondMGroupName), dummyUser, samRequestContext = samRequestContext))
+
+    val authDomain = NonEmptyList.of(WorkbenchGroupName(managedGroupName), WorkbenchGroupName(secondMGroupName))
+    val viewPolicyName = AccessPolicyName(constrainableReaderRoleName.value)
+    val resource = runAndWait(
+      constrainableService.createResource(
+        constrainableResourceType,
+        ResourceId(UUID.randomUUID().toString),
+        Map(viewPolicyName -> constrainablePolicyMembership),
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+    )
+
+    val resourceAndPolicyName =
+      FullyQualifiedPolicyId(FullyQualifiedResourceId(constrainableResourceType.name, resource.resourceId), viewPolicyName)
+    val policy =
+      policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${resourceAndPolicyName}"))
+    policy.version shouldEqual 1
+
+    val resourceWithAuthDomain =
+      runAndWait(constrainableService.addResourceAuthDomain(resource.fullyQualifiedId, authDomain.toList.toSet, None, samRequestContext))
+    resourceWithAuthDomain shouldEqual authDomain.toList.toSet
+
+    val updatedPolicy =
+      policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync().getOrElse(fail(s"s'failed to load policy ${resourceAndPolicyName}"))
+    updatedPolicy.version shouldEqual 2
+
+  }
+
+  it should "add auth domains to resource and descendants" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val accessPolicies = Map(
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
+    val authDomain2 = Set(WorkbenchGroupName("authDomain2"))
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUser, samRequestContext = samRequestContext)
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain2"), dummyUser, samRequestContext = samRequestContext)
+      parentResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("parent"),
+        accessPolicies,
+        authDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      childResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("child"),
+        accessPolicies,
+        Set.empty,
+        Option(parentResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      grandchild <- service.createResource(
+        constrainableResourceType,
+        ResourceId("grandchild"),
+        accessPolicies,
+        Set.empty,
+        Option(childResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      updated <- constrainableService.addResourceAuthDomain(parentResource.fullyQualifiedId, authDomain2, Option(dummyUser.id), samRequestContext)
+      allResourceIds = List(parentResource.fullyQualifiedId, childResource.fullyQualifiedId, grandchild.fullyQualifiedId)
+      allADs <- allResourceIds.traverse(constrainableService.loadResourceAuthDomain(_, samRequestContext))
+      allPolicies <- allResourceIds.traverse(policyDAO.listAccessPolicies(_, samRequestContext))
+    } yield {
+      updated shouldBe authDomain2 ++ authDomain
+      allADs.foreach(_ shouldBe updated)
+      allPolicies.flatten.foreach(_.version shouldBe 2)
+    }
+
+    testResult.unsafeRunSync()
+  }
+
+  it should "throw if any has public policies" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val accessPolicies = Map(
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUser, samRequestContext = samRequestContext)
+      parentResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("parent"),
+        accessPolicies,
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      childResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("child"),
+        accessPolicies,
+        Set.empty,
+        Option(parentResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      grandchild <- service.createResource(
+        constrainableResourceType,
+        ResourceId("grandchild"),
+        accessPolicies,
+        Set.empty,
+        Option(childResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      // pick a random resource to set public, this test should work for any of the 3
+      probeResourceId = Random.shuffle(List(parentResource.fullyQualifiedId, childResource.fullyQualifiedId, grandchild.fullyQualifiedId)).head
+      _ <- constrainableService.setPublic(FullyQualifiedPolicyId(probeResourceId, accessPolicies.head._1), true, samRequestContext)
+      _ <- constrainableService.addResourceAuthDomain(parentResource.fullyQualifiedId, authDomain, Option(dummyUser.id), samRequestContext)
+    } yield {}
+
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      testResult.unsafeRunSync()
+    }
+
+    error.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
+  }
+
+  it should "throw if auth domain does not exist" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val accessPolicies = Map(
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      resource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("parent"),
+        accessPolicies,
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      _ <- constrainableService.addResourceAuthDomain(resource.fullyQualifiedId, authDomain, Option(dummyUser.id), samRequestContext)
+    } yield {}
+
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      testResult.unsafeRunSync()
+    }
+
+    error.errorReport.statusCode shouldEqual Option(StatusCodes.BadRequest)
   }
 
   "listUserResourceRoles" should "list the user's role when they have at least one role" in {
@@ -776,7 +1486,7 @@ class ResourceServiceSpec
     val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
     val expectedPolicy = AccessPolicyResponseEntry(
       AccessPolicyName(ownerRole.roleName.value),
-      AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRole.roleName), Option(Set.empty)),
+      AccessPolicyMembershipResponse(Set(dummyUser.email), Set.empty, Set(ownerRole.roleName), Option(Set.empty)),
       forcedEmail
     )
 
@@ -795,7 +1505,7 @@ class ResourceServiceSpec
     val forcedEmail = WorkbenchEmail("policy-randomuuid@example.com")
     val expectedPolicy = AccessPolicyResponseEntry(
       AccessPolicyName(ownerRole.roleName.value),
-      AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRole.roleName), Option(Set.empty)),
+      AccessPolicyMembershipResponse(Set(dummyUser.email), Set.empty, Set(ownerRole.roleName), Option(Set.empty)),
       forcedEmail
     )
 
@@ -834,7 +1544,7 @@ class ResourceServiceSpec
     val ownerPolicy = actualPolicies.head
 
     val expectedMemberPolicies = sidePolicies.map { p =>
-      PolicyIdentifiers(p.policyName, p.email, sideResource.resourceTypeName, sideResource.resourceId)
+      PolicyInfoResponseBody(p.policyName, p.email, sideResource.resourceTypeName, sideResource.resourceId)
     }
 
     ownerPolicy.policy.memberPolicies.value shouldBe expectedMemberPolicies.toSet
@@ -884,7 +1594,7 @@ class ResourceServiceSpec
         defaultResourceType,
         newPolicy.id.accessPolicyName,
         newPolicy.id.resource,
-        AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
         samRequestContext
       )
     )
@@ -893,6 +1603,86 @@ class ResourceServiceSpec
       policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
 
     assert(policies.contains(newPolicy))
+  }
+
+  it should "should add a memberPolicy as a member when specified through policy identifiers" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // create policy1 and policy 2, update policy 1 by putting policy 2 as a member
+    val resourceType = service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy identifiers
+    val resourceName1 = ResourceId("resource1")
+    val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName1 = AccessPolicyName("foo1")
+    val resource1 =
+      runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies1: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
+    val policyIdentifiers: Set[PolicyIdentifiers] =
+      policies1.map(p => PolicyIdentifiers(p.policyName, resourceType.name, resource1.resourceId)).toSet
+
+    // creating resource for a policy with users member emails, and policy emails
+    val resourceName2 = ResourceId("resource2")
+    val policyMembership2 =
+      AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 =
+      runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+
+    val resourceId = FullyQualifiedResourceId(resourceTypeName = resourceType.name, resourceId = resourceName2)
+    val updatedPolicyMembershipRequest =
+      AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, Option(policyIdentifiers))
+
+    // Act (updating policy2)
+    val updatedPolicy =
+      runAndWait(service.overwritePolicy(resourceType, policyName2, resourceId, updatedPolicyMembershipRequest, samRequestContext))
+
+    // Assert
+    val updatedPolicyMembers = updatedPolicy.members
+    updatedPolicyMembers.size shouldEqual 2
+    val updatedPolicyMembersPolicyIds = updatedPolicyMembers.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId]).head
+    updatedPolicyMembersPolicyIds.accessPolicyName shouldEqual policyName1
+    val updatedPolicyMembersUserIds = updatedPolicyMembers.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
+    updatedPolicyMembersUserIds shouldEqual dummyUser.id
+  }
+
+  it should "should add a memberPolicy as a member when specified through policy email" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    // create policy1 and policy 2, update policy 1 by putting policy 2 as a member
+    val resourceType = service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy identifiers
+    val resourceName1 = ResourceId("resource1")
+    val policyMembership1 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName1 = AccessPolicyName("foo1")
+    val resource1 =
+      runAndWait(service.createResource(resourceType, resourceName1, Map(policyName1 -> policyMembership1), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies1: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName1), samRequestContext).unsafeRunSync()
+
+    // creating resource for a policy with users member emails
+    val resourceName2 = ResourceId("resource2")
+    val policyMembership2 =
+      AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 =
+      runAndWait(service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext))
+
+    val resourceId = FullyQualifiedResourceId(resourceTypeName = resourceType.name, resourceId = resourceName2)
+    val updatedPolicyMembershipRequest =
+      AccessPolicyMembershipRequest(Set(dummyUser.email, policies1.head.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+
+    // Act (updating policy2)
+    val updatedPolicy =
+      runAndWait(service.overwritePolicy(resourceType, policyName2, resourceId, updatedPolicyMembershipRequest, samRequestContext))
+
+    // Assert
+    val updatedPolicyMembers = updatedPolicy.members
+    updatedPolicyMembers.size shouldEqual 2
+    val updatedPolicyMembersPolicyIds = updatedPolicyMembers.filter(_.isInstanceOf[FullyQualifiedPolicyId]).map(_.asInstanceOf[FullyQualifiedPolicyId]).head
+    updatedPolicyMembersPolicyIds.accessPolicyName shouldEqual policyName1
+    val updatedPolicyMembersUserIds = updatedPolicyMembers.filter(_.isInstanceOf[WorkbenchUserId]).map(_.asInstanceOf[WorkbenchUserId]).head
+    updatedPolicyMembersUserIds shouldEqual dummyUser.id
   }
 
   it should "call CloudExtensions.onGroupUpdate when members are added via memberPolicy list" in {
@@ -912,28 +1702,40 @@ class ResourceServiceSpec
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
 
-    // setup existing policy with no members
-    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(accessPolicy)))
-
-    // function calls that should pass but what they return does not matter
-    when(mockAccessPolicyDAO.overwritePolicy(any[AccessPolicy], any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
-
     // overwrite policy with members in memberPolicy
     val memberPolicy = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testMemberR")), AccessPolicyName("testB"))
     val memberPolicyIdSet =
-      Set(PolicyIdentifiers(memberPolicy.accessPolicyName, WorkbenchEmail(""), memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId))
+      Set(
+        PolicyIdentifiers(memberPolicy.accessPolicyName, memberPolicy.resource.resourceTypeName, memberPolicy.resource.resourceId)
+      )
+
+    val updatedPolicy = accessPolicy.copy(members = memberPolicyIdSet.map(_.toFullyQualifiedPolicyId))
+    when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(
+      IO.pure(LazyList(accessPolicy)), // first call with empty membership
+      IO.pure(LazyList(updatedPolicy)) // second call with updated membership
+    )
+    when(mockAccessPolicyDAO.loadPolicy(any[FullyQualifiedPolicyId], any[SamRequestContext])).thenReturn(IO.pure(Some(accessPolicy)))
+    when(mockAccessPolicyDAO.overwritePolicy(any[AccessPolicy], any[SamRequestContext])).thenReturn(IO.pure(updatedPolicy))
+    when(
+      mockCloudExtensions.onGroupUpdate(
+        ArgumentMatchers.eq(Seq(policyId)),
+        ArgumentMatchers.eq(memberPolicyIdSet.map(_.toFullyQualifiedPolicyId)),
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.unit)
+
     runAndWait(
       resourceService.overwritePolicy(
         defaultResourceType,
         policyId.accessPolicyName,
         policyId.resource,
-        AccessPolicyMembership(Set.empty, Set.empty, Set.empty, None, Some(memberPolicyIdSet)),
+        AccessPolicyMembershipRequest(Set.empty, Set.empty, Set.empty, None, Some(memberPolicyIdSet)),
         samRequestContext
       )
     )
 
-    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(500))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(memberPolicyIdSet.map(_.toFullyQualifiedPolicyId)), any[SamRequestContext])
   }
 
   it should "call CloudExtensions.onGroupUpdate when members change" in {
@@ -954,13 +1756,14 @@ class ResourceServiceSpec
     val member = WorkbenchUserId("testU")
     val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
 
-    // setup existing policy with a member
+    // setup existing policy with a member and second call without that member
+    val originalAccessPolicy = AccessPolicy.members.set(Set(member))(accessPolicy)
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
-      .thenReturn(IO.pure(LazyList(AccessPolicy.members.set(Set(member))(accessPolicy))))
+      .thenReturn(IO.pure(LazyList(originalAccessPolicy)), IO.pure(LazyList(accessPolicy)))
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicy(ArgumentMatchers.eq(accessPolicy), any[SamRequestContext])).thenReturn(IO.pure(accessPolicy))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
 
     // overwrite policy with no members
     runAndWait(
@@ -968,15 +1771,16 @@ class ResourceServiceSpec
         defaultResourceType,
         policyId.accessPolicyName,
         policyId.resource,
-        AccessPolicyMembership(Set.empty, Set.empty, Set.empty),
+        AccessPolicyMembershipRequest(Set.empty, Set.empty, Set.empty),
         samRequestContext
       )
     )
 
-    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(500))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
-  it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
+  it should "not do anything when policy is unchanged" in {
     val mockCloudExtensions: CloudExtensions = mock[CloudExtensions](RETURNS_SMART_NULLS)
     val mockDirectoryDAO: DirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
@@ -991,33 +1795,36 @@ class ResourceServiceSpec
     )
 
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
-    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
+    val policyVersion = Random.between(10, 100) // random version to ensure it is neither the default nor fixed
+    val accessPolicy = AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false, version = policyVersion)
 
-    // setup existing policy with no members
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext])).thenReturn(IO.pure(LazyList(accessPolicy)))
 
-    // overwrite policy with no members
-    runAndWait(
+    val updatedPolicy = runAndWait(
       resourceService.overwritePolicy(
         defaultResourceType,
         policyId.accessPolicyName,
         policyId.resource,
-        AccessPolicyMembership(Set.empty, Set.empty, Set.empty),
+        AccessPolicyMembershipRequest(Set.empty, Set.empty, Set.empty),
         samRequestContext
       )
     )
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    // no changes to policy, so no calls to overwritePolicy and version should not change
+    updatedPolicy.version shouldEqual policyVersion
+    verify(mockAccessPolicyDAO, Mockito.never).overwritePolicy(any[AccessPolicy], any[SamRequestContext])
   }
 
   "overwriteAdminPolicy" should "succeed with a valid request" in {
     assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
-    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
+    val resourceType = defaultResourceType.copy(name = ResourceTypeName("my-resource"))
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value))
     val newAdminUser = Generator.genFirecloudUser.sample.get
 
     service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
     runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUser, samRequestContext))
     dirDAO.createUser(newAdminUser, samRequestContext).unsafeRunSync()
 
@@ -1037,7 +1844,7 @@ class ResourceServiceSpec
         resourceTypeAdmin,
         newPolicy.id.accessPolicyName,
         newPolicy.id.resource,
-        AccessPolicyMembership(Set(newAdminUser.email), Set(ResourceAction("non_owner_action")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set(newAdminUser.email), Set(ResourceAction("non_owner_action")), Set.empty, None),
         samRequestContext
       )
     )
@@ -1052,9 +1859,11 @@ class ResourceServiceSpec
     assume(databaseEnabled, databaseEnabledClue)
 
     val resourceTypeAdmin = defaultResourceType.copy(name = ResourceTypeName("resource_type_admin"))
-    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId("my-resource"))
+    val resourceType = defaultResourceType.copy(name = ResourceTypeName("my-resource"))
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(resourceType.name.value))
 
     service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    service.createResourceType(resourceType, samRequestContext).unsafeRunSync()
     runAndWait(service.createResource(resourceTypeAdmin, resource.resourceId, dummyUser, samRequestContext))
 
     val group = BasicWorkbenchGroup(WorkbenchGroupName("foo"), Set(), toEmail(resource.resourceTypeName.value, resource.resourceId.value, "foo"))
@@ -1074,7 +1883,7 @@ class ResourceServiceSpec
           resourceTypeAdmin,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set(WorkbenchEmail("not_an_admin@gmail.com")), Set(ResourceAction("non_owner_action")), Set.empty, None),
+          AccessPolicyMembershipRequest(Set(WorkbenchEmail("not_an_admin@gmail.com")), Set(ResourceAction("non_owner_action")), Set.empty, None),
           samRequestContext
         )
       )
@@ -1107,17 +1916,17 @@ class ResourceServiceSpec
         defaultResourceType,
         newPolicy.id.accessPolicyName,
         newPolicy.id.resource,
-        AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
+        AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
         samRequestContext
       )
     )
 
-    runAndWait(service.overwritePolicyMembers(newPolicy.id, Set.empty, samRequestContext))
+    runAndWait(service.overwritePolicyMembers(newPolicy.id, Set(dummyUser.email), samRequestContext))
 
     val policies =
       policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail("policy-randomuuid@example.com")))
 
-    assert(policies.contains(newPolicy))
+    assert(policies.contains(newPolicy.copy(version = 2, members = Set(dummyUser.id))))
   }
 
   it should "call CloudExtensions.onGroupUpdate when members change" in {
@@ -1137,18 +1946,22 @@ class ResourceServiceSpec
     val policyId = FullyQualifiedPolicyId(FullyQualifiedResourceId(defaultResourceType.name, ResourceId("testR")), AccessPolicyName("testA"))
     val member = WorkbenchUserId("testU")
 
-    // setup existing policy with a member
+    // setup existing policy with a member and second call without that member
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
-      .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+      .thenReturn(
+        IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))),
+        IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)))
+      )
 
     // function calls that should pass but what they return does not matter
     when(mockAccessPolicyDAO.overwritePolicyMembers(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(Set.empty), any[SamRequestContext])).thenReturn(IO.unit)
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
 
     // overwrite policy members with empty set
     runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(500))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
   it should "not call CloudExtensions.onGroupUpdate when members don't change" in {
@@ -1174,7 +1987,7 @@ class ResourceServiceSpec
     // overwrite policy members with empty set
     runAndWait(resourceService.overwritePolicyMembers(policyId, Set.empty, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
   }
 
   it should "succeed with a regex action" in {
@@ -1193,7 +2006,9 @@ class ResourceServiceSpec
 
     val actions = Set(ResourceAction("foo-bang-bar"))
     val newPolicy =
-      runAndWait(service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembership(Set.empty, actions, Set.empty, None), samRequestContext))
+      runAndWait(
+        service.overwritePolicy(rt, AccessPolicyName("foo"), resource, AccessPolicyMembershipRequest(Set.empty, actions, Set.empty, None), samRequestContext)
+      )
 
     assertResult(actions) {
       newPolicy.actions
@@ -1229,7 +2044,7 @@ class ResourceServiceSpec
           defaultResourceType,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty, None),
+          AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("INVALID_ACTION")), Set.empty, None),
           samRequestContext
         )
       )
@@ -1262,7 +2077,7 @@ class ResourceServiceSpec
           rt,
           AccessPolicyName("foo"),
           resource,
-          AccessPolicyMembership(Set.empty, Set(ResourceAction("foo--bar")), Set.empty, None),
+          AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("foo--bar")), Set.empty, None),
           samRequestContext
         )
       )
@@ -1296,7 +2111,7 @@ class ResourceServiceSpec
           defaultResourceType,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE")), None),
+          AccessPolicyMembershipRequest(Set.empty, Set.empty, Set(ResourceRoleName("INVALID_ROLE")), None),
           samRequestContext
         )
       )
@@ -1334,7 +2149,7 @@ class ResourceServiceSpec
           defaultResourceType,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set(WorkbenchEmail("null@null.com")), Set.empty, Set.empty, None),
+          AccessPolicyMembershipRequest(Set(WorkbenchEmail("null@null.com")), Set.empty, Set.empty, None),
           samRequestContext
         )
       )
@@ -1372,7 +2187,7 @@ class ResourceServiceSpec
           defaultResourceType,
           newPolicy.id.accessPolicyName,
           newPolicy.id.resource,
-          AccessPolicyMembership(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
+          AccessPolicyMembershipRequest(Set.empty, Set(ResourceAction("non_owner_action")), Set.empty, None),
           samRequestContext
         )
       )
@@ -1439,50 +2254,51 @@ class ResourceServiceSpec
     policyDAO.listAccessPolicies(resource, samRequestContext).unsafeRunSync() should not be empty
   }
 
-  it should "allow for auth domain groups on a deleted resource to be deleted" in {
-    assume(databaseEnabled, databaseEnabledClue)
+  List(true, false).foreach { reuseIds =>
+    it should s"allow for auth domain groups on a deleted resource to be deleted, reuseIds = $reuseIds" in {
+      assume(databaseEnabled, databaseEnabledClue)
+      val resourceType = constrainableResourceType.copy(reuseIds = reuseIds)
+      val authDomainGroupToDelete = "fooGroup"
+      val otherAuthDomainGroup = "barGroup"
+      constrainableService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+      constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
+      managedGroupService.createManagedGroup(ResourceId(authDomainGroupToDelete), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+      managedGroupService.createManagedGroup(ResourceId(otherAuthDomainGroup), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
+      val resourceToDelete = constrainableService
+        .createResource(
+          resourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership),
+          Set(WorkbenchGroupName(authDomainGroupToDelete)),
+          None,
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
+      val otherResource = constrainableService
+        .createResource(
+          resourceType,
+          ResourceId(UUID.randomUUID().toString),
+          Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership),
+          Set(WorkbenchGroupName(otherAuthDomainGroup)),
+          None,
+          dummyUser.id,
+          samRequestContext
+        )
+        .unsafeRunSync()
 
-    val resourceType = constrainableResourceType.copy(reuseIds = false)
-    val authDomainGroupToDelete = "fooGroup"
-    val otherAuthDomainGroup = "barGroup"
-    constrainableService.createResourceType(resourceType, samRequestContext).unsafeRunSync()
-    constrainableService.createResourceType(managedGroupResourceType, samRequestContext).unsafeRunSync()
-    managedGroupService.createManagedGroup(ResourceId(authDomainGroupToDelete), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
-    managedGroupService.createManagedGroup(ResourceId(otherAuthDomainGroup), dummyUser, samRequestContext = samRequestContext).unsafeRunSync()
-    val resourceToDelete = constrainableService
-      .createResource(
-        resourceType,
-        ResourceId(UUID.randomUUID().toString),
-        Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership),
-        Set(WorkbenchGroupName(authDomainGroupToDelete)),
-        None,
-        dummyUser.id,
-        samRequestContext
+      runAndWait(constrainableService.deleteResource(resourceToDelete.fullyQualifiedId, samRequestContext))
+      runAndWait(managedGroupService.deleteManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext))
+      managedGroupService.loadManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext).unsafeRunSync() shouldBe None
+
+      // Other constrained resources and managed groups should be unaffected
+      constrainableService.loadResourceAuthDomain(otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(
+        WorkbenchGroupName(otherAuthDomainGroup)
       )
-      .unsafeRunSync()
-    val otherResource = constrainableService
-      .createResource(
-        resourceType,
-        ResourceId(UUID.randomUUID().toString),
-        Map(AccessPolicyName(constrainableReaderRoleName.value) -> constrainablePolicyMembership),
-        Set(WorkbenchGroupName(otherAuthDomainGroup)),
-        None,
-        dummyUser.id,
-        samRequestContext
+      managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup), samRequestContext).unsafeRunSync() shouldBe Some(
+        WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain")
       )
-      .unsafeRunSync()
-
-    runAndWait(constrainableService.deleteResource(resourceToDelete.fullyQualifiedId, samRequestContext))
-    runAndWait(managedGroupService.deleteManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext))
-    managedGroupService.loadManagedGroup(ResourceId(authDomainGroupToDelete), samRequestContext).unsafeRunSync() shouldBe None
-
-    // Other constrained resources and managed groups should be unaffected
-    constrainableService.loadResourceAuthDomain(otherResource.fullyQualifiedId, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(
-      WorkbenchGroupName(otherAuthDomainGroup)
-    )
-    managedGroupService.loadManagedGroup(ResourceId(otherAuthDomainGroup), samRequestContext).unsafeRunSync() shouldBe Some(
-      WorkbenchEmail(s"$otherAuthDomainGroup@$emailDomain")
-    )
+    }
   }
 
   it should "delete a child resource that has a parent - reuse ids is false" in {
@@ -1497,6 +2313,54 @@ class ResourceServiceSpec
 
     assert(managedGroupResourceType.reuseIds)
     testDeleteResource(managedGroupResourceType)
+  }
+
+  it should "delete any action managed identities for the resource while it deletes the resource" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId("my-resource"))
+    // There's no actual need for it to be a real "billing profile", we just need a resource to attach the managed resource group to.
+    val billingProfileResource = FullyQualifiedResourceId(defaultResourceType.name, ResourceId(UUID.randomUUID().toString))
+    val ownerRoleActions = defaultResourceType.roles.find(_.roleName == defaultResourceType.ownerRoleName).get.actions
+
+    val managedResourceGroupCoordinates = ManagedResourceGroupCoordinates(
+      TenantId(UUID.randomUUID().toString),
+      SubscriptionId(UUID.randomUUID().toString),
+      ManagedResourceGroupName(UUID.randomUUID().toString)
+    )
+
+    val managedResourceGroup = ManagedResourceGroup(managedResourceGroupCoordinates, BillingProfileId(billingProfileResource.resourceId.value))
+
+    serviceWithAzure.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    runAndWait(serviceWithAzure.createResource(defaultResourceType, resource.resourceId, dummyUser, samRequestContext))
+    runAndWait(serviceWithAzure.createResource(defaultResourceType, billingProfileResource.resourceId, dummyUser, samRequestContext))
+    runAndWait(azureManagedResourceGroupDAO.insertManagedResourceGroup(managedResourceGroup, samRequestContext))
+    ownerRoleActions.foreach { action =>
+      val ami = ActionManagedIdentity(
+        ActionManagedIdentityId(
+          resource,
+          action,
+          BillingProfileId(billingProfileResource.resourceId.value)
+        ),
+        ManagedIdentityObjectId(UUID.randomUUID().toString),
+        ManagedIdentityDisplayName(s"${resource.resourceId.value}-${action.value}"),
+        managedResourceGroupCoordinates
+      )
+      runAndWait(dirDAO.createActionManagedIdentity(ami, samRequestContext))
+    }
+
+    assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().nonEmpty)
+
+    when(mockAzureService.deleteActionManagedIdentity(any[ActionManagedIdentityId], any[SamRequestContext])).thenReturn(IO.unit)
+    runAndWait(serviceWithAzure.deleteResource(resource, samRequestContext))
+
+    assert(dirDAO.getAllActionManagedIdentitiesForResource(resource, samRequestContext).unsafeRunSync().isEmpty)
+    ownerRoleActions.foreach { action =>
+      verify(mockAzureService).deleteActionManagedIdentity(
+        argThat((arg: ActionManagedIdentityId) => arg.action.equals(action) && arg.resourceId.equals(resource)),
+        eqTo(samRequestContext)
+      )
+    }
   }
 
   private def testDeleteResource(resourceType: ResourceType) = {
@@ -1551,17 +2415,75 @@ class ResourceServiceSpec
     assert(policyDAO.listAccessPolicies(parentResource, samRequestContext).unsafeRunSync().nonEmpty)
   }
 
+  it should "delete any policy members from groups before deleting resource" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Create a resource with a policy
+    val ownerRoleName = ResourceRoleName("owner")
+    val resourceType = ResourceType(
+      defaultResourceType.name,
+      Set(SamResourceActionPatterns.delete, ResourceActionPattern("view", "", false)),
+      Set(ResourceRole(ownerRoleName, Set(ResourceAction("delete"), ResourceAction("view")))),
+      ownerRoleName
+    )
+    val resourceName = ResourceId("resource")
+
+    runAndWait(service.createResourceType(resourceType, samRequestContext))
+
+    // creating policy and to refer to by policy identifiers
+    val policyMembership = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), Option(Set.empty))
+    val policyName = AccessPolicyName("foo")
+    val resource =
+      runAndWait(service.createResource(resourceType, resourceName, Map(policyName -> policyMembership), Set.empty, None, dummyUser.id, samRequestContext))
+    val policies: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+
+    // creating policy to refer to by policy email
+    val resourceName2 = ResourceId("resource2")
+    val policyMembership2 = AccessPolicyMembershipRequest(Set(dummyUser.email), Set(ResourceAction("view")), Set(ownerRoleName), None, None)
+    val policyName2 = AccessPolicyName("foo2")
+    val resource2 =
+      runAndWait(
+        service.createResource(resourceType, resourceName2, Map(policyName2 -> policyMembership2), Set.empty, None, dummyUser.id, samRequestContext)
+      )
+    val policies2: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName2), samRequestContext).unsafeRunSync()
+
+    // Add second resource to first policy
+    policies2.foreach { policy =>
+      runAndWait(
+        service.addSubjectToPolicy(
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceName), policyName),
+          FullyQualifiedPolicyId(FullyQualifiedResourceId(resourceType.name, resourceName2), policyName2),
+          samRequestContext
+        )
+      )
+    }
+    val policy2Emails = policies2.map(p => p.email).toSet
+    // Verify that policies are in group
+    val updatedPolicies: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+    policy2Emails.subsetOf(updatedPolicies.head.policy.memberEmails) shouldBe true
+    // Delete resource; should not throw an error
+    runAndWait(service.deleteResource(FullyQualifiedResourceId(resourceType.name, resourceName2), samRequestContext))
+
+    // Verify that policies are no longer in group
+    val updatedPolicies2: Seq[AccessPolicyResponseEntry] =
+      service.listResourcePolicies(FullyQualifiedResourceId(resourceType.name, resourceName), samRequestContext).unsafeRunSync()
+    policy2Emails.subsetOf(updatedPolicies2.head.policy.memberEmails) shouldBe false
+  }
+
   "validatePolicy" should "succeed with a correct policy" in {
     val emailToMaybeSubject = Map(dummyUser.email -> Option(dummyUser.id.asInstanceOf[WorkbenchSubject]))
     val policy = service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ownerRoleName), Set(ResourceAction("alter_policies")), Set())
-    runAndWait(service.validatePolicy(defaultResourceType, policy)) shouldBe empty
+    runAndWait(service.validatePolicy(defaultResourceType, ResourceId(""), policy)) shouldBe empty
   }
 
-  "validatePolicy" should "fail with an incorrect policy" in {
+  it should "fail with an incorrect policy" in {
     val emailToMaybeSubject = Map(dummyUser.email -> Option(dummyUser.id.asInstanceOf[WorkbenchSubject]))
     val policy =
       service.ValidatableAccessPolicy(AccessPolicyName("a"), emailToMaybeSubject, Set(ResourceRoleName("bad_name")), Set(ResourceAction("bad_action")), Set())
-    val maybeErrorReport = runAndWait(service.validatePolicy(defaultResourceType, policy))
+    val maybeErrorReport = runAndWait(service.validatePolicy(defaultResourceType, ResourceId(""), policy))
     maybeErrorReport.value.message should include("invalid policy")
   }
 
@@ -1571,7 +2493,7 @@ class ResourceServiceSpec
     maybeErrorReport.value.message should include("invalid role")
   }
 
-  "validateRoles" should "succeed with role included in listed roles" in {
+  it should "succeed with role included in listed roles" in {
     service.validateRoles(defaultResourceType, Set(ownerRoleName)) shouldBe empty
   }
 
@@ -1582,8 +2504,42 @@ class ResourceServiceSpec
     maybeErrorReport.value.message should include("invalid action")
   }
 
-  "validateActions" should "succeed with action included in listed actions" in {
+  it should "succeed with action included in listed actions" in {
     service.validateActions(defaultResourceType, Set(ResourceAction("alter_policies"))) shouldBe empty
+  }
+
+  "validateResourceTypeAdminDescendantPermissions" should "succeed if resource type admin matches resource" in {
+    service.validateResourceTypeAdminDescendantPermissions(
+      resourceTypeAdmin,
+      ResourceId(defaultResourceType.name.value),
+      Set(
+        AccessPolicyDescendantPermissions(defaultResourceType.name, defaultResourceTypeActions, Set.empty)
+      )
+    ) shouldBe empty
+  }
+
+  it should "succeed if resource type is not admin" in {
+    service.validateResourceTypeAdminDescendantPermissions(
+      defaultResourceType,
+      ResourceId(defaultResourceType.name.value),
+      Set(
+        AccessPolicyDescendantPermissions(defaultResourceType.name, defaultResourceTypeActions, Set.empty)
+      )
+    ) shouldBe empty
+  }
+
+  it should "fail if resource type admin does not match resource" in {
+    service.validateResourceTypeAdminDescendantPermissions(
+      resourceTypeAdmin,
+      ResourceId(defaultResourceType.name.value),
+      Set(
+        AccessPolicyDescendantPermissions(otherResourceType.name, defaultResourceTypeActions, Set.empty)
+      )
+    ) should contain theSameElementsAs Set(
+      ErrorReport(
+        s"Resource type admin policies can only have descendant permissions for their matching resource type, ${otherResourceType.name} is a different type"
+      )
+    )
   }
 
   "add/remove SubjectToPolicy" should "add/remove subject and tolerate prior (non)existence" in {
@@ -1643,12 +2599,17 @@ class ResourceServiceSpec
 
     // return value true at the end indicates group changed
     when(mockDirectoryDAO.addGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
-      .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+      .thenReturn(
+        IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))),
+        IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)))
+      )
+
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.timeout(500)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(500))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
   it should "not call CloudExtensions.onGroupUpdate when member added but is already there" in {
@@ -1674,7 +2635,7 @@ class ResourceServiceSpec
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.addSubjectToPolicy(policyId, member, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
   }
 
   "removeSubjectFromPolicy" should "call CloudExtensions.onGroupUpdate when member removed" in {
@@ -1696,12 +2657,17 @@ class ResourceServiceSpec
 
     // return value true at the end indicates group changed
     when(mockDirectoryDAO.removeGroupMember(ArgumentMatchers.eq(policyId), ArgumentMatchers.eq(member), any[SamRequestContext])).thenReturn(IO.pure(true))
-    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])).thenReturn(IO.unit)
+    when(mockCloudExtensions.onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])).thenReturn(IO.unit)
     when(mockAccessPolicyDAO.listAccessPolicies(ArgumentMatchers.eq(policyId.resource), any[SamRequestContext]))
-      .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+      .thenReturn(
+        IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))),
+        IO.pure(LazyList(AccessPolicy(policyId, Set(member), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)))
+      )
+
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.timeout(1000)).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.timeout(1000))
+      .onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), ArgumentMatchers.eq(Set(member)), any[SamRequestContext])
   }
 
   it should "not call CloudExtensions.onGroupUpdate when member removed but wasn't there to start with" in {
@@ -1727,7 +2693,7 @@ class ResourceServiceSpec
       .thenReturn(IO.pure(LazyList(AccessPolicy(policyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
     runAndWait(resourceService.removeSubjectFromPolicy(policyId, member, samRequestContext))
 
-    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[SamRequestContext])
+    verify(mockCloudExtensions, Mockito.after(500).never).onGroupUpdate(ArgumentMatchers.eq(Seq(policyId)), any[Set[WorkbenchSubject]], any[SamRequestContext])
   }
 
   "initResourceTypes" should "do the happy path" in {
@@ -1773,7 +2739,7 @@ class ResourceServiceSpec
     policyDAO.overwritePolicy(policy.get.copy(members = Set(dummyUser.id)), samRequestContext).unsafeRunSync()
     val policy2 = policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync()
     policy2.map(_.copy(email = WorkbenchEmail(""))) should equal(
-      Some(AccessPolicy(resourceAndPolicyName, Set(dummyUser.id), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false))
+      Some(AccessPolicy(resourceAndPolicyName, Set(dummyUser.id), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false, version = 2))
     )
 
     // call it again to ensure it does not fail
@@ -1782,7 +2748,7 @@ class ResourceServiceSpec
     // verify the policy has not changed
     val policy3 = policyDAO.loadPolicy(resourceAndPolicyName, samRequestContext).unsafeRunSync()
     policy3.map(_.copy(email = WorkbenchEmail(""))) should equal(
-      Some(AccessPolicy(resourceAndPolicyName, Set(dummyUser.id), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false))
+      Some(AccessPolicy(resourceAndPolicyName, Set(dummyUser.id), WorkbenchEmail(""), Set(ownerRoleName), Set.empty, Set.empty, public = false, version = 2))
     )
   }
 
@@ -2133,40 +3099,106 @@ class ResourceServiceSpec
       testPolicy.email
     )
 
-    implicit val patienceConfig = PatienceConfig(5.seconds)
     testResult.unsafeRunSync()
   }
 
-  "setResourceParent" should "throw if the child resource has an auth domain" in {
+  "setResourceParent" should "inherit parent's auth domain for all descendants" in {
     assume(databaseEnabled, databaseEnabledClue)
 
-    val childAccessPolicies = Map(
+    val accessPolicies = Map(
       AccessPolicyName("constrainable") -> constrainablePolicyMembership
     )
 
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
     val testResult = for {
       _ <- service.createResourceType(constrainableResourceType, samRequestContext)
       _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
 
       _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUser, samRequestContext = samRequestContext)
-      childResource <- service.createResource(
+      parentResource <- service.createResource(
         constrainableResourceType,
-        ResourceId("child"),
-        childAccessPolicies,
-        Set(WorkbenchGroupName("authDomain")),
+        ResourceId("parent"),
+        accessPolicies,
+        authDomain,
         None,
         dummyUser.id,
         samRequestContext
       )
-      parentResource <- service.createResource(constrainableResourceType, ResourceId("parent"), dummyUser, samRequestContext)
+      childResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("child"),
+        accessPolicies,
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      grandchild <- service.createResource(
+        constrainableResourceType,
+        ResourceId("grandchild"),
+        accessPolicies,
+        Set.empty,
+        Option(childResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      _ <- service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
+      childAD <- constrainableService.loadResourceAuthDomain(childResource.fullyQualifiedId, samRequestContext)
+      grandchildAD <- constrainableService.loadResourceAuthDomain(grandchild.fullyQualifiedId, samRequestContext)
+    } yield {
+      childAD shouldBe authDomain
+      grandchildAD shouldBe authDomain
+    }
+
+    testResult.unsafeRunSync()
+  }
+
+  it should "fail when parent has auth domain and descendant has public policy" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val accessPolicies = Map(
+      AccessPolicyName("constrainable") -> constrainablePolicyMembership
+    )
+
+    val authDomain = Set(WorkbenchGroupName("authDomain"))
+    val testResult = for {
+      _ <- service.createResourceType(constrainableResourceType, samRequestContext)
+      _ <- service.createResourceType(managedGroupResourceType, samRequestContext)
+
+      _ <- managedGroupService.createManagedGroup(ResourceId("authDomain"), dummyUser, samRequestContext = samRequestContext)
+      parentResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("parent"),
+        accessPolicies,
+        authDomain,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      childResource <- service.createResource(
+        constrainableResourceType,
+        ResourceId("child"),
+        accessPolicies,
+        Set.empty,
+        None,
+        dummyUser.id,
+        samRequestContext
+      )
+      grandchild <- service.createResource(
+        constrainableResourceType,
+        ResourceId("grandchild"),
+        accessPolicies,
+        Set.empty,
+        Option(childResource.fullyQualifiedId),
+        dummyUser.id,
+        samRequestContext
+      )
+      _ <- service.setPublic(FullyQualifiedPolicyId(grandchild.fullyQualifiedId, accessPolicies.head._1), public = true, samRequestContext)
       _ <- service.setResourceParent(childResource.fullyQualifiedId, parentResource.fullyQualifiedId, samRequestContext)
     } yield ()
 
-    val exception = intercept[WorkbenchExceptionWithErrorReport] {
-      testResult.unsafeRunSync()
-    }
-
-    exception.errorReport.statusCode shouldBe Option(StatusCodes.BadRequest)
+    val error = intercept[WorkbenchExceptionWithErrorReport](testResult.unsafeRunSync())
+    error.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
   }
 
   "deletePolicy" should "delete the policy" in {
@@ -2596,7 +3628,7 @@ class ResourceServiceSpec
         defaultResourceType,
         genAccessPolicyName.sample.get,
         resource.fullyQualifiedId,
-        AccessPolicyMembership(Set(dummyUser.email), Set.empty, Set(ownerRoleName)),
+        AccessPolicyMembershipRequest(Set(dummyUser.email), Set.empty, Set(ownerRoleName)),
         samRequestContext
       ),
       List(AccessAdded)
@@ -2625,6 +3657,314 @@ class ResourceServiceSpec
       .unsafeRunSync()
 
     runAuditLogTest(service.overwritePolicyMembers(policy.id, Set(dummyUser.email), samRequestContext), List(AccessAdded))
+  }
+
+  "upsertResourceAccessPolicies" should "upsert a policy" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+
+    val testPolicyId = FullyQualifiedPolicyId(resource, AccessPolicyName(UUID.randomUUID().toString))
+    val expectedPolicy = AccessPolicy(testPolicyId, Set(dummyUser.id), WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false)
+    val returnedPolicies = service
+      .upsertResourceAccessPolicies(
+        Map(
+          testPolicyId -> AccessPolicyMembershipRequest(
+            Set(dummyUser.email),
+            Set.empty,
+            Set.empty
+          )
+        )
+      )
+      .unsafeRunSync()
+      .collect { case (_, Right(policy)) =>
+        policy.copy(email = WorkbenchEmail(""))
+      }
+
+    returnedPolicies should contain theSameElementsAs Set(expectedPolicy)
+
+    policyDAO.loadPolicy(testPolicyId, samRequestContext).unsafeRunSync().map(_.copy(email = WorkbenchEmail(""))) shouldBe Some(
+      expectedPolicy
+    )
+  }
+
+  it should "validate admin policies" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName = ResourceId(defaultResourceType.name.value)
+    val resource = FullyQualifiedResourceId(resourceTypeAdmin.name, resourceName)
+
+    service.createResourceType(resourceTypeAdmin, samRequestContext).unsafeRunSync()
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(resourceTypeAdmin, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+
+    val testPolicyId = FullyQualifiedPolicyId(resource, AccessPolicyName(UUID.randomUUID().toString))
+    val returnedPolicies = service
+      .upsertResourceAccessPolicies(
+        Map(
+          testPolicyId -> AccessPolicyMembershipRequest(
+            Set(dummyUser.email),
+            Set.empty,
+            Set.empty
+          )
+        )
+      )
+      .unsafeRunSync()
+
+    returnedPolicies.size shouldBe 1
+    returnedPolicies.head._2.isLeft shouldBe true
+  }
+
+  "UserFavoriteResource" should "add, remove, and list favorite resources for a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val resourceName = ResourceId("resource")
+    val resource2Name = ResourceId("resource2")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+    val resource2 = FullyQualifiedResourceId(otherResourceType.name, resource2Name)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+    service.createResourceType(otherResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+    service.createResource(otherResourceType, resource2Name, dummyUser, samRequestContext).unsafeRunSync()
+
+    service.addUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource)
+
+    service.addUserFavoriteResource(dummyUser.id, resource2, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource, resource2)
+
+    service.removeUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() should contain theSameElementsAs Set(resource2)
+
+    service.removeUserFavoriteResource(dummyUser.id, resource2, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(dummyUser.id, samRequestContext).unsafeRunSync() shouldBe empty
+  }
+
+  it should "not return favorite resources for another user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    def otherUser = Generator.genWorkbenchUserBoth.sample.get
+    dirDAO.createUser(otherUser, samRequestContext).unsafeRunSync()
+
+    val resourceName = ResourceId("resource")
+    val resource = FullyQualifiedResourceId(defaultResourceType.name, resourceName)
+
+    service.createResourceType(defaultResourceType, samRequestContext).unsafeRunSync()
+
+    service.createResource(defaultResourceType, resourceName, dummyUser, samRequestContext).unsafeRunSync()
+
+    service.addUserFavoriteResource(dummyUser.id, resource, samRequestContext).unsafeRunSync()
+
+    service.getUserFavoriteResources(otherUser.id, samRequestContext).unsafeRunSync() shouldBe empty
+  }
+
+  "bulkMembershipUpdate" should "validate emails, policies and ids" in {
+    val mockAccessPolicyDao = mock[AccessPolicyDAO]
+    val mockDirectoryDao = mock[DirectoryDAO]
+    val resourceServiceWithMocks =
+      new ResourceService(Map.empty, mock[PolicyEvaluatorService], mockAccessPolicyDao, mockDirectoryDao, NoExtensions, "", Set.empty)
+
+    val rtName = ResourceTypeName("rt")
+    val rid = ResourceId("rid")
+
+    when(mockAccessPolicyDao.loadPolicy(argThat[FullyQualifiedPolicyId](_.accessPolicyName.value.endsWith("missing")), any[SamRequestContext]))
+      .thenReturn(IO.pure(None))
+    when(mockAccessPolicyDao.loadPolicy(argThat[FullyQualifiedPolicyId](_.accessPolicyName.value.endsWith("exists")), any[SamRequestContext])).thenReturn(
+      IO.pure(
+        Option(
+          AccessPolicy(
+            FullyQualifiedPolicyId(FullyQualifiedResourceId(rtName, rid), AccessPolicyName("exists")),
+            Set.empty,
+            WorkbenchEmail(""),
+            Set.empty,
+            Set.empty,
+            Set.empty,
+            false
+          )
+        )
+      )
+    )
+    when(mockDirectoryDao.loadSubjectFromEmail(argThat[WorkbenchEmail](_.value.endsWith("missing")), any[SamRequestContext])).thenReturn(IO.pure(None))
+    when(mockDirectoryDao.loadSubjectFromEmail(argThat[WorkbenchEmail](_.value.endsWith("exists")), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(WorkbenchUserId("exists"))))
+    when(mockDirectoryDao.loadUser(argThat[WorkbenchUserId](_.value.endsWith("missing")), any[SamRequestContext])).thenReturn(IO.pure(None))
+    when(mockDirectoryDao.loadUser(argThat[WorkbenchUserId](_.value.endsWith("exists")), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(SamUser(WorkbenchUserId("exists"), None, WorkbenchEmail("exists"), None, false))))
+
+    val error = intercept[WorkbenchExceptionWithErrorReport] {
+      resourceServiceWithMocks
+        .bulkMembershipUpdate(
+          Seq(
+            BulkMembershipUpdate(
+              rtName,
+              ResourceId("one"),
+              Seq(
+                PolicyMembershipUpdate(AccessPolicyName("ap1"), addUserIds = Set(WorkbenchUserId("add id exists"), WorkbenchUserId("add id missing"))),
+                PolicyMembershipUpdate(AccessPolicyName("ap1"), removeUserIds = Set(WorkbenchUserId("remove id exists"), WorkbenchUserId("remove id missing"))),
+                PolicyMembershipUpdate(AccessPolicyName("ap1"), addEmails = Set(WorkbenchEmail("add email exists"), WorkbenchEmail("add email missing"))),
+                PolicyMembershipUpdate(
+                  AccessPolicyName("ap1"),
+                  removeEmails = Set(WorkbenchEmail("remove email exists"), WorkbenchEmail("remove email missing"))
+                ),
+                PolicyMembershipUpdate(
+                  AccessPolicyName("ap1"),
+                  addPolicies = Set(
+                    PolicyIdentifiers(AccessPolicyName("add policy exists"), rtName, rid),
+                    PolicyIdentifiers(AccessPolicyName("add policy missing"), rtName, rid)
+                  )
+                ),
+                PolicyMembershipUpdate(
+                  AccessPolicyName("ap1"),
+                  removePolicies = Set(
+                    PolicyIdentifiers(AccessPolicyName("remove policy exists"), rtName, rid),
+                    PolicyIdentifiers(AccessPolicyName("remove policy missing"), rtName, rid)
+                  )
+                )
+              )
+            )
+          ),
+          samRequestContext
+        )
+        .unsafeRunSync()
+    }
+
+    error.errorReport.statusCode shouldBe Some(StatusCodes.BadRequest)
+    error.errorReport.causes.size shouldBe 3 // 1 for each type of failure (id, email, policy)
+    error.errorReport.causes.map(_.causes.size).sum shouldBe 6 // there should be a failure for add and remove for each type
+    error.errorReport.causes.flatMap(_.causes.map(_.message)).forall(_.contains("missing")) shouldBe true
+  }
+
+  it should "call addAndRemovePolicyMembers with correct subjects and not call onPolicyUpdate" in {
+    val mockAccessPolicyDao = mock[AccessPolicyDAO]
+    val mockDirectoryDao = mock[DirectoryDAO]
+    // using mock[CloudExtensions] here is intentional to make sure onGroupUpdate is not called
+    val resourceServiceWithMocks =
+      new ResourceService(Map.empty, mock[PolicyEvaluatorService], mockAccessPolicyDao, mockDirectoryDao, mock[CloudExtensions], "", Set.empty)
+
+    val rtName = ResourceTypeName("rt")
+    val rid = ResourceId("rid")
+
+    val addId = WorkbenchUserId("add id exists")
+    val removeId = WorkbenchUserId("remove id exists")
+    val addEmail = WorkbenchEmail("add email exists")
+    val removeEmail = WorkbenchEmail("remove email exists")
+    val addPolicy = PolicyIdentifiers(AccessPolicyName("add policy exists"), rtName, rid)
+    val removePolicy = PolicyIdentifiers(AccessPolicyName("remove policy exists"), rtName, rid)
+
+    when(mockAccessPolicyDao.loadPolicy(ArgumentMatchers.eq(addPolicy.toFullyQualifiedPolicyId), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(AccessPolicy(addPolicy.toFullyQualifiedPolicyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+    when(mockAccessPolicyDao.loadPolicy(ArgumentMatchers.eq(removePolicy.toFullyQualifiedPolicyId), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(AccessPolicy(removePolicy.toFullyQualifiedPolicyId, Set.empty, WorkbenchEmail(""), Set.empty, Set.empty, Set.empty, false))))
+    when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(addEmail), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(WorkbenchUserId(addEmail.value))))
+    when(mockDirectoryDao.loadSubjectFromEmail(ArgumentMatchers.eq(removeEmail), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(WorkbenchUserId(removeEmail.value))))
+    when(mockDirectoryDao.loadUser(ArgumentMatchers.eq(addId), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(SamUser(addId, None, WorkbenchEmail("add"), None, false))))
+    when(mockDirectoryDao.loadUser(ArgumentMatchers.eq(removeId), any[SamRequestContext]))
+      .thenReturn(IO.pure(Option(SamUser(removeId, None, WorkbenchEmail("remove"), None, false))))
+
+    when(mockAccessPolicyDao.listAccessPolicies(FullyQualifiedResourceId(rtName, rid), samRequestContext)).thenReturn(
+      IO.pure(
+        LazyList(
+          AccessPolicy(
+            FullyQualifiedPolicyId(FullyQualifiedResourceId(rtName, rid), AccessPolicyName("ap1")),
+            Set.empty,
+            WorkbenchEmail(""),
+            Set.empty,
+            Set.empty,
+            Set.empty,
+            false
+          )
+        )
+      )
+    )
+
+    val bulkMembershipUpdate = BulkMembershipUpdate(
+      rtName,
+      rid,
+      Seq(
+        PolicyMembershipUpdate(
+          AccessPolicyName("ap1"),
+          addUserIds = Set(addId),
+          removeUserIds = Set(removeId),
+          addEmails = Set(addEmail),
+          removeEmails = Set(removeEmail),
+          addPolicies = Set(addPolicy),
+          removePolicies = Set(removePolicy)
+        )
+      )
+    )
+
+    // test will fail with a Strict stubbing argument mismatch if actual arguments do not match this mock
+    when(
+      mockAccessPolicyDao.addAndRemovePolicyMembers(
+        any[FullyQualifiedPolicyId],
+        ArgumentMatchers.eq(Set(addPolicy.toFullyQualifiedPolicyId, addId, WorkbenchUserId(addEmail.value))),
+        ArgumentMatchers.eq(Set(removePolicy.toFullyQualifiedPolicyId, removeId, WorkbenchUserId(removeEmail.value))),
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.pure(0)) // returning 0 should not trigger onPolicyUpdate
+
+    resourceServiceWithMocks.bulkMembershipUpdate(Seq(bulkMembershipUpdate), samRequestContext).unsafeRunSync()
+  }
+
+  it should "call onPolicyUpdate when policy changes" in {
+    val mockAccessPolicyDao = mock[AccessPolicyDAO]
+    val mockDirectoryDao = mock[DirectoryDAO]
+    val mockCloudExtensions = mock[CloudExtensions]
+    val resourceServiceWithMocks =
+      new ResourceService(Map.empty, mock[PolicyEvaluatorService], mockAccessPolicyDao, mockDirectoryDao, mockCloudExtensions, "", Set.empty)
+
+    val rtName = ResourceTypeName("rt")
+    val rid = ResourceId("rid")
+
+    when(mockAccessPolicyDao.listAccessPolicies(FullyQualifiedResourceId(rtName, rid), samRequestContext)).thenReturn(
+      IO.pure(
+        LazyList(
+          AccessPolicy(
+            FullyQualifiedPolicyId(FullyQualifiedResourceId(rtName, rid), AccessPolicyName("ap1")),
+            Set.empty,
+            WorkbenchEmail(""),
+            Set.empty,
+            Set.empty,
+            Set.empty,
+            false
+          )
+        )
+      )
+    )
+
+    val bulkMembershipUpdate = BulkMembershipUpdate(
+      rtName,
+      rid,
+      Seq(
+        PolicyMembershipUpdate(AccessPolicyName("ap1"))
+      )
+    )
+
+    // test will fail with a Strict stubbing argument mismatch if actual arguments do not match this mock
+    when(
+      mockAccessPolicyDao.addAndRemovePolicyMembers(any[FullyQualifiedPolicyId], any[Set[WorkbenchSubject]], any[Set[WorkbenchSubject]], any[SamRequestContext])
+    ).thenReturn(IO.pure(1)) // returning 1 should trigger onPolicyUpdate
+
+    // test will fail if onGroupUpdate is not called due to strict stubbing
+    when(mockCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext])).thenReturn(IO.unit)
+
+    resourceServiceWithMocks.bulkMembershipUpdate(Seq(bulkMembershipUpdate), samRequestContext).unsafeRunSync()
   }
 
   /** Sets up a test log appender attached to the audit logger, runs the `test` IO, ensures that `events` were appended. If tryTwice` run `test` again to make

@@ -7,13 +7,13 @@ import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.UserStatus
 import org.broadinstitute.dsde.workbench.sam.service.UserService
-import org.broadinstitute.dsde.workbench.sam.util.{OpenCensusIOUtils, SamRequestContext}
+import org.broadinstitute.dsde.workbench.sam.util.{OpenTelemetryIOUtils, SamRequestContext}
 
 /** Created by srubenst on 02/04/21.
   */
 class DisableUserMessageReceiver(userService: UserService)(implicit ioRuntime: IORuntime) extends MessageReceiver with LazyLogging {
   override def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit =
-    OpenCensusIOUtils
+    OpenTelemetryIOUtils
       .traceIO("DisableUsersMonitor-PubSubMessage", SamRequestContext()) { samRequestContext =>
         val userId = WorkbenchUserId(message.getData.toStringUtf8)
         logger.info(s"received disable user message: $userId")

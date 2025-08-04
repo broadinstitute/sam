@@ -3,8 +3,8 @@ package org.broadinstitute.dsde.workbench.sam
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.OAuth2BearerToken
-import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives.{complete, extractRequest, onSuccess, optionalHeaderValueByName}
+import akka.http.scaladsl.server.{Directive, Directive0, Directive1}
 import akka.stream.Materializer
 import cats.effect._
 import cats.effect.unsafe.implicits.global
@@ -18,7 +18,6 @@ import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpret
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.{FakeOpenTelemetryMetricsInterpreter, OpenTelemetryMetrics, OpenTelemetryMetricsInterpreter}
 import org.broadinstitute.dsde.workbench.sam.api._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, MockCrlService}
 import org.broadinstitute.dsde.workbench.sam.config.AppConfig._
@@ -28,6 +27,7 @@ import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
 import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -48,7 +48,6 @@ trait MockTestSupport {
 
   implicit val futureTimeout: Timeout = Timeout(Span(10, Seconds))
   implicit val eqWorkbenchException: Eq[WorkbenchException] = (x: WorkbenchException, y: WorkbenchException) => x.getMessage == y.getMessage
-  implicit val openTelemetry: FakeOpenTelemetryMetricsInterpreter.type = FakeOpenTelemetryMetricsInterpreter
 
   val samRequestContext: SamRequestContext = SamRequestContext()
 
@@ -66,6 +65,7 @@ object MockTestSupport extends MockTestSupport {
   val googleServicesConfig: GoogleServicesConfig = appConfig.googleConfig.get.googleServicesConfig
   val configResourceTypes: Map[ResourceTypeName, ResourceType] = config.as[Map[String, ResourceType]]("resourceTypes").values.map(rt => rt.name -> rt).toMap
   val adminConfig: AdminConfig = config.as[AdminConfig]("admin")
+  val azureServicesConfig: Option[AzureServicesConfig] = appConfig.azureServicesConfig
   val databaseEnabled: Boolean = config.getBoolean("db.enabled")
   val databaseEnabledClue = "-- skipping tests that talk to a real database"
 
@@ -93,39 +93,11 @@ object MockTestSupport extends MockTestSupport {
     val googleGroupSyncPubSubDAO = new MockGooglePubSubDAO()
     val googleDisableUsersPubSubDAO = new MockGooglePubSubDAO()
     val googleKeyCachePubSubDAO = new MockGooglePubSubDAO()
-    val googleStorageDAO = new MockGoogleStorageDAO()
     val googleProjectDAO = new MockGoogleProjectDAO()
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
-    val cloudKeyCache = new GoogleKeyCache(
-      distributedLock,
-      googleIamDAO,
-      googleStorageDAO,
-      FakeGoogleStorageInterpreter,
-      googleKeyCachePubSubDAO,
-      googleServicesConfig,
-      petServiceAccountConfig
-    )
+    val cloudKeyCache = new GoogleKeyCache(distributedLock, googleIamDAO, FakeGoogleStorageInterpreter, googleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(
-      new GoogleExtensions(
-        distributedLock,
-        directoryDAO,
-        policyDAO,
-        googleDirectoryDAO,
-        notificationPubSubDAO,
-        googleGroupSyncPubSubDAO,
-        googleDisableUsersPubSubDAO,
-        googleIamDAO,
-        googleStorageDAO,
-        googleProjectDAO,
-        cloudKeyCache,
-        notificationDAO,
-        FakeGoogleKmsInterpreter,
-        FakeGoogleStorageInterpreter,
-        googleServicesConfig,
-        petServiceAccountConfig,
-        resourceTypes,
-        adminConfig.superAdminsGroup
-      )
+      new GoogleExtensions(distributedLock, directoryDAO, policyDAO, googleDirectoryDAO, notificationPubSubDAO, googleGroupSyncPubSubDAO, googleDisableUsersPubSubDAO, googleIamDAO, googleProjectDAO, cloudKeyCache, notificationDAO, FakeGoogleStorageInterpreter, googleServicesConfig, petServiceAccountConfig, resourceTypes, adminConfig.superAdminsGroup)
     )
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
     val mockResourceService = resourceServiceOpt.getOrElse(
@@ -141,8 +113,12 @@ object MockTestSupport extends MockTestSupport {
     )
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypes, policyDAO, directoryDAO, googleExt, "example.com")
-    val tosService = new TosService(directoryDAO, tosConfig)
-    val azureService = new AzureService(MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    val tosService = new TosService(googleExt, directoryDAO, tosConfig)
+
+    val azureService = azureServicesConfig.map { azureConfig =>
+      new AzureService(azureConfig, MockCrlService(), directoryDAO, new MockAzureManagedResourceGroupDAO)
+    }
+
     MockSamDependencies(
       mockResourceService,
       policyEvaluatorService,
@@ -154,7 +130,7 @@ object MockTestSupport extends MockTestSupport {
       policyDAO,
       googleExt,
       FakeOpenIDConnectConfiguration,
-      azureService
+      azureService: Option[AzureService]
     )
   }
 
@@ -162,8 +138,7 @@ object MockTestSupport extends MockTestSupport {
 
   def genSamRoutes(samDependencies: MockSamDependencies, uInfo: SamUser)(implicit
       system: ActorSystem,
-      materializer: Materializer,
-      openTelemetry: OpenTelemetryMetrics[IO]
+      materializer: Materializer
   ): MockSamRoutes = new MockSamRoutes(
     samDependencies.resourceService,
     samDependencies.userService,
@@ -175,7 +150,7 @@ object MockTestSupport extends MockTestSupport {
     samDependencies.tosService,
     LiquibaseConfig("", initWithLiquibase = false),
     samDependencies.oauth2Config,
-    Some(samDependencies.azureService)
+    samDependencies.azureService
   ) with MockSamUserDirectives with GoogleExtensionRoutes {
     override val cloudExtensions: CloudExtensions = samDependencies.cloudExtensions
     override val googleExtensions: GoogleExtensions = samDependencies.cloudExtensions match {
@@ -220,9 +195,14 @@ object MockTestSupport extends MockTestSupport {
             complete(StatusCodes.Unauthorized)
         }
       }
+
+    override val adminConfig: AdminConfig =
+      AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty)
+
+    override def asAdminServiceUser: Directive0 = Directive.Empty
   }
 
-  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer, openTelemetry: OpenTelemetryMetricsInterpreter[IO]): MockSamRoutes =
+  def genSamRoutesWithDefault(implicit system: ActorSystem, materializer: Materializer): MockSamRoutes =
     genSamRoutes(genSamDependencies(), Generator.genWorkbenchUserBoth.sample.get)
 
   /*
@@ -284,7 +264,7 @@ final case class MockSamDependencies(
     policyDao: AccessPolicyDAO,
     cloudExtensions: CloudExtensions,
     oauth2Config: OpenIDConnectConfiguration,
-    azureService: AzureService
+    azureService: Option[AzureService]
 )
 
 object ConnectedTest extends Tag("connected test")

@@ -8,6 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, datab
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{AccessPolicyDAO, DirectoryDAO, PostgresAccessPolicyDAO, PostgresDirectoryDAO}
 import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.{ManagedGroupMembershipEntry, ManagedGroupSupportSummary, SamUser}
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._
@@ -151,7 +152,7 @@ class ManagedGroupServiceSpec
     val exception = intercept[WorkbenchExceptionWithErrorReport] {
       runAndWait(managedGroupService.createManagedGroup(ResourceId(groupName), dummyUser, samRequestContext = samRequestContext))
     }
-    exception.getMessage should include("A resource of this type and name already exists")
+    exception.getMessage should include(s"subject with email $groupName@$testDomain already exists")
     managedGroupService.loadManagedGroup(resourceId, samRequestContext).unsafeRunSync() shouldEqual None
   }
 
@@ -542,12 +543,14 @@ class ManagedGroupServiceSpec
         .value
     )
 
+    val requesterId = requester.googleSubjectId.map(id => WorkbenchUserId(id.value)).getOrElse(fail("no requester google subject id"))
+
     val expectedNotificationMessages = Set(
-      Notifications.GroupAccessRequestNotification(
+      Notifications.GroupAccessRequestNotificationV2(
         adminGoogleSubjectId,
         WorkbenchGroupName(resourceId.value).value,
-        Set(adminGoogleSubjectId),
-        requester.googleSubjectId.map(id => WorkbenchUserId(id.value)).getOrElse(fail("no requester google subject id"))
+        requesterId,
+        requesterId
       )
     )
 
@@ -565,5 +568,26 @@ class ManagedGroupServiceSpec
       managedGroupService.requestAccess(resourceId, dummyUser.id, samRequestContext).unsafeRunSync()
     }
     error.errorReport.statusCode should be(Some(StatusCodes.BadRequest))
+  }
+
+  "ManagedGroupService loadManagedGroupSupportSummary" should "return a ManagedGroupSupportRequestSummary" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    val groupName = "myGroup"
+    val managedGroupResource = makeGroup(groupName, managedGroupService)
+    val managedGroupEmail =
+      managedGroupService.loadManagedGroup(managedGroupResource.resourceId, samRequestContext).unsafeRunSync().getOrElse(fail("group not found"))
+    managedGroupService.loadManagedGroupSupportSummary(managedGroupResource.resourceId, samRequestContext).unsafeRunSync() shouldEqual Some(
+      ManagedGroupSupportSummary(
+        WorkbenchGroupName(groupName),
+        managedGroupEmail,
+        Set.empty,
+        Set.empty
+      )
+    )
+  }
+
+  it should "return None if the group does not exist" in {
+    assume(databaseEnabled, databaseEnabledClue)
+    managedGroupService.loadManagedGroupSupportSummary(ResourceId("nonexistentGroup"), samRequestContext).unsafeRunSync() shouldEqual None
   }
 }

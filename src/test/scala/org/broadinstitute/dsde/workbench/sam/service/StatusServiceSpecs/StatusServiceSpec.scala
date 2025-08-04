@@ -27,8 +27,8 @@ class StatusServiceSpec
     with BeforeAndAfterAll
     with StatusServiceMatchers {
   implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
-  implicit val system = ActorSystem("StatusServiceSpec")
-  implicit override val patienceConfig = PatienceConfig(timeout = 1 second)
+  implicit val system: ActorSystem = ActorSystem("StatusServiceSpec")
+  implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = 1 second)
 
   val allUsersGroup: BasicWorkbenchGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(), WorkbenchEmail("all_users@fake.com"))
 

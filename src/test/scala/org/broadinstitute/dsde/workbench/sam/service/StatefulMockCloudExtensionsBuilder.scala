@@ -2,9 +2,9 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito.{RETURNS_SMART_NULLS, lenient}
 import org.mockito.invocation.InvocationOnMock
@@ -67,7 +67,7 @@ case class StatefulMockCloudExtensionsBuilder(directoryDAO: DirectoryDAO) extend
   lenient()
     .doReturn(IO.unit)
     .when(mockedCloudExtensions)
-    .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext])
+    .onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext])
 
   lenient()
     .doReturn(IO.unit)

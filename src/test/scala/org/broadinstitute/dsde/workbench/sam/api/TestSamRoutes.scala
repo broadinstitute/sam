@@ -3,23 +3,37 @@ package org.broadinstitute.dsde.workbench.sam.api
 import akka.actor.ActorSystem
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives.reject
+import akka.http.scaladsl.server.{Directive, Directive0}
 import akka.stream.Materializer
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.azure.core.management.AzureEnvironment
+import com.typesafe.config.ConfigFactory
+import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.google.mock.MockGoogleDirectoryDAO
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.oauth2.mock.FakeOpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
-import org.broadinstitute.dsde.workbench.sam.TestSupport.{samRequestContext, tosConfig}
+import org.broadinstitute.dsde.workbench.sam.TestSupport.samRequestContext
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureService, CrlService, MockCrlService}
-import org.broadinstitute.dsde.workbench.sam.config.{LiquibaseConfig, TermsOfServiceConfig}
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
+import org.broadinstitute.dsde.workbench.sam.config.{
+  AppConfig,
+  AzureMarketPlace,
+  AzureServiceCatalog,
+  AzureServicePrincipalConfig,
+  AzureServicesConfig,
+  LiquibaseConfig,
+  TermsOfServiceConfig
+}
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalatest.concurrent.ScalaFutures
 
+import java.time.Instant
 import scala.concurrent.ExecutionContext
 
 /** Created by dvoet on 7/14/17.
@@ -38,18 +52,18 @@ class TestSamRoutes(
 )(implicit
     override val system: ActorSystem,
     override val materializer: Materializer,
-    override val executionContext: ExecutionContext,
-    override val openTelemetry: OpenTelemetryMetrics[IO]
+    override val executionContext: ExecutionContext
 ) extends SamRoutes(
       resourceService,
       userService,
       statusService,
       managedGroupService,
-      TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"),
+      TermsOfServiceConfig(true, false, "1", "app.terra.bio/#terms-of-service", Option(Instant.now()), Option("0"), Option("testUrl")),
       policyEvaluatorService,
       tosService,
       LiquibaseConfig("", false),
       FakeOpenIDConnectConfiguration,
+      AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty),
       azureService
     )
     with MockSamUserDirectives
@@ -58,8 +72,10 @@ class TestSamRoutes(
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def createUserAndAcceptTos(samUser: SamUser, samRequestContext: SamRequestContext): Unit = {
     TestSupport.runAndWait(userService.createUser(samUser, samRequestContext))
-    TestSupport.runAndWait(tosService.acceptTosStatus(samUser.id, samRequestContext))
+    TestSupport.runAndWait(tosService.acceptCurrentTermsOfService(samUser.id, samRequestContext))
   }
+
+  override def asAdminServiceUser: Directive0 = Directive.Empty
 }
 
 class TestSamTosEnabledRoutes(
@@ -77,18 +93,18 @@ class TestSamTosEnabledRoutes(
 )(implicit
     override val system: ActorSystem,
     override val materializer: Materializer,
-    override val executionContext: ExecutionContext,
-    override val openTelemetry: OpenTelemetryMetrics[IO]
+    override val executionContext: ExecutionContext
 ) extends SamRoutes(
       resourceService,
       userService,
       statusService,
       managedGroupService,
-      TermsOfServiceConfig(true, false, "0", "app.terra.bio/#terms-of-service"),
+      TermsOfServiceConfig(true, false, "1", "app.terra.bio/#terms-of-service", Option(Instant.now()), Option("0"), Option("testUrl")),
       policyEvaluatorService,
       tosService,
       LiquibaseConfig("", false),
       FakeOpenIDConnectConfiguration,
+      AdminConfig(superAdminsGroup = WorkbenchEmail(""), allowedEmailDomains = Set.empty, serviceAccountAdmins = Set.empty),
       azureService
     )
     with MockSamUserDirectives
@@ -96,12 +112,19 @@ class TestSamTosEnabledRoutes(
     with ScalaFutures {
   def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route = reject
   def mockDirectoryDao: DirectoryDAO = directoryDAO
+
+  override def asAdminServiceUser: Directive0 = Directive.Empty
 }
 
 object TestSamRoutes {
   val defaultUserInfo = Generator.genWorkbenchUserGoogle.sample.get
+  val config = ConfigFactory.load()
+  val appConfig = AppConfig.readConfig(config)
 
   object SamResourceActionPatterns {
+    val config = ConfigFactory.load()
+    val appConfig = AppConfig.readConfig(config)
+
     val readPolicies = ResourceActionPattern("read_policies", "", false)
     val alterPolicies = ResourceActionPattern("alter_policies", "", false)
     val delete = ResourceActionPattern("delete", "", false)
@@ -118,6 +141,7 @@ object TestSamRoutes {
 
     val use = ResourceActionPattern("use", "", true)
     val readAuthDomain = ResourceActionPattern("read_auth_domain", "", true)
+    val updateAuthDomain = ResourceActionPattern("update_auth_domain", "", true)
 
     val testActionAccess = ResourceActionPattern("test_action_access::.+", "", false)
   }
@@ -149,18 +173,25 @@ object TestSamRoutes {
       resourceTypes: Map[ResourceTypeName, ResourceType],
       user: SamUser = defaultUserInfo,
       policyAccessDAO: Option[AccessPolicyDAO] = None,
-      maybeDirectoryDAO: Option[MockDirectoryDAO] = None,
+      maybeDirectoryDAO: Option[DirectoryDAO] = None,
+      maybeGoogleDirectoryDAO: Option[GoogleDirectoryDAO] = None,
       cloudExtensions: Option[CloudExtensions] = None,
       adminEmailDomains: Option[Set[String]] = None,
       crlService: Option[CrlService] = None,
-      acceptTermsOfService: Boolean = true
-  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext, openTelemetry: OpenTelemetryMetrics[IO]) = {
+      acceptTermsOfService: Boolean = true,
+      azureMarketPlace: Option[AzureMarketPlace] = None,
+      azureServiceCatalog: Option[AzureServiceCatalog] = None
+  )(implicit system: ActorSystem, materializer: Materializer, executionContext: ExecutionContext) = {
     val dbRef = TestSupport.dbRef
     val resourceTypesWithAdmin = resourceTypes + (resourceTypeAdmin.name -> resourceTypeAdmin)
     // need to make sure MockDirectoryDAO and MockAccessPolicyDAO share the same groups
+    val googleDirectoryDAO = maybeGoogleDirectoryDAO.getOrElse(new MockGoogleDirectoryDAO())
     val directoryDAO = maybeDirectoryDAO.getOrElse(new MockDirectoryDAO())
-    val googleDirectoryDAO = new MockGoogleDirectoryDAO()
-    val policyDAO = policyAccessDAO.getOrElse(new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], directoryDAO))
+    val policyDAO =
+      directoryDAO match {
+        case mock: MockDirectoryDAO => new MockAccessPolicyDAO(Map.empty[ResourceTypeName, ResourceType], mock)
+        case _ => policyAccessDAO.getOrElse(throw new RuntimeException("policy access dao does not exist but you are trying to access it"))
+      }
 
     val emailDomain = "example.com"
     val policyEvaluatorService = PolicyEvaluatorService(emailDomain, resourceTypesWithAdmin, policyDAO, directoryDAO)
@@ -174,14 +205,14 @@ object TestSamRoutes {
       emailDomain,
       allowedAdminEmailDomains = adminEmailDomains.getOrElse(Set.empty)
     )
-    val mockTosService = new TosService(directoryDAO, TestSupport.tosConfig)
+    val mockTosService = new TosService(cloudXtns, directoryDAO, TestSupport.tosConfig)
     val mockUserService = new UserService(directoryDAO, cloudXtns, Seq.empty, mockTosService)
     val mockManagedGroupService =
       new ManagedGroupService(mockResourceService, policyEvaluatorService, resourceTypesWithAdmin, policyDAO, directoryDAO, cloudXtns, emailDomain)
     TestSupport.runAndWait(mockUserService.createUser(user, samRequestContext))
 
     if (acceptTermsOfService) {
-      TestSupport.runAndWait(mockTosService.acceptTosStatus(user.id, samRequestContext))
+      TestSupport.runAndWait(mockTosService.acceptCurrentTermsOfService(user.id, samRequestContext))
     }
 
     val allUsersGroup = TestSupport.runAndWait(cloudXtns.getOrCreateAllUsersGroup(directoryDAO, samRequestContext))
@@ -189,18 +220,33 @@ object TestSamRoutes {
     mockResourceService.initResourceTypes(samRequestContext).unsafeRunSync()
 
     val mockStatusService = new StatusService(directoryDAO, cloudXtns)
-    val azureService = new AzureService(crlService.getOrElse(MockCrlService(Option(user))), directoryDAO, new MockAzureManagedResourceGroupDAO)
-    val userToTestWith = if (acceptTermsOfService) user.copy(acceptedTosVersion = Some(tosConfig.version)) else user
+    val mockAzureServicesConfig = AzureServicesConfig(
+      Option("mock-managedapp-workload-clientid"),
+      Option(AzureServicePrincipalConfig("mock-managedapp-clientid", "mock-managedapp-clientsecret", "mock-managedapp-tenantid")),
+      azureMarketPlace,
+      azureServiceCatalog,
+      allowManagedIdentityUserCreation = true,
+      azureEnvironment = AzureEnvironment.AZURE
+    )
+
+    val azureService =
+      new AzureService(
+        mockAzureServicesConfig,
+        crlService.getOrElse(MockCrlService(Option(user))),
+        directoryDAO,
+        new MockAzureManagedResourceGroupDAO
+      )
+
     new TestSamRoutes(
       mockResourceService,
       policyEvaluatorService,
       mockUserService,
       mockStatusService,
       mockManagedGroupService,
-      userToTestWith,
+      user,
       tosService = mockTosService,
       cloudExtensions = cloudXtns,
-      azureService = Some(azureService)
+      azureService = Option(azureService)
     )
   }
 }

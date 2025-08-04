@@ -8,9 +8,11 @@ import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, TosService, UserService}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.RejectionHandlers.termsOfServiceRejectionHandler
+import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.TermsOfServiceConfig
-import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport._
-import org.broadinstitute.dsde.workbench.sam.model.{SamUser, TermsOfServiceAcceptance}
+import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
+import org.broadinstitute.dsde.workbench.sam.model.TermsOfServiceAcceptance
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 /** Directives to get user information.
@@ -20,6 +22,7 @@ trait SamUserDirectives {
   val cloudExtensions: CloudExtensions
   val tosService: TosService
   val termsOfServiceConfig: TermsOfServiceConfig
+  val adminConfig: AdminConfig
 
   /** Extracts authentication information from headers, looks up user in database, returns user only if the user is enabled and has accepted latest terms of
     * service. Throws 401 exception if user has not accepted latest terms of service or is disabled. Throws 403 exception if user does not exist (not 404
@@ -47,15 +50,18 @@ trait SamUserDirectives {
       }
     }
 
+  def asAdminServiceUser: Directive0
+
+  val oldTermsOfServiceUrl = "app.terra.bio/#terms-of-service"
   def withTermsOfServiceAcceptance: Directive0 =
     Directives.mapInnerRoute { r =>
-      handleRejections(termsOfServiceRejectionHandler(termsOfServiceConfig.url)) {
+      handleRejections(termsOfServiceRejectionHandler(oldTermsOfServiceUrl)) {
         requestEntityPresent {
           entity(as[TermsOfServiceAcceptance]) { tos =>
-            if (tos.value.equalsIgnoreCase(termsOfServiceConfig.url)) r
+            if (tos.value.equalsIgnoreCase(oldTermsOfServiceUrl)) r
             else
               reject(
-                MalformedRequestContentRejection(s"Invalid ToS acceptance", new WorkbenchException(s"ToS URL did not match ${termsOfServiceConfig.url}"))
+                MalformedRequestContentRejection(s"Invalid ToS acceptance", new WorkbenchException(s"ToS URL did not match ${oldTermsOfServiceUrl}"))
               )
           }
         }

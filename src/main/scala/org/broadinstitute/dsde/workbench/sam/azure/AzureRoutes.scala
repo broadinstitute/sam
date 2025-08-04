@@ -12,11 +12,12 @@ import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.{SecurityDirectives, _}
 import org.broadinstitute.dsde.workbench.sam.azure.AzureJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.CloudExtensions
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.JsString
 
-trait AzureRoutes extends SecurityDirectives with LazyLogging {
+trait AzureRoutes extends SecurityDirectives with LazyLogging with SamRequestContextDirectives with SamModelDirectives {
   val azureService: Option[AzureService]
 
   def azureRoutes(samUser: SamUser, samRequestContext: SamRequestContext): Route =
@@ -24,7 +25,7 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
       .map { service =>
         pathPrefix("azure" / "v1") {
           path("user" / "petManagedIdentity") {
-            post {
+            postWithTelemetry(samRequestContext) {
               entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
                 requireUserCreatePetAction(request, samUser, samRequestContext) {
                   complete {
@@ -38,9 +39,10 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
             }
           } ~
             path("petManagedIdentity" / Segment) { userEmail =>
-              post {
+              val workbenchEmail = WorkbenchEmail(userEmail)
+              postWithTelemetry(samRequestContext, "userEmail" -> workbenchEmail) {
                 requireCloudExtensionCreatePetAction(samUser, samRequestContext) {
-                  loadSamUser(WorkbenchEmail(userEmail), samRequestContext) { targetSamUser =>
+                  loadSamUser(workbenchEmail, samRequestContext) { targetSamUser =>
                     entity(as[GetOrCreatePetManagedIdentityRequest]) { request =>
                       requireUserCreatePetAction(request, targetSamUser, samRequestContext) {
                         complete {
@@ -55,11 +57,74 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
                 }
               }
             } ~
+            pathPrefix("actionManagedIdentity") {
+              path(Segment / Segment / Segment / Segment) { (bpId, resourceTypeName, resourceId, action) =>
+                val billingProfileId = BillingProfileId(bpId)
+                val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+                val resourceAction = ResourceAction(action)
+
+                withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
+                  if (!resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
+                    throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+                  }
+                  pathEndOrSingleSlash {
+                    postWithTelemetry(
+                      samRequestContext,
+                      "billingProfileId" -> billingProfileId,
+                      "resourceType" -> resource.resourceTypeName,
+                      "resource" -> resource.resourceId,
+                      "action" -> resourceAction
+                    ) {
+                      requireAction(resource, resourceAction, samUser.id, samRequestContext) {
+                        complete {
+                          service.getOrCreateActionManagedIdentity(resource, resourceAction, billingProfileId, samRequestContext).map { case (ami, created) =>
+                            val status = if (created) StatusCodes.Created else StatusCodes.OK
+                            status -> ami
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              } ~
+                path(Segment / Segment / Segment) { (resourceTypeName, resourceId, action) =>
+                  val resource = FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId))
+                  val resourceAction = ResourceAction(action)
+
+                  withNonAdminResourceType(resource.resourceTypeName) { resourceType =>
+                    if (!resourceType.actionPatterns.map(ap => ResourceAction(ap.value)).contains(resourceAction)) {
+                      throw new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"action $action not found"))
+                    }
+                    pathEndOrSingleSlash {
+                      getWithTelemetry(
+                        samRequestContext,
+                        "resourceType" -> resource.resourceTypeName,
+                        "resource" -> resource.resourceId,
+                        "action" -> resourceAction
+                      ) {
+                        requireAction(resource, resourceAction, samUser.id, samRequestContext) {
+                          complete {
+                            service.getActionManagedIdentity(resource, resourceAction, samRequestContext).map {
+                              case Some(actionManagedIdentity) => StatusCodes.OK -> actionManagedIdentity
+                              case None =>
+                                throw new WorkbenchExceptionWithErrorReport(
+                                  ErrorReport(StatusCodes.NotFound, s"Action Managed identity for [$resourceAction] on [$resource] not found")
+                                )
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+            } ~
             path("billingProfile" / Segment / "managedResourceGroup") { billingProfileId =>
-              post {
+              val billingProfileResourceId = ResourceId(billingProfileId)
+              val billingProfileIdParam = "billingProfileId" -> billingProfileResourceId
+              postWithTelemetry(samRequestContext, billingProfileIdParam) {
                 entity(as[ManagedResourceGroupCoordinates]) { mrgCoords =>
                   requireAction(
-                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, billingProfileResourceId),
                     SamResourceActions.setManagedResourceGroup,
                     samUser.id,
                     samRequestContext
@@ -72,9 +137,9 @@ trait AzureRoutes extends SecurityDirectives with LazyLogging {
                   }
                 }
               } ~
-                delete {
+                deleteWithTelemetry(samRequestContext, billingProfileIdParam) {
                   requireAction(
-                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(billingProfileId)),
+                    FullyQualifiedResourceId(SamResourceTypes.spendProfile, billingProfileResourceId),
                     SamResourceActions.delete,
                     samUser.id,
                     samRequestContext

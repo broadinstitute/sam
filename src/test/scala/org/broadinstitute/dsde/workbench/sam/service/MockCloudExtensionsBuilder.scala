@@ -2,12 +2,12 @@ package org.broadinstitute.dsde.workbench.sam.service
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
-import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchUserId}
+import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchGroup, WorkbenchGroupIdentity, WorkbenchSubject, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
-import org.broadinstitute.dsde.workbench.sam.model.SamUser
+import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.{SubsystemStatus, Subsystems}
-import org.mockito.ArgumentMatchersSugar.{any, argThat, eqTo}
+import org.mockito.ArgumentMatchersSugar.{any, argThat}
 import org.mockito.{IdiomaticMockito, Strictness}
 
 import scala.collection.mutable
@@ -22,7 +22,7 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
   mockedCloudExtensions.getUserStatus(any[SamUser]) returns IO(false)
   mockedCloudExtensions.onUserEnable(any[SamUser], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.onUserDisable(any[SamUser], any[SamRequestContext]) returns IO.unit
-  mockedCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[SamRequestContext]) returns IO.unit
+  mockedCloudExtensions.onGroupUpdate(any[Seq[WorkbenchGroupIdentity]], any[Set[WorkbenchSubject]], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext]) returns IO.unit
   mockedCloudExtensions.allSubSystems returns Set.empty
   mockedCloudExtensions.checkStatus returns Map.empty
@@ -40,20 +40,13 @@ case class MockCloudExtensionsBuilder(allUsersGroup: WorkbenchGroup) extends Idi
     this
   }
 
-  def withAdminUser(samUser: SamUser): MockCloudExtensionsBuilder = withAdminUser(samUser.email)
-  def withAdminUser(adminUserEmail: WorkbenchEmail): MockCloudExtensionsBuilder = {
-    mockedCloudExtensions.isWorkbenchAdmin(eqTo(adminUserEmail)) returns Future.successful(true)
+  def withAdminUser(): MockCloudExtensionsBuilder = {
+    mockedCloudExtensions.isWorkbenchAdmin(any[WorkbenchEmail]) returns Future.successful(true)
     this
   }
   // testing cases where nonAdmin is attempting to use admin routes
-  def withNonAdminUser(samUser: SamUser): MockCloudExtensionsBuilder = withNonAdminUser(samUser.email)
-  def withNonAdminUser(adminUserEmail: WorkbenchEmail): MockCloudExtensionsBuilder = {
-    mockedCloudExtensions.isWorkbenchAdmin(eqTo(adminUserEmail)) returns Future.successful(false)
-    this
-  }
-
-  def withAdminUsers(samUsers: Iterable[SamUser]): MockCloudExtensionsBuilder = {
-    samUsers.foreach(u => withAdminUser(u))
+  def withNonAdminUser(): MockCloudExtensionsBuilder = {
+    mockedCloudExtensions.isWorkbenchAdmin(any[WorkbenchEmail]) returns Future.successful(false)
     this
   }
 

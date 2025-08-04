@@ -12,11 +12,9 @@ import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, Logg
 import akka.http.scaladsl.server.{Directive0, ExceptionHandler}
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
-import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.oauth2.OpenIDConnectConfiguration
-import org.broadinstitute.dsde.workbench.openTelemetry.OpenTelemetryMetrics
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.api.MockSamRoutes._
 import org.broadinstitute.dsde.workbench.sam.azure.{AzureRoutes, AzureService}
@@ -43,11 +41,11 @@ abstract class MockSamRoutes(
 )(implicit
     val system: ActorSystem,
     val materializer: Materializer,
-    val executionContext: ExecutionContext,
-    val openTelemetry: OpenTelemetryMetrics[IO]
+    val executionContext: ExecutionContext
 ) extends LazyLogging
     with ResourceRoutes
-    with UserRoutes
+    with OldUserRoutes
+    with UserRoutesV1
     with MockStatusRoutes
     with TermsOfServiceRoutes
     with ExtensionRoutes
@@ -59,10 +57,11 @@ abstract class MockSamRoutes(
     oidcConfig.swaggerRoutes("swagger/api-docs.yaml") ~
       oidcConfig.oauth2Routes ~
       statusRoutes ~
-      termsOfServiceRoutes ~
+      oldTermsOfServiceRoutes ~
+      publicTermsOfServiceRoutes ~
       withExecutionContext(ExecutionContext.global) {
         withSamRequestContext { samRequestContext =>
-          pathPrefix("register")(userRoutes(samRequestContext)) ~
+          pathPrefix("register")(oldUserRoutes(samRequestContext)) ~
             pathPrefix("api") {
               // IMPORTANT - all routes under /api must have an active user
               withActiveUser(samRequestContext) { samUser =>
@@ -71,10 +70,11 @@ abstract class MockSamRoutes(
                   adminRoutes(samUser, samRequestContextWithUser) ~
                   extensionRoutes(samUser, samRequestContextWithUser) ~
                   groupRoutes(samUser, samRequestContextWithUser) ~
-                  apiUserRoutes(samUser, samRequestContextWithUser) ~
+                  userRoutesV1(samUser, samRequestContextWithUser) ~
                   azureRoutes(samUser, samRequestContextWithUser)
               }
-            }
+            } ~
+            userTermsOfServiceRoutes(samRequestContext)
         }
       }
   }

@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.config
 
 import cats.data.NonEmptyList
+import com.azure.core.management.AzureEnvironment
 import com.google.api.client.json.gson.GsonFactory
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
@@ -11,8 +12,11 @@ import org.broadinstitute.dsde.workbench.sam.config.AppConfig.AdminConfig
 import org.broadinstitute.dsde.workbench.sam.config.GoogleServicesConfig.googleServicesConfigReader
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DistributedLockConfig
 import org.broadinstitute.dsde.workbench.sam.model._
+import org.broadinstitute.dsde.workbench.sam.model.api.AccessPolicyMembershipRequest
 
+import java.time.Instant
 import scala.concurrent.duration.Duration
+import scala.jdk.CollectionConverters._
 
 /** Created by dvoet on 7/18/17.
   */
@@ -28,16 +32,16 @@ final case class AppConfig(
     oidcConfig: OidcConfig,
     adminConfig: AdminConfig,
     azureServicesConfig: Option[AzureServicesConfig],
-    prometheusConfig: PrometheusConfig
+    prometheusConfig: PrometheusConfig,
+    janitorConfig: JanitorConfig,
+    resourceAccessPolicies: Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]
 )
 
 object AppConfig {
   implicit val oidcReader: ValueReader[OidcConfig] = ValueReader.relative { config =>
     OidcConfig(
       config.getString("authorityEndpoint"),
-      config.getString("oidcClientId"),
-      config.as[Option[String]]("oidcClientSecret"),
-      config.as[Option[String]]("legacyGoogleClientId")
+      config.getString("oidcClientId")
     )
   }
 
@@ -81,7 +85,8 @@ object AppConfig {
         config.as[Map[String, ResourceRole]](s"$uqPath.roles").values.toSet,
         ResourceRoleName(config.getString(s"$uqPath.ownerRoleName")),
         config.getBoolean(s"$uqPath.reuseIds"),
-        config.as[Option[Boolean]](s"$uqPath.allowLeaving").getOrElse(false)
+        config.as[Option[Boolean]](s"$uqPath.allowLeaving").getOrElse(false),
+        config.as[Option[String]](s"$uqPath.prerequisiteAction").map(ResourceAction)
       )
     }
   }
@@ -119,7 +124,11 @@ object AppConfig {
       config.getAs[Boolean]("isTosEnabled").getOrElse(true),
       config.getBoolean("isGracePeriodEnabled"),
       config.getString("version"),
-      config.getString("url")
+      config.getString("baseUrl"),
+      // Must be a valid UTC datetime string in ISO 8601 format ex: 2007-12-03T10:15:30.00Z
+      config.as[Option[String]]("rollingAcceptanceWindowExpirationDatetime").map(Instant.parse),
+      config.as[Option[String]]("previousVersion"),
+      config.as[Option[String]]("acceptanceUrl")
     )
   }
 
@@ -141,20 +150,70 @@ object AppConfig {
   }
 
   implicit val samDatabaseConfigReader: ValueReader[SamDatabaseConfig] = ValueReader.relative { config =>
-    SamDatabaseConfig(config.as[DatabaseConfig]("sam_read"), config.as[DatabaseConfig]("sam_write"), config.as[DatabaseConfig]("sam_background"))
+    SamDatabaseConfig(
+      config.as[DatabaseConfig]("sam_read"),
+      config.as[DatabaseConfig]("sam_write"),
+      config.as[DatabaseConfig]("sam_background"),
+      config.as[DatabaseConfig]("sam_read_replica")
+    )
   }
 
-  final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String])
+  final case class AdminConfig(superAdminsGroup: WorkbenchEmail, allowedEmailDomains: Set[String], serviceAccountAdmins: Set[WorkbenchEmail])
 
   implicit val adminConfigReader: ValueReader[AdminConfig] = ValueReader.relative { config =>
     AdminConfig(
       superAdminsGroup = WorkbenchEmail(config.getString("superAdminsGroup")),
-      allowedEmailDomains = config.as[Set[String]]("allowedAdminEmailDomains")
+      allowedEmailDomains = config.as[Set[String]]("allowedAdminEmailDomains"),
+      serviceAccountAdmins = config.getString("serviceAccountAdmins").split(",").map(e => WorkbenchEmail(e.trim)).toSet
     )
   }
 
   implicit val azureManagedAppPlanReader: ValueReader[ManagedAppPlan] = ValueReader.relative { config =>
     ManagedAppPlan(config.getString("name"), config.getString("publisher"), config.getString("authorizedUserKey"))
+  }
+
+  implicit val azureMarketPlaceReader: ValueReader[Option[AzureMarketPlace]] = ValueReader.relative { config =>
+    // enabled by default
+    if (config.as[Option[Boolean]]("enabled").getOrElse(true)) {
+      Option(AzureMarketPlace(config.as[Seq[ManagedAppPlan]]("managedAppPlans")))
+    } else {
+      None
+    }
+  }
+
+  implicit val azureServiceCatalogReader: ValueReader[Option[AzureServiceCatalog]] = ValueReader.relative { config =>
+    // disabled by default
+    if (config.as[Option[Boolean]]("enabled").getOrElse(false)) {
+      Option(AzureServiceCatalog(config.getString("authorizedUserKey"), config.getString("managedAppTypeServiceCatalog")))
+    } else {
+      None
+    }
+  }
+
+  implicit val azureServicePrincipalConfigReader: ValueReader[Option[AzureServicePrincipalConfig]] = ValueReader.relative { config =>
+    for {
+      clientId <- config.getAs[String]("clientId")
+      clientSecret <- config.getAs[String]("clientSecret")
+      tenantId <- config.getAs[String]("tenantId")
+    } yield AzureServicePrincipalConfig(clientId, clientSecret, tenantId)
+  }
+
+  implicit val azureEnvironmentConfigReader: ValueReader[Option[AzureEnvironment]] = new ValueReader[Option[AzureEnvironment]] {
+    def read(config: Config, path: String): Option[AzureEnvironment] =
+      if (config.hasPath(path)) {
+        val azureEnvironment: String = config.getString(path)
+        val Azure: String = "AZURE"
+        val AzureGov: String = "AZURE_GOV"
+
+        azureEnvironment match {
+          case AzureGov => Some(AzureEnvironment.AZURE_US_GOVERNMENT)
+          case Azure => Some(AzureEnvironment.AZURE)
+          case _ => throw new IllegalArgumentException(s"Unknown Azure environment: $azureEnvironment")
+        }
+      } else {
+        None
+      }
+
   }
 
   implicit val azureServicesConfigReader: ValueReader[Option[AzureServicesConfig]] = ValueReader.relative { config =>
@@ -164,10 +223,12 @@ object AppConfig {
         if (azureEnabled) {
           Option(
             AzureServicesConfig(
-              config.getString("managedAppClientId"),
-              config.getString("managedAppClientSecret"),
-              config.getString("managedAppTenantId"),
-              config.as[Seq[ManagedAppPlan]]("managedAppPlans")
+              config.as[Option[String]]("managedAppWorkloadClientId"),
+              config.as[Option[AzureServicePrincipalConfig]]("managedAppServicePrincipal"),
+              config.as[Option[AzureMarketPlace]]("azureMarketPlace"),
+              config.as[Option[AzureServiceCatalog]]("azureServiceCatalog"),
+              config.as[Option[Boolean]]("allowManagedIdentityUserCreation").getOrElse(false),
+              config.as[Option[AzureEnvironment]]("azureEnvironment").getOrElse(AzureEnvironment.AZURE)
             )
           )
         } else {
@@ -178,6 +239,56 @@ object AppConfig {
 
   implicit val prometheusConfig: ValueReader[PrometheusConfig] = ValueReader.relative { config =>
     PrometheusConfig(config.getInt("endpointPort"))
+  }
+
+  implicit val janitorConfig: ValueReader[JanitorConfig] = ValueReader.relative { config =>
+    JanitorConfig(
+      config.getBoolean("enabled"),
+      ServiceAccountCredentialJson(
+        DefaultServiceAccountJsonPath(config.getString("clientCredentialFilePath"))
+      ),
+      GoogleProject(config.getString("trackResourceProjectId")),
+      config.getString("trackResourceTopicId")
+    )
+  }
+
+  implicit val accessPolicyDescendantPermissionsReader: ValueReader[AccessPolicyDescendantPermissions] = ValueReader.relative { config =>
+    AccessPolicyDescendantPermissions(
+      ResourceTypeName(config.as[String]("resourceTypeName")),
+      config.as[Option[Set[String]]]("actions").getOrElse(Set.empty).map(ResourceAction.apply),
+      config.as[Option[Set[String]]]("roles").getOrElse(Set.empty).map(ResourceRoleName.apply)
+    )
+  }
+
+  implicit val policyIdentifiersReader: ValueReader[PolicyIdentifiers] = ValueReader.relative { config =>
+    PolicyIdentifiers(
+      AccessPolicyName(config.as[String]("accessPolicyName")),
+      ResourceTypeName(config.as[String]("resourceTypeName")),
+      ResourceId(config.as[String]("resourceId"))
+    )
+  }
+
+  implicit val accessPolicyMembershipRequestReader: ValueReader[AccessPolicyMembershipRequest] = ValueReader.relative { config =>
+    AccessPolicyMembershipRequest(
+      config.as[Set[String]]("memberEmails").map(WorkbenchEmail),
+      config.as[Option[Set[String]]]("actions").getOrElse(Set.empty).map(ResourceAction.apply),
+      config.as[Option[Set[String]]]("roles").getOrElse(Set.empty).map(ResourceRoleName.apply),
+      config.as[Option[Set[AccessPolicyDescendantPermissions]]]("descendantPermissions"),
+      config.as[Option[Set[PolicyIdentifiers]]]("memberPolicies")
+    )
+  }
+
+  implicit val resourceAccessPoliciesConfigReader: ValueReader[Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]] = ValueReader.relative { config =>
+    val policies = for {
+      resourceTypeName <- config.root().keySet().asScala
+      resourceId <- config.getConfig(resourceTypeName).root().keySet().asScala
+      policyName <- config.getConfig(s"$resourceTypeName.$resourceId").root().keySet().asScala
+    } yield {
+      val fullyQualifiedPolicyId =
+        FullyQualifiedPolicyId(FullyQualifiedResourceId(ResourceTypeName(resourceTypeName), ResourceId(resourceId)), AccessPolicyName(policyName))
+      fullyQualifiedPolicyId -> config.as[AccessPolicyMembershipRequest](s"$resourceTypeName.$resourceId.$policyName")
+    }
+    policies.toMap
   }
 
   /** Loads all the configs for the Sam App. All values defined in `src/main/resources/sam.conf` will take precedence over any other configs. In this way, we
@@ -200,13 +311,17 @@ object AppConfig {
   }
 
   def readConfig(config: Config): AppConfig = {
-    val googleConfigOption = for {
-      googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
-    } yield GoogleConfig(
-      googleServices,
-      config.as[PetServiceAccountConfig]("petServiceAccount"),
-      config.as[Option[Duration]]("coordinatedAdminSdkBackoffDuration")
-    )
+    val googleEnabled = config.getAs[Boolean]("googleServices.googleEnabled").getOrElse(true)
+    val googleConfigOption =
+      if (googleEnabled) {
+        for {
+          googleServices <- config.getAs[GoogleServicesConfig]("googleServices")
+        } yield GoogleConfig(
+          googleServices,
+          config.as[PetServiceAccountConfig]("petServiceAccount"),
+          config.as[Option[Duration]]("coordinatedAdminSdkBackoffDuration")
+        )
+      } else None
 
     // TODO - https://broadinstitute.atlassian.net/browse/GAWB-3603
     // This should JUST get the value from "emailDomain", but for now we're keeping the backwards compatibility code to
@@ -225,7 +340,9 @@ object AppConfig {
       oidcConfig = config.as[OidcConfig]("oidc"),
       adminConfig = config.as[AdminConfig]("admin"),
       azureServicesConfig = config.getAs[AzureServicesConfig]("azureServices"),
-      prometheusConfig = config.as[PrometheusConfig]("prometheus")
+      prometheusConfig = config.as[PrometheusConfig]("prometheus"),
+      janitorConfig = config.as[JanitorConfig]("janitor"),
+      resourceAccessPolicies = config.as[Option[Map[FullyQualifiedPolicyId, AccessPolicyMembershipRequest]]]("resourceAccessPolicies").getOrElse(Map.empty)
     )
   }
 }

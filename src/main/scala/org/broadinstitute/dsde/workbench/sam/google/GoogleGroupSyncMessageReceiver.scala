@@ -6,11 +6,11 @@ import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver}
 import com.google.common.annotations.VisibleForTesting
 import com.google.pubsub.v1.PubsubMessage
 import com.typesafe.scalalogging.LazyLogging
-import io.opencensus.trace.AttributeValue
+import io.opentelemetry.api.trace.Span
 import net.logstash.logback.argument.StructuredArguments
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.model.FullyQualifiedPolicyId
-import org.broadinstitute.dsde.workbench.sam.util.OpenCensusIOUtils._
+import org.broadinstitute.dsde.workbench.sam.util.OpenTelemetryIOUtils._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json._
 
@@ -22,10 +22,12 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
   override def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit =
     traceIO("GoogleGroupSyncMessageReceiver-PubSubMessage", SamRequestContext()) { samRequestContext =>
       val groupId: WorkbenchGroupIdentity = parseMessage(message)
-      logger.info(s"received sync message: $groupId")
-      samRequestContext.parentSpan.foreach(
-        _.putAttribute("groupId", AttributeValue.stringAttributeValue(groupId.toString))
-      )
+      logger.debug(s"received sync message: $groupId")
+      samRequestContext.otelContext
+        .map(Span.fromContext)
+        .foreach(
+          _.setAttribute("groupId", groupId.toString)
+        )
       groupSynchronizer
         .synchronizeGroupMembers(
           groupId,
@@ -47,6 +49,12 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
         logger.info(s"group to synchronize not found: ${groupNotFound.errorReport}")
         consumer.ack()
 
+      case groupAlreadySynchronized: GroupAlreadySynchronized =>
+        // this can happen if a group is synchronized multiple times in quick succession
+        // acknowledge it so we don't have to handle it again
+        logger.info(s"group already previously synchronized: ${groupAlreadySynchronized.getMessage}")
+        consumer.ack()
+
       case regrets: Throwable =>
         logger.error("failure synchronizing google group", regrets)
         consumer.nack() // redeliver message to hopefully rectify the failure
@@ -56,20 +64,20 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
     * @param report
     * @param consumer
     */
-  private def syncComplete(report: Map[WorkbenchEmail, Seq[SyncReportItem]], consumer: AckReplyConsumer): Unit = {
-    val errorReports = report.values.flatten.collect {
-      case SyncReportItem(_, _, errorReports) if errorReports.nonEmpty => errorReports
+  private def syncComplete(syncedPolicies: Map[WorkbenchEmail, Seq[SyncReportItem]], consumer: AckReplyConsumer): Unit = {
+    val errorReports = syncedPolicies.values.flatten.collect {
+      case SyncReportItem(_, _, _, errorReports) if errorReports.nonEmpty => errorReports
     }.flatten
 
-    import DefaultJsonProtocol._
-    import WorkbenchIdentityJsonSupport._
     import org.broadinstitute.dsde.workbench.sam.google.SamGoogleModelJsonSupport._
 
+    val syncReport = SyncReport(syncedPolicies.map { case (email, changes) => SyncedPolicy(email, changes) }.toSeq)
+
     if (errorReports.isEmpty) {
-      logger.info(s"synchronized google group", StructuredArguments.raw("syncDetail", report.toJson.compactPrint))
+      logger.info(s"synchronized google group", StructuredArguments.raw("syncDetail", syncReport.toJson.compactPrint))
       consumer.ack()
     } else {
-      logger.error(s"synchronized google group with failures", StructuredArguments.raw("syncDetail", report.toJson.compactPrint))
+      logger.error(s"synchronized google group with failures", StructuredArguments.raw("syncDetail", syncReport.toJson.compactPrint))
       consumer.nack() // redeliver message to hopefully rectify the failures
     }
   }
@@ -78,7 +86,7 @@ class GoogleGroupSyncMessageReceiver(groupSynchronizer: GoogleGroupSynchronizer)
   private[google] def parseMessage(message: PubsubMessage): WorkbenchGroupIdentity = {
     val messageJson = message.getData.toStringUtf8.parseJson
     (Try {
-      import org.broadinstitute.dsde.workbench.sam.model.SamJsonSupport.FullyQualifiedPolicyIdFormat
+      import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport.FullyQualifiedPolicyIdFormat
       messageJson.convertTo[FullyQualifiedPolicyId]
     } recover { case _: DeserializationException =>
       import WorkbenchIdentityJsonSupport.WorkbenchGroupNameFormat

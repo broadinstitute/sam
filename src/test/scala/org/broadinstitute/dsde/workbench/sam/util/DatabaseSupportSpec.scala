@@ -12,13 +12,13 @@ import scalikejdbc.DBSession
 
 import java.util.UUID
 import java.util.concurrent.CyclicBarrier
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import cats.effect.Temporal
 import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.sam.TestSupport.{databaseEnabled, databaseEnabledClue}
 
 class DatabaseSupportSpec extends AnyFreeSpec with Matchers with BeforeAndAfterEach with TestSupport {
-  implicit val ec = scala.concurrent.ExecutionContext.global
+  implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
   object DatabaseSupport extends DatabaseSupport {
     override protected lazy val writeDbRef: TestDbReference = TestSupport.dbRef
     override protected lazy val readDbRef: TestDbReference = TestSupport.dbRef
