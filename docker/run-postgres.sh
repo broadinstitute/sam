@@ -4,7 +4,6 @@
 
 # The CloudSQL console simply states "PostgreSQL 15" so we may not match the minor version number
 POSTGRES_VERSION=15
-
 start() {
 
 
