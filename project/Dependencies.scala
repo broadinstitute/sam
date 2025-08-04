@@ -20,7 +20,7 @@ object Dependencies {
   val workbenchNotificationsV = s"1.1-$workbenchLibV"
   val workbenchOauth2V = s"0.9-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.37-SNAPSHOT"
+  val crlVersion = "1.2.39-SNAPSHOT"
   val tclVersion = "1.1.42-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
@@ -66,10 +66,10 @@ object Dependencies {
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
   val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.3.Final"
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.7"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.8"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.73.0"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.74.0"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250718-2.0.0" excludeAll excludIoGrpc // force this version
@@ -117,7 +117,7 @@ object Dependencies {
   val googleStorageLocal: ModuleID =
     "com.google.cloud" % "google-cloud-nio" % "0.128.1" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
-  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.32.0"
+  val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.33.0"
 
   val circeYAML: ModuleID = "io.circe" %% "circe-yaml" % "0.16.1"
   val snakeYAML: ModuleID = "org.yaml" % "snakeyaml" % "2.4"
@@ -130,7 +130,7 @@ object Dependencies {
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
-  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.14.0" excludeAll excludeWorkbenchUtil2
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.16.0" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
@@ -188,7 +188,7 @@ object Dependencies {
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.18.0"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.19.0"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -246,6 +246,6 @@ object Dependencies {
 
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
-    "org.apache.commons" % "commons-compress" % "1.27.1"
+    "org.apache.commons" % "commons-compress" % "1.28.0"
   )
 }
