@@ -115,7 +115,7 @@ object Dependencies {
       excludeWorkbenchModel
     )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.128.1" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.128.3" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.33.0"
 
