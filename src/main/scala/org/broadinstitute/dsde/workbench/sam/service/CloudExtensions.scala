@@ -66,6 +66,8 @@ trait CloudExtensions {
   def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
   ): IO[WorkbenchGroup]
+
+  def forgetProject(project: GoogleProject, resourceService: ResourceService, samRequestContext: SamRequestContext): IO[Map[String, Int]]
 }
 
 trait CloudExtensionsInitializer {
@@ -122,6 +124,9 @@ trait NoExtensions extends CloudExtensions {
       }
     } yield createdGroup
   }
+
+  override def forgetProject(project: GoogleProject, resourceService: ResourceService, samRequestContext: SamRequestContext): IO[Map[String, Int]] =
+    IO.pure(Map())
 }
 
 object NoExtensions extends NoExtensions

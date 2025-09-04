@@ -26,7 +26,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
-import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, CloudExtensionsInitializer, ManagedGroupService, SamApplication}
+import org.broadinstitute.dsde.workbench.sam.service.{CloudExtensions, CloudExtensionsInitializer, ManagedGroupService, ResourceService, SamApplication}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.{HealthMonitor, SubsystemStatus, Subsystems}
 import org.broadinstitute.dsde.workbench.util.{FutureSupport, Retry}
@@ -559,12 +559,23 @@ class GoogleExtensions(
       }
     } yield ()
 
-  private def removePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
+  /** Delete Sam's knowledge of this pet service account. Does not make any changes in the cloud.
+    */
+  // TODO CORE-681: unit tests
+  private def forgetPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       // disable the pet service account
       _ <- disablePetServiceAccount(petServiceAccount, samRequestContext)
       // remove the record for the pet service account
       _ <- directoryDAO.deletePetServiceAccount(petServiceAccount.id, samRequestContext)
+    } yield ()
+
+  /** Delete Sam's knowledge of this pet service account AND remove the pet from the cloud.
+    */
+  private def removePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
+    for {
+      // forget the pet service account
+      _ <- forgetPetServiceAccount(petServiceAccount, samRequestContext)
       // remove the service account itself in Google
       _ <- IO.fromFuture(IO(googleIamDAO.removeServiceAccount(petServiceAccount.id.project, toAccountName(petServiceAccount.serviceAccount.email))))
     } yield ()
@@ -751,7 +762,33 @@ class GoogleExtensions(
       .lastOrError
   }
 
-  override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
+  // TODO CORE-681: unit tests
+  override def forgetProject(project: GoogleProject, resourceService: ResourceService, samRequestContext: SamRequestContext): IO[Map[String, Int]] = {
+    val resourceId = FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project.value))
+
+    // for recursion
+    def recursiveDeleteResource(parentResourceId: FullyQualifiedResourceId, runningCount: Int): IO[Int] =
+      for {
+        children <- resourceService.listResourceChildren(parentResourceId, samRequestContext)
+        _ <- children.toList.traverse { child =>
+          recursiveDeleteResource(child, runningCount)
+        }
+        _ <- resourceService.deleteResource(parentResourceId, samRequestContext)
+      } yield runningCount + 1
+
+    for {
+      // list all pets in this project
+      allProjectPets <- directoryDAO.getAllPetServiceAccountsForProject(project, samRequestContext)
+      // forget all pets in this project
+      _ <- allProjectPets.traverse { pet =>
+        forgetPetServiceAccount(pet, samRequestContext)
+      }
+      // recursively delete this google-project resource and its children
+      numResourcesDeleted <- recursiveDeleteResource(resourceId, 0)
+    } yield Map("pets" -> allProjectPets.size, "resources" -> numResourcesDeleted)
+  }
+
+  override val allSubSystems: Set[Subsystems.Subsystem] = Set() // Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
 
 }
 

@@ -2,15 +2,8 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
-import org.broadinstitute.dsde.workbench.sam.azure.{
-  ActionManagedIdentity,
-  ActionManagedIdentityId,
-  BillingProfileId,
-  ManagedIdentityObjectId,
-  PetManagedIdentity,
-  PetManagedIdentityId
-}
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
+import org.broadinstitute.dsde.workbench.sam.azure.{ActionManagedIdentity, ActionManagedIdentityId, BillingProfileId, ManagedIdentityObjectId, PetManagedIdentity, PetManagedIdentityId}
 import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, GroupMembershipCount, SamUser, SamUserAttributes}
 import org.broadinstitute.dsde.workbench.sam.model.{BasicWorkbenchGroup, FullyQualifiedResourceId, ResourceAction, ResourceTypeName, SamUserTos}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
@@ -130,6 +123,8 @@ trait DirectoryDAO {
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
 
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]]
+
+  def getAllPetServiceAccountsForProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]]
 
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
 
