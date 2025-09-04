@@ -976,7 +976,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       petRecords.map(unmarshalPetServiceAccountRecord)
     }
 
-  // TODO CORE-681: unit tests
   override def getAllPetServiceAccountsForProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]] =
     readOnlyTransaction("getAllPetServiceAccountsForProject", samRequestContext) { implicit session =>
       val petServiceAccountTable = PetServiceAccountTable.syntax
