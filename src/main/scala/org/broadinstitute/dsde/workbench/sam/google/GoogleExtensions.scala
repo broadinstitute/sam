@@ -319,6 +319,15 @@ class GoogleExtensions(
       }
     } yield deletedSomething
 
+  def forgetUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] =
+    for {
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project), samRequestContext)
+      forgotSomething <- maybePet match {
+        case Some(pet) => forgetPetServiceAccount(pet, samRequestContext).map(_ => true)
+        case None => IO.pure(false) // didn't find the pet, nothing to forget
+      }
+    } yield forgotSomething
+
   def createUserPetServiceAccount(user: SamUser, project: GoogleProject, samRequestContext: SamRequestContext): IO[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
     // The normal situation is that the pet either exists in both the database and google or neither.
@@ -561,7 +570,6 @@ class GoogleExtensions(
 
   /** Delete Sam's knowledge of this pet service account. Does not make any changes in the cloud.
     */
-  // TODO CORE-681: unit tests
   private def forgetPetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       // disable the pet service account

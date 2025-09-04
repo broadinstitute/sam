@@ -436,6 +436,55 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
   }
 
+  it should "forget a pet service account for a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val (
+      dirDAO: DirectoryDAO,
+      tosService: TosService,
+      mockGoogleIamDAO: MockGoogleIamDAO,
+      mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
+      googleExtensions: GoogleExtensions,
+      service: UserService,
+      defaultUserProxyEmail: WorkbenchEmail,
+      defaultUser: SamUser
+    ) = initPetTest
+
+    // create a user
+    val newUser = newUserWithAcceptedTos(service, tosService, defaultUser, samRequestContext)
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), TestSupport.enabledMapTosAccepted)
+
+    // create a pet service account
+    val googleProject = GoogleProject("testproject")
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+
+    petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
+
+    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe Some(petServiceAccount)
+
+    // verify google
+    mockGoogleIamDAO.serviceAccounts should contain key petServiceAccount.serviceAccount.email
+    mockGoogleDirectoryDAO.groups should contain key defaultUserProxyEmail
+    mockGoogleDirectoryDAO.groups(defaultUserProxyEmail) shouldBe Set(defaultUser.email, petServiceAccount.serviceAccount.email)
+
+    // create one again, it should work
+    val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    petSaResponse2 shouldBe petServiceAccount
+
+    // forget the pet service account
+    googleExtensions.forgetUserPetServiceAccount(newUser.userInfo.userSubjectId, googleProject, samRequestContext).unsafeRunSync() shouldBe true
+
+    // the user should still exist in DB
+    dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
+
+    // the pet should not exist in DB
+    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe None
+
+    // the pet should still exist in Google
+    mockGoogleIamDAO.serviceAccounts should contain key (petServiceAccount.serviceAccount.email)
+
+  }
+
   private def initPetTest: (DirectoryDAO, TosService, MockGoogleIamDAO, MockGoogleDirectoryDAO, GoogleExtensions, UserService, WorkbenchEmail, SamUser) = {
     val dirDAO = newDirectoryDAO()
 
