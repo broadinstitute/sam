@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import cats.effect.IO
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam._
 import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentity,
@@ -260,6 +260,12 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]] = IO {
     petServiceAccountsByUser.collect { case (PetServiceAccountId(`userId`, _), petSA) =>
+      petSA
+    }.toSeq
+  }
+
+  override def getAllPetServiceAccountsForProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]] = IO {
+    petServiceAccountsByUser.collect { case (PetServiceAccountId(_, `project`), petSA) =>
       petSA
     }.toSeq
   }
