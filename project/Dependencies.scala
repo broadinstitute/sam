@@ -65,11 +65,11 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.9"
   val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.4.Final"
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.8"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.74.0"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.75.0"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250815-2.0.0" excludeAll excludIoGrpc // force this version
@@ -115,7 +115,7 @@ object Dependencies {
       excludeWorkbenchModel
     )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.128.1" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.128.3" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.33.0"
 
