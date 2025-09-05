@@ -770,7 +770,6 @@ class GoogleExtensions(
       .lastOrError
   }
 
-  // TODO CORE-681: unit tests
   override def forgetProject(project: GoogleProject, resourceService: ResourceService, samRequestContext: SamRequestContext): IO[Map[String, Int]] = {
     val projectResourceId = FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project.value))
 
