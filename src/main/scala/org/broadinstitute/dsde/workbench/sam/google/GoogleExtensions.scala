@@ -795,7 +795,7 @@ class GoogleExtensions(
     } yield Map("pets" -> allProjectPets.size, "resources" -> numResourcesDeleted)
   }
 
-  override val allSubSystems: Set[Subsystems.Subsystem] = Set() // Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
+  override val allSubSystems: Set[Subsystems.Subsystem] = Set(Subsystems.GoogleGroups, Subsystems.GooglePubSub, Subsystems.GoogleIam)
 
 }
 
