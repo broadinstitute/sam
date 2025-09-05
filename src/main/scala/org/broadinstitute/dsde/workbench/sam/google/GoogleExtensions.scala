@@ -772,7 +772,7 @@ class GoogleExtensions(
 
   // TODO CORE-681: unit tests
   override def forgetProject(project: GoogleProject, resourceService: ResourceService, samRequestContext: SamRequestContext): IO[Map[String, Int]] = {
-    val resourceId = FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project.value))
+    val projectResourceId = FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project.value))
 
     // for recursion
     def recursiveDeleteResource(parentResourceId: FullyQualifiedResourceId, runningCount: Int): IO[Int] =
@@ -792,7 +792,7 @@ class GoogleExtensions(
         forgetPetServiceAccount(pet, samRequestContext)
       }
       // recursively delete this google-project resource and its children
-      numResourcesDeleted <- recursiveDeleteResource(resourceId, 0)
+      numResourcesDeleted <- recursiveDeleteResource(projectResourceId, 0)
     } yield Map("pets" -> allProjectPets.size, "resources" -> numResourcesDeleted)
   }
 
