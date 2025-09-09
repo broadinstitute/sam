@@ -855,6 +855,32 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
       }
     }
 
+    "getAllPetServiceAccountsForProject" - {
+      "get all pet service accounts for project" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        // create a few users
+        val users = Seq.range(0, 3).map(_ => Generator.genWorkbenchUserBoth.sample.get)
+        users.foreach(user => dao.createUser(user, samRequestContext).unsafeRunSync())
+        // create pets for each user in "testProject1"
+        val project1 = GoogleProject("testProject1")
+        val pets1 = users.map { user =>
+          val pet = PetServiceAccount(PetServiceAccountId(user.id, project1), Generator.genServiceAccount.sample.get)
+          dao.createPetServiceAccount(pet, samRequestContext).unsafeRunSync()
+          pet
+        }
+        // create pets for the first user only in "testProject2"
+        val project2 = GoogleProject("testProject2")
+        val pets2 = users.take(1).map { user =>
+          val pet = PetServiceAccount(PetServiceAccountId(user.id, project2), Generator.genServiceAccount.sample.get)
+          dao.createPetServiceAccount(pet, samRequestContext).unsafeRunSync()
+          pet
+        }
+
+        dao.getAllPetServiceAccountsForProject(project1, samRequestContext).unsafeRunSync() should contain theSameElementsAs pets1
+        dao.getAllPetServiceAccountsForProject(project2, samRequestContext).unsafeRunSync() should contain theSameElementsAs pets2
+      }
+    }
+
     "getUserFromPetServiceAccount" - {
       "get user from pet service account subject ID" in {
         assume(databaseEnabled, databaseEnabledClue)

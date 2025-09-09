@@ -290,6 +290,27 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 }
             }
           }
+        } ~
+        pathPrefix("project") {
+          path(Segment) { project =>
+            val projectResourceId = ResourceId(project)
+            pathEndOrSingleSlash {
+              requireAction(
+                FullyQualifiedResourceId(SamResourceTypes.googleProjectName, projectResourceId),
+                SamResourceActions.delete,
+                samUser.id,
+                samRequestContext
+              ) {
+                deleteWithTelemetry(samRequestContext, "googleProject" -> projectResourceId) {
+                  complete {
+                    googleExtensions
+                      .forgetProject(GoogleProject(project), resourceService, samRequestContext)
+                      .map(response => StatusCodes.OK -> response)
+                  }
+                }
+              }
+            }
+          }
         }
     }
 }

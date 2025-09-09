@@ -2,7 +2,7 @@ package org.broadinstitute.dsde.workbench.sam.dataAccess
 
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.model.google.ServiceAccountSubjectId
+import org.broadinstitute.dsde.workbench.model.google.{GoogleProject, ServiceAccountSubjectId}
 import org.broadinstitute.dsde.workbench.sam.azure.{
   ActionManagedIdentity,
   ActionManagedIdentityId,
@@ -130,6 +130,8 @@ trait DirectoryDAO {
   def deletePetServiceAccount(petServiceAccountId: PetServiceAccountId, samRequestContext: SamRequestContext): IO[Unit]
 
   def getAllPetServiceAccountsForUser(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]]
+
+  def getAllPetServiceAccountsForProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]]
 
   def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount]
 

@@ -976,6 +976,17 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       petRecords.map(unmarshalPetServiceAccountRecord)
     }
 
+  override def getAllPetServiceAccountsForProject(project: GoogleProject, samRequestContext: SamRequestContext): IO[Seq[PetServiceAccount]] =
+    readOnlyTransaction("getAllPetServiceAccountsForProject", samRequestContext) { implicit session =>
+      val petServiceAccountTable = PetServiceAccountTable.syntax
+
+      val loadPetsQuery = samsql"""select ${petServiceAccountTable.resultAll}
+                from ${PetServiceAccountTable as petServiceAccountTable} where ${petServiceAccountTable.project} = ${project}"""
+
+      val petRecords = loadPetsQuery.map(PetServiceAccountTable(petServiceAccountTable)).list().apply()
+      petRecords.map(unmarshalPetServiceAccountRecord)
+    }
+
   override def updatePetServiceAccount(petServiceAccount: PetServiceAccount, samRequestContext: SamRequestContext): IO[PetServiceAccount] =
     serializableWriteTransaction("updatePetServiceAccount", samRequestContext) { implicit session =>
       val petServiceAccountColumn = PetServiceAccountTable.column

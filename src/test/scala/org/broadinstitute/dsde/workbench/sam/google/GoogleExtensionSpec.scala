@@ -27,7 +27,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api._
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.{TestSupport, model, _}
-import org.mockito.ArgumentMatcher
+import org.mockito.{ArgumentMatcher, Mockito}
 import org.mockito.Mockito._
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.ScalaFutures
@@ -40,6 +40,8 @@ import java.util.{Date, GregorianCalendar, UUID}
 import scala.concurrent.ExecutionContext.Implicits.{global => globalEc}
 import scala.concurrent.Future
 import scala.concurrent.duration._
+
+import scala.jdk.CollectionConverters._
 
 class GoogleExtensionSpec(_system: ActorSystem)
     extends TestKit(_system)
@@ -433,6 +435,55 @@ class GoogleExtensionSpec(_system: ActorSystem)
 
     // the pet should not exist in Google
     mockGoogleIamDAO.serviceAccounts should not contain key(petServiceAccount.serviceAccount.email)
+
+  }
+
+  it should "forget a pet service account for a user" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val (
+      dirDAO: DirectoryDAO,
+      tosService: TosService,
+      mockGoogleIamDAO: MockGoogleIamDAO,
+      mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
+      googleExtensions: GoogleExtensions,
+      service: UserService,
+      defaultUserProxyEmail: WorkbenchEmail,
+      defaultUser: SamUser
+    ) = initPetTest
+
+    // create a user
+    val newUser = newUserWithAcceptedTos(service, tosService, defaultUser, samRequestContext)
+    newUser shouldBe UserStatus(UserStatusDetails(defaultUser.id, defaultUser.email), TestSupport.enabledMapTosAccepted)
+
+    // create a pet service account
+    val googleProject = GoogleProject("testproject")
+    val petServiceAccount = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+
+    petServiceAccount.serviceAccount.email.value should endWith(s"@${googleProject.value}.iam.gserviceaccount.com")
+
+    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe Some(petServiceAccount)
+
+    // verify google
+    mockGoogleIamDAO.serviceAccounts should contain key petServiceAccount.serviceAccount.email
+    mockGoogleDirectoryDAO.groups should contain key defaultUserProxyEmail
+    mockGoogleDirectoryDAO.groups(defaultUserProxyEmail) shouldBe Set(defaultUser.email, petServiceAccount.serviceAccount.email)
+
+    // create one again, it should work
+    val petSaResponse2 = googleExtensions.createUserPetServiceAccount(defaultUser, googleProject, samRequestContext).unsafeRunSync()
+    petSaResponse2 shouldBe petServiceAccount
+
+    // forget the pet service account
+    googleExtensions.forgetUserPetServiceAccount(newUser.userInfo.userSubjectId, googleProject, samRequestContext).unsafeRunSync() shouldBe true
+
+    // the user should still exist in DB
+    dirDAO.loadUser(defaultUser.id, samRequestContext).unsafeRunSync() shouldBe Some(defaultUser.copy(enabled = true))
+
+    // the pet should not exist in DB
+    dirDAO.loadPetServiceAccount(PetServiceAccountId(defaultUser.id, googleProject), samRequestContext).unsafeRunSync() shouldBe None
+
+    // the pet should still exist in Google
+    mockGoogleIamDAO.serviceAccounts should contain key (petServiceAccount.serviceAccount.email)
 
   }
 
@@ -2153,6 +2204,175 @@ class GoogleExtensionSpec(_system: ActorSystem)
     val messageLog: ConcurrentLinkedQueue[String] = mockGoogleNotificationPubSubDAO.messageLog
     val formattedMessages: Set[String] = messages.map(m => topicName + "|" + NotificationFormat.write(m).toString())
     messageLog should contain theSameElementsAs formattedMessages
+  }
+
+  "forgetProject" should "recursively delete child resources" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val dirDAO = newDirectoryDAO()
+    val mockGoogleIamDAO = new MockGoogleIamDAO
+    val mockGoogleDirectoryDAO = new MockGoogleDirectoryDAO
+    val mockGoogleProjectDAO = new MockGoogleProjectDAO
+
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      dirDAO,
+      null,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      mockGoogleIamDAO,
+      mockGoogleProjectDAO,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
+
+    val googleProject = GoogleProject("testproject")
+    val projectResourceId = FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(googleProject.value))
+
+    val mockResourceService = mock[ResourceService](RETURNS_SMART_NULLS)
+
+    // set up ResourceService mocks
+
+    // unless otherwise specified below, when listing children, return nothing
+    when(
+      mockResourceService.listResourceChildren(any[FullyQualifiedResourceId], any[SamRequestContext])
+    )
+      .thenReturn(IO.pure(Set()))
+
+    // when listing children of the google-project, return a few children
+    val firstLevelChildren = Seq.range(0, 3).map(idx => FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(s"firstLevelChild-$idx")))
+    when(
+      mockResourceService.listResourceChildren(projectResourceId, samRequestContext)
+    )
+      .thenReturn(IO.pure(firstLevelChildren.toSet))
+    // each first-level child also has a few children
+    val allSecondLevelChildren: Map[FullyQualifiedResourceId, Set[FullyQualifiedResourceId]] = firstLevelChildren.map { firstLevel =>
+      val secondLevelChildren =
+        Seq
+          .range(0, 3)
+          .map(idx => FullyQualifiedResourceId(SamResourceTypes.workspaceName, ResourceId(s"secondLevelChild-$idx-${firstLevel.resourceId}")))
+          .toSet
+      when(
+        mockResourceService.listResourceChildren(firstLevel, samRequestContext)
+      )
+        .thenReturn(IO.pure(secondLevelChildren))
+      firstLevel -> secondLevelChildren
+    }.toMap
+    // one of the second-level children also has one child
+    val secondLevelChildValues = allSecondLevelChildren.values.flatten
+    val secondLevelChildWithAThirdLevel = secondLevelChildValues.head
+    val thirdLevelChild = FullyQualifiedResourceId(SamResourceTypes.spendProfile, ResourceId(s"thirdLevelChild"))
+    when(
+      mockResourceService.listResourceChildren(secondLevelChildWithAThirdLevel, samRequestContext)
+    )
+      .thenReturn(IO.pure(Set(thirdLevelChild)))
+
+    // and, mock the delete calls; these always succeed
+    when(mockResourceService.deleteResource(any[FullyQualifiedResourceId], any[SamRequestContext])).thenReturn(IO.unit)
+
+    // forget project1
+    googleExtensions.forgetProject(googleProject, mockResourceService, samRequestContext).unsafeRunSync()
+
+    val allChildren = firstLevelChildren ++ allSecondLevelChildren.values.flatten ++ Seq(thirdLevelChild)
+
+    // verify number of delete calls: one for each child, plus one for the parent google project itself
+    verify(mockResourceService, times(allChildren.size + 1))
+      .deleteResource(any[FullyQualifiedResourceId], any[SamRequestContext])
+
+    // individually verify we deleted each child
+    allChildren.foreach { child =>
+      verify(mockResourceService)
+        .deleteResource(child, samRequestContext)
+    }
+
+    // verify we deleted the project itself
+    verify(mockResourceService)
+      .deleteResource(projectResourceId, samRequestContext)
+
+    // jump through a few hoops to ensure that all children are deleted before their parents:
+    // get all invocations on the mock
+    val invocations = Mockito.mockingDetails(mockResourceService).getInvocations.asScala.toSeq
+
+    // find all the deleteResource calls, and map the deleted resource to the order in which it was deleted
+    val deleteOrdering: Map[FullyQualifiedResourceId, Int] = invocations.zipWithIndex.collect {
+      case (invocation, idx) if invocation.getMethod.getName == "deleteResource" =>
+        val deletedResourceId = invocation.getArgument[FullyQualifiedResourceId](0)
+        deletedResourceId -> idx
+    }.toMap
+
+    // project should be deleted last
+    deleteOrdering(projectResourceId) shouldBe deleteOrdering.values.max
+
+    // third-level child should be deleted before its second-level parent
+    deleteOrdering(thirdLevelChild) should be < deleteOrdering(secondLevelChildWithAThirdLevel)
+
+    // each second-level child should be deleted before its first-level parent
+    allSecondLevelChildren.foreach { case (parent, children) =>
+      val parentIdx = deleteOrdering(parent)
+      children.foreach { child =>
+        deleteOrdering(child) should be < parentIdx
+      }
+    }
+
+  }
+
+  it should "forget all pets in the project" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    val (
+      dirDAO: DirectoryDAO,
+      tosService: TosService,
+      mockGoogleIamDAO: MockGoogleIamDAO,
+      mockGoogleDirectoryDAO: MockGoogleDirectoryDAO,
+      googleExtensions: GoogleExtensions,
+      service: UserService,
+      defaultUserProxyEmail: WorkbenchEmail,
+      defaultUser: SamUser
+    ) = initPetTest
+
+    val mockResourceService = mock[ResourceService](RETURNS_SMART_NULLS)
+
+    // create a few users
+    val users = Seq.range(0, 3).map(_ => Generator.genWorkbenchUserBoth.sample.get)
+    users.foreach(user => newUserWithAcceptedTos(service, tosService, user, samRequestContext))
+    // create pets for each user in "testProject1"
+    val project1 = GoogleProject("testProject1")
+    val pets1 = users.map { user =>
+      googleExtensions.createUserPetServiceAccount(user, project1, samRequestContext).unsafeRunSync()
+    }
+    // create pets for each user in "testProject2"
+    val project2 = GoogleProject("testProject2")
+    val pets2 = users.map { user =>
+      googleExtensions.createUserPetServiceAccount(user, project2, samRequestContext).unsafeRunSync()
+    }
+
+    // set up ResourceService mocks
+    when(mockResourceService.listResourceChildren(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project1.value)), samRequestContext))
+      .thenReturn(IO.pure(Set()))
+    when(mockResourceService.deleteResource(FullyQualifiedResourceId(SamResourceTypes.googleProjectName, ResourceId(project1.value)), samRequestContext))
+      .thenReturn(IO.unit)
+
+    // forget project1
+    googleExtensions.forgetProject(project1, mockResourceService, samRequestContext).unsafeRunSync()
+
+    // verify no pets in DB for the project we forgot
+    pets1.foreach { pet =>
+      // the pet should not exist in DB
+      dirDAO.loadPetServiceAccount(pet.id, samRequestContext).unsafeRunSync() shouldBe None
+    }
+
+    // verify pets still exist in the project we did not forget
+    pets2.foreach { pet =>
+      // the pet should not exist in DB
+      dirDAO.loadPetServiceAccount(pet.id, samRequestContext).unsafeRunSync() shouldBe Some(pet)
+    }
   }
 
   protected def clearDatabase(): Unit =

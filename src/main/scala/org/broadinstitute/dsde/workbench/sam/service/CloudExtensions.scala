@@ -53,6 +53,8 @@ trait CloudExtensions {
 
   def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean]
 
+  def forgetUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean]
+
   def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]]
 
   def fireAndForgetNotifications[T <: Notification](notifications: Set[T]): Unit
@@ -66,6 +68,8 @@ trait CloudExtensions {
   def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
   ): IO[WorkbenchGroup]
+
+  def forgetProject(project: GoogleProject, resourceService: ResourceService, samRequestContext: SamRequestContext): IO[Map[String, Int]]
 }
 
 trait CloudExtensionsInitializer {
@@ -100,6 +104,8 @@ trait NoExtensions extends CloudExtensions {
 
   override def deleteUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
 
+  override def forgetUserPetServiceAccount(userId: WorkbenchUserId, project: GoogleProject, samRequestContext: SamRequestContext): IO[Boolean] = IO.pure(true)
+
   override def getUserProxy(userEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Option[WorkbenchEmail]] =
     IO.pure(Option(userEmail))
 
@@ -122,6 +128,9 @@ trait NoExtensions extends CloudExtensions {
       }
     } yield createdGroup
   }
+
+  override def forgetProject(project: GoogleProject, resourceService: ResourceService, samRequestContext: SamRequestContext): IO[Map[String, Int]] =
+    IO.pure(Map())
 }
 
 object NoExtensions extends NoExtensions
