@@ -19,7 +19,7 @@ import io.opentelemetry.sdk.{OpenTelemetrySdk, resources}
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.sdk.trace.`export`.BatchSpanProcessor
 import io.opentelemetry.sdk.trace.samplers.Sampler
-import io.opentelemetry.semconv.ResourceAttributes
+import io.opentelemetry.semconv.resource.attributes.ResourceAttributes
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO}
