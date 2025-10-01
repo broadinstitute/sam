@@ -29,7 +29,7 @@ object Dependencies {
     "com.fasterxml.jackson.module" % ("jackson-module-scala_" + scalaV) % jacksonV,
     "ch.qos.logback" % "logback-classic" % "1.4.5",
     "org.slf4j" % "slf4j-api" % "2.0.3",
-    "net.logstash.logback" % "logstash-logback-encoder" % "8.1" exclude("com.fasterxml.jackson.core", "jackson-databind"),
+    "net.logstash.logback" % "logstash-logback-encoder" % "8.1" exclude ("com.fasterxml.jackson.core", "jackson-databind"),
     "com.google.apis" % "google-api-services-oauth2" % "v1-rev112-1.20.0" excludeAll (
       ExclusionRule("com.google.guava", "guava-jdk5"),
       ExclusionRule("org.apache.httpcomponents", "httpclient")
@@ -43,7 +43,7 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
     "com.typesafe.akka" %% "akka-testkit" % akkaV % "test",
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
-    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.6",
     "org.scalatest" %% "scalatest" % "3.2.19" % Test,
     "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % Test,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
