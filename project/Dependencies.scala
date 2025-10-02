@@ -4,11 +4,11 @@ object Dependencies {
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.9"
   val jacksonV = "2.17.0"
-  val scalaLoggingV = "3.9.2"
+  val scalaLoggingV = "3.9.6"
   val scalaTestV = "3.2.19"
-  val scalaCheckV = "1.18.1"
+  val scalaCheckV = "1.19.0"
   val scalikejdbcVersion = "3.4.2"
-  val postgresDriverVersion = "42.7.7"
+  val postgresDriverVersion = "42.7.8"
   val sentryVersion = "6.15.0"
 
   val workbenchLibV = "0c796e4" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
@@ -20,8 +20,8 @@ object Dependencies {
   val workbenchNotificationsV = s"1.1-$workbenchLibV"
   val workbenchOauth2V = s"0.9-$workbenchLibV"
   val monocleVersion = "2.0.5"
-  val crlVersion = "1.2.39-SNAPSHOT"
-  val tclVersion = "1.1.50-SNAPSHOT"
+  val crlVersion = "1.2.41-SNAPSHOT"
+  val tclVersion = "1.1.53-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -47,7 +47,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "8.1"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.18"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.19"
 
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
@@ -65,8 +65,8 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.9"
-  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.4.Final"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.10"
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.6.Final"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.75.0"
@@ -115,7 +115,7 @@ object Dependencies {
       excludeWorkbenchModel
     )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.128.3" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.128.5" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.33.0"
 
