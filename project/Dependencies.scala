@@ -46,7 +46,7 @@ object Dependencies {
   val jacksonDatabind: ModuleID = "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
-  val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "8.1"
+  val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "9.0"
   val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.20"
 
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
@@ -66,7 +66,7 @@ object Dependencies {
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
   val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.11"
-  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.6.Final"
+  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.7.Final"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.76.0"
