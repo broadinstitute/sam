@@ -96,9 +96,9 @@ function make_jar()
     GIT_MODEL_HASH=$(git log -n 1 --pretty=format:%h)
 
     # make jar.  cache sbt dependencies.
-    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 sbtscala/scala-sbt:eclipse-temurin-17.0.15_6_1.11.6_2.13.16 /working/docker/init_schema.sh /working
+    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 sbtscala/scala-sbt:eclipse-temurin-17.0.15_6_1.11.7_2.13.17 /working/docker/init_schema.sh /working
     sleep 40
-    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 sbtscala/scala-sbt:eclipse-temurin-17.0.15_6_1.11.6_2.13.16 /working/docker/install.sh /working
+    docker run --rm --link postgres:postgres -e GIT_MODEL_HASH=$GIT_MODEL_HASH -v $PWD:/working -v jar-cache:/root/.ivy -v jar-cache:/root/.ivy2 sbtscala/scala-sbt:eclipse-temurin-17.0.15_6_1.11.7_2.13.17 /working/docker/install.sh /working
     EXIT_CODE=$?
     set -e # Turn error detection back on for the rest of the script
 
