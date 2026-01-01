@@ -69,7 +69,7 @@ object Dependencies {
   val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.7.Final"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.75.0"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.78.0"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250925-2.0.0" excludeAll excludIoGrpc // force this version
