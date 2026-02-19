@@ -246,6 +246,7 @@ object Dependencies {
 
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
-    "org.apache.commons" % "commons-compress" % "1.28.0"
+    "org.apache.commons" % "commons-compress" % "1.28.0",
+    "com.google.guava" % "guava" % "33.5.0-jre" // Force JRE version, not Android version from grpc-core
   )
 }
