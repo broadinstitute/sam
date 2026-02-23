@@ -19,7 +19,7 @@ import io.opentelemetry.sdk.{OpenTelemetrySdk, resources}
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.sdk.trace.`export`.BatchSpanProcessor
 import io.opentelemetry.sdk.trace.samplers.Sampler
-import io.opentelemetry.semconv.resource.attributes.ResourceAttributes
+import io.opentelemetry.semconv.ServiceAttributes
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
 import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem}
 import org.broadinstitute.dsde.workbench.google.{GoogleDirectoryDAO, HttpGoogleDirectoryDAO, HttpGoogleIamDAO, HttpGoogleProjectDAO, HttpGooglePubSubDAO}
@@ -348,8 +348,8 @@ object Boot extends IOApp with LazyLogging {
     val maybeVersion = Option(getClass.getPackage.getImplementationVersion)
     val resourceBuilder =
       resources.Resource.getDefault.toBuilder
-        .put(ResourceAttributes.SERVICE_NAME, "sam")
-    maybeVersion.foreach(version => resourceBuilder.put(ResourceAttributes.SERVICE_VERSION, version))
+        .put(ServiceAttributes.SERVICE_NAME, "sam")
+    maybeVersion.foreach(version => resourceBuilder.put(ServiceAttributes.SERVICE_VERSION, version))
     val resource = resourceBuilder.build
 
     val maybeTracerProvider = appConfig.googleConfig.flatMap { googleConfig =>
