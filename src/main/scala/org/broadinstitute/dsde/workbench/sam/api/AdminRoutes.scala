@@ -9,6 +9,7 @@ import akka.http.scaladsl.server.Directive0
 import akka.http.scaladsl.server.Directives._
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model._
+import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google.GoogleProject
 import org.broadinstitute.dsde.workbench.sam.config.LiquibaseConfig
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
@@ -179,41 +180,56 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
     }
 
   def adminResourcesRoutes(user: SamUser, samRequestContext: SamRequestContext): server.Route =
-    pathPrefix("resources" / Segment / Segment / "policies") { case (resourceTypeName, resourceId) =>
+    pathPrefix("resources" / Segment / Segment) { case (resourceTypeName, resourceId) =>
       withNonAdminResourceType(ResourceTypeName(resourceTypeName)) { resourceType =>
         val resource = FullyQualifiedResourceId(resourceType.name, ResourceId(resourceId))
-        pathEndOrSingleSlash {
-          getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
-            requireAdminResourceAction(adminReadPolicies, resourceType, user, samRequestContext) {
-              complete {
-                resourceService
-                  .listResourcePolicies(resource, samRequestContext)
-                  .map(response => OK -> response.toSet)
+        pathPrefix("policies") {
+          pathEndOrSingleSlash {
+            getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
+              requireAdminResourceAction(adminReadPolicies, resourceType, user, samRequestContext) {
+                complete {
+                  resourceService
+                    .listResourcePolicies(resource, samRequestContext)
+                    .map(response => OK -> response.toSet)
+                }
+              }
+            }
+          } ~
+          pathPrefix(Segment / "memberEmails" / Segment) { case (policyName, userEmail) =>
+            val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
+            val workbenchEmail = WorkbenchEmail(userEmail)
+            pathEndOrSingleSlash {
+              withSubject(workbenchEmail, samRequestContext) { subject =>
+                putWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
+                  requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
+                    complete {
+                      resourceService
+                        .addSubjectToPolicy(policyId, subject, samRequestContext)
+                        .as(NoContent)
+                    }
+                  }
+                } ~
+                deleteWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
+                  requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
+                    complete {
+                      resourceService
+                        .removeSubjectFromPolicy(policyId, subject, samRequestContext)
+                        .as(NoContent)
+                    }
+                  }
+                }
               }
             }
           }
         } ~
-        pathPrefix(Segment / "memberEmails" / Segment) { case (policyName, userEmail) =>
-          val policyId = FullyQualifiedPolicyId(resource, AccessPolicyName(policyName))
-          val workbenchEmail = WorkbenchEmail(userEmail)
+        pathPrefix("authDomain") {
           pathEndOrSingleSlash {
-            withSubject(workbenchEmail, samRequestContext) { subject =>
-              putWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
-                requireAdminResourceAction(adminAddMember, resourceType, user, samRequestContext) {
-                  complete {
-                    resourceService
-                      .addSubjectToPolicy(policyId, subject, samRequestContext)
-                      .as(NoContent)
-                  }
-                }
-              } ~
-              deleteWithTelemetry(samRequestContext, policyParams(policyId).appended(emailParam(workbenchEmail)): _*) {
-                requireAdminResourceAction(adminRemoveMember, resourceType, user, samRequestContext) {
-                  complete {
-                    resourceService
-                      .removeSubjectFromPolicy(policyId, subject, samRequestContext)
-                      .as(NoContent)
-                  }
+            getWithTelemetry(samRequestContext, resourceParams(resource): _*) {
+              requireAdminResourceAction(SamResourceActions.adminReadSummaryInformation, resourceType, user, samRequestContext) {
+                complete {
+                  resourceService
+                    .loadResourceAuthDomain(resource, samRequestContext)
+                    .map(response => OK -> response)
                 }
               }
             }
