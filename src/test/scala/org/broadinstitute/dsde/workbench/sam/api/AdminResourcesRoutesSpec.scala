@@ -251,7 +251,7 @@ class AdminResourcesRoutesSpec extends AnyFlatSpec with Matchers with TestSuppor
     val samRoutes = TestSamRoutes(resourceTypes, user = adminUser)
 
     runAndWait(samRoutes.userService.createUser(testUser1, samRequestContext))
-    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain1"), adminUser, samRequestContext = samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain1"), testUser1, samRequestContext = samRequestContext))
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
@@ -328,9 +328,9 @@ class AdminResourcesRoutesSpec extends AnyFlatSpec with Matchers with TestSuppor
     val samRoutes = TestSamRoutes(resourceTypes, user = adminUser)
 
     runAndWait(samRoutes.userService.createUser(testUser1, samRequestContext))
-    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain1"), adminUser, samRequestContext = samRequestContext))
-    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain2"), adminUser, samRequestContext = samRequestContext))
-    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain3"), adminUser, samRequestContext = samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain1"), testUser1, samRequestContext = samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain2"), testUser1, samRequestContext = samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain3"), testUser1, samRequestContext = samRequestContext))
 
     val resourceId = ResourceId("foo")
     val policiesMap = Map(
