@@ -1,13 +1,16 @@
 package org.broadinstitute.dsde.workbench.sam.api
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
+import spray.json.DefaultJsonProtocol._
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import cats.implicits.toFoldableOps
 import org.broadinstitute.dsde.workbench.model._
-import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.resourceTypeAdmin
+import org.broadinstitute.dsde.workbench.sam.api.TestSamRoutes.{SamResourceActionPatterns, resourceTypeAdmin}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions._
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api._
+import org.broadinstitute.dsde.workbench.sam.service.ManagedGroupService
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.scalactic.anyvals.NonEmptyList
 import org.scalatest.flatspec.AnyFlatSpec
@@ -216,4 +219,188 @@ class AdminResourcesRoutesSpec extends AnyFlatSpec with Matchers with TestSuppor
         status shouldEqual StatusCodes.NoContent
       }
     }
+
+  private val constrainableResourceType = ResourceType(
+    ResourceTypeName("rt"),
+    Set(SamResourceActionPatterns.readAuthDomain, SamResourceActionPatterns.use),
+    Set(ResourceRole(ResourceRoleName("owner"), Set(readAuthDomain, ManagedGroupService.useAction))),
+    ResourceRoleName("owner")
+  )
+
+  private def initManagedGroupResourceType(): ResourceType = {
+    val accessPolicyNames = Set(ManagedGroupService.adminPolicyName, ManagedGroupService.memberPolicyName, ManagedGroupService.adminNotifierPolicyName)
+    val policyActions: Set[ResourceAction] =
+      accessPolicyNames.flatMap(policyName => Set(SamResourceActions.sharePolicy(policyName), SamResourceActions.readPolicy(policyName)))
+    val resourceActions = Set(
+      ResourceAction("delete"),
+      ResourceAction("notify_admins"),
+      ResourceAction("set_access_instructions"),
+      ManagedGroupService.useAction
+    ) union policyActions
+    val resourceActionPatterns = resourceActions.map(action => ResourceActionPattern(action.value, "", false))
+    val defaultOwnerRole = ResourceRole(ManagedGroupService.adminRoleName, resourceActions)
+    val defaultMemberRole = ResourceRole(ManagedGroupService.memberRoleName, Set.empty)
+    val defaultAdminNotifierRole = ResourceRole(ManagedGroupService.adminNotifierRoleName, Set(ResourceAction("notify_admins")))
+    val defaultRoles = Set(defaultOwnerRole, defaultMemberRole, defaultAdminNotifierRole)
+    ResourceType(ManagedGroupService.managedGroupTypeName, resourceActionPatterns, defaultRoles, ManagedGroupService.adminRoleName)
+  }
+
+  "GET /api/admin/v1/resources/{resourceType}/{resourceId}/authDomain" should "200 with auth domain when resource has one auth domain" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+    val resourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
+    val samRoutes = TestSamRoutes(resourceTypes, user = adminUser)
+
+    runAndWait(samRoutes.userService.createUser(testUser1, samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain1"), testUser1, samRequestContext = samRequestContext))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
+        Set(testUser1.email),
+        Set(readAuthDomain, ManagedGroupService.useAction),
+        Set(ResourceRoleName("owner"))
+      )
+    )
+    runAndWait(
+      samRoutes.resourceService
+        .createResource(constrainableResourceType, resourceId, policiesMap, Set(WorkbenchGroupName("authDomain1")), None, testUser1.id, samRequestContext)
+    )
+
+    val adminResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(constrainableResourceType.name.value))
+    runAndWait(
+      samRoutes.resourceService.createPolicy(
+        FullyQualifiedPolicyId(adminResourceId, defaultAdminPolicyName),
+        Set(adminUser.id),
+        Set(ResourceRoleName("test")),
+        Set(adminReadSummaryInformation),
+        Set(),
+        samRequestContext
+      )
+    )
+
+    Get(s"/api/admin/v1/resources/${constrainableResourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set("authDomain1")
+    }
+  }
+
+  it should "200 with empty set when resource has no auth domain" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+    val resourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
+    val samRoutes = TestSamRoutes(resourceTypes, user = adminUser)
+
+    runAndWait(samRoutes.userService.createUser(testUser1, samRequestContext))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
+        Set(testUser1.email),
+        Set(readAuthDomain, ManagedGroupService.useAction),
+        Set(ResourceRoleName("owner"))
+      )
+    )
+    runAndWait(
+      samRoutes.resourceService
+        .createResource(constrainableResourceType, resourceId, policiesMap, Set.empty, None, testUser1.id, samRequestContext)
+    )
+
+    val adminResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(constrainableResourceType.name.value))
+    runAndWait(
+      samRoutes.resourceService.createPolicy(
+        FullyQualifiedPolicyId(adminResourceId, defaultAdminPolicyName),
+        Set(adminUser.id),
+        Set(ResourceRoleName("test")),
+        Set(adminReadSummaryInformation),
+        Set(),
+        samRequestContext
+      )
+    )
+
+    Get(s"/api/admin/v1/resources/${constrainableResourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set.empty
+    }
+  }
+
+  it should "200 with all auth domains when resource has multiple auth domains" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+    val resourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
+    val samRoutes = TestSamRoutes(resourceTypes, user = adminUser)
+
+    runAndWait(samRoutes.userService.createUser(testUser1, samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain1"), testUser1, samRequestContext = samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain2"), testUser1, samRequestContext = samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain3"), testUser1, samRequestContext = samRequestContext))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
+        Set(testUser1.email),
+        Set(readAuthDomain, ManagedGroupService.useAction),
+        Set(ResourceRoleName("owner"))
+      )
+    )
+    runAndWait(
+      samRoutes.resourceService.createResource(
+        constrainableResourceType,
+        resourceId,
+        policiesMap,
+        Set(WorkbenchGroupName("authDomain1"), WorkbenchGroupName("authDomain2"), WorkbenchGroupName("authDomain3")),
+        None,
+        testUser1.id,
+        samRequestContext
+      )
+    )
+
+    val adminResourceId = FullyQualifiedResourceId(resourceTypeAdmin.name, ResourceId(constrainableResourceType.name.value))
+    runAndWait(
+      samRoutes.resourceService.createPolicy(
+        FullyQualifiedPolicyId(adminResourceId, defaultAdminPolicyName),
+        Set(adminUser.id),
+        Set(ResourceRoleName("test")),
+        Set(adminReadSummaryInformation),
+        Set(),
+        samRequestContext
+      )
+    )
+
+    Get(s"/api/admin/v1/resources/${constrainableResourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[Set[String]] shouldEqual Set("authDomain1", "authDomain2", "authDomain3")
+    }
+  }
+
+  it should "404 when user does not have admin_read_summary_information" in {
+    val managedGroupResourceType = initManagedGroupResourceType()
+    val resourceTypes = Map(constrainableResourceType.name -> constrainableResourceType, managedGroupResourceType.name -> managedGroupResourceType)
+    val samRoutes = TestSamRoutes(resourceTypes, user = testUser1)
+
+    runAndWait(samRoutes.userService.createUser(adminUser, samRequestContext))
+    runAndWait(samRoutes.managedGroupService.createManagedGroup(ResourceId("authDomain1"), adminUser, samRequestContext = samRequestContext))
+
+    val resourceId = ResourceId("foo")
+    val policiesMap = Map(
+      AccessPolicyName("ap") -> AccessPolicyMembershipRequest(
+        Set(adminUser.email),
+        Set(readAuthDomain, ManagedGroupService.useAction),
+        Set(ResourceRoleName("owner"))
+      )
+    )
+    runAndWait(
+      samRoutes.resourceService
+        .createResource(constrainableResourceType, resourceId, policiesMap, Set(WorkbenchGroupName("authDomain1")), None, adminUser.id, samRequestContext)
+    )
+
+    Get(s"/api/admin/v1/resources/${constrainableResourceType.name}/${resourceId.value}/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "404 when the resource type does not exist" in {
+    val samRoutes = TestSamRoutes(Map.empty, user = adminUser)
+
+    Get(s"/api/admin/v1/resources/nonexistent/foo/authDomain") ~> samRoutes.route ~> check {
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
 }

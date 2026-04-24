@@ -376,6 +376,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v1/resources/{resourceTypeName}/{resourceId}/authDomain:
+    get:
+      tags:
+        - Admin
+      summary: Get the auth domain for a resource
+      operationId: adminGetResourceAuthDomain
+      parameters:
+        - name: resourceTypeName
+          in: path
+          description: Type of resource
+          required: true
+          schema:
+            type: string
+        - name: resourceId
+          in: path
+          description: Id of resource
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Auth domain successfully retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        403:
+          description: You do not have permission to perform this action on the resource
+          content: { }
+        404:
+          description: Resource type does not exist or you are not an admin for this resource type
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/resources/{resourceTypeName}/{resourceId}/policies:
     get:
       tags:
