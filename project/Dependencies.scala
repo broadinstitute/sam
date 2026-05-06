@@ -249,6 +249,10 @@ object Dependencies {
     "org.apache.commons" % "commons-compress" % "1.28.0",
     "com.google.guava" % "guava" % "33.5.0-jre", // Force JRE version, not Android version from grpc-core
     "tools.jackson.core" % "jackson-core" % "3.1.0",
-    "tools.jackson.core" % "jackson-databind" % "3.1.0"
+    "tools.jackson.core" % "jackson-databind" % "3.1.0",
+    // override bouncycastle to address CVE-2026-5598 (requires >= 1.84)
+    "org.bouncycastle" % "bcprov-jdk18on" % "1.84",
+    "org.bouncycastle" % "bcpkix-jdk18on" % "1.84",
+    "org.bouncycastle" % "bcutil-jdk18on" % "1.84"
   )
 }
