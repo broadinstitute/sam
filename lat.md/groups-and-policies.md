@@ -18,11 +18,13 @@ Managed groups themselves are also resources of type `managed-group`, with `admi
 
 ### Why Deletion Fails With 409
 
-`PostgresGroupDAO.deleteGroup` does a SQL `DELETE` on `SAM_GROUP`. The `SAM_GROUP_MEMBER.member_group_id` column has a foreign key to `SAM_GROUP` that is **not** set to cascade on delete. If the group is still referenced as a member anywhere, Postgres throws a FK violation, which SAM catches and converts to a 409 Conflict:
+`PostgresGroupDAO.deleteGroup` ([source](https://github.com/broadinstitute/sam/blob/842a2fafc8e5ac5039a1237d5a36f94b8d68dab6/src/main/scala/org/broadinstitute/dsde/workbench/sam/dataAccess/PostgresGroupDAO.scala#L258-L277)) does a SQL `DELETE` on `SAM_GROUP` and catches any `PSQLException` with a FK violation state, converting it to a 409 Conflict:
 
 > "group X cannot be deleted because it is a member of at least 1 other group"
 
-This is intentional — SAM won't silently orphan parent group memberships.
+**The error message is misleading.** It says "member of at least 1 other group" but the underlying cause is any FK violation on the `SAM_GROUP` row — not necessarily a group membership. Check all tables that reference `SAM_GROUP` (e.g. `SAM_GROUP_MEMBER`, `SAM_RESOURCE_POLICY`, `SAM_RESOURCE_AUTH_DOMAIN`) for any references to the group before concluding it is only a membership issue.
+
+This is intentional — SAM won't silently orphan references to a group.
 
 ### Step 1: Find Where the Group Is Used
 
