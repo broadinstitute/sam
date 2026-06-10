@@ -64,7 +64,7 @@ DELETE /api/admin/v1/resources/{resource-type}/{resource-id}/policies/{policy-na
 
 ### Step 3: Check/Fix Permissions on resource_type_admin
 
-The 404 "Resource resource_type_admin/X not found" error does **not** mean the resource doesn't exist — it means you have zero permissions on it. SAM returns 404 instead of 403 as a security measure (`SecurityDirectives.scala`).
+The 404 "Resource resource_type_admin/X not found" error does **not** necessarily mean the resource doesn't exist — it may also mean you have zero permissions on it. SAM returns 404 instead of 403 as a security measure (`SecurityDirectives.scala`).
 
 **Check who has access:**
 ```
