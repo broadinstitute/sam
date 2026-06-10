@@ -4,11 +4,9 @@ name: Build, Publish to Sherlock, and Run Integration Tests
 
 on:
   pull_request:
-    paths-ignore: ['**.md']
   push:
     branches:
       - develop
-    paths-ignore: ['**.md']
 
 env:
   BEE_CREATE_RUN_NAME: 'bee-create-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
