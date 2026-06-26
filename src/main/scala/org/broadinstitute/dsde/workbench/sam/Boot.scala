@@ -38,8 +38,8 @@ import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.sam.util.Sentry.initSentry
 import org.broadinstitute.dsde.workbench.util.DelegatePool
-import org.typelevel.log4cats.StructuredLogger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.{LoggerFactory, StructuredLogger}
+import org.typelevel.log4cats.slf4j.{Slf4jFactory, Slf4jLogger}
 
 import java.io.{File, FileInputStream}
 import java.nio.file.{Files, Paths}
@@ -117,7 +117,8 @@ object Boot extends IOApp with LazyLogging {
       loggerIO.info("Liveness server has been started").unsafeToFuture()(cats.effect.unsafe.IORuntime.global)
   }
 
-  private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] =
+  private[sam] def createAppDependencies(appConfig: AppConfig)(implicit actorSystem: ActorSystem): cats.effect.Resource[IO, AppDependencies] = {
+    implicit val loggerFactory: LoggerFactory[IO] = Slf4jFactory.create[IO]
     for {
       (foregroundDirectoryDAO, foregroundAccessPolicyDAO, postgresDistributedLockDAO, azureManagedResourceGroupDAO, lastQuotaErrorDAO) <- createDAOs(
         appConfig,
@@ -162,6 +163,7 @@ object Boot extends IOApp with LazyLogging {
     )(
       actorSystem
     )
+  }
 
   private def cloudExtensionsInitializerResource(
       appConfig: AppConfig,
