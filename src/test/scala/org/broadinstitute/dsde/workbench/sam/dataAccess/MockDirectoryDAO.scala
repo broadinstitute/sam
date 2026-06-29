@@ -23,6 +23,7 @@ import java.time.Instant
 import java.util.Date
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
+import scala.concurrent.duration.FiniteDuration
 
 /** Created by mbemis on 6/23/17.
   */
@@ -44,6 +45,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   private val petManagedIdentitiesByUser: mutable.Map[PetManagedIdentityId, PetManagedIdentity] = new TrieMap()
 
   private val userFavoriteResources: mutable.Map[WorkbenchUserId, Set[FullyQualifiedResourceId]] = new TrieMap()
+
+  private val externalMembersMigrations: mutable.Map[String, ExternalMembersMigrationRecord] = new TrieMap()
 
   override def createGroup(
       group: BasicWorkbenchGroup,
@@ -147,6 +150,50 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       samRequestContext: SamRequestContext
   ): IO[Seq[WorkbenchEmail]] =
     IO(Seq.empty)
+
+  override def tryClaimExternalMembersMigration(
+      tier: String,
+      resumeCursor: Option[String],
+      staleAfter: FiniteDuration,
+      samRequestContext: SamRequestContext
+  ): IO[Boolean] =
+    IO {
+      val now = Instant.now()
+      val freshlyRunning = externalMembersMigrations.get(tier).exists { r =>
+        r.state == MigrationState.Running && r.updatedAt.isAfter(now.minusMillis(staleAfter.toMillis))
+      }
+      if (freshlyRunning) false
+      else {
+        externalMembersMigrations += tier -> ExternalMembersMigrationRecord(tier, MigrationState.Running, None, 0, 0, resumeCursor, now, now)
+        true
+      }
+    }
+
+  override def recordExternalMembersMigration(
+      tier: String,
+      state: String,
+      total: Option[Long],
+      processed: Long,
+      failed: Long,
+      lastCursor: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    IO {
+      val now = Instant.now()
+      val startedAt = externalMembersMigrations.get(tier).map(_.startedAt).getOrElse(now)
+      externalMembersMigrations += tier -> ExternalMembersMigrationRecord(tier, state, total, processed, failed, lastCursor, startedAt, now)
+    }
+
+  override def setExternalMembersMigrationState(tier: String, state: String, samRequestContext: SamRequestContext): IO[Unit] =
+    IO {
+      externalMembersMigrations.get(tier).foreach(r => externalMembersMigrations += tier -> r.copy(state = state, updatedAt = Instant.now()))
+    }
+
+  override def listExternalMembersMigrations(samRequestContext: SamRequestContext): IO[Seq[ExternalMembersMigrationRecord]] =
+    IO(externalMembersMigrations.values.toSeq.sortBy(_.tier))
+
+  override def getExternalMembersMigration(tier: String, samRequestContext: SamRequestContext): IO[Option[ExternalMembersMigrationRecord]] =
+    IO(externalMembersMigrations.get(tier))
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO {
     // TODO add validation for email

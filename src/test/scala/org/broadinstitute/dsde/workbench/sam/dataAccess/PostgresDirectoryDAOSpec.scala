@@ -2365,5 +2365,49 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, Some(defaultPolicy.email), samRequestContext).unsafeRunSync() shouldBe empty
       }
     }
+
+    "external members migration tracking" - {
+      "claims, records, fails, re-claims, and lists migration progress" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val tier = "proxy"
+
+        // a fresh tier can be claimed
+        dao.tryClaimExternalMembersMigration(tier, None, 1.hour, samRequestContext).unsafeRunSync() shouldBe true
+        // while it is running with a fresh heartbeat, another claim is refused
+        dao.tryClaimExternalMembersMigration(tier, None, 1.hour, samRequestContext).unsafeRunSync() shouldBe false
+
+        dao.recordExternalMembersMigration(tier, MigrationState.Running, Some(10L), 3L, 1L, Some("cursor-3"), samRequestContext).unsafeRunSync()
+        val running = dao.getExternalMembersMigration(tier, samRequestContext).unsafeRunSync().get
+        running.state shouldBe MigrationState.Running
+        running.total shouldBe Some(10L)
+        running.processed shouldBe 3L
+        running.failed shouldBe 1L
+        running.lastCursor shouldBe Some("cursor-3")
+
+        // marking failed preserves the recorded progress columns
+        dao.setExternalMembersMigrationState(tier, MigrationState.Failed, samRequestContext).unsafeRunSync()
+        val failed = dao.getExternalMembersMigration(tier, samRequestContext).unsafeRunSync().get
+        failed.state shouldBe MigrationState.Failed
+        failed.processed shouldBe 3L
+        failed.lastCursor shouldBe Some("cursor-3")
+
+        // a non-running tier can be re-claimed, which resets the counts and sets the resume cursor
+        dao.tryClaimExternalMembersMigration(tier, Some("cursor-3"), 1.hour, samRequestContext).unsafeRunSync() shouldBe true
+        val reclaimed = dao.getExternalMembersMigration(tier, samRequestContext).unsafeRunSync().get
+        reclaimed.state shouldBe MigrationState.Running
+        reclaimed.processed shouldBe 0L
+        reclaimed.lastCursor shouldBe Some("cursor-3")
+
+        dao.listExternalMembersMigrations(samRequestContext).unsafeRunSync().map(_.tier) shouldBe Seq(tier)
+      }
+
+      "treats a running tier with a stale heartbeat as claimable" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val tier = "managed-group"
+        dao.tryClaimExternalMembersMigration(tier, None, 1.hour, samRequestContext).unsafeRunSync() shouldBe true
+        // with a zero staleness window the existing heartbeat is already considered stale, so the tier can be re-claimed
+        dao.tryClaimExternalMembersMigration(tier, None, Duration.Zero, samRequestContext).unsafeRunSync() shouldBe true
+      }
+    }
   }
 }

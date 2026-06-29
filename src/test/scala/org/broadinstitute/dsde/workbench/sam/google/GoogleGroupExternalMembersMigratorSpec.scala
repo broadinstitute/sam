@@ -5,11 +5,12 @@ import cats.effect.unsafe.implicits.global
 import com.google.api.services.groupssettings.model.{Groups => GroupSettings}
 import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.{WorkbenchEmail, WorkbenchUserId}
-import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, ExternalMembersMigrationRecord, MigrationState}
 import org.broadinstitute.dsde.workbench.sam.model.ResourceTypeName
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.ArgumentMatchers
+import org.mockito.Mockito.lenient
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
@@ -26,6 +27,22 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
   private def enabledUser(id: String): SamUser =
     SamUser(WorkbenchUserId(id), None, WorkbenchEmail(s"$id@example.com"), None, enabled = true, Instant.EPOCH, None, Instant.EPOCH)
 
+  private def migrationRecord(tier: String, state: String, lastCursor: Option[String]): ExternalMembersMigrationRecord =
+    ExternalMembersMigrationRecord(tier, state, None, 0, 0, lastCursor, Instant.EPOCH, Instant.EPOCH)
+
+  // stub the status bookkeeping the migrator does for every tier; `existing` is what getExternalMembersMigration returns and `claim` is the claim outcome.
+  // stubbed leniently because not every test exercises every bookkeeping call (e.g. a skipped tier never records progress).
+  private def stubStatus(dao: DirectoryDAO, existing: Option[ExternalMembersMigrationRecord] = None, claim: Boolean = true): Unit = {
+    lenient().when(dao.getExternalMembersMigration(any[String], any[SamRequestContext])).thenReturn(IO.pure(existing))
+    lenient()
+      .when(dao.tryClaimExternalMembersMigration(any[String], any[Option[String]], any[FiniteDuration], any[SamRequestContext]))
+      .thenReturn(IO.pure(claim))
+    lenient()
+      .when(dao.recordExternalMembersMigration(any[String], any[String], any[Option[Long]], any[Long], any[Long], any[Option[String]], any[SamRequestContext]))
+      .thenReturn(IO.unit)
+    lenient().when(dao.setExternalMembersMigrationState(any[String], any[String], any[SamRequestContext])).thenReturn(IO.unit)
+  }
+
   private def newMigrator(directoryDAO: DirectoryDAO, googleExtensions: GoogleExtensions): GoogleGroupExternalMembersMigrator =
     new GoogleGroupExternalMembersMigrator(directoryDAO, googleExtensions, throttleDelay = 1.millisecond)
 
@@ -34,6 +51,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     val user2 = enabledUser("user2")
 
     val directoryDAO = mock[DirectoryDAO]
+    stubStatus(directoryDAO)
     when(directoryDAO.loadEnabledUsers(any[Option[WorkbenchUserId]], any[SamRequestContext])).thenReturn(IO.pure(Seq(user1, user2)))
 
     val googleDirectoryDAO = mock[GoogleDirectoryDAO]
@@ -45,27 +63,54 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     when(googleExtensions.toProxyFromUser(any[WorkbenchUserId]))
       .thenAnswer((invocation: InvocationOnMock) => WorkbenchEmail(s"PROXY_${invocation.getArgument[WorkbenchUserId](0).value}@example.com"))
 
-    val summary = newMigrator(directoryDAO, googleExtensions).migrate(MigrationTier.Proxy, after = None, samRequestContext).unsafeRunSync()
+    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
 
-    summary shouldBe GroupExternalMembersMigrationSummary(processed = 2, failed = 0)
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(WorkbenchEmail("PROXY_user1@example.com"))
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(WorkbenchEmail("PROXY_user2@example.com"))
     // each user's own email is re-added to their proxy group; pet service accounts are left untouched
     verify(googleDirectoryDAO).addMemberToGroup(WorkbenchEmail("PROXY_user1@example.com"), user1.email)
     verify(googleDirectoryDAO).addMemberToGroup(WorkbenchEmail("PROXY_user2@example.com"), user2.email)
+    // the tier is recorded completed with the final counts
+    verify(directoryDAO).recordExternalMembersMigration(
+      ArgumentMatchers.eq("proxy"),
+      ArgumentMatchers.eq(MigrationState.Completed),
+      ArgumentMatchers.eq(Option(2L)),
+      ArgumentMatchers.eq(2L),
+      ArgumentMatchers.eq(0L),
+      any[Option[String]],
+      any[SamRequestContext]
+    )
   }
 
-  it should "resume after the given cursor" in {
+  it should "resume from the last recorded cursor of a prior run" in {
     val directoryDAO = mock[DirectoryDAO]
+    stubStatus(directoryDAO, existing = Some(migrationRecord("proxy", MigrationState.Running, lastCursor = Some("user1"))))
     when(directoryDAO.loadEnabledUsers(any[Option[WorkbenchUserId]], any[SamRequestContext])).thenReturn(IO.pure(Seq.empty))
 
     // empty result set, so no Google calls are made
     val googleExtensions = mock[GoogleExtensions]
 
-    newMigrator(directoryDAO, googleExtensions).migrate(MigrationTier.Proxy, after = Some("user1"), samRequestContext).unsafeRunSync()
+    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
 
-    // users are loaded starting after the resume cursor
+    // the tier is claimed and users are loaded starting after the recorded cursor
+    verify(directoryDAO).tryClaimExternalMembersMigration(
+      ArgumentMatchers.eq("proxy"),
+      ArgumentMatchers.eq(Some("user1")),
+      any[FiniteDuration],
+      any[SamRequestContext]
+    )
     verify(directoryDAO).loadEnabledUsers(ArgumentMatchers.eq(Some(WorkbenchUserId("user1"))), any[SamRequestContext])
+  }
+
+  it should "skip a tier already being migrated on another instance" in {
+    val directoryDAO = mock[DirectoryDAO]
+    stubStatus(directoryDAO, claim = false)
+    val googleExtensions = mock[GoogleExtensions]
+
+    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
+
+    // claim failed, so no enumeration or Google work happens
+    verify(directoryDAO, never).loadEnabledUsers(any[Option[WorkbenchUserId]], any[SamRequestContext])
   }
 
   "migrating a resource type tier" should "enable external members on each synced group without re-adding members" in {
@@ -74,6 +119,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     val group2 = WorkbenchEmail("group2@example.com")
 
     val directoryDAO = mock[DirectoryDAO]
+    stubStatus(directoryDAO)
     when(
       directoryDAO.loadSynchronizedGroupEmailsByResourceType(
         ArgumentMatchers.eq(resourceTypeName),
@@ -88,10 +134,8 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     val googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.googleDirectoryDAO).thenReturn(googleDirectoryDAO)
 
-    val summary =
-      newMigrator(directoryDAO, googleExtensions).migrate(MigrationTier.ResourceType(resourceTypeName), after = None, samRequestContext).unsafeRunSync()
+    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.ResourceType(resourceTypeName)), samRequestContext).unsafeRunSync()
 
-    summary shouldBe GroupExternalMembersMigrationSummary(processed = 2, failed = 0)
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(group1)
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(group2)
     // resource-type groups only flip the setting; no member is re-added
@@ -104,6 +148,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     val goodGroup = WorkbenchEmail("good@example.com")
 
     val directoryDAO = mock[DirectoryDAO]
+    stubStatus(directoryDAO)
     when(
       directoryDAO.loadSynchronizedGroupEmailsByResourceType(
         ArgumentMatchers.eq(resourceTypeName),
@@ -119,33 +164,69 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     val googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.googleDirectoryDAO).thenReturn(googleDirectoryDAO)
 
-    val summary =
-      newMigrator(directoryDAO, googleExtensions).migrate(MigrationTier.ResourceType(resourceTypeName), after = None, samRequestContext).unsafeRunSync()
+    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.ResourceType(resourceTypeName)), samRequestContext).unsafeRunSync()
 
-    summary shouldBe GroupExternalMembersMigrationSummary(processed = 2, failed = 1)
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(goodGroup)
+    // both processed, one counted as failed
+    verify(directoryDAO).recordExternalMembersMigration(
+      ArgumentMatchers.eq("managed-group"),
+      ArgumentMatchers.eq(MigrationState.Completed),
+      ArgumentMatchers.eq(Option(2L)),
+      ArgumentMatchers.eq(2L),
+      ArgumentMatchers.eq(1L),
+      any[Option[String]],
+      any[SamRequestContext]
+    )
   }
 
-  it should "resume after the given cursor" in {
-    val resourceTypeName = ResourceTypeName("managed-group")
-
+  "migrating multiple tiers" should "skip tiers already completed and run the rest in order" in {
     val directoryDAO = mock[DirectoryDAO]
-    when(directoryDAO.loadSynchronizedGroupEmailsByResourceType(ArgumentMatchers.eq(resourceTypeName), any[Option[WorkbenchEmail]], any[SamRequestContext]))
+    when(directoryDAO.getExternalMembersMigration(ArgumentMatchers.eq("proxy"), any[SamRequestContext]))
+      .thenReturn(IO.pure(Some(migrationRecord("proxy", MigrationState.Completed, lastCursor = Some("user9")))))
+    when(directoryDAO.getExternalMembersMigration(ArgumentMatchers.eq("managed-group"), any[SamRequestContext])).thenReturn(IO.pure(None))
+    when(directoryDAO.tryClaimExternalMembersMigration(any[String], any[Option[String]], any[FiniteDuration], any[SamRequestContext])).thenReturn(IO.pure(true))
+    when(
+      directoryDAO.recordExternalMembersMigration(
+        any[String],
+        any[String],
+        any[Option[Long]],
+        any[Long],
+        any[Long],
+        any[Option[String]],
+        any[SamRequestContext]
+      )
+    )
+      .thenReturn(IO.unit)
+    when(directoryDAO.loadSynchronizedGroupEmailsByResourceType(any[ResourceTypeName], any[Option[WorkbenchEmail]], any[SamRequestContext]))
       .thenReturn(IO.pure(Seq.empty))
 
-    // empty result set, so no Google calls are made
     val googleExtensions = mock[GoogleExtensions]
 
     newMigrator(directoryDAO, googleExtensions)
-      .migrate(MigrationTier.ResourceType(resourceTypeName), after = Some("group@example.com"), samRequestContext)
+      .migrate(Seq(MigrationTier.Proxy, MigrationTier.ResourceType(ResourceTypeName("managed-group"))), samRequestContext)
       .unsafeRunSync()
 
-    // groups are loaded starting after the resume cursor
-    verify(directoryDAO).loadSynchronizedGroupEmailsByResourceType(
-      ArgumentMatchers.eq(resourceTypeName),
-      ArgumentMatchers.eq(Some(WorkbenchEmail("group@example.com"))),
+    // proxy is already completed, so it is never claimed; the other tier is
+    verify(directoryDAO, never).tryClaimExternalMembersMigration(
+      ArgumentMatchers.eq("proxy"),
+      any[Option[String]],
+      any[FiniteDuration],
       any[SamRequestContext]
     )
+    verify(directoryDAO).tryClaimExternalMembersMigration(
+      ArgumentMatchers.eq("managed-group"),
+      any[Option[String]],
+      any[FiniteDuration],
+      any[SamRequestContext]
+    )
+  }
+
+  "status" should "return the persisted migration records" in {
+    val records = Seq(migrationRecord("proxy", MigrationState.Completed, None), migrationRecord("managed-group", MigrationState.Running, Some("g")))
+    val directoryDAO = mock[DirectoryDAO]
+    when(directoryDAO.listExternalMembersMigrations(any[SamRequestContext])).thenReturn(IO.pure(records))
+
+    newMigrator(directoryDAO, mock[GoogleExtensions]).status(samRequestContext).unsafeRunSync() shouldBe records
   }
 
   "MigrationTier.fromSelector" should "parse the proxy tier and resource type tiers" in {

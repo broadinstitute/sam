@@ -17,6 +17,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
 import java.util.Date
+import scala.concurrent.duration.FiniteDuration
 
 /** Created by dvoet on 5/26/17.
   */
@@ -89,6 +90,38 @@ trait DirectoryDAO {
     * already-processed users). Used to enumerate users whose proxy groups need to be migrated.
     */
   def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Seq[SamUser]]
+
+  /** Atomically claim a tier for the allowExternalMembers migration so only one instance runs it at a time. Succeeds (returns true) unless another run holds
+    * the tier with a heartbeat newer than `staleAfter` (i.e. is still alive). On success the row is (re)set to `running` with `resumeCursor` as its starting
+    * cursor and zeroed counts.
+    */
+  def tryClaimExternalMembersMigration(
+      tier: String,
+      resumeCursor: Option[String],
+      staleAfter: FiniteDuration,
+      samRequestContext: SamRequestContext
+  ): IO[Boolean]
+
+  /** Record the mutable progress of a claimed tier: its state, total, processed/failed counts, and resume cursor, bumping the heartbeat. Used for the initial
+    * total, periodic heartbeats, and the terminal `completed` state.
+    */
+  def recordExternalMembersMigration(
+      tier: String,
+      state: String,
+      total: Option[Long],
+      processed: Long,
+      failed: Long,
+      lastCursor: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[Unit]
+
+  /** Set only the state (and heartbeat) of a tier, preserving its progress columns. Used to mark a tier `failed` without clobbering the last recorded counts.
+    */
+  def setExternalMembersMigrationState(tier: String, state: String, samRequestContext: SamRequestContext): IO[Unit]
+
+  def listExternalMembersMigrations(samRequestContext: SamRequestContext): IO[Seq[ExternalMembersMigrationRecord]]
+
+  def getExternalMembersMigration(tier: String, samRequestContext: SamRequestContext): IO[Option[ExternalMembersMigrationRecord]]
 
   def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
 

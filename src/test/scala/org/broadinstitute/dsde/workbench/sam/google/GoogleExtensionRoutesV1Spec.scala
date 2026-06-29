@@ -332,4 +332,44 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
       responseAs[String] should not include "userProject"
     }
   }
+
+  // make the test user a super admin by adding them to the configured super admins group in the mock google directory
+  private def makeSuperAdmin(samDependencies: SamDependencies, user: SamUser): Unit = {
+    val googleDirectoryDAO = samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleDirectoryDAO
+    val superAdminsGroup = TestSupport.adminConfig.superAdminsGroup
+    googleDirectoryDAO.createGroup(WorkbenchGroupName("super-admins"), superAdminsGroup).futureValue
+    googleDirectoryDAO.addMemberToGroup(superAdminsGroup, user.email).futureValue
+  }
+
+  "PUT /api/google/v1/groups/allowExternalMembers/migrate/{tiers}" should "reject a non-super-admin with 403" in {
+    val (_, _, routes) = createTestUser()
+    Put("/api/google/v1/groups/allowExternalMembers/migrate/managed-group") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "accept a super admin and start the migration in the background" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Put("/api/google/v1/groups/allowExternalMembers/migrate/managed-group") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Accepted
+      responseAs[String] should include("managed-group")
+    }
+  }
+
+  "GET /api/google/v1/groups/allowExternalMembers/migrate/status" should "reject a non-super-admin with 403" in {
+    val (_, _, routes) = createTestUser()
+    Get("/api/google/v1/groups/allowExternalMembers/migrate/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "return the migration status to a super admin" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Get("/api/google/v1/groups/allowExternalMembers/migrate/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] should include("no allowExternalMembers migrations have been started")
+    }
+  }
 }
