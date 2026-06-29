@@ -31,6 +31,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
   implicit val executionContext: ExecutionContext
   val googleExtensions: GoogleExtensions
   val googleGroupSynchronizer: GoogleGroupSynchronizer
+  val groupExternalMembersMigrator: GoogleGroupExternalMembersMigrator
 
   override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
@@ -288,6 +289,26 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     }
                   }
                 }
+            }
+          }
+        } ~
+        pathPrefix("groups") {
+          // Super-admin-only one-off migration: ensure allowExternalMembers is enabled on existing Google groups for the given priority tier
+          // ("proxy" or a resource type name). Runs in the background and returns immediately; safe to re-run.
+          path("allowExternalMembers" / "migrate" / Segment) { tierSelector =>
+            // `after` is an optional resume cursor (see GoogleGroupExternalMembersMigrator.migrate)
+            parameter("after".?) { after =>
+              val tier = MigrationTier.fromSelector(tierSelector)
+              asSamSuperAdmin(samUser) {
+                putWithTelemetry(samRequestContext, "tier" -> tier) {
+                  complete {
+                    groupExternalMembersMigrator
+                      .migrate(tier, after, samRequestContext)
+                      .start
+                      .as(StatusCodes.Accepted -> s"Started allowExternalMembers migration for tier ${tier.value}")
+                  }
+                }
+              }
             }
           }
         } ~

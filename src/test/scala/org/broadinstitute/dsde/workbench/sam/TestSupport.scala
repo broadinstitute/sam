@@ -22,7 +22,13 @@ import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
+import org.broadinstitute.dsde.workbench.sam.google.{
+  GoogleExtensionRoutes,
+  GoogleExtensions,
+  GoogleGroupExternalMembersMigrator,
+  GoogleGroupSynchronizer,
+  GoogleKeyCache
+}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -200,6 +206,10 @@ object TestSupport extends TestSupport {
           googleExtensions,
           googleExtensions.resourceTypes
         )
+      } else null
+    override val groupExternalMembersMigrator: GoogleGroupExternalMembersMigrator =
+      if (samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) {
+        new GoogleGroupExternalMembersMigrator(googleExtensions.directoryDAO, googleExtensions)
       } else null
     val googleKeyCache = samDependencies.cloudExtensions match {
       case extensions: GoogleExtensions => extensions.googleKeyCache

@@ -799,7 +799,11 @@ class GoogleExtensions(
 
 }
 
-case class GoogleExtensionsInitializer(cloudExtensions: GoogleExtensions, googleGroupSynchronizer: GoogleGroupSynchronizer) extends CloudExtensionsInitializer {
+case class GoogleExtensionsInitializer(
+    cloudExtensions: GoogleExtensions,
+    googleGroupSynchronizer: GoogleGroupSynchronizer,
+    groupExternalMembersMigrator: GoogleGroupExternalMembersMigrator
+) extends CloudExtensionsInitializer {
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] =
     for {
       googleGroupSyncIoRuntime <- GooglePubSubMonitor.createReceiverIORuntime(cloudExtensions.googleServicesConfig.groupSyncPubSubConfig)

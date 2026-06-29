@@ -31,6 +31,19 @@ trait DirectoryDAO {
 
   def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[(WorkbenchGroupName, WorkbenchEmail)]]
 
+  /** Load a page of synchronized group emails for a given resource type, ordered by email. Used to enumerate existing Google groups for migrations. Pass the
+    * last email from the previous page as `afterEmail` to fetch the next page (keyset pagination).
+    */
+  def loadSynchronizedGroupEmailsByResourceType(
+      resourceTypeName: ResourceTypeName,
+      afterEmail: Option[WorkbenchEmail],
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[WorkbenchEmail]]
+
+  /** Total number of synchronized groups for a resource type. Used to report migration progress. */
+  def countSynchronizedGroupsByResourceType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Long]
+
   def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit]
 
   /** @return
@@ -75,6 +88,14 @@ trait DirectoryDAO {
       limit: Int,
       samRequestContext: SamRequestContext
   ): IO[Set[SamUser]]
+
+  /** Load a page of enabled users ordered by id. Pass the last id from the previous page as `afterUserId` to fetch the next page (keyset pagination). Used to
+    * enumerate users whose proxy groups need to be migrated.
+    */
+  def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], limit: Int, samRequestContext: SamRequestContext): IO[Seq[SamUser]]
+
+  /** Total number of enabled users. Used to report migration progress. */
+  def countEnabledUsers(samRequestContext: SamRequestContext): IO[Long]
 
   def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
 
