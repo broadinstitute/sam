@@ -30,13 +30,10 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
   private def migrationRecord(tier: String, state: String, lastCursor: Option[String]): ExternalMembersMigrationRecord =
     ExternalMembersMigrationRecord(tier, state, None, 0, 0, lastCursor, Instant.EPOCH, Instant.EPOCH)
 
-  // stub the status bookkeeping the migrator does for every tier; `existing` is what getExternalMembersMigration returns and `claim` is the claim outcome.
+  // stub the status bookkeeping the migrator does for every tier; `existing` is what getExternalMembersMigration returns.
   // stubbed leniently because not every test exercises every bookkeeping call (e.g. a skipped tier never records progress).
-  private def stubStatus(dao: DirectoryDAO, existing: Option[ExternalMembersMigrationRecord] = None, claim: Boolean = true): Unit = {
+  private def stubStatus(dao: DirectoryDAO, existing: Option[ExternalMembersMigrationRecord] = None): Unit = {
     lenient().when(dao.getExternalMembersMigration(any[String], any[SamRequestContext])).thenReturn(IO.pure(existing))
-    lenient()
-      .when(dao.tryClaimExternalMembersMigration(any[String], any[Option[String]], any[FiniteDuration], any[SamRequestContext]))
-      .thenReturn(IO.pure(claim))
     lenient()
       .when(dao.recordExternalMembersMigration(any[String], any[String], any[Option[Long]], any[Long], any[Long], any[Option[String]], any[SamRequestContext]))
       .thenReturn(IO.unit)
@@ -92,25 +89,8 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
 
     newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
 
-    // the tier is claimed and users are loaded starting after the recorded cursor
-    verify(directoryDAO).tryClaimExternalMembersMigration(
-      ArgumentMatchers.eq("proxy"),
-      ArgumentMatchers.eq(Some("user1")),
-      any[FiniteDuration],
-      any[SamRequestContext]
-    )
+    // users are loaded starting after the recorded cursor
     verify(directoryDAO).loadEnabledUsers(ArgumentMatchers.eq(Some(WorkbenchUserId("user1"))), any[SamRequestContext])
-  }
-
-  it should "skip a tier already being migrated on another instance" in {
-    val directoryDAO = mock[DirectoryDAO]
-    stubStatus(directoryDAO, claim = false)
-    val googleExtensions = mock[GoogleExtensions]
-
-    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
-
-    // claim failed, so no enumeration or Google work happens
-    verify(directoryDAO, never).loadEnabledUsers(any[Option[WorkbenchUserId]], any[SamRequestContext])
   }
 
   "migrating a resource type tier" should "enable external members on each synced group without re-adding members" in {
@@ -184,7 +164,6 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     when(directoryDAO.getExternalMembersMigration(ArgumentMatchers.eq("proxy"), any[SamRequestContext]))
       .thenReturn(IO.pure(Some(migrationRecord("proxy", MigrationState.Completed, lastCursor = Some("user9")))))
     when(directoryDAO.getExternalMembersMigration(ArgumentMatchers.eq("managed-group"), any[SamRequestContext])).thenReturn(IO.pure(None))
-    when(directoryDAO.tryClaimExternalMembersMigration(any[String], any[Option[String]], any[FiniteDuration], any[SamRequestContext])).thenReturn(IO.pure(true))
     when(
       directoryDAO.recordExternalMembersMigration(
         any[String],
@@ -206,17 +185,23 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
       .migrate(Seq(MigrationTier.Proxy, MigrationTier.ResourceType(ResourceTypeName("managed-group"))), samRequestContext)
       .unsafeRunSync()
 
-    // proxy is already completed, so it is never claimed; the other tier is
-    verify(directoryDAO, never).tryClaimExternalMembersMigration(
+    // proxy is already completed, so it never records progress; the other tier runs and records completion
+    verify(directoryDAO, never).recordExternalMembersMigration(
       ArgumentMatchers.eq("proxy"),
+      any[String],
+      any[Option[Long]],
+      any[Long],
+      any[Long],
       any[Option[String]],
-      any[FiniteDuration],
       any[SamRequestContext]
     )
-    verify(directoryDAO).tryClaimExternalMembersMigration(
+    verify(directoryDAO).recordExternalMembersMigration(
       ArgumentMatchers.eq("managed-group"),
+      ArgumentMatchers.eq(MigrationState.Completed),
+      any[Option[Long]],
+      any[Long],
+      any[Long],
       any[Option[String]],
-      any[FiniteDuration],
       any[SamRequestContext]
     )
   }

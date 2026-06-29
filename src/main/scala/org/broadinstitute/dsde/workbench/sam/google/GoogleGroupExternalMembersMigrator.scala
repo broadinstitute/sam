@@ -27,20 +27,18 @@ import scala.concurrent.duration._
   *   minimum delay between processing items, the proactive rate limit
   * @param progressInterval
   *   how often (in groups) to log progress and persist a heartbeat
-  * @param staleAfter
-  *   a tier whose `running` heartbeat is older than this is treated as a dead run and may be re-claimed (e.g. after a pod restart)
   */
 class GoogleGroupExternalMembersMigrator(
     directoryDAO: DirectoryDAO,
     googleExtensions: GoogleExtensions,
     throttleDelay: FiniteDuration = 100.milliseconds,
-    progressInterval: Int = 500,
-    staleAfter: FiniteDuration = 15.minutes
+    progressInterval: Int = 500
 ) extends LazyLogging {
 
-  /** Migrate the given tiers in order, one at a time. Each tier is processed independently: progress is persisted so a `running` tier on another instance is
-    * skipped (cross-instance guard), a `completed` tier is skipped when more than one tier was requested, and a crashed/failed tier resumes from its last
-    * recorded cursor. Returns immediately to the caller via the endpoint's detached fiber.
+  /** Migrate the given tiers in order, one at a time. Each tier is processed independently: a `completed` tier is skipped when more than one tier was
+    * requested, and a crashed/failed tier resumes from its last recorded cursor. Returns immediately to the caller via the endpoint's detached fiber. This is a
+    * one-off operator-driven migration with no cross-instance locking: re-firing while a run is in flight would double up that tier's idempotent work (capped
+    * by the coordinated quota backoff), so the operator should check the status endpoint before re-running.
     */
   def migrate(tiers: Seq[MigrationTier], samRequestContext: SamRequestContext): IO[Unit] =
     tiers.foldLeft(IO.unit)((acc, tier) => acc >> migrateTier(tier, skipCompleted = tiers.size > 1, samRequestContext))
@@ -54,44 +52,39 @@ class GoogleGroupExternalMembersMigrator(
       if (skipCompleted && existing.exists(_.state == MigrationState.Completed))
         IO(logger.info(s"allowExternalMembers migration tier ${tier.value} already completed; skipping"))
       else {
-        // resume from the last recorded cursor when a prior run crashed (stale running) or failed; otherwise start from the beginning. note a `completed`
-        // single tier (not skipped above) intentionally starts fresh from the beginning rather than its final cursor, i.e. a deliberate full re-run.
+        // resume from the last recorded cursor when a prior run crashed (running) or failed; otherwise start from the beginning. note a `completed` single
+        // tier (not skipped above) intentionally starts fresh from the beginning rather than its final cursor, i.e. a deliberate full re-run.
         val resumeCursor = existing.collect { case r if r.state == MigrationState.Running || r.state == MigrationState.Failed => r.lastCursor }.flatten
         runTier(tier, resumeCursor, samRequestContext)
       }
     }
 
   private def runTier(tier: MigrationTier, resumeCursor: Option[String], samRequestContext: SamRequestContext): IO[Unit] =
-    directoryDAO.tryClaimExternalMembersMigration(tier.value, resumeCursor, staleAfter, samRequestContext).flatMap {
-      case false =>
-        IO(logger.info(s"allowExternalMembers migration tier ${tier.value} is already running on another instance; skipping"))
-      case true =>
-        (for {
-          items <- itemsForTier(tier, resumeCursor, samRequestContext)
-          total = items.size
-          _ <- IO(
-            logger.info(
-              s"Starting allowExternalMembers migration for tier ${tier.value} ($total groups to process)${resumeCursor.fold("")(c => s", resuming after $c")}"
-            )
-          )
-          _ <- directoryDAO.recordExternalMembersMigration(tier.value, MigrationState.Running, Some(total.toLong), 0, 0, resumeCursor, samRequestContext)
-          summary <- migrateItems(tier, items, total, samRequestContext)
-          lastCursor = items.lastOption.map(_.cursor).orElse(resumeCursor)
-          _ <- directoryDAO.recordExternalMembersMigration(
-            tier.value,
-            MigrationState.Completed,
-            Some(total.toLong),
-            summary.processed.toLong,
-            summary.failed.toLong,
-            lastCursor,
-            samRequestContext
-          )
-          _ <- IO(logger.info(s"Finished allowExternalMembers migration for tier ${tier.value}: $summary of $total"))
-        } yield ()).handleErrorWith { t =>
-          // an enumeration/persistence failure aborts this tier; mark it failed (preserving the last heartbeat) so it can be resumed, and keep going
-          IO(logger.error(s"allowExternalMembers migration for tier ${tier.value} failed", t)) >>
-            directoryDAO.setExternalMembersMigrationState(tier.value, MigrationState.Failed, samRequestContext).handleError(_ => ())
-        }
+    (for {
+      items <- itemsForTier(tier, resumeCursor, samRequestContext)
+      total = items.size
+      _ <- IO(
+        logger.info(
+          s"Starting allowExternalMembers migration for tier ${tier.value} ($total groups to process)${resumeCursor.fold("")(c => s", resuming after $c")}"
+        )
+      )
+      _ <- directoryDAO.recordExternalMembersMigration(tier.value, MigrationState.Running, Some(total.toLong), 0, 0, resumeCursor, samRequestContext)
+      summary <- migrateItems(tier, items, total, samRequestContext)
+      lastCursor = items.lastOption.map(_.cursor).orElse(resumeCursor)
+      _ <- directoryDAO.recordExternalMembersMigration(
+        tier.value,
+        MigrationState.Completed,
+        Some(total.toLong),
+        summary.processed.toLong,
+        summary.failed.toLong,
+        lastCursor,
+        samRequestContext
+      )
+      _ <- IO(logger.info(s"Finished allowExternalMembers migration for tier ${tier.value}: $summary of $total"))
+    } yield ()).handleErrorWith { t =>
+      // an enumeration/persistence failure aborts this tier; mark it failed (preserving the last heartbeat) so it can be resumed, and keep going
+      IO(logger.error(s"allowExternalMembers migration for tier ${tier.value} failed", t)) >>
+        directoryDAO.setExternalMembersMigrationState(tier.value, MigrationState.Failed, samRequestContext).handleError(_ => ())
     }
 
   // Load every group in the tier as a uniform MigrationItem. Resource-type groups only contain in-domain proxy-group emails as members, so flipping the setting

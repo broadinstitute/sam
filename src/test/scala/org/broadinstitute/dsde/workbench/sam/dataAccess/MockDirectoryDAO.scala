@@ -23,7 +23,6 @@ import java.time.Instant
 import java.util.Date
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
-import scala.concurrent.duration.FiniteDuration
 
 /** Created by mbemis on 6/23/17.
   */
@@ -150,24 +149,6 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       samRequestContext: SamRequestContext
   ): IO[Seq[WorkbenchEmail]] =
     IO(Seq.empty)
-
-  override def tryClaimExternalMembersMigration(
-      tier: String,
-      resumeCursor: Option[String],
-      staleAfter: FiniteDuration,
-      samRequestContext: SamRequestContext
-  ): IO[Boolean] =
-    IO {
-      val now = Instant.now()
-      val freshlyRunning = externalMembersMigrations.get(tier).exists { r =>
-        r.state == MigrationState.Running && r.updatedAt.isAfter(now.minusMillis(staleAfter.toMillis))
-      }
-      if (freshlyRunning) false
-      else {
-        externalMembersMigrations += tier -> ExternalMembersMigrationRecord(tier, MigrationState.Running, None, 0, 0, resumeCursor, now, now)
-        true
-      }
-    }
 
   override def recordExternalMembersMigration(
       tier: String,

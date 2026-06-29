@@ -31,7 +31,7 @@ import scalikejdbc._
 
 import java.time.Instant
 import java.util.Date
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Try}
 
 class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val readDbRef: DbReference)(implicit timer: Temporal[IO])
@@ -188,28 +188,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
         .map(UserTable.unmarshalUserRecord)
     }
 
-  override def tryClaimExternalMembersMigration(
-      tier: String,
-      resumeCursor: Option[String],
-      staleAfter: FiniteDuration,
-      samRequestContext: SamRequestContext
-  ): IO[Boolean] =
-    serializableWriteTransaction("tryClaimExternalMembersMigration", samRequestContext) { implicit session =>
-      // claim the tier unless another run already holds it with a fresh heartbeat. the date math is done in the db to avoid app/db clock skew, and
-      // clock_timestamp() (not now()) is used because this transaction may be retried and we want the real wall-clock time of the successful attempt.
-      val rowsAffected =
-        samsql"""insert into SAM_EXTERNAL_MEMBERS_MIGRATION (tier, state, total, processed, failed, last_cursor, started_at, updated_at)
-                  values ($tier, 'running', null, 0, 0, $resumeCursor, clock_timestamp(), clock_timestamp())
-                  on conflict (tier) do update
-                    set state = 'running', total = null, processed = 0, failed = 0, last_cursor = $resumeCursor,
-                        started_at = clock_timestamp(), updated_at = clock_timestamp()
-                  where SAM_EXTERNAL_MEMBERS_MIGRATION.state <> 'running'
-                     or SAM_EXTERNAL_MEMBERS_MIGRATION.updated_at < clock_timestamp() - ${staleAfter.toMillis} * INTERVAL '1 milliseconds'"""
-          .update()
-          .apply()
-      rowsAffected > 0
-    }
-
   override def recordExternalMembersMigration(
       tier: String,
       state: String,
@@ -220,9 +198,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       samRequestContext: SamRequestContext
   ): IO[Unit] =
     serializableWriteTransaction("recordExternalMembersMigration", samRequestContext) { implicit session =>
-      samsql"""update SAM_EXTERNAL_MEMBERS_MIGRATION
-                set state = $state, total = $total, processed = $processed, failed = $failed, last_cursor = $lastCursor, updated_at = clock_timestamp()
-                where tier = $tier"""
+      // clock_timestamp() (not now()) is used because this transaction may be retried and we want the real wall-clock time of the successful attempt.
+      samsql"""insert into SAM_EXTERNAL_MEMBERS_MIGRATION (tier, state, total, processed, failed, last_cursor, started_at, updated_at)
+                values ($tier, $state, $total, $processed, $failed, $lastCursor, clock_timestamp(), clock_timestamp())
+                on conflict (tier) do update
+                  set state = $state, total = $total, processed = $processed, failed = $failed, last_cursor = $lastCursor, updated_at = clock_timestamp()"""
         .update()
         .apply()
     }
