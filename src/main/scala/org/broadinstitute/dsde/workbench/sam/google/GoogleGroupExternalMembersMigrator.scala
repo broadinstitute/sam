@@ -13,8 +13,8 @@ import scala.concurrent.duration._
   * time.
   *
   * Groups are processed in priority tiers (see [[MigrationTier]]) so the operator controls ordering and pacing by invoking the admin endpoint once per tier.
-  * Every operation is idempotent: [[GoogleDirectoryDAO.enableExternalMembersIfNeeded]] only writes when the setting is currently false, and
-  * [[GoogleExtensions.onUserEnable]] is safe to repeat, so a tier can be re-run safely (e.g. after a quota backoff).
+  * Every operation is idempotent: [[GoogleDirectoryDAO.enableExternalMembersIfNeeded]] only writes when the setting is currently false, and re-adding a user to
+  * their proxy group is a no-op when they are already a member, so a tier can be re-run safely (e.g. after a quota backoff).
   *
   * All Google calls go through the coordinated-backoff [[GoogleDirectoryDAO]] so a quota trip backs off Sam (and therefore Terra) traffic gracefully. Work is
   * additionally throttled (a fixed `IO.sleep` between items) to proactively stay well under Google's quota; speed is intentionally sacrificed for safety.
@@ -22,7 +22,7 @@ import scala.concurrent.duration._
   * @param directoryDAO
   *   the background directory DAO, used to enumerate users/groups without crowding foreground api calls
   * @param googleExtensions
-  *   provides the coordinated-backoff google directory DAO, proxy email derivation, and the `onUserEnable` proxy re-add primitive
+  *   provides the coordinated-backoff google directory DAO and proxy email derivation
   * @param throttleDelay
   *   minimum delay between processing items, the proactive rate limit
   */
@@ -33,8 +33,8 @@ class GoogleGroupExternalMembersMigrator(
     progressInterval: Int = 500
 ) extends LazyLogging {
 
-  /** Flip `allowExternalMembers` on every synchronized Google group for a tier, plus (for the proxy tier) re-add members that may have been dropped while the
-    * setting was false. Returns a summary of what happened.
+  /** Flip `allowExternalMembers` on every synchronized Google group for a tier, plus (for the proxy tier) re-add the user's email that could not be added while
+    * the setting was false. Returns a summary of what happened.
     *
     * @param after
     *   resume cursor: when set, only groups strictly after this value are loaded (a user id for the proxy tier, a group email for resource-type tiers). Use the
@@ -53,15 +53,22 @@ class GoogleGroupExternalMembersMigrator(
       // the endpoint runs this in a detached fiber, so make sure an enumeration failure is logged rather than lost
       .onError(t => IO(logger.error(s"allowExternalMembers migration for tier ${tier.value} failed", t)))
 
-  // Load every group in the tier as a uniform MigrationItem. Resource-type groups only contain in-domain proxy-group emails as members so they were never
-  // impacted (flip the setting only); proxy groups hold a user's real (possibly external) email and are the only place memberships could have been dropped, so
-  // they also re-add the user (and their pet service accounts) via onUserEnable.
+  // Load every group in the tier as a uniform MigrationItem. Resource-type groups only contain in-domain proxy-group emails as members, so flipping the setting
+  // is enough. A proxy group holds the user's real (possibly external) email, which could not be added while external members were disallowed, so it also
+  // re-adds that email once the setting is on. Pet service accounts are internally managed and aren't expected to be missing, so they are left untouched.
   private def itemsForTier(tier: MigrationTier, after: Option[String], samRequestContext: SamRequestContext): IO[Seq[MigrationItem]] =
     tier match {
       case MigrationTier.Proxy =>
         directoryDAO
           .loadEnabledUsers(after.map(WorkbenchUserId), samRequestContext)
-          .map(_.map(user => MigrationItem(googleExtensions.toProxyFromUser(user.id), user.id.value, googleExtensions.onUserEnable(user, samRequestContext))))
+          .map(_.map { user =>
+            val proxyEmail = googleExtensions.toProxyFromUser(user.id)
+            MigrationItem(
+              proxyEmail,
+              user.id.value,
+              IO.fromFuture(IO(googleExtensions.googleDirectoryDAO.addMemberToGroup(proxyEmail, WorkbenchEmail(user.email.value))))
+            )
+          })
       case MigrationTier.ResourceType(resourceTypeName) =>
         directoryDAO
           .loadSynchronizedGroupEmailsByResourceType(resourceTypeName, after.map(WorkbenchEmail), samRequestContext)

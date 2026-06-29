@@ -29,7 +29,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
   private def newMigrator(directoryDAO: DirectoryDAO, googleExtensions: GoogleExtensions): GoogleGroupExternalMembersMigrator =
     new GoogleGroupExternalMembersMigrator(directoryDAO, googleExtensions, throttleDelay = 1.millisecond)
 
-  "migrating the proxy tier" should "enable external members on and re-add each enabled user to their proxy group" in {
+  "migrating the proxy tier" should "enable external members on and re-add each enabled user's email to their proxy group" in {
     val user1 = enabledUser("user1")
     val user2 = enabledUser("user2")
 
@@ -38,20 +38,21 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
 
     val googleDirectoryDAO = mock[GoogleDirectoryDAO]
     when(googleDirectoryDAO.enableExternalMembersIfNeeded(any[WorkbenchEmail])).thenReturn(Future.successful(new GroupSettings))
+    when(googleDirectoryDAO.addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])).thenReturn(Future.successful(()))
 
     val googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.googleDirectoryDAO).thenReturn(googleDirectoryDAO)
     when(googleExtensions.toProxyFromUser(any[WorkbenchUserId]))
       .thenAnswer((invocation: InvocationOnMock) => WorkbenchEmail(s"PROXY_${invocation.getArgument[WorkbenchUserId](0).value}@example.com"))
-    when(googleExtensions.onUserEnable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
 
     val summary = newMigrator(directoryDAO, googleExtensions).migrate(MigrationTier.Proxy, after = None, samRequestContext).unsafeRunSync()
 
     summary shouldBe GroupExternalMembersMigrationSummary(processed = 2, failed = 0)
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(WorkbenchEmail("PROXY_user1@example.com"))
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(WorkbenchEmail("PROXY_user2@example.com"))
-    verify(googleExtensions).onUserEnable(user1, samRequestContext)
-    verify(googleExtensions).onUserEnable(user2, samRequestContext)
+    // each user's own email is re-added to their proxy group; pet service accounts are left untouched
+    verify(googleDirectoryDAO).addMemberToGroup(WorkbenchEmail("PROXY_user1@example.com"), user1.email)
+    verify(googleDirectoryDAO).addMemberToGroup(WorkbenchEmail("PROXY_user2@example.com"), user2.email)
   }
 
   it should "resume after the given cursor" in {
@@ -93,7 +94,8 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     summary shouldBe GroupExternalMembersMigrationSummary(processed = 2, failed = 0)
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(group1)
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(group2)
-    verify(googleExtensions, never).onUserEnable(any[SamUser], any[SamRequestContext])
+    // resource-type groups only flip the setting; no member is re-added
+    verify(googleDirectoryDAO, never).addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])
   }
 
   it should "count failures and keep processing the rest" in {
