@@ -25,7 +25,13 @@ import org.broadinstitute.dsde.workbench.sam.config._
 import org.broadinstitute.dsde.workbench.sam.dataAccess._
 import org.broadinstitute.dsde.workbench.sam.db.TestDbReference
 import org.broadinstitute.dsde.workbench.sam.db.tables._
-import org.broadinstitute.dsde.workbench.sam.google.{GoogleExtensionRoutes, GoogleExtensions, GoogleGroupSynchronizer, GoogleKeyCache}
+import org.broadinstitute.dsde.workbench.sam.google.{
+  GoogleExtensionRoutes,
+  GoogleExtensions,
+  GoogleGroupExternalMembersMigrator,
+  GoogleGroupSynchronizer,
+  GoogleKeyCache
+}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
 import org.broadinstitute.dsde.workbench.sam.service.UserService._
@@ -95,9 +101,27 @@ object MockTestSupport extends MockTestSupport {
     val googleKeyCachePubSubDAO = new MockGooglePubSubDAO()
     val googleProjectDAO = new MockGoogleProjectDAO()
     val notificationDAO = new PubSubNotificationDAO(notificationPubSubDAO, "foo")
-    val cloudKeyCache = new GoogleKeyCache(distributedLock, googleIamDAO, FakeGoogleStorageInterpreter, googleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache =
+      new GoogleKeyCache(distributedLock, googleIamDAO, FakeGoogleStorageInterpreter, googleKeyCachePubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(
-      new GoogleExtensions(distributedLock, directoryDAO, policyDAO, googleDirectoryDAO, notificationPubSubDAO, googleGroupSyncPubSubDAO, googleDisableUsersPubSubDAO, googleIamDAO, googleProjectDAO, cloudKeyCache, notificationDAO, FakeGoogleStorageInterpreter, googleServicesConfig, petServiceAccountConfig, resourceTypes, adminConfig.superAdminsGroup)
+      new GoogleExtensions(
+        distributedLock,
+        directoryDAO,
+        policyDAO,
+        googleDirectoryDAO,
+        notificationPubSubDAO,
+        googleGroupSyncPubSubDAO,
+        googleDisableUsersPubSubDAO,
+        googleIamDAO,
+        googleProjectDAO,
+        cloudKeyCache,
+        notificationDAO,
+        FakeGoogleStorageInterpreter,
+        googleServicesConfig,
+        petServiceAccountConfig,
+        resourceTypes,
+        adminConfig.superAdminsGroup
+      )
     )
     val policyEvaluatorService = policyEvaluatorServiceOpt.getOrElse(PolicyEvaluatorService(appConfig.emailDomain, resourceTypes, policyDAO, directoryDAO))
     val mockResourceService = resourceServiceOpt.getOrElse(
@@ -166,6 +190,10 @@ object MockTestSupport extends MockTestSupport {
           googleExtensions,
           googleExtensions.resourceTypes
         )
+      } else null
+    override val groupExternalMembersMigrator: GoogleGroupExternalMembersMigrator =
+      if (samDependencies.cloudExtensions.isInstanceOf[GoogleExtensions]) {
+        new GoogleGroupExternalMembersMigrator(googleExtensions.directoryDAO, googleExtensions)
       } else null
     val googleKeyCache: GoogleKeyCache = samDependencies.cloudExtensions match {
       case extensions: GoogleExtensions => extensions.googleKeyCache
