@@ -150,7 +150,6 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
   override def loadSynchronizedGroupEmailsByResourceType(
       resourceTypeName: ResourceTypeName,
       afterEmail: Option[WorkbenchEmail],
-      limit: Int,
       samRequestContext: SamRequestContext
   ): IO[Seq[WorkbenchEmail]] =
     readOnlyTransaction("loadSynchronizedGroupEmailsByResourceType", samRequestContext) { implicit session =>
@@ -168,34 +167,13 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
                 where ${g.synchronizedDate} is not null
                 and ${rt.name} = ${resourceTypeName}
                 $afterClause
-                order by ${g.email} asc
-                limit ${limit}"""
+                order by ${g.email} asc"""
         .map(rs => rs.get[WorkbenchEmail](g.resultName.email))
         .list()
         .apply()
     }
 
-  override def countSynchronizedGroupsByResourceType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Long] =
-    readOnlyTransaction("countSynchronizedGroupsByResourceType", samRequestContext) { implicit session =>
-      val g = GroupTable.syntax("g")
-      val p = PolicyTable.syntax("p")
-      val r = ResourceTable.syntax("r")
-      val rt = ResourceTypeTable.syntax("rt")
-
-      samsql"""select count(${g.id})
-                from ${GroupTable as g}
-                join ${PolicyTable as p} on ${p.groupId} = ${g.id}
-                join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
-                join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
-                where ${g.synchronizedDate} is not null
-                and ${rt.name} = ${resourceTypeName}"""
-        .map(_.long(1))
-        .single()
-        .apply()
-        .getOrElse(0L)
-    }
-
-  override def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], limit: Int, samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
+  override def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
     readOnlyTransaction("loadEnabledUsers", samRequestContext) { implicit session =>
       val userTable = UserTable.syntax
       val afterClause = afterUserId.map(userId => samsqls"and ${userTable.id} > ${userId}").getOrElse(samsqls"")
@@ -203,22 +181,11 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       samsql"""select ${userTable.resultAll} from ${UserTable as userTable}
                 where ${userTable.enabled} = true
                 $afterClause
-                order by ${userTable.id} asc
-                limit ${limit}"""
+                order by ${userTable.id} asc"""
         .map(UserTable(userTable))
         .list()
         .apply()
         .map(UserTable.unmarshalUserRecord)
-    }
-
-  override def countEnabledUsers(samRequestContext: SamRequestContext): IO[Long] =
-    readOnlyTransaction("countEnabledUsers", samRequestContext) { implicit session =>
-      val userTable = UserTable.syntax
-      samsql"select count(${userTable.id}) from ${UserTable as userTable} where ${userTable.enabled} = true"
-        .map(_.long(1))
-        .single()
-        .apply()
-        .getOrElse(0L)
     }
 
   override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] =

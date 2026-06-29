@@ -2,7 +2,6 @@ package org.broadinstitute.dsde.workbench.sam.google
 
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import fs2.Stream
 import org.broadinstitute.dsde.workbench.model.{ValueObject, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.DirectoryDAO
 import org.broadinstitute.dsde.workbench.sam.model.ResourceTypeName
@@ -18,7 +17,7 @@ import scala.concurrent.duration._
   * [[GoogleExtensions.onUserEnable]] is safe to repeat, so a tier can be re-run safely (e.g. after a quota backoff).
   *
   * All Google calls go through the coordinated-backoff [[GoogleDirectoryDAO]] so a quota trip backs off Sam (and therefore Terra) traffic gracefully. Work is
-  * additionally metered to proactively stay well under Google's quota; speed is intentionally sacrificed for safety.
+  * additionally throttled (a fixed `IO.sleep` between items) to proactively stay well under Google's quota; speed is intentionally sacrificed for safety.
   *
   * @param directoryDAO
   *   the background directory DAO, used to enumerate users/groups without crowding foreground api calls
@@ -26,99 +25,88 @@ import scala.concurrent.duration._
   *   provides the coordinated-backoff google directory DAO, proxy email derivation, and the `onUserEnable` proxy re-add primitive
   * @param throttleDelay
   *   minimum delay between processing items, the proactive rate limit
-  * @param pageSize
-  *   number of rows fetched per enumeration query
   */
 class GoogleGroupExternalMembersMigrator(
     directoryDAO: DirectoryDAO,
     googleExtensions: GoogleExtensions,
     throttleDelay: FiniteDuration = 100.milliseconds,
-    pageSize: Int = 200,
-    progressInterval: Long = 500
+    progressInterval: Int = 500
 ) extends LazyLogging {
 
   /** Flip `allowExternalMembers` on every synchronized Google group for a tier, plus (for the proxy tier) re-add members that may have been dropped while the
     * setting was false. Returns a summary of what happened.
     *
     * @param after
-    *   resume cursor: when set, processing starts strictly after this value (a user id for the proxy tier, a group email for resource-type tiers). Use the
-    *   cursor from the last progress log line to resume after a restart. Because the cursor is only logged every `progressInterval` groups, resuming may
-    *   re-process up to that many already-done groups, which is harmless since every operation is idempotent.
+    *   resume cursor: when set, only groups strictly after this value are loaded (a user id for the proxy tier, a group email for resource-type tiers). Use the
+    *   cursor from the last progress log line to resume after a restart; re-processing already-done groups is harmless since every operation is idempotent.
     */
   def migrate(tier: MigrationTier, after: Option[String], samRequestContext: SamRequestContext): IO[GroupExternalMembersMigrationSummary] =
     (for {
-      total <- countForTier(tier, samRequestContext)
+      items <- itemsForTier(tier, after, samRequestContext)
+      total = items.size
       _ <- IO(
         logger.info(s"Starting allowExternalMembers migration for tier ${tier.value} ($total groups to process)${after.fold("")(c => s", resuming after $c")}")
       )
-      summary <- streamForTier(tier, after, samRequestContext).zipWithIndex
-        .evalTap { case ((_, cursor), index) => logProgress(tier, processed = index + 1, total, cursor) }
-        .map { case ((succeeded, _), _) => succeeded }
-        .compile
-        .fold(GroupExternalMembersMigrationSummary.empty)(_.record(_))
+      summary <- migrateItems(tier, items, total)
       _ <- IO(logger.info(s"Finished allowExternalMembers migration for tier ${tier.value}: $summary of $total"))
     } yield summary)
       // the endpoint runs this in a detached fiber, so make sure an enumeration failure is logged rather than lost
       .onError(t => IO(logger.error(s"allowExternalMembers migration for tier ${tier.value} failed", t)))
 
-  private def countForTier(tier: MigrationTier, samRequestContext: SamRequestContext): IO[Long] =
+  // Load every group in the tier as a uniform MigrationItem. Resource-type groups only contain in-domain proxy-group emails as members so they were never
+  // impacted (flip the setting only); proxy groups hold a user's real (possibly external) email and are the only place memberships could have been dropped, so
+  // they also re-add the user (and their pet service accounts) via onUserEnable.
+  private def itemsForTier(tier: MigrationTier, after: Option[String], samRequestContext: SamRequestContext): IO[Seq[MigrationItem]] =
     tier match {
-      case MigrationTier.Proxy => directoryDAO.countEnabledUsers(samRequestContext)
-      case MigrationTier.ResourceType(resourceTypeName) => directoryDAO.countSynchronizedGroupsByResourceType(resourceTypeName, samRequestContext)
+      case MigrationTier.Proxy =>
+        directoryDAO
+          .loadEnabledUsers(after.map(WorkbenchUserId), samRequestContext)
+          .map(_.map(user => MigrationItem(googleExtensions.toProxyFromUser(user.id), user.id.value, googleExtensions.onUserEnable(user, samRequestContext))))
+      case MigrationTier.ResourceType(resourceTypeName) =>
+        directoryDAO
+          .loadSynchronizedGroupEmailsByResourceType(resourceTypeName, after.map(WorkbenchEmail), samRequestContext)
+          .map(_.map(groupEmail => MigrationItem(groupEmail, groupEmail.value, IO.unit)))
     }
 
-  // Each emitted element is (didItSucceed, cursorValue), where cursorValue is the resume cursor for that group (its user id or email).
-  private def streamForTier(tier: MigrationTier, after: Option[String], samRequestContext: SamRequestContext): Stream[IO, (Boolean, String)] =
-    tier match {
-      case MigrationTier.Proxy => migrateProxyGroups(after.map(WorkbenchUserId), samRequestContext)
-      case MigrationTier.ResourceType(resourceTypeName) => migrateResourceTypeGroups(resourceTypeName, after.map(WorkbenchEmail), samRequestContext)
+  // Process the groups one at a time, throttled, accumulating a summary. Failures are logged and counted, never aborting the run.
+  private def migrateItems(tier: MigrationTier, items: Seq[MigrationItem], total: Int): IO[GroupExternalMembersMigrationSummary] =
+    items.zipWithIndex.foldLeft(IO.pure(GroupExternalMembersMigrationSummary.empty)) { case (acc, (item, index)) =>
+      acc.flatMap { summary =>
+        for {
+          _ <- IO.sleep(throttleDelay)
+          succeeded <- processItem(item)
+          _ <- logProgress(tier, processed = index + 1, total, item.cursor)
+        } yield summary.record(succeeded)
+      }
     }
 
-  // Log a progress line every `progressInterval` groups, including the resume cursor so a restart can pick up from there.
-  private def logProgress(tier: MigrationTier, processed: Long, total: Long, cursor: String): IO[Unit] =
-    IO.whenA(processed % progressInterval == 0)(
-      IO(logger.info(s"allowExternalMembers migration for tier ${tier.value}: processed $processed of $total (resume after: $cursor)"))
-    )
-
-  // Proxy groups are the only groups that hold a user's real (possibly external) email, so they are also the only place memberships could have been dropped.
-  // For each enabled user: enable external members on their proxy group, then re-add the user (and their pet service accounts) via onUserEnable.
-  private def migrateProxyGroups(after: Option[WorkbenchUserId], samRequestContext: SamRequestContext): Stream[IO, (Boolean, String)] =
-    pagedStream(after)(afterId => directoryDAO.loadEnabledUsers(afterId, pageSize, samRequestContext))(_.id)
-      .metered(throttleDelay)
-      .evalMap(user => processItem(googleExtensions.toProxyFromUser(user.id))(googleExtensions.onUserEnable(user, samRequestContext)).map((_, user.id.value)))
-
-  // Resource/policy groups only contain in-domain proxy-group emails as members, so they were never impacted; flip the setting only, no re-add needed.
-  private def migrateResourceTypeGroups(
-      resourceTypeName: ResourceTypeName,
-      after: Option[WorkbenchEmail],
-      samRequestContext: SamRequestContext
-  ): Stream[IO, (Boolean, String)] =
-    pagedStream(after)(afterEmail => directoryDAO.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, afterEmail, pageSize, samRequestContext))(
-      identity
-    )
-      .metered(throttleDelay)
-      .evalMap(groupEmail => processItem(groupEmail)(IO.unit).map((_, groupEmail.value)))
-
-  // Enable external members on a single group, then run an optional follow-up action (re-add). Failures are logged and counted, never aborting the run.
-  private def processItem(groupEmail: WorkbenchEmail)(followUp: => IO[Unit]): IO[Boolean] =
+  // Enable external members on a single group, then run its follow-up action (the proxy-group re-add, or nothing for resource-type groups).
+  private def processItem(item: MigrationItem): IO[Boolean] =
     (for {
-      _ <- IO.fromFuture(IO(googleExtensions.googleDirectoryDAO.enableExternalMembersIfNeeded(groupEmail)))
-      _ <- followUp
+      _ <- IO.fromFuture(IO(googleExtensions.googleDirectoryDAO.enableExternalMembersIfNeeded(item.groupEmail)))
+      _ <- item.followUp
     } yield true).handleError { t =>
-      logger.warn(s"Failed to migrate allowExternalMembers for group $groupEmail", t)
+      logger.warn(s"Failed to migrate allowExternalMembers for group ${item.groupEmail}", t)
       false
     }
 
-  // Stream all rows from a keyset-paginated query, starting after `initialCursor`, fetching the next page once the current one is exhausted.
-  private def pagedStream[A, K](initialCursor: Option[K])(fetchPage: Option[K] => IO[Seq[A]])(key: A => K): Stream[IO, A] =
-    Stream
-      .unfoldEval(initialCursor) { cursor =>
-        fetchPage(cursor).map { page =>
-          if (page.isEmpty) None else Some((page, Option(key(page.last))))
-        }
-      }
-      .flatMap(page => Stream.emits(page))
+  // Log a progress line every `progressInterval` groups, including the resume cursor so a restart can pick up from there.
+  private def logProgress(tier: MigrationTier, processed: Int, total: Int, cursor: String): IO[Unit] =
+    IO.whenA(processed % progressInterval == 0)(
+      IO(logger.info(s"allowExternalMembers migration for tier ${tier.value}: processed $processed of $total (resume after: $cursor)"))
+    )
 }
+
+/** A single group to migrate, paired with the cursor that resumes after it and a follow-up action to run once the setting is flipped.
+  *
+  * @param groupEmail
+  *   the Google group to enable external members on
+  * @param cursor
+  *   the resume cursor for this group (its user id or email)
+  * @param followUp
+  *   extra work after the flip (proxy-group member re-add, or `IO.unit` when none is needed)
+  */
+private final case class MigrationItem(groupEmail: WorkbenchEmail, cursor: String, followUp: IO[Unit])
 
 sealed trait MigrationTier extends ValueObject
 object MigrationTier {

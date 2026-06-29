@@ -2333,20 +2333,16 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
     }
 
     "loadEnabledUsers" - {
-      "returns only enabled users ordered by id, with keyset pagination" in {
+      "returns only enabled users ordered by id, resuming after the given cursor" in {
         assume(databaseEnabled, databaseEnabledClue)
         val userA = Generator.genWorkbenchUserBoth.sample.get.copy(id = WorkbenchUserId("user-a"), enabled = true)
         val userB = Generator.genWorkbenchUserBoth.sample.get.copy(id = WorkbenchUserId("user-b"), enabled = false)
         val userC = Generator.genWorkbenchUserBoth.sample.get.copy(id = WorkbenchUserId("user-c"), enabled = true)
         Seq(userA, userB, userC).foreach(dao.createUser(_, samRequestContext).unsafeRunSync())
 
-        dao.loadEnabledUsers(None, 10, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userA.id, userC.id)
-        // first page of size 1
-        dao.loadEnabledUsers(None, 1, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userA.id)
-        // next page skips the disabled userB and resumes after userA
-        dao.loadEnabledUsers(Some(userA.id), 10, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userC.id)
-
-        dao.countEnabledUsers(samRequestContext).unsafeRunSync() shouldBe 2
+        dao.loadEnabledUsers(None, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userA.id, userC.id)
+        // resuming after userA skips the disabled userB and returns userC
+        dao.loadEnabledUsers(Some(userA.id), samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userC.id)
       }
     }
 
@@ -2358,18 +2354,15 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
 
         // not synchronized yet -> not returned
-        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, 10, samRequestContext).unsafeRunSync() shouldBe empty
-        dao.countSynchronizedGroupsByResourceType(resourceTypeName, samRequestContext).unsafeRunSync() shouldBe 0
+        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, samRequestContext).unsafeRunSync() shouldBe empty
 
         dao.updateSynchronizedDateAndVersion(defaultPolicy, samRequestContext).unsafeRunSync()
 
-        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, 10, samRequestContext).unsafeRunSync() shouldBe Seq(defaultPolicy.email)
-        dao.countSynchronizedGroupsByResourceType(resourceTypeName, samRequestContext).unsafeRunSync() shouldBe 1
+        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, samRequestContext).unsafeRunSync() shouldBe Seq(defaultPolicy.email)
         // a different resource type returns nothing
-        dao.loadSynchronizedGroupEmailsByResourceType(ResourceTypeName("someOtherType"), None, 10, samRequestContext).unsafeRunSync() shouldBe empty
-        dao.countSynchronizedGroupsByResourceType(ResourceTypeName("someOtherType"), samRequestContext).unsafeRunSync() shouldBe 0
-        // keyset pagination past the only result returns nothing
-        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, Some(defaultPolicy.email), 10, samRequestContext).unsafeRunSync() shouldBe empty
+        dao.loadSynchronizedGroupEmailsByResourceType(ResourceTypeName("someOtherType"), None, samRequestContext).unsafeRunSync() shouldBe empty
+        // resuming past the only result returns nothing
+        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, Some(defaultPolicy.email), samRequestContext).unsafeRunSync() shouldBe empty
       }
     }
   }
