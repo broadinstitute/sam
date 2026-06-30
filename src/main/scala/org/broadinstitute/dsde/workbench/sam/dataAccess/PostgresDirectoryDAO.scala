@@ -147,6 +147,139 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       }
     }
 
+  // Synchronized group emails for a resource type, as a union of (1) the policy-backed groups and (2) the aggregate group whose name matches the resource id.
+  // The aggregate-group branch only matches managed groups (only they create a group named after their resource id); it is an empty no-op for other types.
+  private def synchronizedGroupEmailsByResourceType(resourceTypeName: ResourceTypeName): SQLSyntax = {
+    val g = GroupTable.syntax("g")
+    val p = PolicyTable.syntax("p")
+    val r = ResourceTable.syntax("r")
+    val rt = ResourceTypeTable.syntax("rt")
+    val ag = GroupTable.syntax("ag")
+    val ar = ResourceTable.syntax("ar")
+    val art = ResourceTypeTable.syntax("art")
+    samsqls"""select ${g.email} as email
+                from ${GroupTable as g}
+                join ${PolicyTable as p} on ${p.groupId} = ${g.id}
+                join ${ResourceTable as r} on ${p.resourceId} = ${r.id}
+                join ${ResourceTypeTable as rt} on ${r.resourceTypeId} = ${rt.id}
+                where ${g.synchronizedDate} is not null and ${rt.name} = $resourceTypeName
+              union
+              select ${ag.email} as email
+                from ${GroupTable as ag}
+                join ${ResourceTable as ar} on ${ar.name} = ${ag.name}
+                join ${ResourceTypeTable as art} on ${ar.resourceTypeId} = ${art.id}
+                where ${ag.synchronizedDate} is not null and ${art.name} = $resourceTypeName"""
+  }
+
+  override def loadSynchronizedGroupEmailsByResourceType(
+      resourceTypeName: ResourceTypeName,
+      afterEmail: Option[WorkbenchEmail],
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[WorkbenchEmail]] =
+    readOnlyTransaction("loadSynchronizedGroupEmailsByResourceType", samRequestContext) { implicit session =>
+      val afterClause = afterEmail.map(email => samsqls"where email > $email").getOrElse(samsqls"")
+
+      samsql"""select email from (${synchronizedGroupEmailsByResourceType(resourceTypeName)}) emails
+                $afterClause
+                order by email asc
+                limit $limit"""
+        .map(rs => rs.get[WorkbenchEmail]("email"))
+        .list()
+        .apply()
+    }
+
+  override def countSynchronizedGroupEmailsByResourceType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Long] =
+    readOnlyTransaction("countSynchronizedGroupEmailsByResourceType", samRequestContext) { implicit session =>
+      samsql"select count(*) from (${synchronizedGroupEmailsByResourceType(resourceTypeName)}) emails"
+        .map(_.long(1))
+        .single()
+        .apply()
+        .getOrElse(0L)
+    }
+
+  override def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], limit: Int, samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
+    readOnlyTransaction("loadEnabledUsers", samRequestContext) { implicit session =>
+      val userTable = UserTable.syntax
+      val afterClause = afterUserId.map(userId => samsqls"and ${userTable.id} > ${userId}").getOrElse(samsqls"")
+
+      samsql"""select ${userTable.resultAll} from ${UserTable as userTable}
+                where ${userTable.enabled} = true
+                $afterClause
+                order by ${userTable.id} asc
+                limit $limit"""
+        .map(UserTable(userTable))
+        .list()
+        .apply()
+        .map(UserTable.unmarshalUserRecord)
+    }
+
+  override def countEnabledUsers(samRequestContext: SamRequestContext): IO[Long] =
+    readOnlyTransaction("countEnabledUsers", samRequestContext) { implicit session =>
+      val userTable = UserTable.syntax
+      samsql"select count(*) from ${UserTable as userTable} where ${userTable.enabled} = true"
+        .map(_.long(1))
+        .single()
+        .apply()
+        .getOrElse(0L)
+    }
+
+  override def recordExternalMembersMigration(
+      tier: String,
+      state: String,
+      total: Option[Long],
+      processed: Long,
+      failed: Long,
+      lastCursor: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    serializableWriteTransaction("recordExternalMembersMigration", samRequestContext) { implicit session =>
+      // clock_timestamp() (not now()) is used because this transaction may be retried and we want the real wall-clock time of the successful attempt.
+      samsql"""insert into SAM_EXTERNAL_MEMBERS_MIGRATION (tier, state, total, processed, failed, last_cursor, started_at, updated_at)
+                values ($tier, $state, $total, $processed, $failed, $lastCursor, clock_timestamp(), clock_timestamp())
+                on conflict (tier) do update
+                  set state = $state, total = $total, processed = $processed, failed = $failed, last_cursor = $lastCursor, updated_at = clock_timestamp()"""
+        .update()
+        .apply()
+    }
+
+  override def setExternalMembersMigrationState(tier: String, state: String, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("setExternalMembersMigrationState", samRequestContext) { implicit session =>
+      samsql"update SAM_EXTERNAL_MEMBERS_MIGRATION set state = $state, updated_at = clock_timestamp() where tier = $tier"
+        .update()
+        .apply()
+    }
+
+  override def listExternalMembersMigrations(samRequestContext: SamRequestContext): IO[Seq[ExternalMembersMigrationRecord]] =
+    readOnlyTransaction("listExternalMembersMigrations", samRequestContext) { implicit session =>
+      samsql"""select tier, state, total, processed, failed, last_cursor, started_at, updated_at
+                from SAM_EXTERNAL_MEMBERS_MIGRATION order by tier asc"""
+        .map(unmarshalExternalMembersMigration)
+        .list()
+        .apply()
+    }
+
+  override def getExternalMembersMigration(tier: String, samRequestContext: SamRequestContext): IO[Option[ExternalMembersMigrationRecord]] =
+    readOnlyTransaction("getExternalMembersMigration", samRequestContext) { implicit session =>
+      samsql"""select tier, state, total, processed, failed, last_cursor, started_at, updated_at
+                from SAM_EXTERNAL_MEMBERS_MIGRATION where tier = $tier"""
+        .map(unmarshalExternalMembersMigration)
+        .single()
+        .apply()
+    }
+
+  private def unmarshalExternalMembersMigration(rs: WrappedResultSet): ExternalMembersMigrationRecord =
+    ExternalMembersMigrationRecord(
+      tier = rs.string("tier"),
+      state = rs.string("state"),
+      total = rs.longOpt("total"),
+      processed = rs.long("processed"),
+      failed = rs.long("failed"),
+      lastCursor = rs.stringOpt("last_cursor"),
+      startedAt = rs.timestamp("started_at").toInstant,
+      updatedAt = rs.timestamp("updated_at").toInstant
+    )
+
   override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteGroup", samRequestContext) { implicit session =>
       deleteGroup(groupName)

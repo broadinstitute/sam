@@ -199,7 +199,8 @@ object Boot extends IOApp with LazyLogging {
           )
           val googleGroupSynchronizer =
             new GoogleGroupSynchronizer(backgroundDirectoryDAO, backgroundAccessPolicyDAO, cloudExtension.googleDirectoryDAO, cloudExtension, resourceTypeMap)
-          new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer)
+          val groupExternalMembersMigrator = new GoogleGroupExternalMembersMigrator(backgroundDirectoryDAO, cloudExtension)
+          new GoogleExtensionsInitializer(cloudExtension, googleGroupSynchronizer, groupExternalMembersMigrator)
         }
       case None => cats.effect.Resource.pure[IO, CloudExtensionsInitializer](NoExtensionsInitializer)
     }
@@ -443,7 +444,7 @@ object Boot extends IOApp with LazyLogging {
     val samApplication = SamApplication(userService, resourceService, statusService, tosService)
 
     cloudExtensionsInitializer match {
-      case GoogleExtensionsInitializer(googleExt, synchronizer) =>
+      case GoogleExtensionsInitializer(googleExt, synchronizer, migrator) =>
         val routes = new SamRoutes(
           resourceService,
           userService,
@@ -460,6 +461,7 @@ object Boot extends IOApp with LazyLogging {
           val googleExtensions = googleExt
           val cloudExtensions = googleExt
           val googleGroupSynchronizer = synchronizer
+          val groupExternalMembersMigrator = migrator
         }
         AppDependencies(routes, samApplication, cloudExtensionsInitializer, directoryDAO, accessPolicyDAO, policyEvaluatorService)
       case _ =>

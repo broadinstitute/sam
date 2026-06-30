@@ -5,6 +5,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.RouteTestTimeout
 import cats.effect.unsafe.implicits.global
+import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
@@ -330,6 +331,60 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
 
     Post(s"/api/google/v1/user/signedUrlForBlob", blob) ~> samRoutes.route ~> check {
       responseAs[String] should not include "userProject"
+    }
+  }
+
+  // create the (empty) super admins group in the mock google directory, as it always exists in a real deployment
+  private def createSuperAdminsGroup(samDependencies: SamDependencies): GoogleDirectoryDAO = {
+    val googleDirectoryDAO = samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleDirectoryDAO
+    googleDirectoryDAO.createGroup(WorkbenchGroupName("super-admins"), TestSupport.adminConfig.superAdminsGroup).futureValue
+    googleDirectoryDAO
+  }
+
+  // make the test user a super admin by adding them to the configured super admins group in the mock google directory
+  private def makeSuperAdmin(samDependencies: SamDependencies, user: SamUser): Unit =
+    createSuperAdminsGroup(samDependencies).addMemberToGroup(TestSupport.adminConfig.superAdminsGroup, user.email).futureValue
+
+  "PUT /api/google/v1/groups/allowExternalMembers/migrate/{tiers}" should "reject a non-super-admin with 403" in {
+    val (_, samDep, routes) = createTestUser()
+    createSuperAdminsGroup(samDep)
+    Put("/api/google/v1/groups/allowExternalMembers/migrate/proxy") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "accept a super admin and start the migration in the background" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Put("/api/google/v1/groups/allowExternalMembers/migrate/proxy") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Accepted
+      responseAs[String] should include("proxy")
+    }
+  }
+
+  it should "reject an unknown tier with 400" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Put("/api/google/v1/groups/allowExternalMembers/migrate/not-a-real-tier") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+      responseAs[String] should include("not-a-real-tier")
+    }
+  }
+
+  "GET /api/google/v1/groups/allowExternalMembers/migrate/status" should "reject a non-super-admin with 403" in {
+    val (_, samDep, routes) = createTestUser()
+    createSuperAdminsGroup(samDep)
+    Get("/api/google/v1/groups/allowExternalMembers/migrate/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "return the migration status to a super admin" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Get("/api/google/v1/groups/allowExternalMembers/migrate/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] should include("no allowExternalMembers migrations have been started")
     }
   }
 }

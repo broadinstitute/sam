@@ -45,6 +45,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   private val userFavoriteResources: mutable.Map[WorkbenchUserId, Set[FullyQualifiedResourceId]] = new TrieMap()
 
+  private val externalMembersMigrations: mutable.Map[String, ExternalMembersMigrationRecord] = new TrieMap()
+
   override def createGroup(
       group: BasicWorkbenchGroup,
       accessInstruction: Option[String] = None,
@@ -130,6 +132,57 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
       samRequestContext: SamRequestContext
   ): IO[Set[SamUser]] =
     IO(users.values.toSet)
+
+  override def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], limit: Int, samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
+    IO {
+      users.values
+        .filter(_.enabled)
+        .toSeq
+        .sortBy(_.id.value)
+        .dropWhile(user => afterUserId.exists(after => user.id.value <= after.value))
+        .take(limit)
+    }
+
+  override def countEnabledUsers(samRequestContext: SamRequestContext): IO[Long] =
+    IO(users.values.count(_.enabled).toLong)
+
+  // resource-type associations aren't modeled in this mock; the migrator has its own isolated tests
+  override def loadSynchronizedGroupEmailsByResourceType(
+      resourceTypeName: ResourceTypeName,
+      afterEmail: Option[WorkbenchEmail],
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[WorkbenchEmail]] =
+    IO(Seq.empty)
+
+  override def countSynchronizedGroupEmailsByResourceType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Long] =
+    IO(0L)
+
+  override def recordExternalMembersMigration(
+      tier: String,
+      state: String,
+      total: Option[Long],
+      processed: Long,
+      failed: Long,
+      lastCursor: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    IO {
+      val now = Instant.now()
+      val startedAt = externalMembersMigrations.get(tier).map(_.startedAt).getOrElse(now)
+      externalMembersMigrations += tier -> ExternalMembersMigrationRecord(tier, state, total, processed, failed, lastCursor, startedAt, now)
+    }
+
+  override def setExternalMembersMigrationState(tier: String, state: String, samRequestContext: SamRequestContext): IO[Unit] =
+    IO {
+      externalMembersMigrations.get(tier).foreach(r => externalMembersMigrations += tier -> r.copy(state = state, updatedAt = Instant.now()))
+    }
+
+  override def listExternalMembersMigrations(samRequestContext: SamRequestContext): IO[Seq[ExternalMembersMigrationRecord]] =
+    IO(externalMembersMigrations.values.toSeq.sortBy(_.tier))
+
+  override def getExternalMembersMigration(tier: String, samRequestContext: SamRequestContext): IO[Option[ExternalMembersMigrationRecord]] =
+    IO(externalMembersMigrations.get(tier))
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO {
     // TODO add validation for email

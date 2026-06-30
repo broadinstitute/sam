@@ -2,13 +2,14 @@ package org.broadinstitute.dsde.workbench.sam
 package google
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{StatusCode, StatusCodes}
+import cats.effect.IO
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model.google._
-import org.broadinstitute.dsde.workbench.model.{ErrorReport, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
+import org.broadinstitute.dsde.workbench.model.{ErrorReport, ValueObject, WorkbenchEmail, WorkbenchExceptionWithErrorReport}
 import org.broadinstitute.dsde.workbench.sam.api.{
   ExtensionRoutes,
   SamModelDirectives,
@@ -17,6 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.api.{
   SecurityDirectives,
   ioMarshaller
 }
+import org.broadinstitute.dsde.workbench.sam.dataAccess.ExternalMembersMigrationRecord
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
@@ -31,6 +33,17 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
   implicit val executionContext: ExecutionContext
   val googleExtensions: GoogleExtensions
   val googleGroupSynchronizer: GoogleGroupSynchronizer
+  val groupExternalMembersMigrator: GoogleGroupExternalMembersMigrator
+
+  private def formatMigrationStatus(records: Seq[ExternalMembersMigrationRecord]): String =
+    if (records.isEmpty) "no allowExternalMembers migrations have been started"
+    else
+      records
+        .map { r =>
+          val total = r.total.map(_.toString).getOrElse("?")
+          s"${r.tier}: ${r.state}  ${r.processed}/$total (failed ${r.failed})  cursor=${r.lastCursor.getOrElse("-")}  updated=${r.updatedAt}"
+        }
+        .mkString("\n")
 
   override def extensionRoutes(samUser: SamUser, samRequestContext: SamRequestContext): server.Route =
     (pathPrefix("google" / "v1") | pathPrefix("google")) {
@@ -285,6 +298,45 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     googleExtensions.getSynchronizedState(policyId, samRequestContext).map {
                       case Some(syncState) => StatusCodes.OK -> Option(syncState)
                       case None => StatusCodes.NoContent -> None
+                    }
+                  }
+                }
+            }
+          }
+        } ~
+        pathPrefix("groups") {
+          // Super-admin-only one-off migration: ensure allowExternalMembers is enabled on existing Google groups.
+          asSamSuperAdmin(samUser) {
+            pathPrefix("allowExternalMembers" / "migrate") {
+              // GET .../migrate/status -> plain-text progress report, one line per tier that has been started
+              path("status") {
+                getWithTelemetry(samRequestContext) {
+                  complete {
+                    groupExternalMembersMigrator.status(samRequestContext).map(formatMigrationStatus)
+                  }
+                }
+              } ~
+                // PUT .../migrate/{tier[,tier...]} -> run the given priority tiers ("proxy" or resource type names) in order, in the background.
+                // Returns immediately; safe to re-run to resume (completed tiers are skipped, a crashed tier resumes from its last cursor).
+                path(Segment) { tierSelector =>
+                  putWithTelemetry(samRequestContext, "tiers" -> new ValueObject { val value: String = tierSelector }) {
+                    complete {
+                      val validResourceTypes = googleExtensions.resourceTypes.keySet.map(_.value)
+                      val (unknown, tiers) = tierSelector
+                        .split(",")
+                        .toList
+                        .map(_.trim)
+                        .filter(_.nonEmpty)
+                        .partitionMap(s => MigrationTier.fromSelector(s, validResourceTypes).toRight(s))
+                      if (unknown.nonEmpty)
+                        IO.pure[(StatusCode, String)](
+                          StatusCodes.BadRequest -> s"Unknown migration tier(s): ${unknown.mkString(", ")}. Valid tiers: proxy or a resource type name."
+                        )
+                      else
+                        groupExternalMembersMigrator
+                          .migrate(tiers, samRequestContext)
+                          .start
+                          .as(StatusCodes.Accepted -> s"Started allowExternalMembers migration for tiers ${tiers.map(_.value).mkString(", ")}")
                     }
                   }
                 }
