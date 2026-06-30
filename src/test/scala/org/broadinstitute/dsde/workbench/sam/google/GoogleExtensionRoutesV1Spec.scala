@@ -5,6 +5,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.RouteTestTimeout
 import cats.effect.unsafe.implicits.global
+import org.broadinstitute.dsde.workbench.google.GoogleDirectoryDAO
 import org.broadinstitute.dsde.workbench.model.WorkbenchIdentityJsonSupport._
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.TestSupport._
@@ -333,16 +334,20 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
     }
   }
 
-  // make the test user a super admin by adding them to the configured super admins group in the mock google directory
-  private def makeSuperAdmin(samDependencies: SamDependencies, user: SamUser): Unit = {
+  // create the (empty) super admins group in the mock google directory, as it always exists in a real deployment
+  private def createSuperAdminsGroup(samDependencies: SamDependencies): GoogleDirectoryDAO = {
     val googleDirectoryDAO = samDependencies.cloudExtensions.asInstanceOf[GoogleExtensions].googleDirectoryDAO
-    val superAdminsGroup = TestSupport.adminConfig.superAdminsGroup
-    googleDirectoryDAO.createGroup(WorkbenchGroupName("super-admins"), superAdminsGroup).futureValue
-    googleDirectoryDAO.addMemberToGroup(superAdminsGroup, user.email).futureValue
+    googleDirectoryDAO.createGroup(WorkbenchGroupName("super-admins"), TestSupport.adminConfig.superAdminsGroup).futureValue
+    googleDirectoryDAO
   }
 
+  // make the test user a super admin by adding them to the configured super admins group in the mock google directory
+  private def makeSuperAdmin(samDependencies: SamDependencies, user: SamUser): Unit =
+    createSuperAdminsGroup(samDependencies).addMemberToGroup(TestSupport.adminConfig.superAdminsGroup, user.email).futureValue
+
   "PUT /api/google/v1/groups/allowExternalMembers/migrate/{tiers}" should "reject a non-super-admin with 403" in {
-    val (_, _, routes) = createTestUser()
+    val (_, samDep, routes) = createTestUser()
+    createSuperAdminsGroup(samDep)
     Put("/api/google/v1/groups/allowExternalMembers/migrate/proxy") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
@@ -367,7 +372,8 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   }
 
   "GET /api/google/v1/groups/allowExternalMembers/migrate/status" should "reject a non-super-admin with 403" in {
-    val (_, _, routes) = createTestUser()
+    val (_, samDep, routes) = createTestUser()
+    createSuperAdminsGroup(samDep)
     Get("/api/google/v1/groups/allowExternalMembers/migrate/status") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
