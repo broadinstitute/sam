@@ -2,7 +2,8 @@ package org.broadinstitute.dsde.workbench.sam
 package google
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{StatusCode, StatusCodes}
+import cats.effect.IO
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
@@ -318,13 +319,24 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                 // PUT .../migrate/{tier[,tier...]} -> run the given priority tiers ("proxy" or resource type names) in order, in the background.
                 // Returns immediately; safe to re-run to resume (completed tiers are skipped, a crashed tier resumes from its last cursor).
                 path(Segment) { tierSelector =>
-                  val tiers = tierSelector.split(",").toList.map(s => MigrationTier.fromSelector(s.trim))
                   putWithTelemetry(samRequestContext, "tiers" -> new ValueObject { val value: String = tierSelector }) {
                     complete {
-                      groupExternalMembersMigrator
-                        .migrate(tiers, samRequestContext)
-                        .start
-                        .as(StatusCodes.Accepted -> s"Started allowExternalMembers migration for tiers ${tiers.map(_.value).mkString(", ")}")
+                      val validResourceTypes = googleExtensions.resourceTypes.keySet.map(_.value)
+                      val (unknown, tiers) = tierSelector
+                        .split(",")
+                        .toList
+                        .map(_.trim)
+                        .filter(_.nonEmpty)
+                        .partitionMap(s => MigrationTier.fromSelector(s, validResourceTypes).toRight(s))
+                      if (unknown.nonEmpty)
+                        IO.pure[(StatusCode, String)](
+                          StatusCodes.BadRequest -> s"Unknown migration tier(s): ${unknown.mkString(", ")}. Valid tiers: proxy or a resource type name."
+                        )
+                      else
+                        groupExternalMembersMigrator
+                          .migrate(tiers, samRequestContext)
+                          .start
+                          .as(StatusCodes.Accepted -> s"Started allowExternalMembers migration for tiers ${tiers.map(_.value).mkString(", ")}")
                     }
                   }
                 }

@@ -133,22 +133,30 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   ): IO[Set[SamUser]] =
     IO(users.values.toSet)
 
-  override def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
+  override def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], limit: Int, samRequestContext: SamRequestContext): IO[Seq[SamUser]] =
     IO {
       users.values
         .filter(_.enabled)
         .toSeq
         .sortBy(_.id.value)
         .dropWhile(user => afterUserId.exists(after => user.id.value <= after.value))
+        .take(limit)
     }
+
+  override def countEnabledUsers(samRequestContext: SamRequestContext): IO[Long] =
+    IO(users.values.count(_.enabled).toLong)
 
   // resource-type associations aren't modeled in this mock; the migrator has its own isolated tests
   override def loadSynchronizedGroupEmailsByResourceType(
       resourceTypeName: ResourceTypeName,
       afterEmail: Option[WorkbenchEmail],
+      limit: Int,
       samRequestContext: SamRequestContext
   ): IO[Seq[WorkbenchEmail]] =
     IO(Seq.empty)
+
+  override def countSynchronizedGroupEmailsByResourceType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Long] =
+    IO(0L)
 
   override def recordExternalMembersMigration(
       tier: String,

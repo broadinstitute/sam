@@ -32,12 +32,15 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
 
   // stub the status bookkeeping the migrator does for every tier; `existing` is what getExternalMembersMigration returns.
   // stubbed leniently because not every test exercises every bookkeeping call (e.g. a skipped tier never records progress).
+  // the count stubs default to 0; tests that assert a specific total override them.
   private def stubStatus(dao: DirectoryDAO, existing: Option[ExternalMembersMigrationRecord] = None): Unit = {
     lenient().when(dao.getExternalMembersMigration(any[String], any[SamRequestContext])).thenReturn(IO.pure(existing))
     lenient()
       .when(dao.recordExternalMembersMigration(any[String], any[String], any[Option[Long]], any[Long], any[Long], any[Option[String]], any[SamRequestContext]))
       .thenReturn(IO.unit)
     lenient().when(dao.setExternalMembersMigrationState(any[String], any[String], any[SamRequestContext])).thenReturn(IO.unit)
+    lenient().when(dao.countEnabledUsers(any[SamRequestContext])).thenReturn(IO.pure(0L))
+    lenient().when(dao.countSynchronizedGroupEmailsByResourceType(any[ResourceTypeName], any[SamRequestContext])).thenReturn(IO.pure(0L))
   }
 
   private def newMigrator(directoryDAO: DirectoryDAO, googleExtensions: GoogleExtensions): GoogleGroupExternalMembersMigrator =
@@ -49,7 +52,10 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
 
     val directoryDAO = mock[DirectoryDAO]
     stubStatus(directoryDAO)
-    when(directoryDAO.loadEnabledUsers(any[Option[WorkbenchUserId]], any[SamRequestContext])).thenReturn(IO.pure(Seq(user1, user2)))
+    when(directoryDAO.countEnabledUsers(any[SamRequestContext])).thenReturn(IO.pure(2L))
+    // first page returns both users, the next page is empty so pagination terminates
+    when(directoryDAO.loadEnabledUsers(any[Option[WorkbenchUserId]], any[Int], any[SamRequestContext]))
+      .thenReturn(IO.pure(Seq(user1, user2)), IO.pure(Seq.empty))
 
     val googleDirectoryDAO = mock[GoogleDirectoryDAO]
     when(googleDirectoryDAO.enableExternalMembersIfNeeded(any[WorkbenchEmail])).thenReturn(Future.successful(new GroupSettings))
@@ -82,7 +88,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
   it should "resume from the last recorded cursor of a prior run" in {
     val directoryDAO = mock[DirectoryDAO]
     stubStatus(directoryDAO, existing = Some(migrationRecord("proxy", MigrationState.Running, lastCursor = Some("user1"))))
-    when(directoryDAO.loadEnabledUsers(any[Option[WorkbenchUserId]], any[SamRequestContext])).thenReturn(IO.pure(Seq.empty))
+    when(directoryDAO.loadEnabledUsers(any[Option[WorkbenchUserId]], any[Int], any[SamRequestContext])).thenReturn(IO.pure(Seq.empty))
 
     // empty result set, so no Google calls are made
     val googleExtensions = mock[GoogleExtensions]
@@ -90,7 +96,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
 
     // users are loaded starting after the recorded cursor
-    verify(directoryDAO).loadEnabledUsers(ArgumentMatchers.eq(Some(WorkbenchUserId("user1"))), any[SamRequestContext])
+    verify(directoryDAO).loadEnabledUsers(ArgumentMatchers.eq(Some(WorkbenchUserId("user1"))), any[Int], any[SamRequestContext])
   }
 
   "migrating a resource type tier" should "enable external members on each synced group without re-adding members" in {
@@ -100,13 +106,15 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
 
     val directoryDAO = mock[DirectoryDAO]
     stubStatus(directoryDAO)
+    when(directoryDAO.countSynchronizedGroupEmailsByResourceType(ArgumentMatchers.eq(resourceTypeName), any[SamRequestContext])).thenReturn(IO.pure(2L))
     when(
       directoryDAO.loadSynchronizedGroupEmailsByResourceType(
         ArgumentMatchers.eq(resourceTypeName),
         any[Option[WorkbenchEmail]],
+        any[Int],
         any[SamRequestContext]
       )
-    ).thenReturn(IO.pure(Seq(group1, group2)))
+    ).thenReturn(IO.pure(Seq(group1, group2)), IO.pure(Seq.empty))
 
     val googleDirectoryDAO = mock[GoogleDirectoryDAO]
     when(googleDirectoryDAO.enableExternalMembersIfNeeded(any[WorkbenchEmail])).thenReturn(Future.successful(new GroupSettings))
@@ -129,13 +137,15 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
 
     val directoryDAO = mock[DirectoryDAO]
     stubStatus(directoryDAO)
+    when(directoryDAO.countSynchronizedGroupEmailsByResourceType(ArgumentMatchers.eq(resourceTypeName), any[SamRequestContext])).thenReturn(IO.pure(2L))
     when(
       directoryDAO.loadSynchronizedGroupEmailsByResourceType(
         ArgumentMatchers.eq(resourceTypeName),
         any[Option[WorkbenchEmail]],
+        any[Int],
         any[SamRequestContext]
       )
-    ).thenReturn(IO.pure(Seq(badGroup, goodGroup)))
+    ).thenReturn(IO.pure(Seq(badGroup, goodGroup)), IO.pure(Seq.empty))
 
     val googleDirectoryDAO = mock[GoogleDirectoryDAO]
     when(googleDirectoryDAO.enableExternalMembersIfNeeded(badGroup)).thenReturn(Future.failed(new RuntimeException("boom")))
@@ -176,7 +186,8 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
       )
     )
       .thenReturn(IO.unit)
-    when(directoryDAO.loadSynchronizedGroupEmailsByResourceType(any[ResourceTypeName], any[Option[WorkbenchEmail]], any[SamRequestContext]))
+    when(directoryDAO.countSynchronizedGroupEmailsByResourceType(any[ResourceTypeName], any[SamRequestContext])).thenReturn(IO.pure(0L))
+    when(directoryDAO.loadSynchronizedGroupEmailsByResourceType(any[ResourceTypeName], any[Option[WorkbenchEmail]], any[Int], any[SamRequestContext]))
       .thenReturn(IO.pure(Seq.empty))
 
     val googleExtensions = mock[GoogleExtensions]
@@ -214,8 +225,11 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     newMigrator(directoryDAO, mock[GoogleExtensions]).status(samRequestContext).unsafeRunSync() shouldBe records
   }
 
-  "MigrationTier.fromSelector" should "parse the proxy tier and resource type tiers" in {
-    MigrationTier.fromSelector("proxy") shouldBe MigrationTier.Proxy
-    MigrationTier.fromSelector("managed-group") shouldBe MigrationTier.ResourceType(ResourceTypeName("managed-group"))
+  "MigrationTier.fromSelector" should "parse the proxy tier and known resource type tiers, rejecting unknown selectors" in {
+    val validResourceTypes = Set("managed-group", "workspace")
+    MigrationTier.fromSelector("proxy", validResourceTypes) shouldBe Some(MigrationTier.Proxy)
+    MigrationTier.fromSelector("managed-group", validResourceTypes) shouldBe Some(MigrationTier.ResourceType(ResourceTypeName("managed-group")))
+    // an unknown / typo'd resource type is rejected rather than silently accepted
+    MigrationTier.fromSelector("managed-grup", validResourceTypes) shouldBe None
   }
 }

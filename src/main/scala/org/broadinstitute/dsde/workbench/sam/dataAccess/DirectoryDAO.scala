@@ -31,14 +31,21 @@ trait DirectoryDAO {
 
   def batchLoadGroupEmail(groupNames: Set[WorkbenchGroupName], samRequestContext: SamRequestContext): IO[LazyList[(WorkbenchGroupName, WorkbenchEmail)]]
 
-  /** Load the synchronized group emails for a given resource type, ordered by email. Used to enumerate existing Google groups for migrations. Pass an
-    * `afterEmail` to load only emails strictly after it (used to resume a migration without re-loading already-processed groups).
+  /** Load up to `limit` synchronized group emails for a given resource type, ordered by email. This includes both the policy-backed groups and (for managed
+    * groups) the aggregate group whose name matches the resource id. Used to enumerate existing Google groups for migrations. Pass an `afterEmail` to load only
+    * emails strictly after it, which together with `limit` keyset-paginates a migration through the tier.
     */
   def loadSynchronizedGroupEmailsByResourceType(
       resourceTypeName: ResourceTypeName,
       afterEmail: Option[WorkbenchEmail],
+      limit: Int,
       samRequestContext: SamRequestContext
   ): IO[Seq[WorkbenchEmail]]
+
+  /** Count the synchronized group emails for a given resource type, matching [[loadSynchronizedGroupEmailsByResourceType]]. Used to record a migration tier's
+    * total up front.
+    */
+  def countSynchronizedGroupEmailsByResourceType(resourceTypeName: ResourceTypeName, samRequestContext: SamRequestContext): IO[Long]
 
   def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit]
 
@@ -85,10 +92,13 @@ trait DirectoryDAO {
       samRequestContext: SamRequestContext
   ): IO[Set[SamUser]]
 
-  /** Load the enabled users ordered by id. Pass an `afterUserId` to load only users strictly after it (used to resume a migration without re-loading
-    * already-processed users). Used to enumerate users whose proxy groups need to be migrated.
+  /** Load up to `limit` enabled users ordered by id. Pass an `afterUserId` to load only users strictly after it, which together with `limit` keyset-paginates a
+    * migration through the enabled users. Used to enumerate users whose proxy groups need to be migrated.
     */
-  def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], samRequestContext: SamRequestContext): IO[Seq[SamUser]]
+  def loadEnabledUsers(afterUserId: Option[WorkbenchUserId], limit: Int, samRequestContext: SamRequestContext): IO[Seq[SamUser]]
+
+  /** Count the enabled users, matching [[loadEnabledUsers]]. Used to record the proxy migration tier's total up front. */
+  def countEnabledUsers(samRequestContext: SamRequestContext): IO[Long]
 
   /** Record the mutable progress of a tier: its state, total, processed/failed counts, and resume cursor, bumping the heartbeat. Used to mark a tier `running`
     * at the start of a run, for periodic heartbeats, and for the terminal `completed` state.

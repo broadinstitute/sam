@@ -343,7 +343,7 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
 
   "PUT /api/google/v1/groups/allowExternalMembers/migrate/{tiers}" should "reject a non-super-admin with 403" in {
     val (_, _, routes) = createTestUser()
-    Put("/api/google/v1/groups/allowExternalMembers/migrate/managed-group") ~> routes.route ~> check {
+    Put("/api/google/v1/groups/allowExternalMembers/migrate/proxy") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
@@ -351,9 +351,18 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
   it should "accept a super admin and start the migration in the background" in {
     val (user, samDep, routes) = createTestUser()
     makeSuperAdmin(samDep, user)
-    Put("/api/google/v1/groups/allowExternalMembers/migrate/managed-group") ~> routes.route ~> check {
+    Put("/api/google/v1/groups/allowExternalMembers/migrate/proxy") ~> routes.route ~> check {
       status shouldEqual StatusCodes.Accepted
-      responseAs[String] should include("managed-group")
+      responseAs[String] should include("proxy")
+    }
+  }
+
+  it should "reject an unknown tier with 400" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Put("/api/google/v1/groups/allowExternalMembers/migrate/not-a-real-tier") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.BadRequest
+      responseAs[String] should include("not-a-real-tier")
     }
   }
 

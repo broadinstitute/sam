@@ -2333,16 +2333,19 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
     }
 
     "loadEnabledUsers" - {
-      "returns only enabled users ordered by id, resuming after the given cursor" in {
+      "returns only enabled users ordered by id, paginating after the given cursor" in {
         assume(databaseEnabled, databaseEnabledClue)
         val userA = Generator.genWorkbenchUserBoth.sample.get.copy(id = WorkbenchUserId("user-a"), enabled = true)
         val userB = Generator.genWorkbenchUserBoth.sample.get.copy(id = WorkbenchUserId("user-b"), enabled = false)
         val userC = Generator.genWorkbenchUserBoth.sample.get.copy(id = WorkbenchUserId("user-c"), enabled = true)
         Seq(userA, userB, userC).foreach(dao.createUser(_, samRequestContext).unsafeRunSync())
 
-        dao.loadEnabledUsers(None, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userA.id, userC.id)
+        dao.loadEnabledUsers(None, 100, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userA.id, userC.id)
+        dao.countEnabledUsers(samRequestContext).unsafeRunSync() shouldBe 2L
+        // the limit bounds the page
+        dao.loadEnabledUsers(None, 1, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userA.id)
         // resuming after userA skips the disabled userB and returns userC
-        dao.loadEnabledUsers(Some(userA.id), samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userC.id)
+        dao.loadEnabledUsers(Some(userA.id), 100, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userC.id)
       }
     }
 
@@ -2354,15 +2357,36 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         policyDAO.createPolicy(defaultPolicy, samRequestContext).unsafeRunSync()
 
         // not synchronized yet -> not returned
-        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, samRequestContext).unsafeRunSync() shouldBe empty
+        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, 100, samRequestContext).unsafeRunSync() shouldBe empty
+        dao.countSynchronizedGroupEmailsByResourceType(resourceTypeName, samRequestContext).unsafeRunSync() shouldBe 0L
 
         dao.updateSynchronizedDateAndVersion(defaultPolicy, samRequestContext).unsafeRunSync()
 
-        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, samRequestContext).unsafeRunSync() shouldBe Seq(defaultPolicy.email)
+        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, 100, samRequestContext).unsafeRunSync() shouldBe Seq(defaultPolicy.email)
+        dao.countSynchronizedGroupEmailsByResourceType(resourceTypeName, samRequestContext).unsafeRunSync() shouldBe 1L
         // a different resource type returns nothing
-        dao.loadSynchronizedGroupEmailsByResourceType(ResourceTypeName("someOtherType"), None, samRequestContext).unsafeRunSync() shouldBe empty
+        dao.loadSynchronizedGroupEmailsByResourceType(ResourceTypeName("someOtherType"), None, 100, samRequestContext).unsafeRunSync() shouldBe empty
         // resuming past the only result returns nothing
-        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, Some(defaultPolicy.email), samRequestContext).unsafeRunSync() shouldBe empty
+        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, Some(defaultPolicy.email), 100, samRequestContext).unsafeRunSync() shouldBe empty
+      }
+
+      "includes the aggregate group whose name matches a resource id (e.g. a managed group's group)" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        policyDAO.createResourceType(resourceType, samRequestContext).unsafeRunSync()
+        policyDAO.createResource(defaultResource, samRequestContext).unsafeRunSync()
+
+        // an aggregate group is a plain group whose name equals the resource id; it has no backing policy
+        val aggregateEmail = WorkbenchEmail(s"${defaultResource.resourceId.value}@example.com")
+        val aggregateGroup = BasicWorkbenchGroup(WorkbenchGroupName(defaultResource.resourceId.value), Set.empty, aggregateEmail)
+        dao.createGroup(aggregateGroup, samRequestContext = samRequestContext).unsafeRunSync()
+
+        // not synchronized yet -> not returned
+        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, 100, samRequestContext).unsafeRunSync() shouldBe empty
+
+        dao.updateSynchronizedDateAndVersion(aggregateGroup, samRequestContext).unsafeRunSync()
+
+        dao.loadSynchronizedGroupEmailsByResourceType(resourceTypeName, None, 100, samRequestContext).unsafeRunSync() shouldBe Seq(aggregateEmail)
+        dao.countSynchronizedGroupEmailsByResourceType(resourceTypeName, samRequestContext).unsafeRunSync() shouldBe 1L
       }
     }
 
