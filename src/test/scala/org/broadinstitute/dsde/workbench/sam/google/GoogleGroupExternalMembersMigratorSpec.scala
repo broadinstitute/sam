@@ -66,7 +66,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     when(googleExtensions.toProxyFromUser(any[WorkbenchUserId]))
       .thenAnswer((invocation: InvocationOnMock) => WorkbenchEmail(s"PROXY_${invocation.getArgument[WorkbenchUserId](0).value}@example.com"))
 
-    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
+    newMigrator(directoryDAO, googleExtensions).migrate(List(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
 
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(WorkbenchEmail("PROXY_user1@example.com"))
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(WorkbenchEmail("PROXY_user2@example.com"))
@@ -93,7 +93,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     // empty result set, so no Google calls are made
     val googleExtensions = mock[GoogleExtensions]
 
-    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
+    newMigrator(directoryDAO, googleExtensions).migrate(List(MigrationTier.Proxy), samRequestContext).unsafeRunSync()
 
     // users are loaded starting after the recorded cursor
     verify(directoryDAO).loadEnabledUsers(ArgumentMatchers.eq(Some(WorkbenchUserId("user1"))), any[Int], any[SamRequestContext])
@@ -122,7 +122,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     val googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.googleDirectoryDAO).thenReturn(googleDirectoryDAO)
 
-    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.ResourceType(resourceTypeName)), samRequestContext).unsafeRunSync()
+    newMigrator(directoryDAO, googleExtensions).migrate(List(MigrationTier.ResourceType(resourceTypeName)), samRequestContext).unsafeRunSync()
 
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(group1)
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(group2)
@@ -154,7 +154,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     val googleExtensions = mock[GoogleExtensions]
     when(googleExtensions.googleDirectoryDAO).thenReturn(googleDirectoryDAO)
 
-    newMigrator(directoryDAO, googleExtensions).migrate(Seq(MigrationTier.ResourceType(resourceTypeName)), samRequestContext).unsafeRunSync()
+    newMigrator(directoryDAO, googleExtensions).migrate(List(MigrationTier.ResourceType(resourceTypeName)), samRequestContext).unsafeRunSync()
 
     verify(googleDirectoryDAO).enableExternalMembersIfNeeded(goodGroup)
     // both processed, one counted as failed
@@ -193,7 +193,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
     val googleExtensions = mock[GoogleExtensions]
 
     newMigrator(directoryDAO, googleExtensions)
-      .migrate(Seq(MigrationTier.Proxy, MigrationTier.ResourceType(ResourceTypeName("managed-group"))), samRequestContext)
+      .migrate(List(MigrationTier.Proxy, MigrationTier.ResourceType(ResourceTypeName("managed-group"))), samRequestContext)
       .unsafeRunSync()
 
     // proxy is already completed, so it never records progress; the other tier runs and records completion

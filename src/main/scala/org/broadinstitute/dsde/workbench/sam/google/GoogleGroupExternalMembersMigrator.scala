@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
 import cats.effect.IO
+import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ValueObject, WorkbenchEmail, WorkbenchUserId}
 import org.broadinstitute.dsde.workbench.sam.dataAccess.{DirectoryDAO, ExternalMembersMigrationRecord, MigrationState}
@@ -25,16 +26,14 @@ import scala.concurrent.duration._
   *   provides the coordinated-backoff google directory DAO and proxy email derivation
   * @param throttleDelay
   *   minimum delay between processing items, the proactive rate limit
-  * @param progressInterval
-  *   how often (in groups) to log progress and persist a heartbeat
   * @param pageSize
-  *   how many items to load per keyset-paginated query, so a tier never materializes its whole population in memory at once
+  *   how many items to load per keyset-paginated query, so a tier never materializes its whole population in memory at once; also the heartbeat cadence (one
+  *   progress record per page)
   */
 class GoogleGroupExternalMembersMigrator(
     directoryDAO: DirectoryDAO,
     googleExtensions: GoogleExtensions,
     throttleDelay: FiniteDuration = 100.milliseconds,
-    progressInterval: Int = 500,
     pageSize: Int = 1000
 ) extends LazyLogging {
 
@@ -43,8 +42,8 @@ class GoogleGroupExternalMembersMigrator(
     * one-off operator-driven migration with no cross-instance locking: re-firing while a run is in flight would double up that tier's idempotent work (capped
     * by the coordinated quota backoff), so the operator should check the status endpoint before re-running.
     */
-  def migrate(tiers: Seq[MigrationTier], samRequestContext: SamRequestContext): IO[Unit] =
-    tiers.foldLeft(IO.unit)((acc, tier) => acc >> migrateTier(tier, skipCompleted = tiers.size > 1, samRequestContext))
+  def migrate(tiers: List[MigrationTier], samRequestContext: SamRequestContext): IO[Unit] =
+    tiers.traverse_(tier => migrateTier(tier, skipCompleted = tiers.size > 1, samRequestContext))
 
   /** Current persisted progress for every tier that has been started, for the status endpoint. */
   def status(samRequestContext: SamRequestContext): IO[Seq[ExternalMembersMigrationRecord]] =
@@ -103,8 +102,9 @@ class GoogleGroupExternalMembersMigrator(
       case MigrationTier.ResourceType(resourceTypeName) => directoryDAO.countSynchronizedGroupEmailsByResourceType(resourceTypeName, samRequestContext)
     }
 
-  // Keyset-paginate through the tier a page at a time so the whole population is never held in memory, processing each page's items one at a time and
-  // accumulating a cumulative summary (seeded from any resumed progress). Per-item failures are logged and counted, never aborting the run.
+  // Keyset-paginate through the tier a page at a time so the whole population is never held in memory, accumulating a cumulative summary (seeded from any
+  // resumed progress). Each step loads and processes the next page; iterateUntilM repeats it until a page comes back short, i.e. the last page. Per-item
+  // failures are logged and counted, never aborting the run.
   private def migratePages(
       tier: MigrationTier,
       startCursor: Option[String],
@@ -112,24 +112,24 @@ class GoogleGroupExternalMembersMigrator(
       base: GroupExternalMembersMigrationSummary,
       samRequestContext: SamRequestContext
   ): IO[GroupExternalMembersMigrationSummary] = {
-    def loop(cursor: Option[String], summary: GroupExternalMembersMigrationSummary): IO[GroupExternalMembersMigrationSummary] =
-      itemsForTier(tier, cursor, samRequestContext).flatMap { items =>
-        if (items.isEmpty) IO.pure(summary)
-        else
-          items
-            .foldLeft(IO.pure(summary)) { (acc, item) =>
-              acc.flatMap { current =>
-                for {
-                  _ <- IO.sleep(throttleDelay)
-                  succeeded <- processItem(item)
-                  updated = current.record(succeeded, item.cursor)
-                  _ <- checkpoint(tier, total, updated, samRequestContext)
-                } yield updated
-              }
-            }
-            .flatMap(pageSummary => loop(items.lastOption.map(_.cursor), pageSummary))
+    def processNextPage(state: PageProgress): IO[PageProgress] =
+      itemsForTier(tier, state.cursor, samRequestContext).flatMap { page =>
+        page
+          .traverse(item => IO.sleep(throttleDelay) >> processItem(item))
+          .flatMap { outcomes =>
+            val summary = state.summary.copy(
+              processed = state.summary.processed + page.size,
+              failed = state.summary.failed + outcomes.count(succeeded => !succeeded),
+              lastCursor = page.lastOption.map(_.cursor).orElse(state.summary.lastCursor)
+            )
+            val next = PageProgress(summary.lastCursor, summary, done = page.size < pageSize)
+            recordPageProgress(tier, total, summary, samRequestContext).as(next)
+          }
       }
-    loop(startCursor, base)
+
+    PageProgress(startCursor, base, done = false)
+      .iterateUntilM(processNextPage)(_.done)
+      .map(_.summary)
   }
 
   // Load one page of the tier as uniform MigrationItems. Resource-type groups only contain in-domain proxy-group emails as members, so flipping the setting is
@@ -164,16 +164,19 @@ class GoogleGroupExternalMembersMigrator(
       false
     }
 
-  // Every `progressInterval` groups, log progress and persist a heartbeat (cumulative counts + resume cursor) so progress survives a restart and the status
-  // endpoint stays current.
-  private def checkpoint(tier: MigrationTier, total: Long, summary: GroupExternalMembersMigrationSummary, samRequestContext: SamRequestContext): IO[Unit] =
-    IO.whenA(summary.processed % progressInterval == 0)(
-      IO(
-        logger.info(
-          s"allowExternalMembers migration for tier ${tier.value}: processed ${summary.processed} of $total (resume after: ${summary.lastCursor.getOrElse("-")})"
-        )
-      ) >> recordProgress(tier, MigrationState.Running, total, summary, samRequestContext)
-    )
+  // After each page, log progress and persist a heartbeat (cumulative counts + resume cursor) so progress survives a restart and the status endpoint stays
+  // current.
+  private def recordPageProgress(
+      tier: MigrationTier,
+      total: Long,
+      summary: GroupExternalMembersMigrationSummary,
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    IO(
+      logger.info(
+        s"allowExternalMembers migration for tier ${tier.value}: processed ${summary.processed} of $total (resume after: ${summary.lastCursor.getOrElse("-")})"
+      )
+    ) >> recordProgress(tier, MigrationState.Running, total, summary, samRequestContext)
 
   private def recordProgress(
       tier: MigrationTier,
@@ -195,6 +198,10 @@ class GoogleGroupExternalMembersMigrator(
   *   extra work after the flip (proxy-group member re-add, or `IO.unit` when none is needed)
   */
 private final case class MigrationItem(groupEmail: WorkbenchEmail, cursor: String, followUp: IO[Unit])
+
+/** The loop state threaded through the per-page migration: where to resume, the cumulative summary so far, and whether the last page was the final (short) one.
+  */
+private final case class PageProgress(cursor: Option[String], summary: GroupExternalMembersMigrationSummary, done: Boolean)
 
 sealed trait MigrationTier extends ValueObject
 object MigrationTier {
@@ -223,7 +230,4 @@ object MigrationTier {
   * @param lastCursor
   *   the resume cursor of the most recently processed group, persisted so a crashed run resumes after it
   */
-case class GroupExternalMembersMigrationSummary(processed: Long, failed: Long, lastCursor: Option[String] = None) {
-  def record(succeeded: Boolean, cursor: String): GroupExternalMembersMigrationSummary =
-    copy(processed = processed + 1, failed = if (succeeded) failed else failed + 1, lastCursor = Some(cursor))
-}
+case class GroupExternalMembersMigrationSummary(processed: Long, failed: Long, lastCursor: Option[String] = None)
