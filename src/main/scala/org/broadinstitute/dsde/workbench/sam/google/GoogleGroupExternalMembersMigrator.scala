@@ -18,24 +18,22 @@ import scala.concurrent.duration._
   * Every operation is idempotent: [[GoogleDirectoryDAO.enableExternalMembersIfNeeded]] only writes when the setting is currently false, and re-adding a user to
   * their proxy group is a no-op when they are already a member, so a tier can be re-run safely (e.g. after a quota backoff).
   *
-  * All Google calls go through the coordinated-backoff [[GoogleDirectoryDAO]] so a quota trip backs off Sam (and therefore Terra) traffic gracefully. Work is
-  * additionally paced to a configurable rate to proactively stay under Google's Groups Settings API quota. That rate (queries per minute) is the single
-  * throughput control: it is overridable per run (see [[migrate]]) so the operator can dial throughput up or down between runs to match whatever quota Google
-  * has granted, without a redeploy (there is no live retune of a run already in flight). Because starts are paced, in-flight concurrency self-limits to roughly
-  * `rate × latency`; a fixed [[maxConcurrency]] ceiling exists only to bound the worst case if Google slows for a sustained stretch, and is set generously so
-  * it never throttles the paced rate under normal latency.
+  * All Google calls go through the coordinated-backoff [[GoogleDirectoryDAO]] so a quota trip backs off Sam (and therefore Terra) traffic gracefully. On top of
+  * that, work is paced to a configurable queries-per-minute rate to stay under Google's Groups Settings API quota. That rate is the single throughput knob and is
+  * overridable per run (see [[migrate]]), so the operator can retune between runs to match whatever quota Google has granted without a redeploy. Because starts
+  * are paced, concurrency self-limits to roughly `rate × latency`; [[maxConcurrency]] is only a safety ceiling for when Google slows down.
   *
   * @param directoryDAO
   *   the background directory DAO, used to enumerate users/groups without crowding foreground api calls, and to persist per-tier migration progress
   * @param googleExtensions
   *   provides the coordinated-backoff google directory DAO and proxy email derivation
   * @param defaultQueriesPerMinute
-  *   default proactive rate limit, expressed in Groups Settings API queries per minute (the unit Google's quota uses). Each group costs ~2 queries (a settings
-  *   `get` plus a conditional `patch`), so the effective group throughput is roughly half this. Deliberately conservative so a bare invocation is safe against
-  *   the current quota with headroom for foreground traffic; the operator overrides it per run once a higher quota is granted.
+  *   default rate limit in Groups Settings API queries per minute (the unit of Google's quota). Each group costs ~2 queries (a `get` plus a conditional
+  *   `patch`), so group throughput is roughly half this. Conservative by default so a bare invocation is safe against the current quota; the operator overrides
+  *   it per run once a higher quota is granted.
   * @param maxConcurrency
-  *   hard ceiling on groups processed in parallel. Not an operator knob and not a throughput control (the rate limiter is): it only caps how many calls can be
-  *   in flight at once if Google stalls, keeping that below the per-page bound. Sized generously so it never limits the paced rate at any realistic quota.
+  *   safety ceiling on groups in flight at once, not a throughput knob (the rate limiter is that). Only bites if Google stalls; sized so it never limits the
+  *   paced rate under normal latency.
   * @param pageSize
   *   how many items to load per keyset-paginated query, so a tier never materializes its whole population in memory at once; also the heartbeat cadence (one
   *   progress record per page)
@@ -51,11 +49,10 @@ class GoogleGroupExternalMembersMigrator(
   /** Migrate the given tiers in order, one at a time. Each tier is processed independently: a `completed` tier is skipped when more than one tier was
     * requested, and a crashed/failed tier resumes from its last recorded cursor. Returns immediately to the caller via the endpoint's detached fiber.
     *
-    * The rate override is per-invocation and is not persisted, so a resume (e.g. after a reboot left the tier `Running`) may pass a different value than the
-    * original run; the tier picks up from its cursor at whatever rate this call specifies. There is intentionally no way to retune a run already in flight and
-    * no cross-instance/cross-fiber locking: re-firing while a run is live starts a *second* runner for that tier, each with its own independent rate limiter
-    * (so their call rates add up, overshooting the intended limit) both doubling that tier's idempotent work. The coordinated quota backoff is the only shared
-    * brake, so the operator must check the status endpoint and confirm a run has ended (stale heartbeat) before re-running to change the rate.
+    * The rate override is per-invocation and not persisted, so a resume may run at a different rate than the original; the tier just picks up from its cursor at
+    * whatever rate this call specifies. There is no locking: re-firing while a run is live starts a *second* runner for the tier with its own rate limiter (so the
+    * two rates add up and overshoot the limit), on top of doubling the idempotent work. The operator must confirm a run has ended (via the status endpoint) before
+    * re-running.
     */
   def migrate(
       tiers: List[MigrationTier],
@@ -134,13 +131,12 @@ class GoogleGroupExternalMembersMigrator(
       case MigrationTier.ResourceType(resourceTypeName) => directoryDAO.countSynchronizedGroupEmailsByResourceType(resourceTypeName, samRequestContext)
     }
 
-  // Keyset-paginate through the tier a page at a time so the whole population is never held in memory, accumulating a cumulative summary (seeded from any
-  // resumed progress). Each step loads and processes the next page; iterateUntilM repeats it until a page comes back short, i.e. the last page. Within a page,
-  // items run in parallel but every item first waits on a shared rate limiter (which spaces group *starts* so the per-minute call average stays at the configured
-  // limit; the ~2 calls a single group makes still go back-to-back, so the rate is an average rather than an instantaneous cap) and then acquires a `maxConcurrency`
-  // permit. In-flight concurrency self-limits to about rate*latency from the pacing alone; the semaphore is only a safety cap on that if Google stalls, never the
-  // throughput control. The limiter and semaphore are created once per tier and, because tiers run sequentially, effectively bound the rate across the whole run.
-  // Per-item failures are logged and counted, never aborting the run.
+  // Keyset-paginate through the tier one page at a time so the whole population is never held in memory, accumulating a cumulative summary (seeded from any
+  // resumed progress). iterateUntilM loads and processes each page until one comes back short, i.e. the last page. Within a page, items run in parallel, but each
+  // first waits on a shared rate limiter that spaces out group *starts* (a group's ~2 calls still go back-to-back, so the limit is a per-minute average, not an
+  // instantaneous cap), then takes a `maxConcurrency` permit. Pacing alone keeps concurrency near rate*latency; the semaphore is just a safety cap for when Google
+  // stalls. Both are created once per tier and, since tiers run sequentially, bound the rate across the whole run. Per-item failures are logged and counted,
+  // never aborting the run.
   private def migratePages(
       tier: MigrationTier,
       startCursor: Option[String],
@@ -172,14 +168,13 @@ class GoogleGroupExternalMembersMigrator(
         .map(_.summary)
     }
 
-  // Minimum wall-clock spacing between the starts of two groups, so the Google call rate stays under `queriesPerMinute`. Each group costs ~2 Groups Settings
-  // queries (get + conditional patch), so groups/min = queriesPerMinute / 2 and the per-group interval is 60_000ms / (queriesPerMinute / 2). A non-positive rate
-  // disables pacing.
+  // Wall-clock spacing between two group starts that keeps the call rate under `queriesPerMinute`. Each group is ~2 queries (get + conditional patch), so
+  // groups/min = queriesPerMinute / 2 and the interval is 60_000 / (queriesPerMinute / 2) ms. A non-positive rate disables pacing.
   private def groupInterval(queriesPerMinute: Int): FiniteDuration =
     if (queriesPerMinute <= 0) Duration.Zero else (120000L / queriesPerMinute).milliseconds
 
-  // Reserve the next start slot at least `interval` after the previous reservation (never in the past), then sleep until it before running `task`. The Ref holds
-  // the next free slot as a monotonic timestamp; `modify` claims a slot atomically so concurrent callers serialize their starts without bunching up.
+  // Reserve the next start slot `interval` after the previous one (never in the past), then sleep until it before running `task`. The Ref holds the next free
+  // slot as a monotonic timestamp; `modify` claims one atomically so concurrent callers serialize their starts instead of bunching up.
   private def paced[A](interval: FiniteDuration, nextSlot: Ref[IO, FiniteDuration])(task: IO[A]): IO[A] =
     for {
       now <- IO.monotonic
