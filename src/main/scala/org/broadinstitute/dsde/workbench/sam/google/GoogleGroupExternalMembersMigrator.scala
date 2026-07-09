@@ -19,9 +19,9 @@ import scala.concurrent.duration._
   * their proxy group is a no-op when they are already a member, so a tier can be re-run safely (e.g. after a quota backoff).
   *
   * All Google calls go through the coordinated-backoff [[GoogleDirectoryDAO]] so a quota trip backs off Sam (and therefore Terra) traffic gracefully. On top of
-  * that, work is paced to a configurable queries-per-minute rate to stay under Google's Groups Settings API quota. That rate is the single throughput knob and is
-  * overridable per run (see [[migrate]]), so the operator can retune between runs to match whatever quota Google has granted without a redeploy. Because starts
-  * are paced, concurrency self-limits to roughly `rate × latency`; [[maxConcurrency]] is only a safety ceiling for when Google slows down.
+  * that, work is paced to a configurable queries-per-minute rate to stay under Google's Groups Settings API quota. That rate is the single throughput knob and
+  * is overridable per run (see [[migrate]]), so the operator can retune between runs to match whatever quota Google has granted without a redeploy. Because
+  * starts are paced, concurrency self-limits to roughly `rate × latency`; [[maxConcurrency]] is only a safety ceiling for when Google slows down.
   *
   * @param directoryDAO
   *   the background directory DAO, used to enumerate users/groups without crowding foreground api calls, and to persist per-tier migration progress
@@ -49,10 +49,10 @@ class GoogleGroupExternalMembersMigrator(
   /** Migrate the given tiers in order, one at a time. Each tier is processed independently: a `completed` tier is skipped when more than one tier was
     * requested, and a crashed/failed tier resumes from its last recorded cursor. Returns immediately to the caller via the endpoint's detached fiber.
     *
-    * The rate override is per-invocation and not persisted, so a resume may run at a different rate than the original; the tier just picks up from its cursor at
-    * whatever rate this call specifies. There is no locking: re-firing while a run is live starts a *second* runner for the tier with its own rate limiter (so the
-    * two rates add up and overshoot the limit), on top of doubling the idempotent work. The operator must confirm a run has ended (via the status endpoint) before
-    * re-running.
+    * The rate override is per-invocation and not persisted, so a resume may run at a different rate than the original; the tier just picks up from its cursor
+    * at whatever rate this call specifies. There is no locking: re-firing while a run is live starts a *second* runner for the tier with its own rate limiter
+    * (so the two rates add up and overshoot the limit), on top of doubling the idempotent work. The operator must confirm a run has ended (via the status
+    * endpoint) before re-running.
     */
   def migrate(
       tiers: List[MigrationTier],
