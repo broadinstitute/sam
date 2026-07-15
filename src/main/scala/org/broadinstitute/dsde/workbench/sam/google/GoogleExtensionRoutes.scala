@@ -318,25 +318,30 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
               } ~
                 // PUT .../migrate/{tier[,tier...]} -> run the given priority tiers ("proxy" or resource type names) in order, in the background.
                 // Returns immediately; safe to re-run to resume (completed tiers are skipped, a crashed tier resumes from its last cursor).
+                // Optional queriesPerMinute query param sets the Groups Settings API rate limit (the single throughput control) for this run.
                 path(Segment) { tierSelector =>
-                  putWithTelemetry(samRequestContext, "tiers" -> new ValueObject { val value: String = tierSelector }) {
-                    complete {
-                      val validResourceTypes = googleExtensions.resourceTypes.keySet.map(_.value)
-                      val (unknown, tiers) = tierSelector
-                        .split(",")
-                        .toList
-                        .map(_.trim)
-                        .filter(_.nonEmpty)
-                        .partitionMap(s => MigrationTier.fromSelector(s, validResourceTypes).toRight(s))
-                      if (unknown.nonEmpty)
-                        IO.pure[(StatusCode, String)](
-                          StatusCodes.BadRequest -> s"Unknown migration tier(s): ${unknown.mkString(", ")}. Valid tiers: proxy or a resource type name."
-                        )
-                      else
-                        groupExternalMembersMigrator
-                          .migrate(tiers, samRequestContext)
-                          .start
-                          .as(StatusCodes.Accepted -> s"Started allowExternalMembers migration for tiers ${tiers.map(_.value).mkString(", ")}")
+                  parameters("queriesPerMinute".as[Int].optional) { queriesPerMinute =>
+                    putWithTelemetry(samRequestContext, "tiers" -> new ValueObject { val value: String = tierSelector }) {
+                      complete {
+                        val validResourceTypes = googleExtensions.resourceTypes.keySet.map(_.value)
+                        val (unknown, tiers) = tierSelector
+                          .split(",")
+                          .toList
+                          .map(_.trim)
+                          .filter(_.nonEmpty)
+                          .partitionMap(s => MigrationTier.fromSelector(s, validResourceTypes).toRight(s))
+                        if (unknown.nonEmpty)
+                          IO.pure[(StatusCode, String)](
+                            StatusCodes.BadRequest -> s"Unknown migration tier(s): ${unknown.mkString(", ")}. Valid tiers: proxy or a resource type name."
+                          )
+                        else if (queriesPerMinute.exists(_ < 1))
+                          IO.pure[(StatusCode, String)](StatusCodes.BadRequest -> s"queriesPerMinute must be >= 1 (was ${queriesPerMinute.get})")
+                        else
+                          groupExternalMembersMigrator
+                            .migrate(tiers, samRequestContext, queriesPerMinute)
+                            .start
+                            .as(StatusCodes.Accepted -> s"Started allowExternalMembers migration for tiers ${tiers.map(_.value).mkString(", ")}")
+                      }
                     }
                   }
                 }
