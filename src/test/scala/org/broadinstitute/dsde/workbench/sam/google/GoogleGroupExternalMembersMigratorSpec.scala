@@ -18,7 +18,6 @@ import org.scalatest.matchers.should.Matchers
 
 import java.time.Instant
 import scala.concurrent.Future
-import scala.concurrent.duration._
 
 class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
@@ -44,7 +43,7 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
   }
 
   private def newMigrator(directoryDAO: DirectoryDAO, googleExtensions: GoogleExtensions): GoogleGroupExternalMembersMigrator =
-    new GoogleGroupExternalMembersMigrator(directoryDAO, googleExtensions, throttleDelay = 1.millisecond)
+    new GoogleGroupExternalMembersMigrator(directoryDAO, googleExtensions, defaultQueriesPerMinute = 120000)
 
   "migrating the proxy tier" should "enable external members on and re-add each enabled user's email to their proxy group" in {
     val user1 = enabledUser("user1")
@@ -167,6 +166,39 @@ class GoogleGroupExternalMembersMigratorSpec extends AnyFlatSpec with Matchers w
       any[Option[String]],
       any[SamRequestContext]
     )
+  }
+
+  it should "pace Google calls according to the queriesPerMinute override" in {
+    val resourceTypeName = ResourceTypeName("managed-group")
+    val groups = (1 to 4).map(i => WorkbenchEmail(s"group$i@example.com"))
+
+    val directoryDAO = mock[DirectoryDAO]
+    stubStatus(directoryDAO)
+    when(directoryDAO.countSynchronizedGroupEmailsByResourceType(ArgumentMatchers.eq(resourceTypeName), any[SamRequestContext])).thenReturn(IO.pure(4L))
+    when(
+      directoryDAO.loadSynchronizedGroupEmailsByResourceType(
+        ArgumentMatchers.eq(resourceTypeName),
+        any[Option[WorkbenchEmail]],
+        any[Int],
+        any[SamRequestContext]
+      )
+    ).thenReturn(IO.pure(groups), IO.pure(Seq.empty))
+
+    val googleDirectoryDAO = mock[GoogleDirectoryDAO]
+    when(googleDirectoryDAO.enableExternalMembersIfNeeded(any[WorkbenchEmail])).thenReturn(Future.successful(new GroupSettings))
+
+    val googleExtensions = mock[GoogleExtensions]
+    when(googleExtensions.googleDirectoryDAO).thenReturn(googleDirectoryDAO)
+
+    // 1200 queries/min => ~2 queries per group => a 100ms interval between the 4 groups, so >= 3 intervals of spacing before the run completes
+    val start = System.nanoTime()
+    new GoogleGroupExternalMembersMigrator(directoryDAO, googleExtensions)
+      .migrate(List(MigrationTier.ResourceType(resourceTypeName)), samRequestContext, queriesPerMinuteOverride = Some(1200))
+      .unsafeRunSync()
+    val elapsedMillis = (System.nanoTime() - start) / 1000000
+
+    elapsedMillis should be >= 250L
+    verify(googleDirectoryDAO, times(4)).enableExternalMembersIfNeeded(any[WorkbenchEmail])
   }
 
   "migrating multiple tiers" should "skip tiers already completed and run the rest in order" in {

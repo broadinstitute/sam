@@ -1,6 +1,7 @@
 package org.broadinstitute.dsde.workbench.sam.google
 
-import cats.effect.IO
+import cats.effect.{IO, Ref}
+import cats.effect.std.Semaphore
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import org.broadinstitute.dsde.workbench.model.{ValueObject, WorkbenchEmail, WorkbenchUserId}
@@ -17,15 +18,22 @@ import scala.concurrent.duration._
   * Every operation is idempotent: [[GoogleDirectoryDAO.enableExternalMembersIfNeeded]] only writes when the setting is currently false, and re-adding a user to
   * their proxy group is a no-op when they are already a member, so a tier can be re-run safely (e.g. after a quota backoff).
   *
-  * All Google calls go through the coordinated-backoff [[GoogleDirectoryDAO]] so a quota trip backs off Sam (and therefore Terra) traffic gracefully. Work is
-  * additionally throttled (a fixed `IO.sleep` between items) to proactively stay well under Google's quota; speed is intentionally sacrificed for safety.
+  * All Google calls go through the coordinated-backoff [[GoogleDirectoryDAO]] so a quota trip backs off Sam (and therefore Terra) traffic gracefully. On top of
+  * that, work is paced to a configurable queries-per-minute rate to stay under Google's Groups Settings API quota. That rate is the single throughput knob and
+  * is overridable per run (see [[migrate]]), so the operator can retune between runs to match whatever quota Google has granted without a redeploy. Because
+  * starts are paced, concurrency self-limits to roughly `rate × latency`; [[maxConcurrency]] is only a safety ceiling for when Google slows down.
   *
   * @param directoryDAO
   *   the background directory DAO, used to enumerate users/groups without crowding foreground api calls, and to persist per-tier migration progress
   * @param googleExtensions
   *   provides the coordinated-backoff google directory DAO and proxy email derivation
-  * @param throttleDelay
-  *   minimum delay between processing items, the proactive rate limit
+  * @param defaultQueriesPerMinute
+  *   default rate limit in Groups Settings API queries per minute (the unit of Google's quota). Each group costs ~2 queries (a `get` plus a conditional
+  *   `patch`), so group throughput is roughly half this. Conservative by default so a bare invocation is safe against the current quota; the operator overrides
+  *   it per run once a higher quota is granted.
+  * @param maxConcurrency
+  *   safety ceiling on groups in flight at once, not a throughput knob (the rate limiter is that). Only bites if Google stalls; sized so it never limits the
+  *   paced rate under normal latency.
   * @param pageSize
   *   how many items to load per keyset-paginated query, so a tier never materializes its whole population in memory at once; also the heartbeat cadence (one
   *   progress record per page)
@@ -33,23 +41,42 @@ import scala.concurrent.duration._
 class GoogleGroupExternalMembersMigrator(
     directoryDAO: DirectoryDAO,
     googleExtensions: GoogleExtensions,
-    throttleDelay: FiniteDuration = 100.milliseconds,
+    defaultQueriesPerMinute: Int = 300,
+    maxConcurrency: Int = 128,
     pageSize: Int = 1000
 ) extends LazyLogging {
 
   /** Migrate the given tiers in order, one at a time. Each tier is processed independently: a `completed` tier is skipped when more than one tier was
-    * requested, and a crashed/failed tier resumes from its last recorded cursor. Returns immediately to the caller via the endpoint's detached fiber. This is a
-    * one-off operator-driven migration with no cross-instance locking: re-firing while a run is in flight would double up that tier's idempotent work (capped
-    * by the coordinated quota backoff), so the operator should check the status endpoint before re-running.
+    * requested, and a crashed/failed tier resumes from its last recorded cursor. Returns immediately to the caller via the endpoint's detached fiber.
+    *
+    * The rate override is per-invocation and not persisted, so a resume may run at a different rate than the original; the tier just picks up from its cursor
+    * at whatever rate this call specifies. There is no locking: re-firing while a run is live starts a *second* runner for the tier with its own rate limiter
+    * (so the two rates add up and overshoot the limit), on top of doubling the idempotent work. The operator must confirm a run has ended (via the status
+    * endpoint) before re-running.
     */
-  def migrate(tiers: List[MigrationTier], samRequestContext: SamRequestContext): IO[Unit] =
-    tiers.traverse_(tier => migrateTier(tier, skipCompleted = tiers.size > 1, samRequestContext))
+  def migrate(
+      tiers: List[MigrationTier],
+      samRequestContext: SamRequestContext,
+      queriesPerMinuteOverride: Option[Int] = None
+  ): IO[Unit] = {
+    val queriesPerMinute = queriesPerMinuteOverride.getOrElse(defaultQueriesPerMinute)
+    IO(
+      logger.info(
+        s"allowExternalMembers migration starting for tiers ${tiers.map(_.value).mkString(", ")} at $queriesPerMinute queries/min (max concurrency $maxConcurrency)"
+      )
+    ) >> tiers.traverse_(tier => migrateTier(tier, skipCompleted = tiers.size > 1, queriesPerMinute, samRequestContext))
+  }
 
   /** Current persisted progress for every tier that has been started, for the status endpoint. */
   def status(samRequestContext: SamRequestContext): IO[Seq[ExternalMembersMigrationRecord]] =
     directoryDAO.listExternalMembersMigrations(samRequestContext)
 
-  private def migrateTier(tier: MigrationTier, skipCompleted: Boolean, samRequestContext: SamRequestContext): IO[Unit] =
+  private def migrateTier(
+      tier: MigrationTier,
+      skipCompleted: Boolean,
+      queriesPerMinute: Int,
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
     directoryDAO.getExternalMembersMigration(tier.value, samRequestContext).flatMap { existing =>
       if (skipCompleted && existing.exists(_.state == MigrationState.Completed))
         IO(logger.info(s"allowExternalMembers migration tier ${tier.value} already completed; skipping"))
@@ -66,6 +93,7 @@ class GoogleGroupExternalMembersMigrator(
             resumable.flatMap(_.lastCursor)
           ),
           knownTotal = resumable.flatMap(_.total),
+          queriesPerMinute,
           samRequestContext
         )
       }
@@ -76,6 +104,7 @@ class GoogleGroupExternalMembersMigrator(
       resumeCursor: Option[String],
       base: GroupExternalMembersMigrationSummary,
       knownTotal: Option[Long],
+      queriesPerMinute: Int,
       samRequestContext: SamRequestContext
   ): IO[Unit] =
     (for {
@@ -86,7 +115,7 @@ class GoogleGroupExternalMembersMigrator(
         )
       )
       _ <- recordProgress(tier, MigrationState.Running, total, base, samRequestContext)
-      summary <- migratePages(tier, resumeCursor, total, base, samRequestContext)
+      summary <- migratePages(tier, resumeCursor, total, base, queriesPerMinute, samRequestContext)
       _ <- recordProgress(tier, MigrationState.Completed, total, summary, samRequestContext)
       _ <- IO(logger.info(s"Finished allowExternalMembers migration for tier ${tier.value}: $summary of $total"))
     } yield ()).handleErrorWith { t =>
@@ -102,35 +131,60 @@ class GoogleGroupExternalMembersMigrator(
       case MigrationTier.ResourceType(resourceTypeName) => directoryDAO.countSynchronizedGroupEmailsByResourceType(resourceTypeName, samRequestContext)
     }
 
-  // Keyset-paginate through the tier a page at a time so the whole population is never held in memory, accumulating a cumulative summary (seeded from any
-  // resumed progress). Each step loads and processes the next page; iterateUntilM repeats it until a page comes back short, i.e. the last page. Per-item
-  // failures are logged and counted, never aborting the run.
+  // Keyset-paginate through the tier one page at a time so the whole population is never held in memory, accumulating a cumulative summary (seeded from any
+  // resumed progress). iterateUntilM loads and processes each page until one comes back short, i.e. the last page. Within a page, items run in parallel, but each
+  // first waits on a shared rate limiter that spaces out group *starts* (a group's ~2 calls still go back-to-back, so the limit is a per-minute average, not an
+  // instantaneous cap), then takes a `maxConcurrency` permit. Pacing alone keeps concurrency near rate*latency; the semaphore is just a safety cap for when Google
+  // stalls. Both are created once per tier and, since tiers run sequentially, bound the rate across the whole run. Per-item failures are logged and counted,
+  // never aborting the run.
   private def migratePages(
       tier: MigrationTier,
       startCursor: Option[String],
       total: Long,
       base: GroupExternalMembersMigrationSummary,
+      queriesPerMinute: Int,
       samRequestContext: SamRequestContext
-  ): IO[GroupExternalMembersMigrationSummary] = {
-    def processNextPage(state: PageProgress): IO[PageProgress] =
-      itemsForTier(tier, state.cursor, samRequestContext).flatMap { page =>
-        page
-          .traverse(item => IO.sleep(throttleDelay) >> processItem(item))
-          .flatMap { outcomes =>
-            val summary = state.summary.copy(
-              processed = state.summary.processed + page.size,
-              failed = state.summary.failed + outcomes.count(succeeded => !succeeded),
-              lastCursor = page.lastOption.map(_.cursor).orElse(state.summary.lastCursor)
-            )
-            val next = PageProgress(summary.lastCursor, summary, done = page.size < pageSize)
-            recordPageProgress(tier, total, summary, samRequestContext).as(next)
-          }
-      }
+  ): IO[GroupExternalMembersMigrationSummary] =
+    (Semaphore[IO](maxConcurrency.toLong), Ref.of[IO, FiniteDuration](Duration.Zero)).tupled.flatMap { case (permits, nextSlot) =>
+      val interval = groupInterval(queriesPerMinute)
 
-    PageProgress(startCursor, base, done = false)
-      .iterateUntilM(processNextPage)(_.done)
-      .map(_.summary)
-  }
+      def processNextPage(state: PageProgress): IO[PageProgress] =
+        itemsForTier(tier, state.cursor, samRequestContext).flatMap { page =>
+          page.toList
+            .parTraverse(item => paced(interval, nextSlot)(permits.permit.use(_ => processItem(item))))
+            .flatMap { outcomes =>
+              val summary = state.summary.copy(
+                processed = state.summary.processed + page.size,
+                failed = state.summary.failed + outcomes.count(succeeded => !succeeded),
+                lastCursor = page.lastOption.map(_.cursor).orElse(state.summary.lastCursor)
+              )
+              val next = PageProgress(summary.lastCursor, summary, done = page.size < pageSize)
+              recordPageProgress(tier, total, summary, samRequestContext).as(next)
+            }
+        }
+
+      PageProgress(startCursor, base, done = false)
+        .iterateUntilM(processNextPage)(_.done)
+        .map(_.summary)
+    }
+
+  // Wall-clock spacing between two group starts that keeps the call rate under `queriesPerMinute`. Each group is ~2 queries (get + conditional patch), so
+  // groups/min = queriesPerMinute / 2 and the interval is 60_000 / (queriesPerMinute / 2) ms. A non-positive rate disables pacing.
+  private def groupInterval(queriesPerMinute: Int): FiniteDuration =
+    if (queriesPerMinute <= 0) Duration.Zero else (120000L / queriesPerMinute).milliseconds
+
+  // Reserve the next start slot `interval` after the previous one (never in the past), then sleep until it before running `task`. The Ref holds the next free
+  // slot as a monotonic timestamp; `modify` claims one atomically so concurrent callers serialize their starts instead of bunching up.
+  private def paced[A](interval: FiniteDuration, nextSlot: Ref[IO, FiniteDuration])(task: IO[A]): IO[A] =
+    for {
+      now <- IO.monotonic
+      waitFor <- nextSlot.modify { next =>
+        val start = if (next > now) next else now
+        (start + interval, start - now)
+      }
+      _ <- IO.sleep(if (waitFor > Duration.Zero) waitFor else Duration.Zero)
+      result <- task
+    } yield result
 
   // Load one page of the tier as uniform MigrationItems. Resource-type groups only contain in-domain proxy-group emails as members, so flipping the setting is
   // enough. A proxy group holds the user's real (possibly external) email, which could not be added while external members were disallowed, so it also re-adds
