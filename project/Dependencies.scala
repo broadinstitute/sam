@@ -250,9 +250,9 @@ object Dependencies {
     "tools.jackson.core" % "jackson-core" % "3.1.0",
     "tools.jackson.core" % "jackson-databind" % "3.1.0",
     // override bouncycastle to address CVE-2026-5598 (requires >= 1.84)
-    "org.bouncycastle" % "bcprov-jdk18on" % "1.84",
-    "org.bouncycastle" % "bcpkix-jdk18on" % "1.84",
-    "org.bouncycastle" % "bcutil-jdk18on" % "1.84",
+    "org.bouncycastle" % "bcprov-jdk18on" % "1.85",
+    "org.bouncycastle" % "bcpkix-jdk18on" % "1.85",
+    "org.bouncycastle" % "bcutil-jdk18on" % "1.85",
 
     // force all transitive netty modules to a single, current version
     "io.netty" % "netty-buffer" % nettyV,
