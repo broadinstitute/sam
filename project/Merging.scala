@@ -31,6 +31,9 @@ object Merging {
     case x if x.endsWith("arrow-git.properties") => MergeStrategy.concat
     case "logback.xml" => MergeStrategy.first
     case PathList("META-INF", "spring-configuration-metadata.json") => MergeStrategy.discard // don't need no stinkin' spring
+    // Jackson 2 and Jackson 3 coexist functionally, but fail in assembly on this:
+    case "META-INF/FastDoubleParser-LICENSE" => MergeStrategy.first
+
     case x => oldStrategy(x)
   }
 }
