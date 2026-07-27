@@ -10,6 +10,7 @@ object Dependencies {
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.7.8"
   val sentryVersion = "6.15.0"
+  val nettyV = "4.2.16.Final"
 
   val workbenchLibV = "9254061" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
@@ -66,7 +67,6 @@ object Dependencies {
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
   val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.13"
-  val nettyAll: ModuleID = "io.netty" % "netty-all" % "4.2.13.Final"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.78.0"
@@ -235,7 +235,6 @@ object Dependencies {
     scalikeCoreTest,
     postgres,
     cloudResourceLib,
-    nettyAll,
     reactorNetty,
     azureManagedApplications,
     sentry,
@@ -248,11 +247,32 @@ object Dependencies {
   val rootDependencyOverrides = Seq(
     "org.apache.commons" % "commons-compress" % "1.28.0",
     "com.google.guava" % "guava" % "33.5.0-jre", // Force JRE version, not Android version from grpc-core
-    "tools.jackson.core" % "jackson-core" % "3.1.0",
-    "tools.jackson.core" % "jackson-databind" % "3.1.0",
+    "tools.jackson.core" % "jackson-core" % "3.2.1",
+    "tools.jackson.core" % "jackson-databind" % "3.2.1",
     // override bouncycastle to address CVE-2026-5598 (requires >= 1.84)
-    "org.bouncycastle" % "bcprov-jdk18on" % "1.84",
-    "org.bouncycastle" % "bcpkix-jdk18on" % "1.84",
-    "org.bouncycastle" % "bcutil-jdk18on" % "1.84"
+    "org.bouncycastle" % "bcprov-jdk18on" % "1.85",
+    "org.bouncycastle" % "bcpkix-jdk18on" % "1.85",
+    "org.bouncycastle" % "bcutil-jdk18on" % "1.85",
+
+    // force all transitive netty modules to a single, current version
+    "io.netty" % "netty-buffer" % nettyV,
+    "io.netty" % "netty-codec" % nettyV,
+    "io.netty" % "netty-codec-dns" % nettyV,
+    "io.netty" % "netty-codec-http" % nettyV,
+    "io.netty" % "netty-codec-http2" % nettyV,
+    "io.netty" % "netty-codec-socks" % nettyV,
+    "io.netty" % "netty-common" % nettyV,
+    "io.netty" % "netty-handler" % nettyV,
+    "io.netty" % "netty-handler-proxy" % nettyV,
+    "io.netty" % "netty-resolver" % nettyV,
+    "io.netty" % "netty-resolver-dns" % nettyV,
+    "io.netty" % "netty-resolver-dns-classes-macos" % nettyV,
+    "io.netty" % "netty-resolver-dns-native-macos" % nettyV,
+    "io.netty" % "netty-transport" % nettyV,
+    "io.netty" % "netty-transport-classes-epoll" % nettyV,
+    "io.netty" % "netty-transport-classes-kqueue" % nettyV,
+    "io.netty" % "netty-transport-native-epoll" % nettyV,
+    "io.netty" % "netty-transport-native-kqueue" % nettyV,
+    "io.netty" % "netty-transport-native-unix-common" % nettyV
   )
 }
