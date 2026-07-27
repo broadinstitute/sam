@@ -12,14 +12,14 @@ object Dependencies {
   val sentryVersion = "6.15.0"
   val nettyV = "4.2.16.Final"
 
-  val workbenchLibV = "9254061" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchLibV = "adcc4d4" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
-  val workbenchUtil2V = s"0.9-$workbenchLibV"
+  val workbenchUtil2V = s"1.1-$workbenchLibV"
   val workbenchModelV = s"0.21-$workbenchLibV"
-  val workbenchGoogleV = s"0.35-$workbenchLibV"
-  val workbenchGoogle2V = s"0.41-$workbenchLibV"
-  val workbenchNotificationsV = s"2.0-$workbenchLibV"
-  val workbenchOauth2V = s"0.10-$workbenchLibV"
+  val workbenchGoogleV = s"0.36-$workbenchLibV"
+  val workbenchGoogle2V = s"0.42-$workbenchLibV"
+  val workbenchNotificationsV = s"2.1-$workbenchLibV"
+  val workbenchOauth2V = s"0.11-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.42-SNAPSHOT"
   val tclVersion = "1.1.68-SNAPSHOT"
