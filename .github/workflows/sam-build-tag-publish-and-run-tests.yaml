@@ -236,7 +236,7 @@ jobs:
       matrix:
         terra-env: [ dev ] # what versions of apps do we use to emulate types of environments
     runs-on: ubuntu-latest
-    needs: [sam-swat-test-job, rawls-swat-test-job, orch-swat-test-job]
+    needs: [sam-swat-test-job, rawls-swat-test-job]
     if: always() # always run to confirm bee is destroyed
     permissions:
       contents: 'read'
