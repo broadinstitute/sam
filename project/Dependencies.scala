@@ -254,6 +254,10 @@ object Dependencies {
     "org.bouncycastle" % "bcpkix-jdk18on" % "1.85",
     "org.bouncycastle" % "bcutil-jdk18on" % "1.85",
 
+    // transitive from terra-cloud-resource-library, upgrading to a janitor version available
+    // in libs-snapshot-standard
+    "bio.terra" % "terra-resource-janitor-client" % "0.113.55-SNAPSHOT",
+
     // force all transitive netty modules to a single, current version
     "io.netty" % "netty-buffer" % nettyV,
     "io.netty" % "netty-codec" % nettyV,
