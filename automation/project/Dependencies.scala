@@ -3,7 +3,7 @@ import sbt._
 object Dependencies {
   val scalaV = "2.13"
 
-  val jacksonV = "2.17.0"
+  val jacksonV = "2.18.3"
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.2"
 
