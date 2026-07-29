@@ -86,6 +86,7 @@ object Settings {
 
   val pact4sSettings = commonSettings ++ List(
     libraryDependencies ++= pact4sDependencies,
+    dependencyOverrides ++= rootDependencyOverrides,
 
     /** Invoking pact tests from root project (sbt "project pact" test) will launch tests in a separate JVM context that ensures contracts are written to the
       * pact/target/pacts folder. Otherwise, contracts will be written to the root folder.
