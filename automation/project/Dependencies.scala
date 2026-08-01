@@ -44,7 +44,7 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-testkit" % akkaV % "test",
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.6",
-    "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+    "org.scalatest" %% "scalatest" % "3.2.20" % Test,
     "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % Test,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
     workbenchServiceTest,
