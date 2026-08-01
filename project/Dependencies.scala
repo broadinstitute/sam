@@ -66,7 +66,7 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.13"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.18"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
   val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.83.1"
