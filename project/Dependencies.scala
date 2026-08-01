@@ -246,7 +246,7 @@ object Dependencies {
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
     "org.apache.commons" % "commons-compress" % "1.28.0",
-    "com.google.guava" % "guava" % "33.5.0-jre", // Force JRE version, not Android version from grpc-core
+    "com.google.guava" % "guava" % "33.6.0-jre", // Force JRE version, not Android version from grpc-core
     "tools.jackson.core" % "jackson-core" % "3.2.1",
     "tools.jackson.core" % "jackson-databind" % "3.2.1",
     // override bouncycastle to address CVE-2026-5598 (requires >= 1.84)
