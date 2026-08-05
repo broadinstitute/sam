@@ -4,6 +4,7 @@ object Dependencies {
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.9"
   val jacksonV = "2.22.1"
+  val jacksonAnnotationsV = "2.22"
   val scalaLoggingV = "3.9.6"
   val scalaTestV = "3.2.19"
   val scalaCheckV = "1.19.0"
@@ -43,7 +44,7 @@ object Dependencies {
   val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
   val sentryLogback: ModuleID = "io.sentry" % "sentry-logback" % sentryVersion
 
-  val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
+  val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonAnnotationsV
   val jacksonDatabind: ModuleID = "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
