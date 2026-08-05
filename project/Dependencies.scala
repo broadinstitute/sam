@@ -3,7 +3,8 @@ import sbt._
 object Dependencies {
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.9"
-  val jacksonV = "2.17.0"
+  val jacksonV = "2.22.1"
+  val jacksonAnnotationsV = "2.22"
   val scalaLoggingV = "3.9.6"
   val scalaTestV = "3.2.19"
   val scalaCheckV = "1.19.0"
@@ -43,7 +44,7 @@ object Dependencies {
   val sentry: ModuleID = "io.sentry" % "sentry" % sentryVersion
   val sentryLogback: ModuleID = "io.sentry" % "sentry-logback" % sentryVersion
 
-  val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV
+  val jacksonAnnotations: ModuleID = "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonAnnotationsV
   val jacksonDatabind: ModuleID = "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
@@ -247,8 +248,12 @@ object Dependencies {
   val rootDependencyOverrides = Seq(
     "org.apache.commons" % "commons-compress" % "1.28.0",
     "com.google.guava" % "guava" % "33.5.0-jre", // Force JRE version, not Android version from grpc-core
+    // Jackson 2 and Jackson 3 co-exist. Set versions for both:
     "tools.jackson.core" % "jackson-core" % "3.2.1",
     "tools.jackson.core" % "jackson-databind" % "3.2.1",
+    jacksonCore,
+    jacksonAnnotations,
+    jacksonDatabind,
     // override bouncycastle to address CVE-2026-5598 (requires >= 1.84)
     "org.bouncycastle" % "bcprov-jdk18on" % "1.85",
     "org.bouncycastle" % "bcpkix-jdk18on" % "1.85",

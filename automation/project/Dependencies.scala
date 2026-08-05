@@ -3,7 +3,8 @@ import sbt._
 object Dependencies {
   val scalaV = "2.13"
 
-  val jacksonV = "2.18.3"
+  val jacksonV = "2.22.1"
+  val jacksonAnnotationsV = "2.22"
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.2"
 
@@ -23,7 +24,7 @@ object Dependencies {
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
     // specified as transitive dependencies, due to OWASP DependencyCheck warnings for earlier versions.
-    "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonV,
+    "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonAnnotationsV,
     "com.fasterxml.jackson.core" % "jackson-databind" % jacksonV,
     "com.fasterxml.jackson.core" % "jackson-core" % jacksonV,
     "com.fasterxml.jackson.module" % ("jackson-module-scala_" + scalaV) % jacksonV,
