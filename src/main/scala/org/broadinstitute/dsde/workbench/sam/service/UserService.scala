@@ -251,6 +251,15 @@ class UserService(
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext)
     } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
 
+  // Called on login (rather than at registration) so that, over time, this group reflects users who have actually
+  // used Terra rather than everyone who has ever registered. Checks membership first since this runs on a hot path.
+  def addToAllUsersLoginGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
+    for {
+      allUsersLoginGroup <- cloudExtensions.getOrCreateAllUsersLoginGroup(directoryDAO, samRequestContext)
+      alreadyMember <- directoryDAO.isGroupMember(allUsersLoginGroup.id, uid, samRequestContext)
+      _ <- if (alreadyMember) IO.unit else directoryDAO.addGroupMember(allUsersLoginGroup.id, uid, samRequestContext).map(_ => ())
+    } yield ()
+
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
       _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains, nonInvitableDomains)
