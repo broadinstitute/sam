@@ -253,11 +253,16 @@ class UserService(
 
   // Called on login (rather than at registration) so that, over time, this group reflects users who have actually
   // used Terra rather than everyone who has ever registered. Checks membership first since this runs on a hot path.
+  // Only a DB-only addGroupMember would not actually get synced to Google (see CloudExtensions.onUserLogin), so
+  // onUserLogin is called to push the user's proxy email into the real Google Group directly, same as onUserCreate
+  // does for All_Users.
   def addToAllUsersLoginGroup(uid: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
     for {
       allUsersLoginGroup <- cloudExtensions.getOrCreateAllUsersLoginGroup(directoryDAO, samRequestContext)
       alreadyMember <- directoryDAO.isGroupMember(allUsersLoginGroup.id, uid, samRequestContext)
-      _ <- if (alreadyMember) IO.unit else directoryDAO.addGroupMember(allUsersLoginGroup.id, uid, samRequestContext).map(_ => ())
+      _ <-
+        if (alreadyMember) IO.unit
+        else directoryDAO.addGroupMember(allUsersLoginGroup.id, uid, samRequestContext) *> cloudExtensions.onUserLogin(uid, samRequestContext)
     } yield ()
 
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =

@@ -46,6 +46,12 @@ trait CloudExtensions {
 
   def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
 
+  // Pushes the user's proxy email directly into the All_Users_Login Google Group, mirroring how onUserCreate pushes
+  // into All_Users. A DB-only membership write (addGroupMember) does not itself get synced to Google: the async
+  // onGroupUpdate/synchronizeGroupMembers pipeline only re-syncs a group that has already been synced once before,
+  // so without this direct push All_Users_Login would go stale after its first (incidental) sync.
+  def onUserLogin(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
+
   def getUserStatus(user: SamUser): IO[Boolean]
 
   def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
@@ -100,6 +106,8 @@ trait NoExtensions extends CloudExtensions {
   override def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit] = IO.unit
 
   override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+
+  override def onUserLogin(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def getUserStatus(user: SamUser): IO[Boolean] = IO.pure(true)
 

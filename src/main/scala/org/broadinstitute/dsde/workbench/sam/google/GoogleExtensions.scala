@@ -286,6 +286,16 @@ class GoogleExtensions(
     } yield ()
   }
 
+  override def onUserLogin(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
+    val proxyEmail = toProxyFromUser(userId)
+    for {
+      allUsersLoginGroup <- getOrCreateAllUsersLoginGroup(directoryDAO, samRequestContext)
+      _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersLoginGroup.email, proxyEmail))) recover {
+        case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
+      }
+    } yield ()
+  }
+
   override def getUserStatus(user: SamUser): IO[Boolean] =
     getUserProxy(user.id).flatMap {
       case Some(proxyEmail) => IO.fromFuture(IO(googleDirectoryDAO.isGroupMember(proxyEmail, WorkbenchEmail(user.email.value))))
