@@ -63,6 +63,9 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
     onSuccess {
       for {
         user <- getSamUser(oidcHeaders, userService, samRequestContext).unsafeToFuture()
+        // this directive backs the self-info endpoints the UI calls on session bootstrap, so it doubles as our
+        // best available "user logged into Terra" signal for populating the All_Users_Login group
+        _ <- userService.addToAllUsersLoginGroup(user.id, samRequestContext).unsafeToFuture()
         allowances <- userService.getUserAllowances(user, samRequestContext).unsafeToFuture()
       } yield (user, allowances.allowed)
     }.tflatMap { samUserAllowedTuple =>

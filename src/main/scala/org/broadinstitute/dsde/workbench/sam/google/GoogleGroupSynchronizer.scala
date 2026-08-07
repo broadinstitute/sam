@@ -180,8 +180,10 @@ class GoogleGroupSynchronizer(
             .loadPolicy(rpn, samRequestContext)
             .map(_.map { loadedPolicy =>
               if (loadedPolicy.public) {
-                // include all users group when synchronizing a public policy
-                AccessPolicy.members.modify(_ + CloudExtensions.allUsersGroupName)(loadedPolicy)
+                // Grant both the legacy All_Users group and the newer All_Users_Login group when synchronizing a
+                // public policy. This dual-grant is temporary: All_Users_Login only grows from logins going forward,
+                // so All_Users is kept here to avoid an access regression until All_Users_Login has caught up.
+                AccessPolicy.members.modify(_ + CloudExtensions.allUsersGroupName + CloudExtensions.allUsersLoginGroupName)(loadedPolicy)
               } else {
                 loadedPolicy
               }

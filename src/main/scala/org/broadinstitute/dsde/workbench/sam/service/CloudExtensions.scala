@@ -21,6 +21,9 @@ import scala.concurrent.{ExecutionContext, Future}
 object CloudExtensions {
   val resourceTypeName = ResourceTypeName("cloud-extension")
   val allUsersGroupName = WorkbenchGroupName("All_Users")
+  // Populated on login (rather than at registration, like All_Users) going forward. During the transition, public
+  // policies grant both groups so that access is not lost for users who registered but haven't logged in since rollout.
+  val allUsersLoginGroupName = WorkbenchGroupName("All_Users_Login")
 }
 
 trait CloudExtensions {
@@ -42,6 +45,12 @@ trait CloudExtensions {
   def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit]
 
   def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
+
+  // Pushes the user's proxy email directly into the All_Users_Login Google Group, mirroring how onUserCreate pushes
+  // into All_Users. A DB-only membership write (addGroupMember) does not itself get synced to Google: the async
+  // onGroupUpdate/synchronizeGroupMembers pipeline only re-syncs a group that has already been synced once before,
+  // so without this direct push All_Users_Login would go stale after its first (incidental) sync.
+  def onUserLogin(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit]
 
   def getUserStatus(user: SamUser): IO[Boolean]
 
@@ -66,6 +75,10 @@ trait CloudExtensions {
   def emailDomain: String
 
   def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+      executionContext: ExecutionContext
+  ): IO[WorkbenchGroup]
+
+  def getOrCreateAllUsersLoginGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
   ): IO[WorkbenchGroup]
 
@@ -94,6 +107,8 @@ trait NoExtensions extends CloudExtensions {
 
   override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
+  override def onUserLogin(userId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+
   override def getUserStatus(user: SamUser): IO[Boolean] = IO.pure(true)
 
   override def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
@@ -119,12 +134,19 @@ trait NoExtensions extends CloudExtensions {
 
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
+  ): IO[WorkbenchGroup] = getOrCreateGroupStub(CloudExtensions.allUsersGroupName, directoryDAO, samRequestContext)
+
+  override def getOrCreateAllUsersLoginGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+      executionContext: ExecutionContext
+  ): IO[WorkbenchGroup] = getOrCreateGroupStub(CloudExtensions.allUsersLoginGroupName, directoryDAO, samRequestContext)
+
+  private def getOrCreateGroupStub(groupName: WorkbenchGroupName, directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
+      executionContext: ExecutionContext
   ): IO[WorkbenchGroup] = {
-    val allUsersGroup =
-      BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set.empty, WorkbenchEmail(s"GROUP_${CloudExtensions.allUsersGroupName.value}@$emailDomain"))
+    val groupStub = BasicWorkbenchGroup(groupName, Set.empty, WorkbenchEmail(s"GROUP_${groupName.value}@$emailDomain"))
     for {
-      createdGroup <- directoryDAO.createGroup(allUsersGroup, samRequestContext = samRequestContext) recover {
-        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => allUsersGroup
+      createdGroup <- directoryDAO.createGroup(groupStub, samRequestContext = samRequestContext) recover {
+        case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => groupStub
       }
     } yield createdGroup
   }
