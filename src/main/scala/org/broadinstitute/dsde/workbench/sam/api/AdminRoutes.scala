@@ -136,6 +136,19 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
               }
             }
           } ~
+          // For accounts that never log into the Terra UI (e.g. test/CI service accounts) and so never hit the
+          // self-info endpoints that normally populate All_Users_Login
+          pathPrefix("addToAllUsersLoginGroup") {
+            pathEndOrSingleSlash {
+              putWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+                complete {
+                  userService
+                    .addToAllUsersLoginGroup(workbenchUserId, samRequestContext)
+                    .map(_ => OK)
+                }
+              }
+            }
+          } ~
           pathPrefix("petServiceAccount") {
             path(Segment) { project =>
               val googleProject = GoogleProject(project)
