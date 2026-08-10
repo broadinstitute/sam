@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.sam.api.{
   SecurityDirectives,
   ioMarshaller
 }
-import org.broadinstitute.dsde.workbench.sam.dataAccess.ExternalMembersMigrationRecord
+import org.broadinstitute.dsde.workbench.sam.dataAccess.{AllUsersCleanupRecord, ExternalMembersMigrationRecord}
 import org.broadinstitute.dsde.workbench.sam.model._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.api.SamUser
@@ -34,6 +34,7 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
   val googleExtensions: GoogleExtensions
   val googleGroupSynchronizer: GoogleGroupSynchronizer
   val groupExternalMembersMigrator: GoogleGroupExternalMembersMigrator
+  val allUsersGroupCleanupMigrator: AllUsersGroupCleanupMigrator
 
   private def formatMigrationStatus(records: Seq[ExternalMembersMigrationRecord]): String =
     if (records.isEmpty) "no allowExternalMembers migrations have been started"
@@ -42,6 +43,16 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
         .map { r =>
           val total = r.total.map(_.toString).getOrElse("?")
           s"${r.tier}: ${r.state}  ${r.processed}/$total (failed ${r.failed})  cursor=${r.lastCursor.getOrElse("-")}  updated=${r.updatedAt}"
+        }
+        .mkString("\n")
+
+  private def formatCleanupStatus(records: Seq[AllUsersCleanupRecord]): String =
+    if (records.isEmpty) "no All_Users cleanup runs have been started"
+    else
+      records
+        .map { r =>
+          val total = r.total.map(_.toString).getOrElse("?")
+          s"${r.emailPattern}: ${r.state}  ${r.processed}/$total (failed ${r.failed})  cursor=${r.lastCursor.getOrElse("-")}  updated=${r.updatedAt}"
         }
         .mkString("\n")
 
@@ -345,7 +356,46 @@ trait GoogleExtensionRoutes extends ExtensionRoutes with SamUserDirectives with 
                     }
                   }
                 }
-            }
+            } ~
+              // Super-admin-only one-off cleanup: remove users matching an email pattern from the All_Users group.
+              pathPrefix("allUsers" / "cleanup") {
+                // GET .../allUsers/cleanup/preview?emailPattern=X -> synchronous count of users currently matching the pattern, no Google calls.
+                path("preview") {
+                  parameter("emailPattern") { emailPattern =>
+                    getWithTelemetry(samRequestContext, "emailPattern" -> new ValueObject { val value: String = emailPattern }) {
+                      complete {
+                        allUsersGroupCleanupMigrator.previewCount(emailPattern, samRequestContext).map(count => StatusCodes.OK -> count.toString)
+                      }
+                    }
+                  }
+                } ~
+                  // GET .../allUsers/cleanup/status -> plain-text progress report, one line per email pattern that has been run
+                  path("status") {
+                    getWithTelemetry(samRequestContext) {
+                      complete {
+                        allUsersGroupCleanupMigrator.status(samRequestContext).map(formatCleanupStatus)
+                      }
+                    }
+                  } ~
+                  // PUT .../allUsers/cleanup?emailPattern=X -> remove every user matching the pattern from All_Users, in the background. Returns
+                  // immediately; safe to re-run to resume (a completed pattern re-run starts fresh, a running/failed one resumes from its last cursor).
+                  // Optional queriesPerMinute query param sets the Directory API rate limit (the single throughput control) for this run.
+                  pathEndOrSingleSlash {
+                    parameters("emailPattern", "queriesPerMinute".as[Int].optional) { (emailPattern, queriesPerMinute) =>
+                      putWithTelemetry(samRequestContext, "emailPattern" -> new ValueObject { val value: String = emailPattern }) {
+                        complete {
+                          if (queriesPerMinute.exists(_ < 1))
+                            IO.pure[(StatusCode, String)](StatusCodes.BadRequest -> s"queriesPerMinute must be >= 1 (was ${queriesPerMinute.get})")
+                          else
+                            allUsersGroupCleanupMigrator
+                              .removeMatching(emailPattern, samRequestContext, queriesPerMinute)
+                              .start
+                              .as(StatusCodes.Accepted -> s"Started All_Users cleanup for pattern $emailPattern")
+                        }
+                      }
+                    }
+                  }
+              }
           }
         } ~
         pathPrefix("project") {

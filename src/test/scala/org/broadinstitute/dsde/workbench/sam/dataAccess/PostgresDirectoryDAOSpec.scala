@@ -2419,5 +2419,57 @@ class PostgresDirectoryDAOSpec extends AnyFreeSpec with Matchers with BeforeAndA
         dao.listExternalMembersMigrations(samRequestContext).unsafeRunSync().map(_.tier) shouldBe Seq(tier)
       }
     }
+
+    "loadUsersByEmailPattern" - {
+      "returns users whose email matches the pattern, ordered by id, paginating after the given cursor" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val userA = Generator.genWorkbenchUserBoth.sample.get
+          .copy(id = WorkbenchUserId("user-a"), email = WorkbenchEmail("tdr-ingest-sa@datarepo-a.iam.gserviceaccount.com"))
+        val userB = Generator.genWorkbenchUserBoth.sample.get
+          .copy(id = WorkbenchUserId("user-b"), email = WorkbenchEmail("tdr-ingest-sa@datarepo-b.iam.gserviceaccount.com"))
+        val userC = Generator.genWorkbenchUserBoth.sample.get.copy(id = WorkbenchUserId("user-c"), email = WorkbenchEmail("someone-else@example.com"))
+        Seq(userA, userB, userC).foreach(dao.createUser(_, samRequestContext).unsafeRunSync())
+
+        val pattern = "tdr-ingest-sa@datarepo-%"
+        dao.loadUsersByEmailPattern(pattern, None, 100, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userA.id, userB.id)
+        dao.countUsersByEmailPattern(pattern, samRequestContext).unsafeRunSync() shouldBe 2L
+        // the limit bounds the page
+        dao.loadUsersByEmailPattern(pattern, None, 1, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userA.id)
+        // resuming after userA returns userB
+        dao.loadUsersByEmailPattern(pattern, Some(userA.id), 100, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userB.id)
+        // a plain email with no wildcards behaves as an exact-match lookup
+        dao.loadUsersByEmailPattern(userC.email.value, None, 100, samRequestContext).unsafeRunSync().map(_.id) shouldBe Seq(userC.id)
+      }
+    }
+
+    "All_Users cleanup tracking" - {
+      "upserts, reads, fails, and lists cleanup progress" in {
+        assume(databaseEnabled, databaseEnabledClue)
+        val emailPattern = "tdr-ingest-sa@datarepo-%"
+
+        // nothing recorded yet
+        dao.getAllUsersCleanupRun(emailPattern, samRequestContext).unsafeRunSync() shouldBe None
+
+        // first record inserts the row
+        dao.recordAllUsersCleanupProgress(emailPattern, MigrationState.Running, Some(10L), 0L, 0L, None, samRequestContext).unsafeRunSync()
+        // a subsequent record updates it (heartbeat)
+        dao.recordAllUsersCleanupProgress(emailPattern, MigrationState.Running, Some(10L), 3L, 1L, Some("cursor-3"), samRequestContext).unsafeRunSync()
+        val running = dao.getAllUsersCleanupRun(emailPattern, samRequestContext).unsafeRunSync().get
+        running.state shouldBe MigrationState.Running
+        running.total shouldBe Some(10L)
+        running.processed shouldBe 3L
+        running.failed shouldBe 1L
+        running.lastCursor shouldBe Some("cursor-3")
+
+        // marking failed preserves the recorded progress columns
+        dao.setAllUsersCleanupState(emailPattern, MigrationState.Failed, samRequestContext).unsafeRunSync()
+        val failed = dao.getAllUsersCleanupRun(emailPattern, samRequestContext).unsafeRunSync().get
+        failed.state shouldBe MigrationState.Failed
+        failed.processed shouldBe 3L
+        failed.lastCursor shouldBe Some("cursor-3")
+
+        dao.listAllUsersCleanupRuns(samRequestContext).unsafeRunSync().map(_.emailPattern) shouldBe Seq(emailPattern)
+      }
+    }
   }
 }

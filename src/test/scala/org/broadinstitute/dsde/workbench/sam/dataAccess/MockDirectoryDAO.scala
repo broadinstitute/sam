@@ -21,8 +21,10 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 
 import java.time.Instant
 import java.util.Date
+import java.util.regex.Pattern
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
+import scala.util.matching.Regex
 
 /** Created by mbemis on 6/23/17.
   */
@@ -46,6 +48,8 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
   private val userFavoriteResources: mutable.Map[WorkbenchUserId, Set[FullyQualifiedResourceId]] = new TrieMap()
 
   private val externalMembersMigrations: mutable.Map[String, ExternalMembersMigrationRecord] = new TrieMap()
+
+  private val allUsersCleanupRuns: mutable.Map[String, AllUsersCleanupRecord] = new TrieMap()
 
   override def createGroup(
       group: BasicWorkbenchGroup,
@@ -183,6 +187,65 @@ class MockDirectoryDAO(val groups: mutable.Map[WorkbenchGroupIdentity, Workbench
 
   override def getExternalMembersMigration(tier: String, samRequestContext: SamRequestContext): IO[Option[ExternalMembersMigrationRecord]] =
     IO(externalMembersMigrations.get(tier))
+
+  private def likePatternToRegex(pattern: String): Regex = {
+    val regex = new StringBuilder("^")
+    pattern.foreach {
+      case '%' => regex.append(".*")
+      case '_' => regex.append(".")
+      case c => regex.append(Pattern.quote(c.toString))
+    }
+    regex.append("$")
+    regex.toString.r
+  }
+
+  override def loadUsersByEmailPattern(
+      pattern: String,
+      afterUserId: Option[WorkbenchUserId],
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[SamUser]] =
+    IO {
+      val regex = likePatternToRegex(pattern)
+      users.values
+        .filter(user => regex.matches(user.email.value))
+        .toSeq
+        .sortBy(_.id.value)
+        .dropWhile(user => afterUserId.exists(after => user.id.value <= after.value))
+        .take(limit)
+    }
+
+  override def countUsersByEmailPattern(pattern: String, samRequestContext: SamRequestContext): IO[Long] =
+    IO {
+      val regex = likePatternToRegex(pattern)
+      users.values.count(user => regex.matches(user.email.value)).toLong
+    }
+
+  override def recordAllUsersCleanupProgress(
+      emailPattern: String,
+      state: String,
+      total: Option[Long],
+      processed: Long,
+      failed: Long,
+      lastCursor: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    IO {
+      val now = Instant.now()
+      val startedAt = allUsersCleanupRuns.get(emailPattern).map(_.startedAt).getOrElse(now)
+      allUsersCleanupRuns += emailPattern -> AllUsersCleanupRecord(emailPattern, state, total, processed, failed, lastCursor, startedAt, now)
+    }
+
+  override def setAllUsersCleanupState(emailPattern: String, state: String, samRequestContext: SamRequestContext): IO[Unit] =
+    IO {
+      allUsersCleanupRuns.get(emailPattern).foreach(r => allUsersCleanupRuns += emailPattern -> r.copy(state = state, updatedAt = Instant.now()))
+    }
+
+  override def listAllUsersCleanupRuns(samRequestContext: SamRequestContext): IO[Seq[AllUsersCleanupRecord]] =
+    IO(allUsersCleanupRuns.values.toSeq.sortBy(_.emailPattern))
+
+  override def getAllUsersCleanupRun(emailPattern: String, samRequestContext: SamRequestContext): IO[Option[AllUsersCleanupRecord]] =
+    IO(allUsersCleanupRuns.get(emailPattern))
 
   override def updateUserEmail(userId: WorkbenchUserId, email: WorkbenchEmail, samRequestContext: SamRequestContext): IO[Unit] = IO {
     // TODO add validation for email

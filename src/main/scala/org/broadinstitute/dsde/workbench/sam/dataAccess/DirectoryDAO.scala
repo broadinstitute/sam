@@ -121,6 +121,36 @@ trait DirectoryDAO {
 
   def getExternalMembersMigration(tier: String, samRequestContext: SamRequestContext): IO[Option[ExternalMembersMigrationRecord]]
 
+  /** Load up to `limit` users whose email matches the given SQL `LIKE` pattern, ordered by id. Pass an `afterUserId` to load only users strictly after it,
+    * which together with `limit` keyset-paginates a cleanup run through the matches. A pattern with no `%`/`_` wildcards behaves as an exact-match lookup.
+    */
+  def loadUsersByEmailPattern(pattern: String, afterUserId: Option[WorkbenchUserId], limit: Int, samRequestContext: SamRequestContext): IO[Seq[SamUser]]
+
+  /** Count the users matching [[loadUsersByEmailPattern]]'s pattern. Used for the preview endpoint and to record a cleanup run's total up front. */
+  def countUsersByEmailPattern(pattern: String, samRequestContext: SamRequestContext): IO[Long]
+
+  /** Record the mutable progress of an All_Users cleanup run for one email pattern: its state, total, processed/failed counts, and resume cursor, bumping the
+    * heartbeat. Used to mark a run `running` at the start, for periodic heartbeats, and for the terminal `completed` state.
+    */
+  def recordAllUsersCleanupProgress(
+      emailPattern: String,
+      state: String,
+      total: Option[Long],
+      processed: Long,
+      failed: Long,
+      lastCursor: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[Unit]
+
+  /** Set only the state (and heartbeat) of a cleanup run, preserving its progress columns. Used to mark a run `failed` without clobbering the last recorded
+    * counts.
+    */
+  def setAllUsersCleanupState(emailPattern: String, state: String, samRequestContext: SamRequestContext): IO[Unit]
+
+  def listAllUsersCleanupRuns(samRequestContext: SamRequestContext): IO[Seq[AllUsersCleanupRecord]]
+
+  def getAllUsersCleanupRun(emailPattern: String, samRequestContext: SamRequestContext): IO[Option[AllUsersCleanupRecord]]
+
   def loadUserByGoogleSubjectId(userId: GoogleSubjectId, samRequestContext: SamRequestContext): IO[Option[SamUser]]
 
   def loadUserByAzureB2CId(userId: AzureB2CId, samRequestContext: SamRequestContext): IO[Option[SamUser]]

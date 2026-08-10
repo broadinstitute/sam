@@ -280,6 +280,93 @@ class PostgresDirectoryDAO(protected val writeDbRef: DbReference, protected val 
       updatedAt = rs.timestamp("updated_at").toInstant
     )
 
+  override def loadUsersByEmailPattern(
+      pattern: String,
+      afterUserId: Option[WorkbenchUserId],
+      limit: Int,
+      samRequestContext: SamRequestContext
+  ): IO[Seq[SamUser]] =
+    readOnlyTransaction("loadUsersByEmailPattern", samRequestContext) { implicit session =>
+      val userTable = UserTable.syntax
+      val afterClause = afterUserId.map(userId => samsqls"and ${userTable.id} > ${userId}").getOrElse(samsqls"")
+
+      samsql"""select ${userTable.resultAll} from ${UserTable as userTable}
+                where ${userTable.email} like $pattern
+                $afterClause
+                order by ${userTable.id} asc
+                limit $limit"""
+        .map(UserTable(userTable))
+        .list()
+        .apply()
+        .map(UserTable.unmarshalUserRecord)
+    }
+
+  override def countUsersByEmailPattern(pattern: String, samRequestContext: SamRequestContext): IO[Long] =
+    readOnlyTransaction("countUsersByEmailPattern", samRequestContext) { implicit session =>
+      val userTable = UserTable.syntax
+      samsql"select count(*) from ${UserTable as userTable} where ${userTable.email} like $pattern"
+        .map(_.long(1))
+        .single()
+        .apply()
+        .getOrElse(0L)
+    }
+
+  override def recordAllUsersCleanupProgress(
+      emailPattern: String,
+      state: String,
+      total: Option[Long],
+      processed: Long,
+      failed: Long,
+      lastCursor: Option[String],
+      samRequestContext: SamRequestContext
+  ): IO[Unit] =
+    serializableWriteTransaction("recordAllUsersCleanupProgress", samRequestContext) { implicit session =>
+      // clock_timestamp() (not now()) is used because this transaction may be retried and we want the real wall-clock time of the successful attempt.
+      samsql"""insert into SAM_ALL_USERS_CLEANUP (email_pattern, state, total, processed, failed, last_cursor, started_at, updated_at)
+                values ($emailPattern, $state, $total, $processed, $failed, $lastCursor, clock_timestamp(), clock_timestamp())
+                on conflict (email_pattern) do update
+                  set state = $state, total = $total, processed = $processed, failed = $failed, last_cursor = $lastCursor, updated_at = clock_timestamp()"""
+        .update()
+        .apply()
+    }
+
+  override def setAllUsersCleanupState(emailPattern: String, state: String, samRequestContext: SamRequestContext): IO[Unit] =
+    serializableWriteTransaction("setAllUsersCleanupState", samRequestContext) { implicit session =>
+      samsql"update SAM_ALL_USERS_CLEANUP set state = $state, updated_at = clock_timestamp() where email_pattern = $emailPattern"
+        .update()
+        .apply()
+    }
+
+  override def listAllUsersCleanupRuns(samRequestContext: SamRequestContext): IO[Seq[AllUsersCleanupRecord]] =
+    readOnlyTransaction("listAllUsersCleanupRuns", samRequestContext) { implicit session =>
+      samsql"""select email_pattern, state, total, processed, failed, last_cursor, started_at, updated_at
+                from SAM_ALL_USERS_CLEANUP order by email_pattern asc"""
+        .map(unmarshalAllUsersCleanupRecord)
+        .list()
+        .apply()
+    }
+
+  override def getAllUsersCleanupRun(emailPattern: String, samRequestContext: SamRequestContext): IO[Option[AllUsersCleanupRecord]] =
+    readOnlyTransaction("getAllUsersCleanupRun", samRequestContext) { implicit session =>
+      samsql"""select email_pattern, state, total, processed, failed, last_cursor, started_at, updated_at
+                from SAM_ALL_USERS_CLEANUP where email_pattern = $emailPattern"""
+        .map(unmarshalAllUsersCleanupRecord)
+        .single()
+        .apply()
+    }
+
+  private def unmarshalAllUsersCleanupRecord(rs: WrappedResultSet): AllUsersCleanupRecord =
+    AllUsersCleanupRecord(
+      emailPattern = rs.string("email_pattern"),
+      state = rs.string("state"),
+      total = rs.longOpt("total"),
+      processed = rs.long("processed"),
+      failed = rs.long("failed"),
+      lastCursor = rs.stringOpt("last_cursor"),
+      startedAt = rs.timestamp("started_at").toInstant,
+      updatedAt = rs.timestamp("updated_at").toInstant
+    )
+
   override def deleteGroup(groupName: WorkbenchGroupName, samRequestContext: SamRequestContext): IO[Unit] =
     serializableWriteTransaction("deleteGroup", samRequestContext) { implicit session =>
       deleteGroup(groupName)
