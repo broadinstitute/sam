@@ -145,6 +145,12 @@ paths:
         403:
           description: You do not have admin privileges
           content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/user/{userId}/attributes:
     put:
       tags:
@@ -177,12 +183,6 @@ paths:
         404:
           description: User not found
           content: { }
-        500:
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/user/email/{email}:
     get:
       tags:
