@@ -8,7 +8,7 @@ import org.broadinstitute.dsde.workbench.sam.TestSupport.enabledMapNoTosAccepted
 import org.broadinstitute.dsde.workbench.sam.matchers.BeForUserMatcher.beForUser
 import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AdminUpdateUserRequest, SamUser, SamUserAttributes, SamUserAttributesRequest}
 import org.broadinstitute.dsde.workbench.sam.service._
 import org.broadinstitute.dsde.workbench.sam.{Generator, TestSupport}
 import org.mockito.scalatest.MockitoSugar
@@ -134,6 +134,50 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.OK)
       // Enabled in particular since we cant directly extract the user from the builder
       responseAs[SamUser] shouldEqual defaultUser.copy(azureB2CId = None)
+    }
+  }
+
+  // These tests focus on AdminRoutes wiring + authorization; the set/create/default logic is covered in UserServiceSpec.
+  "PUT /admin/v1/user/{userSubjectId}/attributes" should "set a user's attributes if the requesting user is an admin" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminUser()
+      .withEnabledUser(defaultUser)
+      .withAllowedUser(defaultUser)
+      .build
+    // Act
+    Put(s"/api/admin/v1/user/$defaultUserId/attributes", SamUserAttributesRequest(Some(true))) ~> samRoutes.route ~> check {
+      // Assert
+      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.OK)
+      responseAs[SamUserAttributes].userId shouldEqual defaultUserId
+    }
+  }
+
+  it should "not find a user when setting attributes if that user does not exist and the requesting user is an admin" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsAdminUser()
+      .withEnabledUser(defaultUser)
+      .withAllowedUser(defaultUser)
+      .build
+    // Act
+    Put(s"/api/admin/v1/user/$badUserId/attributes", SamUserAttributesRequest(Some(true))) ~> samRoutes.route ~> check {
+      // Assert
+      status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "forbid setting a user's attributes if the requesting user is a non admin" in {
+    // Arrange
+    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
+      .callAsNonAdminUser()
+      .withEnabledUser(defaultUser)
+      .withAllowedUser(defaultUser)
+      .build
+    // Act
+    Put(s"/api/admin/v1/user/$defaultUserId/attributes", SamUserAttributesRequest(Some(true))) ~> samRoutes.route ~> check {
+      // Assert
+      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.Forbidden)
     }
   }
 
