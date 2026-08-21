@@ -126,6 +126,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorReport'
+  /api/admin/v1/user/{userId}/repairAllUsersGroup:
+    put:
+      tags:
+        - Admin
+      summary: Adds a user to the All_Users group, e.g. to repair a user who was not added during registration.
+      operationId: adminRepairAllUsersGroup
+      parameters:
+        - name: userId
+          in: path
+          description: User ID of the user to add to the All_Users group
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: User was added to the All_Users group
+        403:
+          description: You do not have admin privileges
+          content: { }
+        500:
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
   /api/admin/v1/user/email/{email}:
     get:
       tags:
