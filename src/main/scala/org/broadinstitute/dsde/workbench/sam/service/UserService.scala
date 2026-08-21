@@ -495,6 +495,23 @@ class UserService(
   def setUserAttributes(userAttributes: SamUserAttributes, samRequestContext: SamRequestContext): IO[SamUserAttributes] =
     directoryDAO.setUserAttributes(userAttributes, samRequestContext).map(_ => userAttributes)
 
+  // Admin-facing: set/create attributes for an arbitrary user (e.g. to repair a user whose attributes row was never
+  // created during a failed registration, which locks them out of the Terra UI). Returns None if the user does not
+  // exist so the caller can 404 rather than create an orphan attributes row. marketingConsent defaults to false when
+  // omitted so an empty body reliably creates the row instead of failing validation; the user can change it themselves
+  // once they can load the UI.
+  def setUserAttributesForUser(
+      userId: WorkbenchUserId,
+      userAttributesRequest: SamUserAttributesRequest,
+      samRequestContext: SamRequestContext
+  ): IO[Option[SamUserAttributes]] =
+    getUser(userId, samRequestContext).flatMap {
+      case Some(_) =>
+        val normalized = userAttributesRequest.copy(marketingConsent = Some(userAttributesRequest.marketingConsent.getOrElse(false)))
+        setUserAttributesFromRequest(userId, normalized, samRequestContext).map(Some(_))
+      case None => IO.pure(None)
+    }
+
   def repairCloudAccess(workbenchUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] = {
     val maybeUser = getUser(workbenchUserId, samRequestContext)
     maybeUser.flatMap {

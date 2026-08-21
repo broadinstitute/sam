@@ -16,7 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.model.api.SamJsonSupport._
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceActions.{adminAddMember, adminReadPolicies, adminRemoveMember}
 import org.broadinstitute.dsde.workbench.sam.model.SamResourceTypes.resourceTypeAdminName
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AdminUpdateUserRequest, SamUser}
+import org.broadinstitute.dsde.workbench.sam.model.api.{AccessPolicyMembershipRequest, AdminUpdateUserRequest, SamUser, SamUserAttributesRequest}
 import org.broadinstitute.dsde.workbench.sam.service.{ManagedGroupService, ResourceService, UserService}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import spray.json.DefaultJsonProtocol._
@@ -132,6 +132,19 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
                   userService
                     .addToAllUsersGroup(workbenchUserId, samRequestContext)
                     .map(_ => OK)
+                }
+              }
+            }
+          } ~
+          pathPrefix("attributes") {
+            pathEndOrSingleSlash {
+              patchWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+                entity(as[SamUserAttributesRequest]) { request =>
+                  complete {
+                    userService
+                      .setUserAttributesForUser(workbenchUserId, request, samRequestContext)
+                      .map(attributes => (if (attributes.isDefined) OK else NotFound) -> attributes)
+                  }
                 }
               }
             }

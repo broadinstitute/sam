@@ -92,6 +92,8 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
       SamUserAllowances(enabled = false, termsOfService = false)
     )
     mockUserService.getUserAttributes(any[WorkbenchUserId], any[SamRequestContext]) returns IO(None)
+    // default: user not found -> None (route 404s). makeUser overrides this per existing user.
+    mockUserService.setUserAttributesForUser(any[WorkbenchUserId], any[SamUserAttributesRequest], any[SamRequestContext]) returns IO(None)
 
     mockUserService.repairCloudAccess(any[WorkbenchUserId], any[SamRequestContext]) returns IO(())
   }
@@ -117,6 +119,11 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     mockUserService.disableUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
       IO(None)
     }
+    // existing user -> Some, reflecting the request's marketingConsent (defaulting to false when omitted)
+    mockUserService.setUserAttributesForUser(eqTo(samUser.id), any[SamUserAttributesRequest], any[SamRequestContext]) answers (
+      (_: WorkbenchUserId, r: SamUserAttributesRequest, _: SamRequestContext) =>
+        IO(Option(SamUserAttributes(samUser.id, r.marketingConsent.getOrElse(false))))
+    )
     mockUserService.getUsersByQuery(
       eqTo(Option(samUser.id)),
       any[Option[GoogleSubjectId]],

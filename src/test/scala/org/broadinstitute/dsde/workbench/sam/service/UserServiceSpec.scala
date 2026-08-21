@@ -14,7 +14,7 @@ import org.broadinstitute.dsde.workbench.sam.google.GoogleExtensions
 import org.broadinstitute.dsde.workbench.sam.matchers.BeSameUserMatcher.beSameUserAs
 import org.broadinstitute.dsde.workbench.sam.matchers.TimeMatchers
 import org.broadinstitute.dsde.workbench.sam.model._
-import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes}
+import org.broadinstitute.dsde.workbench.sam.model.api.{SamUser, SamUserAttributes, SamUserAttributesRequest}
 import org.broadinstitute.dsde.workbench.sam.service.UserServiceSpecs.{CreateUserSpec, GetUserStatusSpec, InviteUserSpec}
 import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.mockito.Mockito
@@ -170,6 +170,26 @@ class OldUserServiceMockSpec(_system: ActorSystem)
     when(googleExtensions.getUserStatus(enabledUser)).thenReturn(IO(false))
     val status = service.getUserStatusDiagnostics(enabledUser.id, samRequestContext).unsafeRunSync()
     status.value.inGoogleProxyGroup shouldBe false
+  }
+
+  "setUserAttributesForUser" should "create attributes for an existing user, defaulting marketingConsent to false when omitted" in {
+    when(dirDAO.getUserAttributes(defaultUser.id, samRequestContext)).thenReturn(IO(None))
+    val result = service.setUserAttributesForUser(defaultUser.id, SamUserAttributesRequest(None), samRequestContext).unsafeRunSync()
+    result shouldBe Some(SamUserAttributes(defaultUser.id, marketingConsent = false))
+  }
+
+  it should "create attributes for an existing user with the supplied marketingConsent value" in {
+    when(dirDAO.getUserAttributes(defaultUser.id, samRequestContext)).thenReturn(IO(None))
+    val result = service.setUserAttributesForUser(defaultUser.id, SamUserAttributesRequest(Some(true)), samRequestContext).unsafeRunSync()
+    result shouldBe Some(SamUserAttributes(defaultUser.id, marketingConsent = true))
+  }
+
+  it should "return None (so the caller can 404) when the user does not exist" in {
+    val missingUserId = WorkbenchUserId("nonexistent-user")
+    when(dirDAO.loadUser(missingUserId, samRequestContext)).thenReturn(IO(None))
+    val result = service.setUserAttributesForUser(missingUserId, SamUserAttributesRequest(Some(true)), samRequestContext).unsafeRunSync()
+    result shouldBe None
+    verify(dirDAO, never()).setUserAttributes(any[SamUserAttributes], any[SamRequestContext])
   }
 
   it should "return UserStatusDiagnostics.tosAccepted as false if user's TOS status is false" in {

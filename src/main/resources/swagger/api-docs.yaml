@@ -145,6 +145,38 @@ paths:
         403:
           description: You do not have admin privileges
           content: { }
+  /api/admin/v1/user/{userId}/attributes:
+    patch:
+      tags:
+        - Admin
+      summary: Sets a user's attributes, e.g. to repair a user whose attributes were not created during registration.
+      operationId: adminSetUserAttributes
+      parameters:
+        - name: userId
+          in: path
+          description: User ID of the user whose attributes are being set
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: User attributes to set. marketingConsent defaults to false if omitted.
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/SamUserAttributes'
+      responses:
+        200:
+          description: Attributes were set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamUserAttributes'
+        403:
+          description: You do not have admin privileges
+          content: { }
+        404:
+          description: User not found
+          content: { }
         500:
           description: Internal Server Error
           content:
