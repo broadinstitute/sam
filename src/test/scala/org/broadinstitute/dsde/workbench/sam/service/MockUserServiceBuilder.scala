@@ -119,10 +119,9 @@ case class MockUserServiceBuilder() extends IdiomaticMockito {
     mockUserService.disableUser(any[WorkbenchUserId], any[SamRequestContext]) returns {
       IO(None)
     }
-    // existing user -> Some, reflecting the request's marketingConsent (defaulting to false when omitted)
-    mockUserService.setUserAttributesForUser(eqTo(samUser.id), any[SamUserAttributesRequest], any[SamRequestContext]) answers (
-      (_: WorkbenchUserId, r: SamUserAttributesRequest, _: SamRequestContext) =>
-        IO(Option(SamUserAttributes(samUser.id, r.marketingConsent.getOrElse(false))))
+    // existing user -> Some (the real create/default logic is exercised in UserServiceSpec)
+    mockUserService.setUserAttributesForUser(eqTo(samUser.id), any[SamUserAttributesRequest], any[SamRequestContext]) returns IO(
+      Option(SamUserAttributes(samUser.id, marketingConsent = false))
     )
     mockUserService.getUsersByQuery(
       eqTo(Option(samUser.id)),

@@ -146,7 +146,7 @@ paths:
           description: You do not have admin privileges
           content: { }
   /api/admin/v1/user/{userId}/attributes:
-    patch:
+    put:
       tags:
         - Admin
       summary: Sets a user's attributes, e.g. to repair a user whose attributes were not created during registration.

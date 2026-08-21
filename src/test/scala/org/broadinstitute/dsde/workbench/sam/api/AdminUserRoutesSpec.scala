@@ -137,35 +137,19 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
     }
   }
 
-  "PATCH /admin/v1/user/{userSubjectId}/attributes" should "set a user's attributes if the requesting user is an admin" in {
+  // These tests focus on AdminRoutes wiring + authorization; the set/create/default logic is covered in UserServiceSpec.
+  "PUT /admin/v1/user/{userSubjectId}/attributes" should "set a user's attributes if the requesting user is an admin" in {
     // Arrange
     val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
       .callAsAdminUser()
       .withEnabledUser(defaultUser)
       .withAllowedUser(defaultUser)
       .build
-    val requestBody = SamUserAttributesRequest(Some(true))
     // Act
-    Patch(s"/api/admin/v1/user/$defaultUserId/attributes", requestBody) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/user/$defaultUserId/attributes", SamUserAttributesRequest(Some(true))) ~> samRoutes.route ~> check {
       // Assert
       withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.OK)
-      responseAs[SamUserAttributes] shouldEqual SamUserAttributes(defaultUserId, marketingConsent = true)
-    }
-  }
-
-  it should "default marketingConsent to false when omitted (empty request body)" in {
-    // Arrange
-    val samRoutes = new MockSamRoutesBuilder(allUsersGroup)
-      .callAsAdminUser()
-      .withEnabledUser(defaultUser)
-      .withAllowedUser(defaultUser)
-      .build
-    val requestBody = SamUserAttributesRequest(None)
-    // Act
-    Patch(s"/api/admin/v1/user/$defaultUserId/attributes", requestBody) ~> samRoutes.route ~> check {
-      // Assert
-      withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.OK)
-      responseAs[SamUserAttributes] shouldEqual SamUserAttributes(defaultUserId, marketingConsent = false)
+      responseAs[SamUserAttributes].userId shouldEqual defaultUserId
     }
   }
 
@@ -177,7 +161,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withAllowedUser(defaultUser)
       .build
     // Act
-    Patch(s"/api/admin/v1/user/$badUserId/attributes", SamUserAttributesRequest(Some(true))) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/user/$badUserId/attributes", SamUserAttributesRequest(Some(true))) ~> samRoutes.route ~> check {
       // Assert
       status shouldEqual StatusCodes.NotFound
     }
@@ -191,7 +175,7 @@ class AdminUserRoutesSpec extends AnyFlatSpec with Matchers with ScalatestRouteT
       .withAllowedUser(defaultUser)
       .build
     // Act
-    Patch(s"/api/admin/v1/user/$defaultUserId/attributes", SamUserAttributesRequest(Some(true))) ~> samRoutes.route ~> check {
+    Put(s"/api/admin/v1/user/$defaultUserId/attributes", SamUserAttributesRequest(Some(true))) ~> samRoutes.route ~> check {
       // Assert
       withClue(s"Response Body: ${responseAs[String]}")(status shouldEqual StatusCodes.Forbidden)
     }

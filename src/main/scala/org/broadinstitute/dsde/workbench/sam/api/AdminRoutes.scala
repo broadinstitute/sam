@@ -138,7 +138,9 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
           } ~
           pathPrefix("attributes") {
             pathEndOrSingleSlash {
-              patchWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
+              // PUT (not PATCH): this sets the user's full attributes state, defaulting any omitted value, rather than
+              // only touching the fields provided.
+              putWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
                 entity(as[SamUserAttributesRequest]) { request =>
                   complete {
                     userService
