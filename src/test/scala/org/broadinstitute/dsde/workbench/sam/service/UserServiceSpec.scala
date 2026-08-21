@@ -189,7 +189,7 @@ class OldUserServiceMockSpec(_system: ActorSystem)
     when(dirDAO.loadUser(missingUserId, samRequestContext)).thenReturn(IO(None))
     val result = service.setUserAttributesForUser(missingUserId, SamUserAttributesRequest(Some(true)), samRequestContext).unsafeRunSync()
     result shouldBe None
-    verify(dirDAO, never()).setUserAttributes(any[SamUserAttributes], any[SamRequestContext])
+    verify(dirDAO, never).setUserAttributes(any[SamUserAttributes], any[SamRequestContext])
   }
 
   it should "return UserStatusDiagnostics.tosAccepted as false if user's TOS status is false" in {
