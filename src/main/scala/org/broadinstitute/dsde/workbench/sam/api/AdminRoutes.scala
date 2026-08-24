@@ -130,7 +130,7 @@ trait AdminRoutes extends SecurityDirectives with SamRequestContextDirectives wi
               putWithTelemetry(samRequestContext, userIdParam(workbenchUserId)) {
                 complete {
                   userService
-                    .addToAllUsersGroup(workbenchUserId, samRequestContext)
+                    .repairAllUsersGroupMembership(workbenchUserId, samRequestContext)
                     .map(_ => OK)
                 }
               }

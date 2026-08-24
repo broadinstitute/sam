@@ -263,9 +263,15 @@ class GoogleExtensions(
       _ <- IO.fromFuture(IO(googleDirectoryDAO.createGroup(user.email.value, proxyEmail, Option(googleDirectoryDAO.lockedDownGroupSettings)))) recover {
         case e: GoogleJsonResponseException if e.getDetails.getCode == StatusCodes.Conflict.intValue => ()
       }
+      _ <- addProxyGroupToAllUsersGroup(user, samRequestContext)
+    } yield ()
+  }
+
+  override def addProxyGroupToAllUsersGroup(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = {
+    val proxyEmail = toProxyFromUser(user.id)
+    for {
       allUsersGroup <- getOrCreateAllUsersGroup(directoryDAO, samRequestContext)
       _ <- IO.fromFuture(IO(googleDirectoryDAO.addMemberToGroup(allUsersGroup.email, proxyEmail)))
-
     } yield ()
   }
 

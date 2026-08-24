@@ -135,6 +135,7 @@ class OldUserServiceMockSpec(_system: ActorSystem)
       .thenReturn(IO(allUsersGroup))
 
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.addProxyGroupToAllUsersGroup(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
@@ -266,6 +267,31 @@ class OldUserServiceMockSpec(_system: ActorSystem)
     service.deleteUser(defaultUser.id, samRequestContext).unsafeRunSync()
     verify(dirDAO).deleteUser(defaultUser.id, samRequestContext)
   }
+
+  "repairAllUsersGroupMembership" should "add the user to All_Users in the database and directly on google" in {
+    service.repairAllUsersGroupMembership(defaultUser.id, samRequestContext).unsafeRunSync()
+    verify(dirDAO).addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)
+    verify(googleExtensions).addProxyGroupToAllUsersGroup(enabledUser, samRequestContext)
+    verify(googleExtensions, never).onUserCreate(any[SamUser], any[SamRequestContext])
+  }
+
+  it should "still succeed if the user is already a member of All_Users on google" in {
+    when(googleExtensions.addProxyGroupToAllUsersGroup(enabledUser, samRequestContext))
+      .thenReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "already a member"))))
+
+    service.repairAllUsersGroupMembership(defaultUser.id, samRequestContext).unsafeRunSync()
+    verify(dirDAO).addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)
+  }
+
+  it should "raise a NotFound error for a non-existent user" in {
+    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      service.repairAllUsersGroupMembership(defaultUser.id, samRequestContext).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
+    verify(dirDAO, never).addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)
+  }
 }
 
 object GenEmail {
@@ -340,6 +366,7 @@ class OldUserServiceSpec(_system: ActorSystem)
         .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
     }
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.addProxyGroupToAllUsersGroup(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO.pure(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
@@ -774,10 +801,37 @@ class OldUserServiceSpec(_system: ActorSystem)
 
     verify(googleExtensions).onUserCreate(updatedUserInPostgres.get, samRequestContext)
     verify(googleExtensions).onUserEnable(updatedUserInPostgres.get, samRequestContext)
-    verify(googleExtensions).onGroupUpdate(Seq(allUsersGroup.id, group.id), Set(invitedUserId), samRequestContext)
+    // All_Users is excluded from the resync -- onUserCreate/onUserEnable above already handle it,
+    // and re-syncing it here would trigger a full resync of every user in the system
+    verify(googleExtensions).onGroupUpdate(Seq(group.id), Set(invitedUserId), samRequestContext)
 
     // get group from db
     val groupWithUpdatedVersion = runAndWait(dirDAO.loadGroup(group.id, samRequestContext))
     groupWithUpdatedVersion.get.version shouldBe group.version + 1
+  }
+
+  it should "not resync the All_Users group even when it is the user's only direct group membership" in {
+    assume(databaseEnabled, databaseEnabledClue)
+
+    // Create user
+    val inviteeEmail = genNonPetEmail.sample.get
+    service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
+    val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
+
+    val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
+    runAndWait(service.createUser(registeringUser, samRequestContext))
+
+    val allUsersGroupInPostgres = runAndWait(dirDAO.loadGroup(allUsersGroup.id, samRequestContext)).value
+
+    // Run test -- the user's only direct membership at this point is All_Users
+    service.repairCloudAccess(invitedUserId, samRequestContext).unsafeRunSync()
+
+    // called once during createUser (before the user was added to All_Users) and once by repairCloudAccess
+    // (which filters All_Users out, leaving an empty group list) -- both with an empty group list
+    verify(googleExtensions, times(2)).onGroupUpdate(Seq.empty, Set(invitedUserId), samRequestContext)
+
+    // All_Users' version should not have been bumped by repairCloudAccess
+    val allUsersGroupAfterRepair = runAndWait(dirDAO.loadGroup(allUsersGroup.id, samRequestContext)).value
+    allUsersGroupAfterRepair.version shouldBe allUsersGroupInPostgres.version
   }
 }

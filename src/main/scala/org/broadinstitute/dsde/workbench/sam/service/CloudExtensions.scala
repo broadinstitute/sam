@@ -43,6 +43,11 @@ trait CloudExtensions {
 
   def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
 
+  /** Adds the user's proxy group to the All_Users group, without creating the proxy group itself. Used to repair a user's All_Users membership without the side
+    * effects of onUserCreate.
+    */
+  def addProxyGroupToAllUsersGroup(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
+
   def getUserStatus(user: SamUser): IO[Boolean]
 
   def onUserEnable(user: SamUser, samRequestContext: SamRequestContext): IO[Unit]
@@ -93,6 +98,8 @@ trait NoExtensions extends CloudExtensions {
   override def onGroupDelete(groupEmail: WorkbenchEmail): IO[Unit] = IO.unit
 
   override def onUserCreate(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
+
+  override def addProxyGroupToAllUsersGroup(user: SamUser, samRequestContext: SamRequestContext): IO[Unit] = IO.unit
 
   override def getUserStatus(user: SamUser): IO[Boolean] = IO.pure(true)
 

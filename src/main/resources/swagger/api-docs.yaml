@@ -130,7 +130,7 @@ paths:
     put:
       tags:
         - Admin
-      summary: Adds a user to the All_Users group, e.g. to repair a user who was not added during registration.
+      summary: Adds a user to the All_Users group in Sam and directly in Google, e.g. to repair a user who was not added during registration.
       operationId: adminRepairAllUsersGroup
       parameters:
         - name: userId
@@ -141,9 +141,12 @@ paths:
             type: string
       responses:
         200:
-          description: User was added to the All_Users group
+          description: User was added to the All_Users group (as long as the database insert succeeds; the Google-side repair is best-effort)
         403:
           description: You do not have admin privileges
+          content: { }
+        404:
+          description: User not found
           content: { }
         500:
           description: Internal Server Error

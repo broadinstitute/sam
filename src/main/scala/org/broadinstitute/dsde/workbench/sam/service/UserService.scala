@@ -251,6 +251,22 @@ class UserService(
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext)
     } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
 
+  // Admin-facing repair for a user whose All_Users membership never made it to Google (e.g. a failed
+  // registration). In addition to the Sam DB membership (addToAllUsersGroup), this directly adds the user's
+  // existing proxy group to All_Users in Google -- it does not attempt to (re)create the proxy group itself,
+  // since that's not what this endpoint is repairing. Both the DB insert and the Google group insert are
+  // already no-ops if the membership exists, so this is safe to call repeatedly and always reports success
+  // rather than failing because the user was already repaired.
+  def repairAllUsersGroupMembership(workbenchUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
+    getUser(workbenchUserId, samRequestContext).flatMap {
+      case Some(user) =>
+        for {
+          _ <- addToAllUsersGroup(user.id, samRequestContext)
+          _ <- cloudExtensions.addProxyGroupToAllUsersGroup(user, samRequestContext).recover { case _ => () }
+        } yield ()
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"User $workbenchUserId not found")))
+    }
+
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
       _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains, nonInvitableDomains)
@@ -520,7 +536,11 @@ class UserService(
           // if the user is already created and enabled, then recover and just add them to the groups they should be in
           _ <- cloudExtensions.onUserCreate(user, samRequestContext).recover { case _ => () }
           _ <- cloudExtensions.onUserEnable(user, samRequestContext).recover { case _ => () }
-          groups <- directoryDAO.listUserDirectMemberships(user.id, samRequestContext)
+          allGroups <- directoryDAO.listUserDirectMemberships(user.id, samRequestContext)
+          // onUserCreate above already directly adds this user's proxy group to All_Users in Google, so
+          // excluding it here avoids also triggering a full resync of that group (every user in the system)
+          // via onGroupUpdate on every repair call
+          groups = allGroups.filterNot(_ == CloudExtensions.allUsersGroupName)
           _ = groups.map(g => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(g, samRequestContext))
           _ <- cloudExtensions.onGroupUpdate(groups, Set(user.id), samRequestContext)
         } yield IO.pure(())
