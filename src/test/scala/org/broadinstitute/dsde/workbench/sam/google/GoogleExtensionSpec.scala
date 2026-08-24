@@ -1227,6 +1227,39 @@ class GoogleExtensionSpec(_system: ActorSystem)
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
 
+  it should "not resync the All_Users group, even if it has been synced before" in {
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val mockGoogleGroupSyncPubSubDAO = mock[MockGooglePubSubDAO](RETURNS_SMART_NULLS)
+    val googleExtensions = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      null,
+      null,
+      mockGoogleGroupSyncPubSubDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      null,
+      configResourceTypes,
+      superAdminsGroup
+    )
+
+    // if All_Users were not excluded, this would report that it has been synced before, triggering a resync
+    when(mockDirectoryDAO.getSynchronizedDate(CloudExtensions.allUsersGroupName, samRequestContext))
+      .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+
+    runAndWait(googleExtensions.onGroupUpdate(Seq(CloudExtensions.allUsersGroupName), Set.empty, samRequestContext))
+
+    verify(mockGoogleGroupSyncPubSubDAO, never).publishMessages(any[String], any[Seq[MessageRequest]])
+    verify(mockDirectoryDAO, never).getSynchronizedDate(CloudExtensions.allUsersGroupName, samRequestContext)
+  }
+
   private def setupGoogleKeyCacheTestsWithRealKey: (GoogleExtensions, UserService, TosService) =
     setupGoogleKeyCacheTests(true)
 

@@ -536,11 +536,7 @@ class UserService(
           // if the user is already created and enabled, then recover and just add them to the groups they should be in
           _ <- cloudExtensions.onUserCreate(user, samRequestContext).recover { case _ => () }
           _ <- cloudExtensions.onUserEnable(user, samRequestContext).recover { case _ => () }
-          allGroups <- directoryDAO.listUserDirectMemberships(user.id, samRequestContext)
-          // onUserCreate above already directly adds this user's proxy group to All_Users in Google, so
-          // excluding it here avoids also triggering a full resync of that group (every user in the system)
-          // via onGroupUpdate on every repair call
-          groups = allGroups.filterNot(_ == CloudExtensions.allUsersGroupName)
+          groups <- directoryDAO.listUserDirectMemberships(user.id, samRequestContext)
           _ = groups.map(g => directoryDAO.updateGroupUpdatedDateAndVersionWithSession(g, samRequestContext))
           _ <- cloudExtensions.onGroupUpdate(groups, Set(user.id), samRequestContext)
         } yield IO.pure(())

@@ -801,37 +801,10 @@ class OldUserServiceSpec(_system: ActorSystem)
 
     verify(googleExtensions).onUserCreate(updatedUserInPostgres.get, samRequestContext)
     verify(googleExtensions).onUserEnable(updatedUserInPostgres.get, samRequestContext)
-    // All_Users is excluded from the resync -- onUserCreate/onUserEnable above already handle it,
-    // and re-syncing it here would trigger a full resync of every user in the system
-    verify(googleExtensions).onGroupUpdate(Seq(group.id), Set(invitedUserId), samRequestContext)
+    verify(googleExtensions).onGroupUpdate(Seq(allUsersGroup.id, group.id), Set(invitedUserId), samRequestContext)
 
     // get group from db
     val groupWithUpdatedVersion = runAndWait(dirDAO.loadGroup(group.id, samRequestContext))
     groupWithUpdatedVersion.get.version shouldBe group.version + 1
-  }
-
-  it should "not resync the All_Users group even when it is the user's only direct group membership" in {
-    assume(databaseEnabled, databaseEnabledClue)
-
-    // Create user
-    val inviteeEmail = genNonPetEmail.sample.get
-    service.inviteUser(inviteeEmail, samRequestContext).unsafeRunSync()
-    val invitedUserId = dirDAO.loadSubjectFromEmail(inviteeEmail, samRequestContext).unsafeRunSync().value.asInstanceOf[WorkbenchUserId]
-
-    val registeringUser = genWorkbenchUserGoogle.sample.get.copy(email = inviteeEmail)
-    runAndWait(service.createUser(registeringUser, samRequestContext))
-
-    val allUsersGroupInPostgres = runAndWait(dirDAO.loadGroup(allUsersGroup.id, samRequestContext)).value
-
-    // Run test -- the user's only direct membership at this point is All_Users
-    service.repairCloudAccess(invitedUserId, samRequestContext).unsafeRunSync()
-
-    // called once during createUser (before the user was added to All_Users) and once by repairCloudAccess
-    // (which filters All_Users out, leaving an empty group list) -- both with an empty group list
-    verify(googleExtensions, times(2)).onGroupUpdate(Seq.empty, Set(invitedUserId), samRequestContext)
-
-    // All_Users' version should not have been bumped by repairCloudAccess
-    val allUsersGroupAfterRepair = runAndWait(dirDAO.loadGroup(allUsersGroup.id, samRequestContext)).value
-    allUsersGroupAfterRepair.version shouldBe allUsersGroupInPostgres.version
   }
 }

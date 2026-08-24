@@ -189,8 +189,11 @@ class GoogleExtensions(
   ): IO[Unit] =
     for {
       start <- clock.monotonic
+      // All_Users membership changes are handled directly (see onUserCreate/addProxyGroupToAllUsersGroup), so it's
+      // excluded here to avoid queuing a full resync of the largest group in the system on every group update
+      relevantGroupIdentities = groupIdentities.filterNot(_ == CloudExtensions.allUsersGroupName)
       // only sync groups that have been synchronized in the past
-      previouslySyncedIds <- groupIdentities.toList.traverseFilter { id =>
+      previouslySyncedIds <- relevantGroupIdentities.toList.traverseFilter { id =>
         directoryDAO.getSynchronizedDate(id, samRequestContext).map(dateOption => dateOption.map(_ => id))
       }
 
