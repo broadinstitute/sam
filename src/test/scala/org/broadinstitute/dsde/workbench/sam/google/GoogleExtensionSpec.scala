@@ -1227,6 +1227,43 @@ class GoogleExtensionSpec(_system: ActorSystem)
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
 
+  "GoogleGroupSynchronizer.synchronizeGroupMembers" should "never actually sync the All_Users group, no matter who asked" in {
+    val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
+    val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
+    val ge = new GoogleExtensions(
+      TestSupport.distributedLock,
+      mockDirectoryDAO,
+      mockAccessPolicyDAO,
+      mockGoogleDirectoryDAO,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      googleServicesConfig,
+      petServiceAccountConfig,
+      configResourceTypes,
+      superAdminsGroup
+    )
+    val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, ge, configResourceTypes)
+
+    val allUsersGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(WorkbenchUserId("someUser")), ge.allUsersGroupEmail)
+    // version > lastSynchronizedVersion would normally mean this group needs synchronizing
+    when(mockDirectoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext))
+      .thenReturn(IO.pure(Option(allUsersGroup.copy(version = 2, lastSynchronizedVersion = Option(1)))))
+
+    val results = runAndWait(synchronizer.synchronizeGroupMembers(CloudExtensions.allUsersGroupName, samRequestContext = samRequestContext))
+
+    results shouldBe Map(allUsersGroup.email -> Seq.empty)
+    verify(mockGoogleDirectoryDAO, never).listGroupMembers(any[WorkbenchEmail])
+    verify(mockGoogleDirectoryDAO, never).addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])
+    verify(mockDirectoryDAO, never).updateSynchronizedDateAndVersion(any[WorkbenchGroup], any[SamRequestContext])
+  }
+
   private def setupGoogleKeyCacheTestsWithRealKey: (GoogleExtensions, UserService, TosService) =
     setupGoogleKeyCacheTests(true)
 

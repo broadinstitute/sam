@@ -135,6 +135,7 @@ class OldUserServiceMockSpec(_system: ActorSystem)
       .thenReturn(IO(allUsersGroup))
 
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.addProxyGroupToAllUsersGroup(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
@@ -266,6 +267,31 @@ class OldUserServiceMockSpec(_system: ActorSystem)
     service.deleteUser(defaultUser.id, samRequestContext).unsafeRunSync()
     verify(dirDAO).deleteUser(defaultUser.id, samRequestContext)
   }
+
+  "repairAllUsersGroupMembership" should "add the user to All_Users in the database and directly on google" in {
+    service.repairAllUsersGroupMembership(defaultUser.id, samRequestContext).unsafeRunSync()
+    verify(dirDAO).addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)
+    verify(googleExtensions).addProxyGroupToAllUsersGroup(enabledUser, samRequestContext)
+    verify(googleExtensions, never).onUserCreate(any[SamUser], any[SamRequestContext])
+  }
+
+  it should "still succeed if the user is already a member of All_Users on google" in {
+    when(googleExtensions.addProxyGroupToAllUsersGroup(enabledUser, samRequestContext))
+      .thenReturn(IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.Conflict, "already a member"))))
+
+    service.repairAllUsersGroupMembership(defaultUser.id, samRequestContext).unsafeRunSync()
+    verify(dirDAO).addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)
+  }
+
+  it should "raise a NotFound error for a non-existent user" in {
+    when(dirDAO.loadUser(defaultUser.id, samRequestContext)).thenReturn(IO(None))
+
+    val err = intercept[WorkbenchExceptionWithErrorReport] {
+      service.repairAllUsersGroupMembership(defaultUser.id, samRequestContext).unsafeRunSync()
+    }
+    err.errorReport.statusCode shouldBe Some(StatusCodes.NotFound)
+    verify(dirDAO, never).addGroupMember(allUsersGroup.id, defaultUser.id, samRequestContext)
+  }
 }
 
 object GenEmail {
@@ -340,6 +366,7 @@ class OldUserServiceSpec(_system: ActorSystem)
         .thenReturn(NoExtensions.getOrCreateAllUsersGroup(dirDAO, samRequestContext))
     }
     when(googleExtensions.onUserCreate(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
+    when(googleExtensions.addProxyGroupToAllUsersGroup(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.onUserDelete(any[WorkbenchUserId], any[SamRequestContext])).thenReturn(IO.unit)
     when(googleExtensions.getUserStatus(any[SamUser])).thenReturn(IO.pure(true))
     when(googleExtensions.onUserDisable(any[SamUser], any[SamRequestContext])).thenReturn(IO.unit)

@@ -251,6 +251,22 @@ class UserService(
       _ <- directoryDAO.addGroupMember(allUsersGroup.id, uid, samRequestContext)
     } yield logger.info(s"Added user uid ${uid.value} to the All Users group")
 
+  // Admin-facing repair for a user whose All_Users membership never made it to Google (e.g. a failed
+  // registration). In addition to the Sam DB membership (addToAllUsersGroup), this directly adds the user's
+  // existing proxy group to All_Users in Google -- it does not attempt to (re)create the proxy group itself,
+  // since that's not what this endpoint is repairing. Both the DB insert and the Google group insert are
+  // already no-ops if the membership exists, so this is safe to call repeatedly and always reports success
+  // rather than failing because the user was already repaired.
+  def repairAllUsersGroupMembership(workbenchUserId: WorkbenchUserId, samRequestContext: SamRequestContext): IO[Unit] =
+    getUser(workbenchUserId, samRequestContext).flatMap {
+      case Some(user) =>
+        for {
+          _ <- addToAllUsersGroup(user.id, samRequestContext)
+          _ <- cloudExtensions.addProxyGroupToAllUsersGroup(user, samRequestContext).recover { case _ => () }
+        } yield ()
+      case None => IO.raiseError(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"User $workbenchUserId not found")))
+    }
+
   def inviteUser(inviteeEmail: WorkbenchEmail, samRequestContext: SamRequestContext): IO[UserStatusDetails] =
     for {
       _ <- validateEmailAddress(inviteeEmail, blockedEmailDomains, nonInvitableDomains)
