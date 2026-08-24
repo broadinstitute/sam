@@ -191,9 +191,6 @@ class GoogleGroupSynchronizer(
       group <- OptionT.fromOption[IO](groupOption).getOrRaise(new WorkbenchExceptionWithErrorReport(ErrorReport(StatusCodes.NotFound, s"$groupId not found")))
     } yield
     // All_Users membership is repaired directly (see GoogleExtensions.onUserCreate/addProxyGroupToAllUsersGroup)
-    // rather than through the normal group-diff sync below, which would be prohibitively expensive for the
-    // largest group in the system -- so it's never selected for synchronization here, regardless of caller
-    // (pubsub message, sub-group traversal, or a manual admin trigger).
     // If group.version > group.lastSynchronizedVersion, then the group needs to be synchronized
     // Else Noop
     if (groupId == CloudExtensions.allUsersGroupName) {
