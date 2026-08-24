@@ -1227,17 +1227,17 @@ class GoogleExtensionSpec(_system: ActorSystem)
     verify(mockGoogleGroupSyncPubSubDAO, times(1)).publishMessages(any[String], any[Seq[MessageRequest]])
   }
 
-  it should "not resync the All_Users group, even if it has been synced before" in {
+  "GoogleGroupSynchronizer.synchronizeGroupMembers" should "never actually sync the All_Users group, no matter who asked" in {
     val mockDirectoryDAO = mock[DirectoryDAO](RETURNS_SMART_NULLS)
     val mockAccessPolicyDAO = mock[AccessPolicyDAO](RETURNS_SMART_NULLS)
-    val mockGoogleGroupSyncPubSubDAO = mock[MockGooglePubSubDAO](RETURNS_SMART_NULLS)
-    val googleExtensions = new GoogleExtensions(
+    val mockGoogleDirectoryDAO = mock[GoogleDirectoryDAO](RETURNS_SMART_NULLS)
+    val ge = new GoogleExtensions(
       TestSupport.distributedLock,
       mockDirectoryDAO,
       mockAccessPolicyDAO,
+      mockGoogleDirectoryDAO,
       null,
       null,
-      mockGoogleGroupSyncPubSubDAO,
       null,
       null,
       null,
@@ -1245,19 +1245,23 @@ class GoogleExtensionSpec(_system: ActorSystem)
       null,
       null,
       googleServicesConfig,
-      null,
+      petServiceAccountConfig,
       configResourceTypes,
       superAdminsGroup
     )
+    val synchronizer = new GoogleGroupSynchronizer(mockDirectoryDAO, mockAccessPolicyDAO, mockGoogleDirectoryDAO, ge, configResourceTypes)
 
-    // if All_Users were not excluded, this would report that it has been synced before, triggering a resync
-    when(mockDirectoryDAO.getSynchronizedDate(CloudExtensions.allUsersGroupName, samRequestContext))
-      .thenReturn(IO.pure(Some(new GregorianCalendar(2018, 8, 26).getTime())))
+    val allUsersGroup = BasicWorkbenchGroup(CloudExtensions.allUsersGroupName, Set(WorkbenchUserId("someUser")), ge.allUsersGroupEmail)
+    // version > lastSynchronizedVersion would normally mean this group needs synchronizing
+    when(mockDirectoryDAO.loadGroup(CloudExtensions.allUsersGroupName, samRequestContext))
+      .thenReturn(IO.pure(Option(allUsersGroup.copy(version = 2, lastSynchronizedVersion = Option(1)))))
 
-    runAndWait(googleExtensions.onGroupUpdate(Seq(CloudExtensions.allUsersGroupName), Set.empty, samRequestContext))
+    val results = runAndWait(synchronizer.synchronizeGroupMembers(CloudExtensions.allUsersGroupName, samRequestContext = samRequestContext))
 
-    verify(mockGoogleGroupSyncPubSubDAO, never).publishMessages(any[String], any[Seq[MessageRequest]])
-    verify(mockDirectoryDAO, never).getSynchronizedDate(CloudExtensions.allUsersGroupName, samRequestContext)
+    results shouldBe Map(allUsersGroup.email -> Seq.empty)
+    verify(mockGoogleDirectoryDAO, never).listGroupMembers(any[WorkbenchEmail])
+    verify(mockGoogleDirectoryDAO, never).addMemberToGroup(any[WorkbenchEmail], any[WorkbenchEmail])
+    verify(mockDirectoryDAO, never).updateSynchronizedDateAndVersion(any[WorkbenchGroup], any[SamRequestContext])
   }
 
   private def setupGoogleKeyCacheTestsWithRealKey: (GoogleExtensions, UserService, TosService) =
