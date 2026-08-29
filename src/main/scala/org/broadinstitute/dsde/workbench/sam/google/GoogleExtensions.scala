@@ -36,6 +36,7 @@ import java.io.ByteArrayInputStream
 import java.net.URL
 import java.util.Date
 import java.util.concurrent.TimeUnit
+import scala.annotation.nowarn
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -87,6 +88,7 @@ class GoogleExtensions(
   private val requestedByQueryParam = "requestedBy"
   private val defaultSignedUrlDuration = 60L
 
+  @nowarn("cat=unused-params")
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
   ): IO[WorkbenchGroup] = {
@@ -808,7 +810,8 @@ class GoogleExtensions(
 case class GoogleExtensionsInitializer(
     cloudExtensions: GoogleExtensions,
     googleGroupSynchronizer: GoogleGroupSynchronizer,
-    groupExternalMembersMigrator: GoogleGroupExternalMembersMigrator
+    groupExternalMembersMigrator: GoogleGroupExternalMembersMigrator,
+    allUsersGroupCleanupMigrator: AllUsersGroupCleanupMigrator
 ) extends CloudExtensionsInitializer {
   override def onBoot(samApplication: SamApplication)(implicit system: ActorSystem): IO[Unit] =
     for {

@@ -16,6 +16,7 @@ import org.broadinstitute.dsde.workbench.sam.util.SamRequestContext
 import org.broadinstitute.dsde.workbench.util.health.SubsystemStatus
 import org.broadinstitute.dsde.workbench.util.health.Subsystems.Subsystem
 
+import scala.annotation.nowarn
 import scala.concurrent.{ExecutionContext, Future}
 
 object CloudExtensions {
@@ -124,6 +125,7 @@ trait NoExtensions extends CloudExtensions {
 
   override val emailDomain = "example.com"
 
+  @nowarn("cat=unused-params")
   override def getOrCreateAllUsersGroup(directoryDAO: DirectoryDAO, samRequestContext: SamRequestContext)(implicit
       executionContext: ExecutionContext
   ): IO[WorkbenchGroup] = {

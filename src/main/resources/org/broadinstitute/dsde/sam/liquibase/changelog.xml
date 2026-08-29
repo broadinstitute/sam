@@ -35,4 +35,5 @@
     <include file="changesets/20240820_descendant_auth_domains.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20241205_prereq_action_column.xml" relativeToChangelogFile="true"/>
     <include file="changesets/20260629_external_members_migration.xml" relativeToChangelogFile="true"/>
+    <include file="changesets/20260810_all_users_cleanup.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

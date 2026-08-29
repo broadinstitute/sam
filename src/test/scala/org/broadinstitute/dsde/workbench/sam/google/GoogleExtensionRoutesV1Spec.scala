@@ -387,4 +387,55 @@ class GoogleExtensionRoutesV1Spec extends GoogleExtensionRoutesSpecHelper with S
       responseAs[String] should include("no allowExternalMembers migrations have been started")
     }
   }
+
+  "GET /api/google/v1/groups/allUsers/cleanup/preview" should "reject a non-super-admin with 403" in {
+    val (_, samDep, routes) = createTestUser()
+    createSuperAdminsGroup(samDep)
+    Get("/api/google/v1/groups/allUsers/cleanup/preview?emailPattern=tdr-ingest-sa@datarepo-%25") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "return the match count to a super admin" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Get("/api/google/v1/groups/allUsers/cleanup/preview?emailPattern=tdr-ingest-sa@datarepo-%25") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] shouldEqual "0"
+    }
+  }
+
+  "PUT /api/google/v1/groups/allUsers/cleanup" should "reject a non-super-admin with 403" in {
+    val (_, samDep, routes) = createTestUser()
+    createSuperAdminsGroup(samDep)
+    Put("/api/google/v1/groups/allUsers/cleanup?emailPattern=tdr-ingest-sa@datarepo-%25") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "accept a super admin and start the cleanup in the background" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Put("/api/google/v1/groups/allUsers/cleanup?emailPattern=tdr-ingest-sa@datarepo-%25") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Accepted
+      responseAs[String] should include("tdr-ingest-sa@datarepo-%")
+    }
+  }
+
+  "GET /api/google/v1/groups/allUsers/cleanup/status" should "reject a non-super-admin with 403" in {
+    val (_, samDep, routes) = createTestUser()
+    createSuperAdminsGroup(samDep)
+    Get("/api/google/v1/groups/allUsers/cleanup/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.Forbidden
+    }
+  }
+
+  it should "return the cleanup status to a super admin" in {
+    val (user, samDep, routes) = createTestUser()
+    makeSuperAdmin(samDep, user)
+    Get("/api/google/v1/groups/allUsers/cleanup/status") ~> routes.route ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[String] should include("no All_Users cleanup runs have been started")
+    }
+  }
 }
