@@ -11,7 +11,7 @@ object Dependencies {
   val scalikejdbcVersion = "3.4.2"
   val postgresDriverVersion = "42.7.8"
   val sentryVersion = "6.15.0"
-  val nettyV = "4.2.16.Final"
+  val nettyV = "4.2.17.Final"
 
   val workbenchLibV = "76e472e" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
