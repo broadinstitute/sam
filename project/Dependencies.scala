@@ -247,7 +247,7 @@ object Dependencies {
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
     "org.apache.commons" % "commons-compress" % "1.28.0",
-    "com.google.guava" % "guava" % "33.5.0-jre", // Force JRE version, not Android version from grpc-core
+    "com.google.guava" % "guava" % "33.7.2-jre", // Force JRE version, not Android version from grpc-core
     // Jackson 2 and Jackson 3 co-exist. Set versions for both:
     "tools.jackson.core" % "jackson-core" % "3.2.1",
     "tools.jackson.core" % "jackson-databind" % "3.2.1",
