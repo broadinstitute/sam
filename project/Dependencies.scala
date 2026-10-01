@@ -250,7 +250,7 @@ object Dependencies {
     "com.google.guava" % "guava" % "33.7.2-jre", // Force JRE version, not Android version from grpc-core
     // Jackson 2 and Jackson 3 co-exist. Set versions for both:
     "tools.jackson.core" % "jackson-core" % "3.2.3",
-    "tools.jackson.core" % "jackson-databind" % "3.2.1",
+    "tools.jackson.core" % "jackson-databind" % "3.2.3",
     jacksonCore,
     jacksonAnnotations,
     jacksonDatabind,
