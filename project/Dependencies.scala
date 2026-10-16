@@ -3,13 +3,13 @@ import sbt._
 object Dependencies {
   val akkaV = "2.6.19"
   val akkaHttpV = "10.2.9"
-  val jacksonV = "2.22.1"
+  val jacksonV = "2.22.3"
   val jacksonAnnotationsV = "2.22"
   val scalaLoggingV = "3.9.6"
-  val scalaTestV = "3.2.19"
-  val scalaCheckV = "1.19.0"
+  val scalaTestV = "3.2.20"
+  val scalaCheckV = "1.20.0"
   val scalikejdbcVersion = "3.4.2"
-  val postgresDriverVersion = "42.7.8"
+  val postgresDriverVersion = "42.7.13"
   val sentryVersion = "6.15.0"
   val nettyV = "4.2.16.Final"
 
@@ -23,7 +23,7 @@ object Dependencies {
   val workbenchOauth2V = s"0.11-$workbenchLibV"
   val monocleVersion = "2.0.5"
   val crlVersion = "1.2.42-SNAPSHOT"
-  val tclVersion = "1.1.68-SNAPSHOT"
+  val tclVersion = "1.1.79-SNAPSHOT"
   val slf4jVersion = "2.0.6"
 
   val excludeAkkaActor = ExclusionRule(organization = "com.typesafe.akka", name = "akka-actor_2.12")
@@ -49,7 +49,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "9.0"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.23"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.38"
 
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
@@ -67,10 +67,10 @@ object Dependencies {
   val akkaHttpTestKit: ModuleID = "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test"
   val scalaCheck: ModuleID = "org.scalacheck" %% "scalacheck" % scalaCheckV % "test"
 
-  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.13"
+  val reactorNetty: ModuleID = "io.projectreactor.netty" % "reactor-netty" % "1.2.18"
 
   val excludIoGrpc = ExclusionRule(organization = "io.grpc", name = "grpc-core")
-  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.78.0"
+  val ioGrpc: ModuleID = "io.grpc" % "grpc-core" % "1.84.0"
 
   val googleOAuth2: ModuleID = "com.google.auth" % "google-auth-library-oauth2-http" % "0.18.0" excludeAll excludIoGrpc
   val googleStorage: ModuleID = "com.google.apis" % "google-api-services-storage" % "v1-rev20250925-2.0.0" excludeAll excludIoGrpc // force this version
@@ -80,7 +80,7 @@ object Dependencies {
 
   val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
   val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-18" % s"${scalaTestV}.0" % Test
-  val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "2.0.0" % Test
+  val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "2.2.3" % Test
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
   // workbench-google pulls in workbench-{util, model, metrics}; exclude them so we can control the library versions individually.
@@ -116,7 +116,7 @@ object Dependencies {
       excludeWorkbenchModel
     )
   val googleStorageLocal: ModuleID =
-    "com.google.cloud" % "google-cloud-nio" % "0.128.9" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
+    "com.google.cloud" % "google-cloud-nio" % "0.128.14" % "test" // needed for mocking google cloud storage. Should use same version as wb-libs
 
   val liquibaseCore: ModuleID = "org.liquibase" % "liquibase-core" % "4.33.0"
 
@@ -131,7 +131,7 @@ object Dependencies {
   val slf4jApi: ModuleID = "org.slf4j" % "slf4j-api" % slf4jVersion
   val slf4jSimple: ModuleID = "org.slf4j" % "slf4j-simple" % slf4jVersion
 
-  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.16.4" excludeAll excludeWorkbenchUtil2
+  val okio: ModuleID = "com.squareup.okio" % "okio" % "3.18.2" excludeAll excludeWorkbenchUtil2
 
   // pact deps
   val pact4sV = "0.9.0"
@@ -189,7 +189,7 @@ object Dependencies {
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
 
   // was included transitively before, now explicit
-  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.20.0"
+  val commonsCodec: ModuleID = "commons-codec" % "commons-codec" % "1.22.1"
 
   val rootDependencies = Seq(
     // proactively pull in latest versions of Jackson libs, instead of relying on the versions
@@ -247,10 +247,10 @@ object Dependencies {
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
     "org.apache.commons" % "commons-compress" % "1.28.0",
-    "com.google.guava" % "guava" % "33.5.0-jre", // Force JRE version, not Android version from grpc-core
+    "com.google.guava" % "guava" % "33.7.2-jre", // Force JRE version, not Android version from grpc-core
     // Jackson 2 and Jackson 3 co-exist. Set versions for both:
-    "tools.jackson.core" % "jackson-core" % "3.2.1",
-    "tools.jackson.core" % "jackson-databind" % "3.2.1",
+    "tools.jackson.core" % "jackson-core" % "3.2.3",
+    "tools.jackson.core" % "jackson-databind" % "3.2.3",
     jacksonCore,
     jacksonAnnotations,
     jacksonDatabind,
