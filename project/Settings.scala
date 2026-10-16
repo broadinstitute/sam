@@ -68,7 +68,7 @@ object Settings {
   lazy val commonSettings =
     commonBuildSettings ++ commonAssemblySettings ++ commonTestSettings ++ List(
       organization := "org.broadinstitute.dsde.workbench",
-      scalaVersion := "2.13.18",
+      scalaVersion := "3.9.0",
       resolvers := proxyResolvers ++: resolvers.value ++: commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       Compile / compile := (Compile / compile).dependsOn(Compile / scalafmtAll).value,
