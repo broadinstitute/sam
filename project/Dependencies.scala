@@ -79,7 +79,7 @@ object Dependencies {
   val monocleMacro: ModuleID = "com.github.julien-truffaut" %% "monocle-macro" % monocleVersion
 
   val scalaTest: ModuleID = "org.scalatest" %% "scalatest" % scalaTestV % "test"
-  val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-18" % s"${scalaTestV}.0" % Test
+  val scalaTestScalaCheck = "org.scalatestplus" %% "scalacheck-1-19" % s"${scalaTestV}.0" % Test
   val mockitoScalaTest = "org.mockito" %% "mockito-scala-scalatest" % "2.0.0" % Test
 
   // All of workbench-libs pull in Akka; exclude it since we provide our own Akka dependency.
