@@ -72,7 +72,7 @@ jobs:
           run-name: "${{ env.SAM_BUILD_RUN_NAME }}"
           workflow: sam-build
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
+          ref: refs/heads/core-69-sam-dispatch-run-name  # TEMP: testing terra-github-workflows#275, revert before merge
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           inputs: '{ "run-name": "${{ env.SAM_BUILD_RUN_NAME }}", "repository": "${{ github.event.repository.full_name }}", "ref": "${{ needs.extract-branch.outputs.branch-name }}", "sam-release-tag": "${{ needs.tag.outputs.tag }}" }'
 
@@ -171,7 +171,7 @@ jobs:
           run-name: "${{ env.SAM_SMOKE_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}"
           workflow: .github/workflows/sam-smoke-tests.yaml
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
+          ref: refs/heads/core-69-sam-dispatch-run-name  # TEMP: testing terra-github-workflows#275, revert before merge
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           # The smoke tests just need an access token for an enabled user on the Sam host that is being tested.
@@ -194,7 +194,7 @@ jobs:
           run-name: "${{ env.SAM_SWAT_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}"
           workflow: .github/workflows/sam-swat-tests.yaml
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
+          ref: refs/heads/core-69-sam-dispatch-run-name  # TEMP: testing terra-github-workflows#275, revert before merge
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           inputs: '{ "run-name": "${{ env.SAM_SWAT_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}", "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}", "log-results": "${{ needs.prepare-configs.outputs.log-results }}", "test-context": "${{ needs.prepare-configs.outputs.test-context }}", "caller_run_id": "${{ github.run_id }}", "ref": "${{ needs.extract-branch.outputs.branch-name }}" }'
