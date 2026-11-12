@@ -1,0 +1,29 @@
+name: Auto-merge Scala Steward PRs
+
+# Enables GitHub auto-merge on Scala Steward PRs so they squash-merge into develop
+# as soon as branch protection is satisfied (required checks green + required approvals).
+# This does not bypass review; it only removes the manual "click merge" step.
+
+on:
+  pull_request:
+    # Steward applies its label in a separate API call ~1s after opening the PR, so the
+    # `opened` payload usually has no labels yet; `labeled` is the event that actually matches.
+    types: [opened, reopened, ready_for_review, labeled]
+
+permissions: {}
+
+jobs:
+  enable-auto-merge:
+    # Scala Steward runs as broadbot and applies the Scala_Steward label
+    # (pullRequests.customLabels in .scala-steward.conf).
+    if: >-
+      github.event.pull_request.user.login == 'broadbot' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'Scala_Steward')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable Scala Steward auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.BROADBOT_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
