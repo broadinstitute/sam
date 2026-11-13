@@ -12,6 +12,9 @@ env:
   BEE_CREATE_RUN_NAME: 'bee-create-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
   BEE_DESTROY_RUN_NAME: 'bee-destroy-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
   RAWLS_SWAT_TESTS_RUN_NAME: 'rawls-swat-tests-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
+  SAM_BUILD_RUN_NAME: 'sam-build-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
+  SAM_SMOKE_TESTS_RUN_NAME: 'sam-smoke-tests-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
+  SAM_SWAT_TESTS_RUN_NAME: 'sam-swat-tests-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}'
 
 jobs:
   tag:
@@ -64,13 +67,14 @@ jobs:
 
       # Builds Sam elsewhere to protect secrets.  Upon success, will tag the commit in git.
       - name: dispatch build to terra-github-workflows
-        uses: broadinstitute/workflow-dispatch@v3
+        uses: broadinstitute/workflow-dispatch@v4.0.0
         with:
+          run-name: "${{ env.SAM_BUILD_RUN_NAME }}"
           workflow: sam-build
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
+          ref: refs/heads/core-69-sam-dispatch-run-name  # TEMP: testing terra-github-workflows#275, revert before merge
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
-          inputs: '{ "repository": "${{ github.event.repository.full_name }}", "ref": "${{ needs.extract-branch.outputs.branch-name }}", "sam-release-tag": "${{ needs.tag.outputs.tag }}" }'
+          inputs: '{ "run-name": "${{ env.SAM_BUILD_RUN_NAME }}", "repository": "${{ github.event.repository.full_name }}", "ref": "${{ needs.extract-branch.outputs.branch-name }}", "sam-release-tag": "${{ needs.tag.outputs.tag }}" }'
 
       - name: Render Sam version
         id: render-sam-version
@@ -162,15 +166,16 @@ jobs:
       id-token: 'write'
     steps:
       - name: dispatch to terra-github-workflows
-        uses: broadinstitute/workflow-dispatch@v3
+        uses: broadinstitute/workflow-dispatch@v4.0.0
         with:
+          run-name: "${{ env.SAM_SMOKE_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}"
           workflow: .github/workflows/sam-smoke-tests.yaml
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
+          ref: refs/heads/core-69-sam-dispatch-run-name  # TEMP: testing terra-github-workflows#275, revert before merge
           token: ${{ secrets.BROADBOT_TOKEN }} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
           # The smoke tests just need an access token for an enabled user on the Sam host that is being tested.
-          inputs: '{ "sam-hostname": "sam.${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}.bee.envs-terra.bio", "ENV": "${{ matrix.testing-env }}", "smoke-test-user-email": "firecloud-${{ matrix.testing-env }}@broad-dsde-${{ matrix.testing-env }}.iam.gserviceaccount.com" }'
+          inputs: '{ "run-name": "${{ env.SAM_SMOKE_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}", "sam-hostname": "sam.${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}.bee.envs-terra.bio", "ENV": "${{ matrix.testing-env }}", "smoke-test-user-email": "firecloud-${{ matrix.testing-env }}@broad-dsde-${{ matrix.testing-env }}.iam.gserviceaccount.com" }'
 
   sam-swat-test-job:
     strategy:
@@ -184,14 +189,15 @@ jobs:
       id-token: 'write'
     steps:
       - name: dispatch to terra-github-workflows
-        uses: broadinstitute/workflow-dispatch@v3
+        uses: broadinstitute/workflow-dispatch@v4.0.0
         with:
+          run-name: "${{ env.SAM_SWAT_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}"
           workflow: .github/workflows/sam-swat-tests.yaml
           repo: broadinstitute/terra-github-workflows
-          ref: refs/heads/main
+          ref: refs/heads/core-69-sam-dispatch-run-name  # TEMP: testing terra-github-workflows#275, revert before merge
           token: ${{ secrets.BROADBOT_TOKEN}} # github token for access to kick off a job in the private repo
           # manually recalculate b/c env context is broken https://github.com/actions/runner/issues/480
-          inputs: '{ "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}", "log-results": "${{ needs.prepare-configs.outputs.log-results }}", "test-context": "${{ needs.prepare-configs.outputs.test-context }}", "caller_run_id": "${{ github.run_id }}", "ref": "${{ needs.extract-branch.outputs.branch-name }}" }'
+          inputs: '{ "run-name": "${{ env.SAM_SWAT_TESTS_RUN_NAME }}-${{ matrix.terra-env }}-${{ matrix.testing-env }}", "bee-name": "${{ github.event.repository.name }}-${{ github.run_id }}-${{ matrix.terra-env }}", "ENV": "${{ matrix.testing-env }}", "log-results": "${{ needs.prepare-configs.outputs.log-results }}", "test-context": "${{ needs.prepare-configs.outputs.test-context }}", "caller_run_id": "${{ github.run_id }}", "ref": "${{ needs.extract-branch.outputs.branch-name }}" }'
 
   rawls-swat-test-job:
     strategy:
