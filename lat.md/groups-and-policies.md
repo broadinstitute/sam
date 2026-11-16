@@ -1,6 +1,10 @@
 # SAM Lore and Techniques
 
+Operational knowledge about Sam groups, policies and their Google groups that is not obvious from the code.
+
 ## Deleting a Managed Group That Is a Member of Another Group
+
+Why deleting an in-use managed group fails with 409, what that failure still changes in Google, and how to find and remove the group's references.
 
 ### Background: How SAM Group/Policy Relationships Work
 
@@ -25,6 +29,8 @@ Managed groups themselves are also resources of type `managed-group`, with `admi
 **The error message is misleading.** It says "member of at least 1 other group" but the underlying cause is any FK violation on the `SAM_GROUP` row — not necessarily a group membership. Check all tables that reference `SAM_GROUP` (e.g. `SAM_GROUP_MEMBER`, `SAM_RESOURCE_POLICY`, `SAM_RESOURCE_AUTH_DOMAIN`) for any references to the group before concluding it is only a membership issue.
 
 This is intentional — SAM won't silently orphan references to a group.
+
+**A 409 here does not mean nothing happened.** `ManagedGroupService.deleteManagedGroup` deletes the Google groups first: the managed group's own group, then every policy group. Only after that does it attempt the database delete. When the delete returns 409, the group still exists in Sam but its Google groups are gone, so everyone who reaches cloud resources through it, such as an auth domain nested in a workspace policy, silently loses bucket access. Before retrying a delete, check the usage queries in Step 1. After a failed delete, recreate the Google groups as described in [[groups-and-policies#SAM Lore and Techniques#Repairing a Managed Group's Google Groups]].
 
 ### Step 1: Find Where the Group Is Used
 
@@ -103,9 +109,11 @@ This call is an **overwrite** — include any existing members if the policy alr
 
 ### Key Tables
 
+The Postgres tables that hold Sam groups, memberships, policies and auth domains.
+
 | Table | Purpose |
 |---|---|
-| `SAM_GROUP` | All groups (managed groups and policy backing groups) |
+| `SAM_GROUP` | All groups (managed groups and policy backing groups). `email` is the group's Google group email (`policy-<uuid>@…` for policies); `version` > `last_synchronized_version` means a Google sync is pending |
 | `SAM_GROUP_MEMBER` | Direct membership (`group_id`, `member_group_id`, `member_user_id`) |
 | `SAM_GROUP_MEMBER_FLAT` | Transitive/flattened membership |
 | `SAM_RESOURCE` | Resources (managed groups, workspaces, dockstore tools, etc.) |
@@ -113,3 +121,26 @@ This call is an **overwrite** — include any existing members if the policy alr
 | `SAM_RESOURCE_POLICY` | Policies — links resource + policy name to a backing SAM_GROUP |
 | `SAM_RESOURCE_AUTH_DOMAIN` | Auth domain constraints on resources |
 | `SAM_USER` | Users with email |
+
+## Repairing a Managed Group's Google Groups
+
+How to make Sam recreate or refill a managed group's Google groups when they no longer match Postgres, for example after a failed delete or a failed first sync.
+
+### Why Sam Does Not Repair Them On Its Own
+
+Sam syncs a group to Google only when its `SAM_GROUP.version` is greater than `last_synchronized_version` (`GoogleGroupSynchronizer.loadSamGroupForSynchronization`). Membership changes increase the version; nothing else does.
+
+- The managed group's own group (the aggregate, named after the group) has a fixed membership: its `admin` and `member` policy groups. Its version stays at 1, so it is synced once, when `ManagedGroupService.createManagedGroup` publishes it, and never again.
+- A sync records `last_synchronized_version` even when individual Google adds failed. The Pub/Sub message is nacked and redelivered, but the redelivered sync sees the version as already synced and skips. A failed add is therefore never retried.
+- A sync creates a missing Google group (`loadGoogleGroupMemberEmailsMaybeCreateGroup`), so a version increase followed by a sync both recreates and refills a group.
+
+### Procedure
+
+Increase the version, then trigger a sync, from the bottom of the hierarchy up.
+
+1. Find the rows: policy groups are named `managed-group_<group>_<policy>` and their `email` is the policy's Google group email. The aggregate row is named `<group>`.
+2. For any policy group missing or wrong in Google, run `UPDATE SAM_GROUP SET version = version + 1 WHERE email = '<policy email>'`. Then call `POST /api/google/v1/resource/managed-group/<group>/<policy>/sync`. Any active Sam user may call it; it returns the sync report.
+3. For the aggregate group, run `UPDATE SAM_GROUP SET version = version + 1 WHERE name = '<group>'`. Then publish the group name as a JSON string, `"<group>"`, to the group-sync topic (`GOOGLE_PUB_SUB_TOPIC`, `sam-group-sync` in live environments). The `POST .../sync` endpoint accepts only policies. A policy can also be published, as `{"resource":{"resourceTypeName":"managed-group","resourceId":"<group>"},"accessPolicyName":"member"}`.
+4. Check the result in Sam's logs (`synchronized google group`, or `... with failures` with a `syncDetail` field) and in admin.google.com. If an add failed, repeat the version increase and the sync.
+
+Used in production on 2026-10-30 to recreate two auth-domain groups' missing aggregate Google groups. Steps 3 and 4 alone were enough, because their policy groups were intact.
