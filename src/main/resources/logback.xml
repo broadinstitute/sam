@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <if condition='!isDefined("SAM_LOG_APPENDER")'>
-        <then>
-            <variable name="SAM_LOG_APPENDER" value="Console-Stackdriver" />
-        </then>
-    </if>
+    <!-- Default when the env var is unset. logback 1.6 no longer evaluates the Janino <if condition=...> that was used here. -->
+    <variable name="SAM_LOG_APPENDER" value="${SAM_LOG_APPENDER:-Console-Stackdriver}" />
 
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
