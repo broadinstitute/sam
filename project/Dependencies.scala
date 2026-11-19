@@ -171,7 +171,9 @@ object Dependencies {
   def excludeSnakeyaml = ExclusionRule("org.yaml", "snakeyaml")
   def excludeLiquibase = ExclusionRule("org.liquibase")
   def excludeKubernetes = ExclusionRule("io.kubernetes", "client-java")
-  // Sam does not use Stairway; TCL pulls stairway-azure in at runtime scope
+  // Sam does not use Stairway; TCL tries to pull in stairway-gcp (compile) and stairway-azure (runtime), and both bring core stairway
+  def excludeStairway = ExclusionRule("bio.terra", "stairway")
+  def excludeStairwayGcp = ExclusionRule("bio.terra", "stairway-gcp")
   def excludeStairwayAzure = ExclusionRule("bio.terra", "stairway-azure")
   def tclExclusions(m: ModuleID): ModuleID = m.excludeAll(
     excludeSpringBoot,
@@ -186,6 +188,8 @@ object Dependencies {
     excludeSlf4j,
     excludeLiquibase,
     excludeKubernetes,
+    excludeStairway,
+    excludeStairwayGcp,
     excludeStairwayAzure
   )
 
@@ -250,6 +254,7 @@ object Dependencies {
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
     "org.apache.commons" % "commons-compress" % "1.28.0",
+    "org.apache.commons" % "commons-lang3" % "3.20.0",
     "com.google.guava" % "guava" % "33.5.0-jre", // Force JRE version, not Android version from grpc-core
     // Jackson 2 and Jackson 3 co-exist. Set versions for both:
     "tools.jackson.core" % "jackson-core" % "3.2.1",
@@ -257,6 +262,8 @@ object Dependencies {
     jacksonCore,
     jacksonAnnotations,
     jacksonDatabind,
+    "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonV,
+    "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonV,
     // override bouncycastle to address CVE-2026-5598 (requires >= 1.84)
     "org.bouncycastle" % "bcprov-jdk18on" % "1.85",
     "org.bouncycastle" % "bcpkix-jdk18on" % "1.85",
