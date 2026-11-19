@@ -265,9 +265,9 @@ object Dependencies {
     "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonV,
     "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonV,
     // override bouncycastle to address CVE-2026-5598 (requires >= 1.84)
-    "org.bouncycastle" % "bcprov-jdk18on" % "1.85",
-    "org.bouncycastle" % "bcpkix-jdk18on" % "1.85",
-    "org.bouncycastle" % "bcutil-jdk18on" % "1.85",
+    "org.bouncycastle" % "bcprov-jdk18on" % "1.87",
+    "org.bouncycastle" % "bcpkix-jdk18on" % "1.87",
+    "org.bouncycastle" % "bcutil-jdk18on" % "1.87",
 
     // transitive from terra-cloud-resource-library, upgrading to a janitor version available
     // in libs-snapshot-standard
