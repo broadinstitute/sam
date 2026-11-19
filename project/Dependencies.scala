@@ -13,7 +13,7 @@ object Dependencies {
   val sentryVersion = "6.15.0"
   val nettyV = "4.2.19.Final"
 
-  val workbenchLibV = "b3c715c" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchLibV = "242a83f" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
   val workbenchUtil2V = s"1.1-$workbenchLibV"
   val workbenchModelV = s"0.21-$workbenchLibV"
@@ -171,6 +171,10 @@ object Dependencies {
   def excludeSnakeyaml = ExclusionRule("org.yaml", "snakeyaml")
   def excludeLiquibase = ExclusionRule("org.liquibase")
   def excludeKubernetes = ExclusionRule("io.kubernetes", "client-java")
+  // Sam does not use Stairway; TCL tries to pull in stairway-gcp (compile) and stairway-azure (runtime), and both bring core stairway
+  def excludeStairway = ExclusionRule("bio.terra", "stairway")
+  def excludeStairwayGcp = ExclusionRule("bio.terra", "stairway-gcp")
+  def excludeStairwayAzure = ExclusionRule("bio.terra", "stairway-azure")
   def tclExclusions(m: ModuleID): ModuleID = m.excludeAll(
     excludeSpringBoot,
     excludeSpringAop,
@@ -183,7 +187,10 @@ object Dependencies {
     excludeSnakeyaml,
     excludeSlf4j,
     excludeLiquibase,
-    excludeKubernetes
+    excludeKubernetes,
+    excludeStairway,
+    excludeStairwayGcp,
+    excludeStairwayAzure
   )
 
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
@@ -247,6 +254,7 @@ object Dependencies {
   // Needed because it looks like the dependency overrides of wb-libs doesn't propagate to the importing project...
   val rootDependencyOverrides = Seq(
     "org.apache.commons" % "commons-compress" % "1.28.0",
+    "org.apache.commons" % "commons-lang3" % "3.20.0",
     "com.google.guava" % "guava" % "33.5.0-jre", // Force JRE version, not Android version from grpc-core
     // Jackson 2 and Jackson 3 co-exist. Set versions for both:
     "tools.jackson.core" % "jackson-core" % "3.2.1",
@@ -254,10 +262,12 @@ object Dependencies {
     jacksonCore,
     jacksonAnnotations,
     jacksonDatabind,
+    "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonV,
+    "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonV,
     // override bouncycastle to address CVE-2026-5598 (requires >= 1.84)
-    "org.bouncycastle" % "bcprov-jdk18on" % "1.85",
-    "org.bouncycastle" % "bcpkix-jdk18on" % "1.85",
-    "org.bouncycastle" % "bcutil-jdk18on" % "1.85",
+    "org.bouncycastle" % "bcprov-jdk18on" % "1.87",
+    "org.bouncycastle" % "bcpkix-jdk18on" % "1.87",
+    "org.bouncycastle" % "bcutil-jdk18on" % "1.87",
 
     // transitive from terra-cloud-resource-library, upgrading to a janitor version available
     // in libs-snapshot-standard
