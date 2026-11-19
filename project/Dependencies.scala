@@ -13,7 +13,7 @@ object Dependencies {
   val sentryVersion = "6.15.0"
   val nettyV = "4.2.19.Final"
 
-  val workbenchLibV = "b3c715c" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
+  val workbenchLibV = "242a83f" // If updating this, make sure googleStorageLocal in test dependencies is up-to-date
   val workbenchUtilV = s"0.10-$workbenchLibV"
   val workbenchUtil2V = s"1.1-$workbenchLibV"
   val workbenchModelV = s"0.21-$workbenchLibV"
