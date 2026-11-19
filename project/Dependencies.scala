@@ -49,7 +49,7 @@ object Dependencies {
   val jacksonCore: ModuleID = "com.fasterxml.jackson.core" % "jackson-core" % jacksonV
 
   val logstashLogback: ModuleID = "net.logstash.logback" % "logstash-logback-encoder" % "9.0"
-  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.5.23"
+  val logbackClassic: ModuleID = "ch.qos.logback" % "logback-classic" % "1.6.7" // CVE-2026-19880: fixed in 1.6.3; no 1.5.x release is fixed
 
   val ravenLogback: ModuleID = "com.getsentry.raven" % "raven-logback" % "7.8.6"
   val scalaLogging: ModuleID = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingV
