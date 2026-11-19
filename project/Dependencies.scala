@@ -171,6 +171,8 @@ object Dependencies {
   def excludeSnakeyaml = ExclusionRule("org.yaml", "snakeyaml")
   def excludeLiquibase = ExclusionRule("org.liquibase")
   def excludeKubernetes = ExclusionRule("io.kubernetes", "client-java")
+  // Sam does not use Stairway; TCL pulls stairway-azure in at runtime scope
+  def excludeStairwayAzure = ExclusionRule("bio.terra", "stairway-azure")
   def tclExclusions(m: ModuleID): ModuleID = m.excludeAll(
     excludeSpringBoot,
     excludeSpringAop,
@@ -183,7 +185,8 @@ object Dependencies {
     excludeSnakeyaml,
     excludeSlf4j,
     excludeLiquibase,
-    excludeKubernetes
+    excludeKubernetes,
+    excludeStairwayAzure
   )
 
   val terraCommonLib = tclExclusions("bio.terra" % "terra-common-lib" % tclVersion classifier "plain")
