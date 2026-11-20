@@ -49,11 +49,14 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
   def asAdminServiceUser: Directive0 = requireOidcHeaders.flatMap { oidcHeaders =>
     Directives
       .mapInnerRoute { r =>
-        if (!adminConfig.serviceAccountAdmins.contains(oidcHeaders.email)) {
-          reject(AuthorizationFailedRejection)
-        } else {
+        if (
+          adminConfig.serviceAccountAdmins.contains(oidcHeaders.email) ||
+          isServiceAccountAdminUami(oidcHeaders)
+        ) {
           logger.info(s"Handling request for service admin account: ${oidcHeaders.email}")
           r
+        } else {
+          reject(AuthorizationFailedRejection)
         }
       }
       .tflatMap(_ => logAdminServiceAdminUserRequestResult(oidcHeaders))
@@ -108,6 +111,11 @@ trait StandardSamUserDirectives extends SamUserDirectives with LazyLogging with 
       _ => Right(AzureB2CId(idString)), // could not parse id as a Long, treat id as b2c id which are uuids
       _ => Left(GoogleSubjectId(idString)) // id is a number which is what google subject ids look like
     )
+  }
+
+  private def isServiceAccountAdminUami(oidcHeaders: OIDCHeaders) = {
+    val maybeUamiEmail = oidcHeaders.externalId.map(b2cId => WorkbenchEmail(s"${b2cId.value}@uami.terra.bio")).toOption
+    oidcHeaders.email.value.isEmpty && maybeUamiEmail.isDefined && adminConfig.serviceAccountAdmins.contains(maybeUamiEmail.get)
   }
 
   private def logAdminServiceAdminUserRequestResult(oidcHeaders: OIDCHeaders): Directive0 = {
